@@ -12,6 +12,12 @@ object CliApp {
   private val logger = LoggerFactory.getLogger(getClass)
 
   def main(args: Array[String]): Unit = {
+    // Intercept help requests for custom hierarchical help
+    if (shouldShowHelp(args)) {
+      showHelp(args)
+      System.exit(0)
+    }
+
     OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config()) match {
       case Some(config) =>
         val exitCode = run(config)
@@ -21,7 +27,37 @@ object CliApp {
     }
   }
 
+  /** Check if help should be displayed */
+  private def shouldShowHelp(args: Array[String]): Boolean = {
+    args.contains("--help") || args.contains("-h")
+  }
+
+  /** Show appropriate help based on command context */
+  private def showHelp(args: Array[String]): Unit = {
+    val commands = Set("read", "info", "write", "validate", "convert")
+    val commandBeforeHelp = args.takeWhile(arg => !arg.startsWith("--help") && !arg.startsWith("-h"))
+      .find(commands.contains)
+
+    commandBeforeHelp match {
+      case Some(command) =>
+        HelpFormatter.commandHelp(command) match {
+          case Some(help) => println(help)
+          case None       => println(HelpFormatter.topLevelHelp())
+        }
+      case None =>
+        println(HelpFormatter.topLevelHelp())
+    }
+  }
+
   private def run(config: ArgumentParser.Config): Int = {
+    // Show help if no command specified
+    config.command match {
+      case None =>
+        println(HelpFormatter.topLevelHelp())
+        return 1
+      case Some(_) => // Continue execution
+    }
+
     try {
       val configManager = new ConfigurationManager()
       val appConfig =
@@ -38,15 +74,7 @@ object CliApp {
       val repository = new ParquetRepository()
       val service = new ParquetService(repository)
 
-      config.command match {
-        case Some(command) =>
-          executeCommand(command, service, config.globalOptions)
-        case None =>
-          System.err.println(
-            "No command specified. Use --help for usage information"
-          )
-          1
-      }
+      executeCommand(config.command.get, service, config.globalOptions)
     } catch {
       case e: Exception =>
         logger.error("Unexpected error", e)

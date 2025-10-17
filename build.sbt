@@ -22,6 +22,23 @@ lazy val root = (project in file("."))
     assembly / assemblyJarName := "parqueteer.jar",
     Compile / mainClass := Some("io.parqueteer.cli.CliApp"),
 
+    // Assembly optimizations - enable caching for faster incremental builds
+    assembly / assemblyOption := (assembly / assemblyOption).value.withCacheOutput(true),
+
+    // Exclude test-only dependencies from assembly
+    assembly / assemblyExcludedJars := {
+      val cp = (assembly / fullClasspath).value
+      cp.filter { jar =>
+        val name = jar.data.getName.toLowerCase
+        // Exclude test jars, documentation, source jars
+        name.contains("scalatest") ||
+        name.contains("scalamock") ||
+        name.contains("scalacheck") ||
+        name.contains("-sources") ||
+        name.contains("-javadoc")
+      }
+    },
+
     // Add JVM options to suppress warnings in packaged distribution
     bashScriptExtraDefines += """addJava "--add-opens=java.base/java.lang=ALL-UNNAMED"""",
     bashScriptExtraDefines += """addJava "--add-opens=java.base/sun.nio.ch=ALL-UNNAMED"""",
@@ -97,7 +114,9 @@ lazy val root = (project in file("."))
     assembly / assemblyMergeStrategy := {
       case PathList("META-INF", "services", xs @ _*) => MergeStrategy.concat
       case PathList("META-INF", "versions", xs @ _*) => MergeStrategy.first
+      case PathList("META-INF", "LICENSE" | "LICENSE.txt" | "NOTICE" | "NOTICE.txt", xs @ _*) => MergeStrategy.discard
       case PathList("META-INF", xs @ _*) => MergeStrategy.discard
+      case PathList("module-info.class") => MergeStrategy.discard
       case PathList("reference.conf")    => MergeStrategy.concat
       case _                             => MergeStrategy.first
     }

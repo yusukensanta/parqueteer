@@ -1,0 +1,14 @@
+# SBT JVM Options
+# Increase heap size for assembly plugin (merging large dependencies)
+-J-Xmx4G
+-J-Xms1G
+
+# Use G1 Garbage Collector for better performance
+-J-XX:+UseG1GC
+
+# Reduce GC overhead
+-J-XX:MaxGCPauseMillis=100
+
+# Enable parallel execution for faster builds
+-Dsbt.task.timings=true
+-Dsbt.task.timings.on.shutdown=true
