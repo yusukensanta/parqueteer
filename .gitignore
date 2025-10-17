@@ -1,0 +1,48 @@
+# Documentation (except README)
+*.md
+*.puml
+!README.md
+
+# SBT / Scala Build
+target/
+lib_managed/
+src_managed/
+project/target/
+project/project/
+dist/
+*.class
+*.log
+.history
+.cache-*
+
+# IDE: Metals / Bloop / BSP
+.metals/
+.bloop/
+.bsp/
+
+# IDE: IntelliJ IDEA
+.idea/
+*.iml
+.idea_modules/
+
+# IDE: VS Code
+.vscode/
+
+# IDE: Eclipse
+.classpath
+.project
+.settings/
+bin/
+
+# Generated launch scripts (from sbt-native-packager or similar)
+/parqueteer
+/parqueteer.bat
+
+# Node.js artifacts (if any)
+node_modules/
+package-lock.json
+yarn.lock
+
+# OS Files
+.DS_Store
+Thumbs.db

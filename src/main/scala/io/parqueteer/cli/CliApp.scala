@@ -1,0 +1,328 @@
+package io.parqueteer.cli
+
+import io.parqueteer.core.services.ParquetService
+import io.parqueteer.core.repositories.ParquetRepository
+import io.parqueteer.core.models.{ReadConfig, WriteConfig}
+import io.parqueteer.config.ConfigurationManager
+import scopt.OParser
+import scala.util.{Success, Failure}
+import org.slf4j.LoggerFactory
+
+object CliApp {
+  private val logger = LoggerFactory.getLogger(getClass)
+
+  def main(args: Array[String]): Unit = {
+    OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config()) match {
+      case Some(config) =>
+        val exitCode = run(config)
+        System.exit(exitCode)
+      case None =>
+        System.exit(2)
+    }
+  }
+
+  private def run(config: ArgumentParser.Config): Int = {
+    try {
+      val configManager = new ConfigurationManager()
+      val appConfig =
+        configManager.loadConfig(config.globalOptions.configPath) match {
+          case Success(cfg) => cfg
+          case Failure(error) =>
+            System.err.println(
+              s"Failed to load configuration: ${error.getMessage}"
+            )
+            return 1
+        }
+      setupLogging(appConfig.logging, config.globalOptions.verbose)
+
+      val repository = new ParquetRepository()
+      val service = new ParquetService(repository)
+
+      config.command match {
+        case Some(command) =>
+          executeCommand(command, service, config.globalOptions)
+        case None =>
+          System.err.println(
+            "No command specified. Use --help for usage information"
+          )
+          1
+      }
+    } catch {
+      case e: Exception =>
+        logger.error("Unexpected error", e)
+        System.err.println(s"Error: ${e.getMessage}")
+        if (config.globalOptions.verbose) {
+          e.printStackTrace()
+        }
+        1
+    }
+  }
+
+  private def executeCommand(
+      command: Command,
+      service: ParquetService,
+      globalOptions: GlobalOptions
+  ): Int = {
+    command match {
+      case ReadCommand(filePath, maxRows, columns, filter, format) =>
+        executeRead(
+          service,
+          filePath,
+          maxRows,
+          columns,
+          filter,
+          format,
+          globalOptions
+        )
+
+      case InfoCommand(filePath, format, showSchema, showMetadata) =>
+        executeInfo(
+          service,
+          filePath,
+          format,
+          showSchema,
+          showMetadata,
+          globalOptions
+        )
+
+      case WriteCommand(
+            outputPath,
+            inputPath,
+            inputFormat,
+            compression,
+            rowGroupSize
+          ) =>
+        executeWrite(
+          service,
+          outputPath,
+          inputPath,
+          inputFormat,
+          compression,
+          rowGroupSize,
+          globalOptions
+        )
+
+      case ValidateCommand(filePath, verbose) =>
+        executeValidate(
+          service,
+          filePath,
+          verbose || globalOptions.verbose,
+          globalOptions
+        )
+
+      case ConvertCommand(inputPath, outputPath, compression, maxRows) =>
+        executeConvert(
+          service,
+          inputPath,
+          outputPath,
+          compression,
+          maxRows,
+          globalOptions
+        )
+    }
+  }
+
+  private def executeRead(
+      service: ParquetService,
+      filePath: String,
+      maxRows: Option[Long],
+      columns: Option[List[String]],
+      filter: Option[String],
+      format: io.parqueteer.core.models.OutputFormat,
+      globalOptions: GlobalOptions
+  ): Int = {
+    val readConfig = ReadConfig(
+      maxRows = maxRows,
+      columns = columns,
+      filter = filter,
+      outputFormat = format
+    )
+
+    service.readFile(filePath, readConfig) match {
+      case Success(file) =>
+        val output = service.formatContent(file, format)
+        println(output)
+        0
+      case Failure(error) =>
+        System.err.println(s"Failed to read file: ${error.getMessage}")
+        if (globalOptions.verbose) error.printStackTrace()
+        1
+    }
+  }
+
+  private def executeInfo(
+      service: ParquetService,
+      filePath: String,
+      format: io.parqueteer.core.models.OutputFormat,
+      showSchema: Boolean,
+      showMetadata: Boolean,
+      globalOptions: GlobalOptions
+  ): Int = {
+    val _ = (format, globalOptions) // suppress unused warnings
+    service.getFileInfo(filePath) match {
+      case Success(file) =>
+        if (showMetadata) {
+          println(service.formatMetadata(file))
+          println()
+        }
+        if (showSchema) {
+          println(service.formatSchema(file))
+        }
+        0
+      case Failure(error) =>
+        System.err.println(s"Failed to get file info: ${error.getMessage}")
+        if (globalOptions.verbose) error.printStackTrace()
+        1
+    }
+  }
+
+  private def executeWrite(
+      service: ParquetService,
+      outputPath: String,
+      inputPath: String,
+      inputFormat: String,
+      compression: io.parqueteer.core.models.CompressionType,
+      rowGroupSize: Option[Long],
+      globalOptions: GlobalOptions
+  ): Int = {
+    try {
+      val inputData = readInputData(inputPath, inputFormat)
+
+      val writeConfig = WriteConfig(
+        compressionType = compression,
+        rowGroupSize = rowGroupSize.getOrElse(128 * 1024 * 1024L)
+      )
+
+      service.writeFile(outputPath, inputData, writeConfig) match {
+        case Success(_) =>
+          println(s"Successfully wrote data to $outputPath")
+          0
+        case Failure(error) =>
+          System.err.println(s"Failed to write file: ${error.getMessage}")
+          if (globalOptions.verbose) error.printStackTrace()
+          1
+      }
+    } catch {
+      case e: Exception =>
+        System.err.println(s"Failed to read input data: ${e.getMessage}")
+        if (globalOptions.verbose) e.printStackTrace()
+        1
+    }
+  }
+
+  private def executeValidate(
+      service: ParquetService,
+      filePath: String,
+      verbose: Boolean,
+      globalOptions: GlobalOptions
+  ): Int = {
+    val _ = (verbose, globalOptions) // suppress unused warnings
+    service.validateFile(filePath) match {
+      case Success(result) =>
+        if (result.isValid) {
+          println(s"✓ File $filePath is valid")
+          0
+        } else {
+          println(s"✗ File $filePath has issues:")
+          result.issues.foreach(issue => println(s"  - $issue"))
+          1
+        }
+      case Failure(error) =>
+        System.err.println(s"Failed to validate file: ${error.getMessage}")
+        if (globalOptions.verbose) error.printStackTrace()
+        1
+    }
+  }
+
+  private def executeConvert(
+      service: ParquetService,
+      inputPath: String,
+      outputPath: String,
+      compression: io.parqueteer.core.models.CompressionType,
+      maxRows: Option[Long],
+      globalOptions: GlobalOptions
+  ): Int = {
+    val _ = (maxRows, globalOptions) // suppress unused warnings
+    val conversionConfig = io.parqueteer.core.services.ConversionConfig(
+      writeConfig = WriteConfig(compressionType = compression)
+    )
+
+    service.convertFile(inputPath, outputPath, conversionConfig) match {
+      case Success(_) =>
+        println(s"Successfully converted $inputPath to $outputPath")
+        0
+      case Failure(error) =>
+        System.err.println(s"Failed to convert file: ${error.getMessage}")
+        if (globalOptions.verbose) error.printStackTrace()
+        1
+    }
+  }
+
+  private def readInputData(
+      inputPath: String,
+      inputFormat: String
+  ): List[Map[String, Any]] = {
+    import better.files._
+    import io.circe.parser._
+
+    val content = File(inputPath).contentAsString
+
+    inputFormat.toLowerCase match {
+      case "json" =>
+        parse(content) match {
+          case Left(error) =>
+            throw new IllegalArgumentException(
+              s"Failed to parse JSON: ${error.getMessage}"
+            )
+          case Right(json) =>
+            json.asArray match {
+              case Some(array) =>
+                array.toList.map(
+                  _.asObject.get.toMap.view
+                    .mapValues {
+                      case json if json.isString => json.asString.get
+                      case json if json.isNumber =>
+                        json.asNumber.get.toDouble
+                      case json if json.isBoolean => json.asBoolean.get
+                      case json if json.isNull    => null
+                      case json                   => json.toString
+                    }
+                    .toMap
+                )
+              case None =>
+                throw new java.lang.IllegalArgumentException(
+                  "JSON must be an array of objects"
+                )
+            }
+        }
+      case "csv" =>
+        val lines = content.split("\n").toList
+        if (lines.isEmpty) return List.empty
+
+        val headers = lines.head.split(",").map(_.trim)
+        lines.tail.map { line =>
+          val values = line.split(",").map(_.trim)
+          headers.zip(values).toMap.asInstanceOf[Map[String, Any]]
+        }
+      case _ =>
+        throw new java.lang.IllegalArgumentException(
+          s"Unsupported input format: $inputFormat"
+        )
+    }
+  }
+
+  private def setupLogging(
+      loggingConfig: io.parqueteer.config.LoggingConfig,
+      verbose: Boolean
+  ): Unit = {
+    import ch.qos.logback.classic.{Level, LoggerContext}
+    import org.slf4j.LoggerFactory
+
+    val context = LoggerFactory.getILoggerFactory.asInstanceOf[LoggerContext]
+    val rootLogger = context.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME)
+
+    val level =
+      if (verbose) Level.DEBUG else Level.valueOf(loggingConfig.level)
+    rootLogger.setLevel(level)
+  }
+}
