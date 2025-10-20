@@ -1,4 +1,5 @@
 # Documentation (except README)
+.claude/
 *.md
 *.puml
 !README.md
