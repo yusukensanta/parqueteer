@@ -44,6 +44,26 @@ make assembly     # Create distributable JAR
 make help
 ```
 
+### 4. Git Hooks (Automatic Quality Checks)
+
+The `make setup-dev` command automatically configures git hooks that help maintain code quality:
+
+**Pre-commit Hook** - Checks code formatting before each commit:
+- ✅ Runs `sbt scalafmtCheckAll` automatically
+- ✅ Prevents commits with improperly formatted code
+- ✅ Provides helpful error messages with fix instructions
+
+**To test pre-commit checks manually:**
+```bash
+make pre-commit    # Run the same check the hook uses
+make fmt           # Auto-fix formatting issues
+```
+
+**To bypass the hook** (not recommended, only for emergencies):
+```bash
+git commit --no-verify
+```
+
 ## Development Workflow
 
 ### Making Changes
