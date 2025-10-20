@@ -3,6 +3,7 @@
 *.md
 *.puml
 !README.md
+!CONTRIBUTING.md
 
 # SBT / Scala Build
 target/

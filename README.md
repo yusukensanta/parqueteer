@@ -1,4 +1,4 @@
-# Parqueteer 🦜
+# parqueteer 🦜
 
 **A modern CLI toolkit for Apache Parquet files with cloud storage support**
 
@@ -86,21 +86,31 @@ java -jar parqueteer.jar --help
 git clone https://github.com/yusukensanta/parqueteer.git
 cd parqueteer
 
-# Compile the project
+# Quick start with Make (recommended)
+make setup-dev    # One-time setup
+make compile      # Build the project
+make assembly     # Create standalone JAR
+
+# Or use sbt directly
 sbt compile
-
-# Create distribution package (recommended - includes launch scripts)
-sbt universal:packageBin
-# Creates: target/universal/parqueteer-0.1.0-SNAPSHOT.zip
-
-# OR create standalone JAR
 sbt assembly
-# Creates: target/scala-3.7.3/parqueteer.jar
 ```
+
+**See all available commands:**
+```bash
+make help
+```
+
+**Common commands:**
+- `make compile` - Compile the project
+- `make test` - Run tests
+- `make assembly` - Create fat JAR (target/scala-3.7.3/parqueteer.jar)
+- `make package` - Create distribution with launch scripts
+- `make clean` - Remove build artifacts
 
 **Prerequisites**:
 - Java 21 (or Java 17+)
-- SBT 1.9+
+- SBT 1.9+ (or use `make install` with [mise](https://mise.jdx.dev) for automatic version management)
 
 ### Cloud Credentials
 
