@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Pre-commit hook to check code formatting with scalafmt
+# Pre-commit hook to ensure code quality before commits
+# Checks: formatting, compilation, tests
 
 set -e
 
@@ -8,37 +9,121 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[0;33m'
 BLUE='\033[0;34m'
+BOLD='\033[1m'
 NC='\033[0m' # No Color
 
-echo -e "${BLUE}Running pre-commit checks...${NC}"
+echo -e "${BOLD}${BLUE}=== Pre-commit Quality Checks ===${NC}"
 echo ""
 
-# Check if scalafmt is configured
+# Track if any check fails
+CHECKS_FAILED=0
+
+# Function to report success
+report_success() {
+    echo -e "${GREEN}✓${NC} $1"
+}
+
+# Function to report failure
+report_failure() {
+    echo -e "${RED}✗${NC} $1"
+    CHECKS_FAILED=1
+}
+
+# Function to report skip
+report_skip() {
+    echo -e "${YELLOW}⚠${NC} $1"
+}
+
+# ==============================================================================
+# Check 1: Code Formatting
+# ==============================================================================
+echo -e "${BLUE}[1/3] Checking code formatting...${NC}"
+
 if [[ ! -f .scalafmt.conf ]]; then
-    echo -e "${YELLOW}⚠ No .scalafmt.conf found - skipping format check${NC}"
-    exit 0
+    report_skip "No .scalafmt.conf found - skipping format check"
+else
+    if sbt scalafmtCheckAll > /dev/null 2>&1; then
+        report_success "Code formatting check passed"
+    else
+        report_failure "Code formatting check failed"
+        echo ""
+        echo -e "${YELLOW}Your code is not properly formatted.${NC}"
+        echo ""
+        echo "Please run:"
+        echo -e "  ${GREEN}make fmt${NC}           # Auto-format code"
+        echo -e "  ${GREEN}git add .${NC}          # Stage formatted files"
+        echo -e "  ${GREEN}git commit${NC}         # Retry commit"
+    fi
 fi
 
-# Run scalafmt check
-echo -e "${BLUE}Checking code formatting with scalafmt...${NC}"
+echo ""
 
-if sbt scalafmtCheckAll > /dev/null 2>&1; then
-    echo -e "${GREEN}✓ Code formatting check passed!${NC}"
+# ==============================================================================
+# Check 2: Compilation
+# ==============================================================================
+echo -e "${BLUE}[2/3] Checking compilation...${NC}"
+
+if sbt compile > /dev/null 2>&1; then
+    report_success "Compilation passed"
+
+    # Clean up build artifacts after successful compile
+    echo -e "${BLUE}      Cleaning up build artifacts...${NC}"
+    # Keep only essential files, remove temporary build outputs
+    # We don't run 'sbt clean' because that would delete everything
+    # Just ensure no uncommitted build artifacts
+    if [[ -d target/streams ]]; then
+        rm -rf target/streams
+    fi
+    echo -e "${GREEN}      ✓${NC} Build artifacts cleaned"
+else
+    report_failure "Compilation failed"
+    echo ""
+    echo -e "${YELLOW}Your code does not compile.${NC}"
+    echo ""
+    echo "Please fix compilation errors:"
+    echo -e "  ${GREEN}sbt compile${NC}        # See detailed errors"
+fi
+
+echo ""
+
+# ==============================================================================
+# Check 3: Tests
+# ==============================================================================
+echo -e "${BLUE}[3/3] Running tests...${NC}"
+
+if sbt test > /dev/null 2>&1; then
+    report_success "All tests passed"
+else
+    report_failure "Tests failed"
+    echo ""
+    echo -e "${YELLOW}Some tests are failing.${NC}"
+    echo ""
+    echo "Please fix failing tests:"
+    echo -e "  ${GREEN}sbt test${NC}           # See detailed test results"
+fi
+
+echo ""
+echo -e "${BOLD}${BLUE}===================================${NC}"
+
+# ==============================================================================
+# Final Result
+# ==============================================================================
+if [[ $CHECKS_FAILED -eq 0 ]]; then
+    echo -e "${BOLD}${GREEN}✓ All pre-commit checks passed!${NC}"
+    echo ""
+    echo -e "${BLUE}Proceeding with commit...${NC}"
     exit 0
 else
-    echo -e "${RED}✗ Code formatting check failed!${NC}"
+    echo -e "${BOLD}${RED}✗ Pre-commit checks failed!${NC}"
     echo ""
-    echo -e "${YELLOW}Your code is not properly formatted.${NC}"
+    echo -e "${YELLOW}Please fix the issues above and try again.${NC}"
     echo ""
-    echo "Please run one of the following to fix formatting:"
-    echo -e "  ${GREEN}make fmt${NC}           # Using Makefile"
-    echo -e "  ${GREEN}sbt scalafmtAll${NC}    # Using sbt directly"
+    echo -e "${BLUE}Quick fixes:${NC}"
+    echo -e "  ${GREEN}make fmt${NC}           # Fix formatting"
+    echo -e "  ${GREEN}sbt compile${NC}        # Check compilation errors"
+    echo -e "  ${GREEN}sbt test${NC}           # Run tests locally"
     echo ""
-    echo "Then stage the changes and commit again:"
-    echo -e "  ${GREEN}git add .${NC}"
-    echo -e "  ${GREEN}git commit${NC}"
-    echo ""
-    echo -e "${YELLOW}To bypass this check (not recommended):${NC}"
+    echo -e "${YELLOW}To bypass these checks (NOT recommended):${NC}"
     echo -e "  ${GREEN}git commit --no-verify${NC}"
     echo ""
     exit 1

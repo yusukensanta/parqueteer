@@ -52,7 +52,7 @@ setup-hooks: ## Configure git hooks for version sync and pre-commit checks
 	@chmod +x .githooks/*
 	@git config core.hooksPath .githooks
 	@echo "$(GREEN)✓$(NC) Git hooks configured:"
-	@echo "  - pre-commit: Checks code formatting before commits"
+	@echo "  - pre-commit: Checks formatting, compilation, and tests before commits"
 	@echo "  - post-checkout: Syncs sbt version after branch changes"
 
 ##@ Build
@@ -98,8 +98,22 @@ lint: ## Check code style
 check: lint test ## Run all checks (lint + test)
 	@echo "$(GREEN)✓$(NC) All checks passed!"
 
-pre-commit: lint ## Run pre-commit checks (same as git hook)
-	@echo "$(GREEN)✓$(NC) Pre-commit checks passed!"
+pre-commit: ## Run pre-commit checks (same as git hook: format, compile, test)
+	@echo "$(BLUE)=== Pre-commit Quality Checks ===$(NC)"
+	@echo ""
+	@echo "$(BLUE)[1/3] Checking code formatting...$(NC)"
+	@sbt scalafmtCheckAll > /dev/null 2>&1 && echo "$(GREEN)✓$(NC) Code formatting check passed" || (echo "$(RED)✗$(NC) Code formatting check failed" && exit 1)
+	@echo ""
+	@echo "$(BLUE)[2/3] Checking compilation...$(NC)"
+	@sbt compile > /dev/null 2>&1 && echo "$(GREEN)✓$(NC) Compilation passed" || (echo "$(RED)✗$(NC) Compilation failed" && exit 1)
+	@echo "$(BLUE)      Cleaning up build artifacts...$(NC)"
+	@rm -rf target/streams 2>/dev/null || true
+	@echo "$(GREEN)      ✓$(NC) Build artifacts cleaned"
+	@echo ""
+	@echo "$(BLUE)[3/3] Running tests...$(NC)"
+	@sbt test > /dev/null 2>&1 && echo "$(GREEN)✓$(NC) All tests passed" || (echo "$(RED)✗$(NC) Tests failed" && exit 1)
+	@echo ""
+	@echo "$(GREEN)✓ All pre-commit checks passed!$(NC)"
 
 ##@ Clean
 

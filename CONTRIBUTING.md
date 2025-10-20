@@ -48,16 +48,23 @@ make help
 
 The `make setup-dev` command automatically configures git hooks that help maintain code quality:
 
-**Pre-commit Hook** - Checks code formatting before each commit:
-- ✅ Runs `sbt scalafmtCheckAll` automatically
-- ✅ Prevents commits with improperly formatted code
-- ✅ Provides helpful error messages with fix instructions
+**Pre-commit Hook** - Runs comprehensive checks before each commit:
+- ✅ **Formatting**: Checks code formatting with scalafmt
+- ✅ **Compilation**: Ensures code compiles successfully
+- ✅ **Tests**: Runs all tests to ensure they pass
+- ✅ **Cleanup**: Removes temporary build artifacts after compile
 
 **To test pre-commit checks manually:**
 ```bash
-make pre-commit    # Run the same check the hook uses
-make fmt           # Auto-fix formatting issues
+make pre-commit    # Run all checks (format, compile, test)
+make fmt           # Auto-fix formatting issues only
 ```
+
+**What happens during pre-commit:**
+1. Code formatting check (`sbt scalafmtCheckAll`)
+2. Compilation check (`sbt compile`)
+3. Cleanup of build artifacts (`target/streams`)
+4. Test execution (`sbt test`)
 
 **To bypass the hook** (not recommended, only for emergencies):
 ```bash
