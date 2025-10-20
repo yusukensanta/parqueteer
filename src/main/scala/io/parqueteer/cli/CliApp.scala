@@ -35,7 +35,8 @@ object CliApp {
   /** Show appropriate help based on command context */
   private def showHelp(args: Array[String]): Unit = {
     val commands = Set("read", "info", "write", "validate", "convert")
-    val commandBeforeHelp = args.takeWhile(arg => !arg.startsWith("--help") && !arg.startsWith("-h"))
+    val commandBeforeHelp = args
+      .takeWhile(arg => !arg.startsWith("--help") && !arg.startsWith("-h"))
       .find(commands.contains)
 
     commandBeforeHelp match {

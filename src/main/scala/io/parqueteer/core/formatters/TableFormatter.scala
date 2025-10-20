@@ -1,10 +1,6 @@
 package io.parqueteer.core.formatters
 
-import io.parqueteer.core.models.{
-  FileContent,
-  ParquetSchema,
-  FileMetadata
-}
+import io.parqueteer.core.models.{FileContent, ParquetSchema, FileMetadata}
 
 class TableFormatter extends OutputFormatter {
   private val MaxColumnWidth = 50 // prevents extremely wide columns
@@ -119,7 +115,9 @@ class TableFormatter extends OutputFormatter {
   }
 
   // Package-private for access from PrettyFormatter
-  private[formatters] def extractColumns(rows: List[Map[String, Any]]): List[String] = {
+  private[formatters] def extractColumns(
+      rows: List[Map[String, Any]]
+  ): List[String] = {
     rows.flatMap(_.keys).distinct.sorted
   }
 
@@ -173,7 +171,7 @@ class TableFormatter extends OutputFormatter {
       widths: List[Int],
       schema: Option[ParquetSchema]
   ): String = {
-    val _ = schema  // Reserved for future type-aware formatting
+    val _ = schema // Reserved for future type-aware formatting
     val values = columns.map { col =>
       row
         .get(col)

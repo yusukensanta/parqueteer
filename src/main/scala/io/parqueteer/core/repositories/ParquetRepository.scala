@@ -36,7 +36,7 @@ class ParquetRepository {
               hadoopConf = hadoopConfig
             )
           )
-          .filter(filter)  // Apply filter here!
+          .filter(filter) // Apply filter here!
           .read(path)
 
         // Read records with limit
@@ -50,7 +50,8 @@ class ParquetRepository {
 
         val totalRows =
           getRowCount(new HadoopPath(file.location.path), hadoopConfig)
-        val isPartial = config.maxRows.exists(_ < totalRows) || filter != Filter.noopFilter
+        val isPartial =
+          config.maxRows.exists(_ < totalRows) || filter != Filter.noopFilter
 
         FileContent(
           rows = rows,
@@ -73,15 +74,16 @@ class ParquetRepository {
           val schema = footer.getFileMetaData.getSchema
 
           // Get compression types from first row group (if available)
-          val compressionMap: Map[String, String] = footer.getBlocks.asScala.headOption
-            .map { rowGroup =>
-              rowGroup.getColumns.asScala.map { columnChunk =>
-                val columnPath = columnChunk.getPath.toDotString
-                val compression = columnChunk.getCodec.name()
-                columnPath -> compression
-              }.toMap
-            }
-            .getOrElse(Map.empty[String, String])
+          val compressionMap: Map[String, String] =
+            footer.getBlocks.asScala.headOption
+              .map { rowGroup =>
+                rowGroup.getColumns.asScala.map { columnChunk =>
+                  val columnPath = columnChunk.getPath.toDotString
+                  val compression = columnChunk.getCodec.name()
+                  columnPath -> compression
+                }.toMap
+              }
+              .getOrElse(Map.empty[String, String])
 
           val columns = schema.getColumns.asScala.map { column =>
             val columnPath = column.getPath.mkString(".")
@@ -119,7 +121,8 @@ class ParquetRepository {
           val metadata = footer.getFileMetaData
 
           // Calculate compression ratio from row groups
-          val compressionRatio = calculateCompressionRatio(footer.getBlocks.asScala.toList)
+          val compressionRatio =
+            calculateCompressionRatio(footer.getBlocks.asScala.toList)
 
           FileMetadata(
             fileSize = fileStatus.getLen,
@@ -160,7 +163,8 @@ class ParquetRepository {
         }
 
         // Use ExampleParquetWriter.builder for Group writing
-        val writer = ExampleParquetWriter.builder(new HadoopPath(location.path))
+        val writer = ExampleParquetWriter
+          .builder(new HadoopPath(location.path))
           .withType(parquetSchema)
           .withConf(hadoopConfig)
           .withCompressionCodec(convertCompressionType(config.compressionType))
@@ -363,29 +367,29 @@ class ParquetRepository {
           issues.toList
         } else {
 
-        // Use ParquetFileReader.open with InputFile
-        val inputFile = HadoopInputFile.fromPath(path, hadoopConfig)
-        Using.resource(ParquetFileReader.open(inputFile)) { reader =>
-          val footer = reader.getFooter
+          // Use ParquetFileReader.open with InputFile
+          val inputFile = HadoopInputFile.fromPath(path, hadoopConfig)
+          Using.resource(ParquetFileReader.open(inputFile)) { reader =>
+            val footer = reader.getFooter
 
-          val schema = footer.getFileMetaData.getSchema
-          if (schema.getColumns.isEmpty) {
-            issues += "Schema has no columns"
-          }
-
-          val blocks = footer.getBlocks.asScala
-          if (blocks.isEmpty) {
-            issues += "File has no row groups"
-          }
-
-          blocks.zipWithIndex.foreach { case (block, index) =>
-            if (block.getRowCount <= 0) {
-              issues += s"Row group $index has invalid row count: ${block.getRowCount}"
+            val schema = footer.getFileMetaData.getSchema
+            if (schema.getColumns.isEmpty) {
+              issues += "Schema has no columns"
             }
-          }
 
-          issues.toList
-        }
+            val blocks = footer.getBlocks.asScala
+            if (blocks.isEmpty) {
+              issues += "File has no row groups"
+            }
+
+            blocks.zipWithIndex.foreach { case (block, index) =>
+              if (block.getRowCount <= 0) {
+                issues += s"Row group $index has invalid row count: ${block.getRowCount}"
+              }
+            }
+
+            issues.toList
+          }
         }
       }
     }
@@ -441,25 +445,24 @@ class ParquetRepository {
     RowParquetRecord(fields)
   }
 
-  /**
-   * Create parquet4s Filter from filter expression
-   *
-   * Supports SQL-like filter expressions:
-   * - age > 25
-   * - name = "John"
-   * - age > 25 AND salary >= 50000
-   * - (age < 18 OR age > 65) AND active = true
-   */
+  /** Create parquet4s Filter from filter expression
+    *
+    * Supports SQL-like filter expressions:
+    *   - age > 25
+    *   - name = "John"
+    *   - age > 25 AND salary >= 50000
+    *   - (age < 18 OR age > 65) AND active = true
+    */
   private def createFilter(filterExpr: Option[String]): Filter = {
     filterExpr match {
-      case None => Filter.noopFilter  // No filter = accept all
+      case None => Filter.noopFilter // No filter = accept all
 
       case Some(expr) =>
         import io.parqueteer.core.filters.FilterParser
 
         FilterParser.parse(expr) match {
           case Right(filter) => filter
-          case Left(error) =>
+          case Left(error)   =>
             // Log error but don't fail - fall back to no filter
             println(s"Warning: Invalid filter expression: $error")
             println(s"Proceeding without filter")
@@ -482,11 +485,9 @@ class ParquetRepository {
     }
   }
 
-  /**
-   * Calculate compression ratio from row group metadata
-   * Ratio = uncompressed_size / compressed_size
-   * Higher ratio means better compression
-   */
+  /** Calculate compression ratio from row group metadata Ratio =
+    * uncompressed_size / compressed_size Higher ratio means better compression
+    */
   private def calculateCompressionRatio(
       rowGroups: List[org.apache.parquet.hadoop.metadata.BlockMetaData]
   ): Option[Double] = {

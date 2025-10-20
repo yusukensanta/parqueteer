@@ -182,7 +182,7 @@ class PrettyFormatter extends OutputFormatter {
       widths: List[Int],
       schema: Option[ParquetSchema]
   ): String = {
-    val _ = schema  // Reserved for future type-aware formatting
+    val _ = schema // Reserved for future type-aware formatting
     val values = columns.map { col =>
       row
         .get(col)
