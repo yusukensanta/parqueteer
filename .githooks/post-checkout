@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Auto-sync sbt version from .tool-versions after git checkout
+
+SCRIPT_DIR="$(git rev-parse --show-toplevel)"
+SYNC_SCRIPT="$SCRIPT_DIR/scripts/sync-sbt-version.sh"
+
+if [[ -f "$SYNC_SCRIPT" ]]; then
+    echo "Syncing sbt version from .tool-versions..."
+    "$SYNC_SCRIPT"
+fi

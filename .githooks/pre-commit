@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# Pre-commit hook to check code formatting with scalafmt
+
+set -e
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+echo -e "${BLUE}Running pre-commit checks...${NC}"
+echo ""
+
+# Check if scalafmt is configured
+if [[ ! -f .scalafmt.conf ]]; then
+    echo -e "${YELLOW}⚠ No .scalafmt.conf found - skipping format check${NC}"
+    exit 0
+fi
+
+# Run scalafmt check
+echo -e "${BLUE}Checking code formatting with scalafmt...${NC}"
+
+if sbt scalafmtCheckAll > /dev/null 2>&1; then
+    echo -e "${GREEN}✓ Code formatting check passed!${NC}"
+    exit 0
+else
+    echo -e "${RED}✗ Code formatting check failed!${NC}"
+    echo ""
+    echo -e "${YELLOW}Your code is not properly formatted.${NC}"
+    echo ""
+    echo "Please run one of the following to fix formatting:"
+    echo -e "  ${GREEN}make fmt${NC}           # Using Makefile"
+    echo -e "  ${GREEN}sbt scalafmtAll${NC}    # Using sbt directly"
+    echo ""
+    echo "Then stage the changes and commit again:"
+    echo -e "  ${GREEN}git add .${NC}"
+    echo -e "  ${GREEN}git commit${NC}"
+    echo ""
+    echo -e "${YELLOW}To bypass this check (not recommended):${NC}"
+    echo -e "  ${GREEN}git commit --no-verify${NC}"
+    echo ""
+    exit 1
+fi
