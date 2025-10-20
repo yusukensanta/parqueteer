@@ -1,0 +1,4 @@
+# Managed by mise - https://mise.jdx.dev/
+sbt   1.11.7
+scala 3.7
+java  openjdk-21

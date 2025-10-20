@@ -1,0 +1,25 @@
+# Mise configuration for parqueteer
+# https://mise.jdx.dev/
+
+[tasks.sync-sbt]
+description = "Sync sbt version from .tool-versions to project/build.properties"
+run = "./scripts/sync-sbt-version.sh"
+
+[tasks.build]
+description = "Compile the project"
+run = "sbt compile"
+depends = ["sync-sbt"]
+
+[tasks.assembly]
+description = "Create fat JAR with all dependencies"
+run = "sbt assembly"
+depends = ["sync-sbt"]
+
+[tasks.test]
+description = "Run all tests"
+run = "sbt test"
+depends = ["sync-sbt"]
+
+# Auto-sync sbt version when .tool-versions changes
+[hooks]
+"enter" = "mise run sync-sbt"
