@@ -1,9 +1,38 @@
 import ReleaseTransformations._
 
 ThisBuild / organization := "com.github.yusukensanta"
-ThisBuild / version := "0.1.0-SNAPSHOT"
+// Version managed by sbt-ci-release from git tags
 name := "parqueteer"
 ThisBuild / scalaVersion := "3.7.3"
+
+// sbt-ci-release configuration
+ThisBuild / versionScheme := Some("early-semver")
+
+// Maven Central publishing configuration
+ThisBuild / sonatypeCredentialHost := "central.sonatype.com"
+ThisBuild / publishTo := sonatypePublishToBundle.value
+ThisBuild / publishMavenStyle := true
+ThisBuild / pomIncludeRepository := { _ => false }
+
+// POM metadata (required by Maven Central)
+ThisBuild / licenses := Seq(
+  "Apache-2.0" -> url("http://www.apache.org/licenses/LICENSE-2.0")
+)
+ThisBuild / developers := List(
+  Developer(
+    id = "yusukensanta",
+    name = "Yusuke Nakayama",
+    email = "yusukensanta@gmail.com", // TODO: Update with your actual email
+    url = url("https://github.com/yusukensanta")
+  )
+)
+ThisBuild / homepage := Some(url("https://github.com/yusukensanta/parqueteer"))
+ThisBuild / scmInfo := Some(
+  ScmInfo(
+    url("https://github.com/yusukensanta/parqueteer"),
+    "scm:git@github.com:yusukensanta/parqueteer.git"
+  )
+)
 
 ThisBuild / javaOptions ++= Seq("-source", "25", "-target", "25")
 ThisBuild / scalacOptions ++= Seq(
@@ -20,9 +49,13 @@ ThisBuild / scalacOptions ++= Seq(
 lazy val root = (project in file("."))
   .enablePlugins(JavaAppPackaging)
   .settings(
-    assembly / mainClass := Some("com.github.yusukensanta.parqueteer.cli.CliApp"),
+    assembly / mainClass := Some(
+      "com.github.yusukensanta.parqueteer.cli.CliApp"
+    ),
     assembly / assemblyJarName := "parqueteer.jar",
-    Compile / mainClass := Some("com.github.yusukensanta.parqueteer.cli.CliApp"),
+    Compile / mainClass := Some(
+      "com.github.yusukensanta.parqueteer.cli.CliApp"
+    ),
 
     // Assembly optimizations - enable caching for faster incremental builds
     assembly / assemblyOption := (assembly / assemblyOption).value
