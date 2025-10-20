@@ -1,3 +1,5 @@
+import ReleaseTransformations._
+
 ThisBuild / organization := "io.parqueteer"
 ThisBuild / version := "0.1.0-SNAPSHOT"
 name := "parqueteer"
@@ -23,7 +25,8 @@ lazy val root = (project in file("."))
     Compile / mainClass := Some("io.parqueteer.cli.CliApp"),
 
     // Assembly optimizations - enable caching for faster incremental builds
-    assembly / assemblyOption := (assembly / assemblyOption).value.withCacheOutput(true),
+    assembly / assemblyOption := (assembly / assemblyOption).value
+      .withCacheOutput(true),
 
     // Exclude test-only dependencies from assembly
     assembly / assemblyExcludedJars := {
@@ -48,6 +51,25 @@ lazy val root = (project in file("."))
     batScriptExtraDefines += """set "_JAVA_OPTS=%_JAVA_OPTS% --add-opens=java.base/java.lang=ALL-UNNAMED"""",
     batScriptExtraDefines += """set "_JAVA_OPTS=%_JAVA_OPTS% --add-opens=java.base/sun.nio.ch=ALL-UNNAMED"""",
     batScriptExtraDefines += """set "_JAVA_OPTS=%_JAVA_OPTS% -Xmx1G"""",
+
+    // Universal packaging configuration for distribution
+    Universal / packageName := s"${name.value}-${version.value}",
+    Universal / topLevelDirectory := Some(s"${name.value}-${version.value}"),
+
+    // Include README and other docs in distribution
+    Universal / mappings ++= Seq(
+      (ThisBuild / baseDirectory).value / "README.md" -> "README.md",
+      (ThisBuild / baseDirectory).value / "LICENSE" -> "LICENSE"
+    ).filter(_._1.exists),
+
+    // Exclude assembly JAR from Universal package (Universal creates its own structure)
+    Universal / mappings := {
+      val original = (Universal / mappings).value
+      // Keep only the staged files from JavaAppPackaging, not assembly output
+      original.filterNot { case (file, path) =>
+        path.contains("parqueteer.jar") && !path.startsWith("lib/")
+      }
+    },
     libraryDependencies ++= {
       val parquet4sVersion =
         "2.18.0" // Latest that definitely exists for Scala 3
@@ -114,10 +136,44 @@ lazy val root = (project in file("."))
     assembly / assemblyMergeStrategy := {
       case PathList("META-INF", "services", xs @ _*) => MergeStrategy.concat
       case PathList("META-INF", "versions", xs @ _*) => MergeStrategy.first
-      case PathList("META-INF", "LICENSE" | "LICENSE.txt" | "NOTICE" | "NOTICE.txt", xs @ _*) => MergeStrategy.discard
+      case PathList(
+            "META-INF",
+            "LICENSE" | "LICENSE.txt" | "NOTICE" | "NOTICE.txt",
+            xs @ _*
+          ) =>
+        MergeStrategy.discard
       case PathList("META-INF", xs @ _*) => MergeStrategy.discard
       case PathList("module-info.class") => MergeStrategy.discard
       case PathList("reference.conf")    => MergeStrategy.concat
       case _                             => MergeStrategy.first
     }
   )
+
+// Release configuration
+releaseProcess := Seq[ReleaseStep](
+  checkSnapshotDependencies, // Check no SNAPSHOT dependencies
+  inquireVersions, // Ask for release and next version
+  runClean, // Clean before build
+  runTest, // Run tests
+  setReleaseVersion, // Set version to release version
+  commitReleaseVersion, // Commit the release version
+  tagRelease, // Tag the release (v{version})
+  setNextVersion, // Set version to next SNAPSHOT
+  commitNextVersion, // Commit the next SNAPSHOT version
+  pushChanges // Push commits and tags to remote
+)
+
+// Don't publish to Maven/Sonatype (we use GitHub Releases instead)
+releasePublishArtifactsAction := {}
+
+// Use minor version bump by default (1.0.0 -> 1.1.0)
+releaseVersionBump := sbtrelease.Version.Bump.Minor
+
+// Custom tag name format (adds 'v' prefix: v1.0.0)
+releaseTagName := s"v${
+    if (releaseUseGlobalVersion.value) (ThisBuild / version).value
+    else version.value
+  }"
+
+// Require clean working directory before release
+releaseIgnoreUntrackedFiles := false
