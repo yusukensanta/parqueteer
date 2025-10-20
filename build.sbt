@@ -1,6 +1,6 @@
 import ReleaseTransformations._
 
-ThisBuild / organization := "io.parqueteer"
+ThisBuild / organization := "com.github.yusukensanta"
 ThisBuild / version := "0.1.0-SNAPSHOT"
 name := "parqueteer"
 ThisBuild / scalaVersion := "3.7.3"
@@ -20,9 +20,9 @@ ThisBuild / scalacOptions ++= Seq(
 lazy val root = (project in file("."))
   .enablePlugins(JavaAppPackaging)
   .settings(
-    assembly / mainClass := Some("io.parqueteer.cli.CliApp"),
+    assembly / mainClass := Some("com.github.yusukensanta.parqueteer.cli.CliApp"),
     assembly / assemblyJarName := "parqueteer.jar",
-    Compile / mainClass := Some("io.parqueteer.cli.CliApp"),
+    Compile / mainClass := Some("com.github.yusukensanta.parqueteer.cli.CliApp"),
 
     // Assembly optimizations - enable caching for faster incremental builds
     assembly / assemblyOption := (assembly / assemblyOption).value
