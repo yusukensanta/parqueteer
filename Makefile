@@ -1,4 +1,4 @@
-.PHONY: help install sync-versions clean compile test assembly package run fmt lint check setup-dev setup-hooks
+.PHONY: help install sync-versions clean compile test assembly package run fmt lint check pre-commit setup-dev setup-hooks
 
 # Default target: show help
 .DEFAULT_GOAL := help
@@ -47,11 +47,13 @@ setup-dev: install setup-hooks ## Complete development environment setup
 	@echo "  make test       # Run tests"
 	@echo "  make assembly   # Create distributable JAR"
 
-setup-hooks: ## Configure git hooks for version sync
+setup-hooks: ## Configure git hooks for version sync and pre-commit checks
 	@echo "$(GREEN)✓$(NC) Setting up git hooks..."
 	@chmod +x .githooks/*
 	@git config core.hooksPath .githooks
-	@echo "$(GREEN)✓$(NC) Git hooks configured"
+	@echo "$(GREEN)✓$(NC) Git hooks configured:"
+	@echo "  - pre-commit: Checks code formatting before commits"
+	@echo "  - post-checkout: Syncs sbt version after branch changes"
 
 ##@ Build
 
@@ -95,6 +97,9 @@ lint: ## Check code style
 
 check: lint test ## Run all checks (lint + test)
 	@echo "$(GREEN)✓$(NC) All checks passed!"
+
+pre-commit: lint ## Run pre-commit checks (same as git hook)
+	@echo "$(GREEN)✓$(NC) Pre-commit checks passed!"
 
 ##@ Clean
 
