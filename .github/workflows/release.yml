@@ -89,14 +89,27 @@ jobs:
           body: |
             ## Installation
 
-            ### Linux / macOS
+            ### Homebrew (macOS/Linux)
+            ```bash
+            brew tap yusukensanta/parqueteer
+            brew install parqueteer
+            ```
+
+            ### curl (macOS/Linux)
+            ```bash
+            curl -fsSL https://raw.githubusercontent.com/yusukensanta/parqueteer/main/scripts/install.sh | bash
+            ```
+
+            ### Manual Installation
+
+            #### Linux / macOS
             ```bash
             tar -xzf parqueteer-${{ steps.version.outputs.VERSION }}.tgz
             cd parqueteer-${{ steps.version.outputs.VERSION }}
             ./bin/parqueteer --version
             ```
 
-            ### Windows
+            #### Windows
             ```powershell
             # Extract the zip file
             # Then run:
@@ -122,3 +135,27 @@ jobs:
             target/universal/*.zip
             target/universal/checksums.txt
           retention-days: 30
+
+      - name: Update Homebrew Formula
+        run: |
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          TGZ_FILE="parqueteer-${VERSION}.tgz"
+
+          # Get SHA256 from checksums.txt
+          SHA256=$(grep "$TGZ_FILE" target/universal/checksums.txt | awk '{print $1}')
+
+          # Update Formula/parqueteer.rb
+          sed -i "s/version \".*\"/version \"${VERSION}\"/" Formula/parqueteer.rb
+          sed -i "s|url \".*\"|url \"https://github.com/yusukensanta/parqueteer/releases/download/v${VERSION}/parqueteer-${VERSION}.tgz\"|" Formula/parqueteer.rb
+          sed -i "s/sha256 \".*\"/sha256 \"${SHA256}\"/" Formula/parqueteer.rb
+
+          echo "Updated Homebrew formula:"
+          cat Formula/parqueteer.rb
+
+      - name: Commit and push updated formula
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/parqueteer.rb
+          git commit -m "chore: update Homebrew formula to v${{ steps.version.outputs.VERSION }}" || echo "No changes to commit"
+          git push origin HEAD:main || echo "Failed to push formula update"
