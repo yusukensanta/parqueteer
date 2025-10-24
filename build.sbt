@@ -1,5 +1,3 @@
-import ReleaseTransformations._
-
 ThisBuild / organization := "io.github.yusukensanta"
 // Version managed by sbt-ci-release from git tags
 name := "parqueteer"
@@ -187,31 +185,5 @@ lazy val root = (project in file("."))
     }
   )
 
-// Release configuration
-releaseProcess := Seq[ReleaseStep](
-  checkSnapshotDependencies, // Check no SNAPSHOT dependencies
-  inquireVersions, // Ask for release and next version
-  runClean, // Clean before build
-  runTest, // Run tests
-  setReleaseVersion, // Set version to release version
-  commitReleaseVersion, // Commit the release version
-  tagRelease, // Tag the release (v{version})
-  setNextVersion, // Set version to next SNAPSHOT
-  commitNextVersion, // Commit the next SNAPSHOT version
-  pushChanges // Push commits and tags to remote
-)
-
-// Don't publish to Maven/Sonatype (we use GitHub Releases instead)
-releasePublishArtifactsAction := {}
-
-// Use minor version bump by default (1.0.0 -> 1.1.0)
-releaseVersionBump := sbtrelease.Version.Bump.Minor
-
-// Custom tag name format (adds 'v' prefix: v1.0.0)
-releaseTagName := s"v${
-    if (releaseUseGlobalVersion.value) (ThisBuild / version).value
-    else version.value
-  }"
-
-// Require clean working directory before release
-releaseIgnoreUntrackedFiles := false
+// Version is automatically managed by sbt-ci-release from git tags
+// No manual release process needed - just push a tag to trigger CI publishing

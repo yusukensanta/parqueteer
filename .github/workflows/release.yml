@@ -34,18 +34,11 @@ jobs:
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
           echo "Extracted version: $VERSION"
 
-      - name: Verify version matches build.sbt
+      - name: Show version info
         run: |
-          BUILD_VERSION=$(grep 'ThisBuild / version :=' build.sbt | sed 's/.*"\(.*\)".*/\1/')
           TAG_VERSION="${{ steps.version.outputs.VERSION }}"
-          echo "build.sbt version: $BUILD_VERSION"
           echo "Tag version: $TAG_VERSION"
-
-          # Allow release if build.sbt is already updated to release version
-          # (happens when using sbt-release plugin)
-          if [ "$BUILD_VERSION" != "$TAG_VERSION" ]; then
-            echo "⚠️  Warning: Version mismatch, but continuing with tag version: $TAG_VERSION"
-          fi
+          echo "Note: Using sbt-ci-release for automatic version management from git tags"
 
       - name: Setup sbt via Coursier
         run: |
