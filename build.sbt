@@ -1,6 +1,6 @@
 import ReleaseTransformations._
 
-ThisBuild / organization := "com.github.yusukensanta"
+ThisBuild / organization := "io.github.yusukensanta"
 // Version managed by sbt-ci-release from git tags
 name := "parqueteer"
 ThisBuild / scalaVersion := "3.7.3"
@@ -50,11 +50,11 @@ lazy val root = (project in file("."))
   .enablePlugins(JavaAppPackaging)
   .settings(
     assembly / mainClass := Some(
-      "com.github.yusukensanta.parqueteer.cli.CliApp"
+      "io.github.yusukensanta.parqueteer.cli.CliApp"
     ),
     assembly / assemblyJarName := "parqueteer.jar",
     Compile / mainClass := Some(
-      "com.github.yusukensanta.parqueteer.cli.CliApp"
+      "io.github.yusukensanta.parqueteer.cli.CliApp"
     ),
 
     // Assembly optimizations - enable caching for faster incremental builds
