@@ -113,7 +113,6 @@ lazy val root = (project in file("."))
       val circeYamlVersion = "0.15.3"
       val scoptVersion = "4.1.0"
       val betterFilesVersion = "3.9.2"
-      val logbackVersion = "1.5.15"
       val slf4jVersion = "2.0.16"
       val scalatestVersion = "3.2.18"
       val scalamockVersion = "6.0.0" // Latest for Scala 3
@@ -124,6 +123,7 @@ lazy val root = (project in file("."))
       val azureStorageVersion = "12.28.1"
       val azureIdentityVersion = "1.15.1"
       val hadoopVersion = "3.4.2"
+      val gcsConnectorVersion = "hadoop3-2.2.19"
 
       Seq(
         "com.github.mjakubowski84" %% "parquet4s-core" % parquet4sVersion,
@@ -141,25 +141,50 @@ lazy val root = (project in file("."))
         // File I/O
         "com.github.pathikrit" %% "better-files" % betterFilesVersion,
 
-        // Logging
-        "org.slf4j" % "slf4j-api" % slf4jVersion,
-        "ch.qos.logback" % "logback-classic" % logbackVersion,
+        // Logging - using simple logger for smaller distribution
+        "org.slf4j" % "slf4j-simple" % slf4jVersion,
 
-        // Cloud Storage - AWS
+        // ================================================================
+        // Cloud Storage - AWS S3 (Optimized to exclude 641 MB bundle)
+        // ================================================================
+
+        // Hadoop AWS connector for s3a:// URIs - EXCLUDE the bundle!
+        "org.apache.hadoop" % "hadoop-aws" % hadoopVersion
+          exclude ("software.amazon.awssdk", "bundle"),
+
+        // Add only the AWS SDK v2 modules we need (instead of 641 MB bundle)
         "software.amazon.awssdk" % "s3" % awsSdkVersion,
-        "software.amazon.awssdk" % "sts" % awsSdkVersion,
-        "org.apache.hadoop" % "hadoop-aws" % hadoopVersion,
+        "software.amazon.awssdk" % "sts" % awsSdkVersion, // For credential management
+        "software.amazon.awssdk" % "apache-client" % awsSdkVersion, // HTTP client
 
-        // Cloud Storage - Google Cloud
+        // ================================================================
+        // Cloud Storage - Google Cloud (Optimized)
+        // ================================================================
+
+        // GCS connector for Hadoop (gs:// URIs)
+        "com.google.cloud.bigdataoss" % "gcs-connector" % gcsConnectorVersion
+          exclude ("com.google.guava", "guava") // Avoid version conflicts
+          exclude ("org.apache.hadoop", "hadoop-common"), // Already included
+
+        // Native GCS client (for direct API usage)
         "com.google.cloud" % "google-cloud-storage" % googleCloudStorageVersion,
-        "com.google.cloud.bigdataoss" % "gcs-connector" % "hadoop3-2.2.19",
 
-        // Cloud Storage - Azure
+        // ================================================================
+        // Cloud Storage - Azure (Optimized)
+        // ================================================================
+
+        // Hadoop Azure connector for wasb:// URIs
+        "org.apache.hadoop" % "hadoop-azure" % hadoopVersion
+          exclude ("org.apache.hadoop", "hadoop-common"), // Already included
+
+        // Native Azure client (for direct API usage)
         "com.azure" % "azure-storage-blob" % azureStorageVersion,
         "com.azure" % "azure-identity" % azureIdentityVersion,
-        "org.apache.hadoop" % "hadoop-azure" % hadoopVersion,
 
-        // Hadoop core for cloud filesystem support
+        // ================================================================
+        // Hadoop Core (Minimal for cloud filesystem support)
+        // ================================================================
+
         "org.apache.hadoop" % "hadoop-client-api" % hadoopVersion,
         "org.apache.hadoop" % "hadoop-client-runtime" % hadoopVersion,
 

@@ -345,14 +345,10 @@ object CliApp {
       loggingConfig: io.github.yusukensanta.parqueteer.config.LoggingConfig,
       verbose: Boolean
   ): Unit = {
-    import ch.qos.logback.classic.{Level, LoggerContext}
-    import org.slf4j.LoggerFactory
-
-    val context = LoggerFactory.getILoggerFactory.asInstanceOf[LoggerContext]
-    val rootLogger = context.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME)
-
-    val level =
-      if (verbose) Level.DEBUG else Level.valueOf(loggingConfig.level)
-    rootLogger.setLevel(level)
+    // Note: Using slf4j-simple which doesn't support programmatic configuration
+    // To configure logging level, set system property before JVM starts:
+    //   -Dorg.slf4j.simpleLogger.defaultLogLevel=DEBUG
+    // We keep this method for compatibility but logging config is now static
+    ()
   }
 }
