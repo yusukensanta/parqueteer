@@ -48,7 +48,8 @@ make help
 
 The `make setup-dev` command automatically configures git hooks that help maintain code quality:
 
-**Pre-commit Hook** - Runs comprehensive checks before each commit:
+**Pre-commit Hook** - Runs comprehensive checks before each commit (only when Scala/sbt files are modified):
+- ✅ **Smart Detection**: Automatically skips checks if only docs or config files changed
 - ✅ **Formatting**: Checks code formatting with scalafmt
 - ✅ **Compilation**: Ensures code compiles successfully
 - ✅ **Tests**: Runs all tests to ensure they pass
@@ -61,10 +62,13 @@ make fmt           # Auto-fix formatting issues only
 ```
 
 **What happens during pre-commit:**
-1. Code formatting check (`sbt scalafmtCheckAll`)
-2. Compilation check (`sbt compile`)
-3. Cleanup of build artifacts (`target/streams`)
-4. Test execution (`sbt test`)
+1. **Detection**: Checks if any `.scala` or `.sbt` files are staged
+   - If no Scala/sbt files modified → Skips all checks ✅ Fast commit!
+   - If Scala/sbt files modified → Runs full checks below
+2. Code formatting check (`sbt scalafmtCheckAll`)
+3. Compilation check (`sbt compile`)
+4. Cleanup of build artifacts (`target/streams`)
+5. Test execution (`sbt test`)
 
 **To bypass the hook** (not recommended, only for emergencies):
 ```bash
