@@ -47,6 +47,21 @@ jobs:
             echo "⚠️  Warning: Version mismatch, but continuing with tag version: $TAG_VERSION"
           fi
 
+      - name: Setup sbt via Coursier
+        run: |
+          curl -fL https://github.com/coursier/coursier/releases/latest/download/cs-x86_64-pc-linux.gz | gzip -d > cs
+          chmod +x cs
+          ./cs setup --yes --jvm 21
+          echo "$HOME/.local/share/coursier/bin" >> $GITHUB_PATH
+
+      - name: Cache sbt dependencies
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: |
+            ~/.sbt
+            ~/.cache/coursier
+          key: ${{ runner.os }}-sbt-${{ hashFiles('**/build.sbt', 'project/**') }}
+
       - name: Run tests
         run: sbt clean test
 
