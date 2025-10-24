@@ -14,6 +14,11 @@ ThisBuild / publishTo := sonatypePublishToBundle.value
 ThisBuild / publishMavenStyle := true
 ThisBuild / pomIncludeRepository := { _ => false }
 
+// Exclude publishing settings from lintUnused check
+// These are used by sbt-ci-release plugin at runtime
+Global / excludeLintKeys += publishMavenStyle
+Global / excludeLintKeys += pomIncludeRepository
+
 // POM metadata (required by Maven Central)
 ThisBuild / licenses := Seq(
   "Apache-2.0" -> url("http://www.apache.org/licenses/LICENSE-2.0")
