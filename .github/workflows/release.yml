@@ -169,14 +169,11 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
+          git stash
           git fetch origin main
           git checkout main
-
-          git pull --rebase origin main || {
-              echo "ERROR: Failed to rebase on main"
-              echo "This might indicate a merge conflict."
-              exit 1
-          }
+          git pull origin main
+          git stash pop
 
           git add Formula/parqueteer.rb
           git commit -m "chore: update Homebrew formula to v${{ steps.version.outputs.VERSION }}" || echo "No changes to commit"
