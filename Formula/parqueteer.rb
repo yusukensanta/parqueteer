@@ -1,8 +1,8 @@
 class Parqueteer < Formula
   desc "CLI tool for working with Parquet files - query, inspect, and convert with ease"
   homepage "https://github.com/yusukensanta/parqueteer"
-  version "0.1.4"
   url "https://github.com/yusukensanta/parqueteer/releases/download/v0.1.4/parqueteer-0.1.4.tgz"
+  version "0.1.4"
   sha256 "bf5777cacf122fbf458f782db2b8617898830182e060bd75e59a869e5ad052a3" # Will be calculated during release
   license "Apache-2.0"
 
@@ -11,7 +11,7 @@ class Parqueteer < Formula
 
   def install
     # Remove Windows batch files
-    rm_f Dir["bin/*.bat"]
+    rm_r Dir["bin/*.bat"]
 
     # Install all files to libexec
     libexec.install Dir["*"]
