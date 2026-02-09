@@ -51,3 +51,6 @@ yarn.lock
 Thumbs.db
 
 mise.toml
+
+# Claude Code related dirs
+.serena
