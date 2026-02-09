@@ -4,6 +4,7 @@
 *.puml
 !README.md
 !CONTRIBUTING.md
+!.github/ISSUE_TEMPLATE/*
 
 # SBT / Scala Build
 target/
