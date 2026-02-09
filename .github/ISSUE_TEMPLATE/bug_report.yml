@@ -1,0 +1,111 @@
+name: Bug Report
+description: Report a bug or unexpected behavior in Parqueteer
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug! Please fill in as much detail as possible.
+
+  - type: input
+    id: version
+    attributes:
+      label: Parqueteer Version
+      description: "Run `parqueteer --version` to get the version"
+      placeholder: "e.g. 0.1.5"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating System
+      options:
+        - macOS
+        - Linux
+        - Windows (WSL)
+        - Windows
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: java-version
+    attributes:
+      label: Java Version
+      description: "Run `java -version` to get the version"
+      placeholder: "e.g. OpenJDK 21.0.2"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: command
+    attributes:
+      label: Command
+      description: Which command triggered the bug?
+      options:
+        - read
+        - info
+        - write
+        - validate
+        - convert
+        - Other / General
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug Description
+      description: A clear description of what happened vs what you expected
+      placeholder: |
+        **What happened:**
+        ...
+
+        **What I expected:**
+        ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      description: Minimal steps to reproduce the behavior
+      placeholder: |
+        1. Run `parqueteer read ...`
+        2. ...
+        3. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Error Output / Logs
+      description: Paste relevant terminal output (use `--verbose` flag for extra detail)
+      render: shell
+    validations:
+      required: false
+
+  - type: dropdown
+    id: storage
+    attributes:
+      label: Storage Type
+      description: Where is the Parquet file located?
+      options:
+        - Local filesystem
+        - AWS S3
+        - Google Cloud Storage
+        - Azure Storage
+        - N/A
+    validations:
+      required: false
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional Context
+      description: Any other context (config file, file size, schema complexity, etc.)
+    validations:
+      required: false

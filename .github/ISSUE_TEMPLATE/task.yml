@@ -1,0 +1,63 @@
+name: Task
+description: Internal improvement, refactoring, testing, or infrastructure work
+labels: ["task"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template for internal tasks like refactoring, testing, CI/CD, or documentation.
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Category
+      options:
+        - Testing
+        - Refactoring
+        - CI/CD
+        - Documentation
+        - Dependencies
+        - Performance
+        - Security
+        - Infrastructure
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      options:
+        - "P1: Must do before next milestone"
+        - "P2: Should do soon"
+        - "P3: Nice to have"
+        - "P4: Long-term / strategic"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What needs to be done and why
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance Criteria
+      description: How do we know this task is complete?
+      placeholder: |
+        - [ ] Criterion 1
+        - [ ] Criterion 2
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Technical Notes
+      description: Relevant files, design considerations, or references
+    validations:
+      required: false
