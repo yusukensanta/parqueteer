@@ -84,6 +84,21 @@ class TableFormatterTest extends AnyFlatSpec with Matchers {
     result should include("7.20")
   }
 
+  it should "produce exact table structure for single-column single-row input" in {
+    val minimal = FileContent(
+      rows = List(Map("id" -> 1L)),
+      totalRows = 1L,
+      isPartial = false
+    )
+    val result = formatter.formatContent(minimal, None)
+    result should include("┌")
+    result should include("id")
+    result should include("1")
+    result should include("┘")
+    // Summary pinned exactly
+    result should include("1 rows (showing all)")
+  }
+
   "TableFormatter.formatSchema" should "include column count" in {
     val result = formatter.formatSchema(sampleSchema)
     result should include("Total Columns: 2")
@@ -100,6 +115,12 @@ class TableFormatterTest extends AnyFlatSpec with Matchers {
     result should include("SNAPPY")
   }
 
+  it should "show Yes for optional columns and No for required columns" in {
+    val result = formatter.formatSchema(sampleSchema)
+    result should include("Yes")
+    result should include("No")
+  }
+
   "TableFormatter.formatMetadata" should "show file size in human-readable form" in {
     val result = formatter.formatMetadata(sampleMetadata)
     result should include("1.50 KB")
@@ -107,7 +128,7 @@ class TableFormatterTest extends AnyFlatSpec with Matchers {
 
   it should "show version" in {
     val result = formatter.formatMetadata(sampleMetadata)
-    result should include("2.0")
+    result should include("Parquet Version: 2.0")
   }
 
   it should "show creator" in {
@@ -115,8 +136,17 @@ class TableFormatterTest extends AnyFlatSpec with Matchers {
     result should include("parqueteer")
   }
 
+  it should "include createdAt timestamp" in {
+    val result = formatter.formatMetadata(sampleMetadata)
+    result should include("2024-01-01")
+  }
+
   "TableFormatter.formatBytes" should "format bytes" in {
     formatter.formatBytes(512L) shouldBe "512.00 B"
+  }
+
+  it should "format exactly 1024 bytes as 1.00 KB" in {
+    formatter.formatBytes(1024L) shouldBe "1.00 KB"
   }
 
   it should "format kilobytes" in {
