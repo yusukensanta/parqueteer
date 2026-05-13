@@ -148,7 +148,6 @@ object ArgumentParser {
             .action((x, c) => c.copy(command = Some(ValidateCommand(x))))
             .text("Path to parquet file"),
           opt[Unit]("verbose")
-            .abbr("v")
             .action((_, c) => updateValidateCommand(c, _.copy(verbose = true)))
             .text("Show detailed validation information")
         ),
