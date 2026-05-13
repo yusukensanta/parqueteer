@@ -84,6 +84,12 @@ class FilterParserTest extends AnyFlatSpec with Matchers {
     result.exists(_ ne Filter.noopFilter) shouldBe true
   }
 
+  it should "parse large Long value without truncation (> Int.MaxValue)" in {
+    val result = FilterParser.parse("id > 3000000000")
+    result shouldBe a[Right[?, ?]]
+    result.exists(_ ne Filter.noopFilter) shouldBe true
+  }
+
   it should "return Left for empty string" in {
     FilterParser.parse("") shouldBe a[Left[?, ?]]
   }

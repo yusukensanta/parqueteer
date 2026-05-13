@@ -118,7 +118,7 @@ class FilterParser extends JavaTokenParsers {
       case "=" =>
         value match {
           case s: String  => col === s
-          case l: Long    => col === l.toInt
+          case l: Long    => col === l
           case d: Double  => col === d
           case b: Boolean => col === b
           case _          => col === value.toString
@@ -126,32 +126,32 @@ class FilterParser extends JavaTokenParsers {
       case "!=" =>
         value match {
           case s: String  => col !== s
-          case l: Long    => col !== l.toInt
+          case l: Long    => col !== l
           case d: Double  => col !== d
           case b: Boolean => col !== b
           case _          => col !== value.toString
         }
       case ">" =>
         value match {
-          case l: Long   => col > l.toInt
+          case l: Long   => col > l
           case d: Double => col > d
           case _         => Filter.noopFilter
         }
       case ">=" =>
         value match {
-          case l: Long   => col >= l.toInt
+          case l: Long   => col >= l
           case d: Double => col >= d
           case _         => Filter.noopFilter
         }
       case "<" =>
         value match {
-          case l: Long   => col < l.toInt
+          case l: Long   => col < l
           case d: Double => col < d
           case _         => Filter.noopFilter
         }
       case "<=" =>
         value match {
-          case l: Long   => col <= l.toInt
+          case l: Long   => col <= l
           case d: Double => col <= d
           case _         => Filter.noopFilter
         }
