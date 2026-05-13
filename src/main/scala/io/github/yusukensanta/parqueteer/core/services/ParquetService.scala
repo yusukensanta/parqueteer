@@ -7,7 +7,7 @@ import scala.util.{Try, Success, Failure}
 import io.circe.{Encoder, Json}
 
 object ParquetServiceEncoders {
-  implicit val anyEncoder: Encoder[Any] = Encoder.instance {
+  given anyEncoder: Encoder[Any] = Encoder.instance {
     case null      => Json.Null
     case s: String => Json.fromString(s)
     case i: Int    => Json.fromInt(i)
@@ -34,7 +34,7 @@ object ParquetServiceEncoders {
     case other       => Json.fromString(other.toString)
   }
 
-  implicit val mapStringAnyEncoder: Encoder[Map[String, Any]] =
+  given mapStringAnyEncoder: Encoder[Map[String, Any]] =
     Encoder.instance { map =>
       val typedMap = map.asInstanceOf[Map[Any, Any]]
       Json.obj(typedMap.map { case (k, v) =>
@@ -42,7 +42,7 @@ object ParquetServiceEncoders {
       }.toSeq*)
     }
 
-  implicit val listMapEncoder: Encoder[List[Map[String, Any]]] =
+  given listMapEncoder: Encoder[List[Map[String, Any]]] =
     Encoder.instance(list =>
       Json.fromValues(list.map(mapStringAnyEncoder.apply))
     )

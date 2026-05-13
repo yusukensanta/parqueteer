@@ -10,7 +10,7 @@ import io.circe.syntax._
 import io.circe.generic.semiauto._
 
 class JSONFormatter extends OutputFormatter {
-  import JSONFormatter._
+  import JSONFormatter.given
 
   override def formatContent(
       content: FileContent,
@@ -69,12 +69,12 @@ object JSONFormatter {
   import io.github.yusukensanta.parqueteer.core.models.ColumnInfo
   import java.time.Instant
 
-  implicit val columnInfoEncoder: Encoder[ColumnInfo] =
+  given Encoder[ColumnInfo] =
     deriveEncoder[ColumnInfo]
-  implicit val parquetSchemaEncoder: Encoder[ParquetSchema] =
+  given Encoder[ParquetSchema] =
     deriveEncoder[ParquetSchema]
-  implicit val instantEncoder: Encoder[Instant] =
+  given Encoder[Instant] =
     Encoder.encodeString.contramap(_.toString)
-  implicit val fileMetadataEncoder: Encoder[FileMetadata] =
+  given Encoder[FileMetadata] =
     deriveEncoder[FileMetadata]
 }

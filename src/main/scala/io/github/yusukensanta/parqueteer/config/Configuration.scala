@@ -64,39 +64,39 @@ case class LoggingConfig(
 )
 
 object AppConfig {
-  implicit val s3ConfigDecoder: Decoder[S3Config] = deriveDecoder[S3Config]
-  implicit val s3ConfigEncoder: Encoder[S3Config] = deriveEncoder[S3Config]
+  given Decoder[S3Config] = deriveDecoder[S3Config]
+  given Encoder[S3Config] = deriveEncoder[S3Config]
 
-  implicit val gcsConfigDecoder: Decoder[GCSConfig] = deriveDecoder[GCSConfig]
-  implicit val gcsConfigEncoder: Encoder[GCSConfig] = deriveEncoder[GCSConfig]
+  given Decoder[GCSConfig] = deriveDecoder[GCSConfig]
+  given Encoder[GCSConfig] = deriveEncoder[GCSConfig]
 
-  implicit val azureConfigDecoder: Decoder[AzureConfig] =
+  given Decoder[AzureConfig] =
     deriveDecoder[AzureConfig]
-  implicit val azureConfigEncoder: Encoder[AzureConfig] =
+  given Encoder[AzureConfig] =
     deriveEncoder[AzureConfig]
 
-  implicit val cloudConfigDecoder: Decoder[CloudConfig] =
+  given Decoder[CloudConfig] =
     deriveDecoder[CloudConfig]
-  implicit val cloudConfigEncoder: Encoder[CloudConfig] =
+  given Encoder[CloudConfig] =
     deriveEncoder[CloudConfig]
 
-  implicit val outputConfigDecoder: Decoder[OutputConfig] =
+  given Decoder[OutputConfig] =
     deriveDecoder[OutputConfig]
-  implicit val outputConfigEncoder: Encoder[OutputConfig] =
+  given Encoder[OutputConfig] =
     deriveEncoder[OutputConfig]
 
-  implicit val performanceConfigDecoder: Decoder[PerformanceConfig] =
+  given Decoder[PerformanceConfig] =
     deriveDecoder[PerformanceConfig]
-  implicit val performanceConfigEncoder: Encoder[PerformanceConfig] =
+  given Encoder[PerformanceConfig] =
     deriveEncoder[PerformanceConfig]
 
-  implicit val loggingConfigDecoder: Decoder[LoggingConfig] =
+  given Decoder[LoggingConfig] =
     deriveDecoder[LoggingConfig]
-  implicit val loggingConfigEncoder: Encoder[LoggingConfig] =
+  given Encoder[LoggingConfig] =
     deriveEncoder[LoggingConfig]
 
-  implicit val appConfigDecoder: Decoder[AppConfig] = deriveDecoder[AppConfig]
-  implicit val appConfigEncoder: Encoder[AppConfig] = deriveEncoder[AppConfig]
+  given Decoder[AppConfig] = deriveDecoder[AppConfig]
+  given Encoder[AppConfig] = deriveEncoder[AppConfig]
 }
 
 class ConfigurationManager {
