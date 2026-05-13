@@ -82,7 +82,7 @@ class S3CredentialManager extends CloudCredentialManager {
             .credentialsProvider(DefaultCredentialsProvider.create())
             .build()
           val identity = stsClient.getCallerIdentity()
-          println(
+          System.err.println(
             s"S3 credentials validated for account: ${identity.account()}"
           )
         }

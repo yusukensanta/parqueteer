@@ -464,8 +464,8 @@ class ParquetRepository {
           case Right(filter) => filter
           case Left(error)   =>
             // Log error but don't fail - fall back to no filter
-            println(s"Warning: Invalid filter expression: $error")
-            println(s"Proceeding without filter")
+            System.err.println(s"Warning: Invalid filter expression: $error")
+            System.err.println(s"Proceeding without filter")
             Filter.noopFilter
         }
     }

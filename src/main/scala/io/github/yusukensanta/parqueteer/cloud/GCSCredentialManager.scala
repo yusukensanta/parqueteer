@@ -46,7 +46,7 @@ class GCSCredentialManager extends CloudCredentialManager {
             case Failure(error) =>
               // Try application default credentials
               conf.set("google.cloud.auth.service.account.enable", "false")
-              println(
+              System.err.println(
                 s"Warning: Using application default credentials: ${error.getMessage}"
               )
           }
@@ -91,7 +91,7 @@ class GCSCredentialManager extends CloudCredentialManager {
             // Try to get bucket metadata to validate credentials
             val bucket = storage.get(gcsLocation.bucket)
             if (bucket != null) {
-              println(
+              System.err.println(
                 s"GCS credentials validated for bucket: ${gcsLocation.bucket}"
               )
             } else {
