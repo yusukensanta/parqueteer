@@ -4,7 +4,7 @@ import io.github.yusukensanta.parqueteer.core.models._
 import io.github.yusukensanta.parqueteer.core.repositories.ParquetRepository
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import scala.util.{Try, Success}
+import scala.util.{Try, Success, Failure}
 import java.time.Instant
 
 class ParquetServiceTest extends AnyFlatSpec with Matchers {
@@ -169,5 +169,83 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
       file,
       OutputFormat.Table
     ) shouldBe "No content available"
+  }
+
+  // ── Error propagation ────────────────────────────────────────────────────
+  "ParquetService.readFile" should "propagate Failure when readContent fails" in {
+    val service = new ParquetService(
+      new FakeParquetRepository(contentResult =
+        Failure(new RuntimeException("disk error"))
+      )
+    )
+    val result = service.readFile("/tmp/test.parquet")
+    result.isFailure shouldBe true
+    result.failed.get.getMessage should include("disk error")
+  }
+
+  it should "propagate Failure when readSchema fails" in {
+    val service = new ParquetService(
+      new FakeParquetRepository(schemaResult =
+        Failure(new RuntimeException("schema corrupt"))
+      )
+    )
+    val result = service.readFile("/tmp/test.parquet")
+    result.isFailure shouldBe true
+    result.failed.get.getMessage should include("schema corrupt")
+  }
+
+  it should "propagate Failure when readMetadata fails" in {
+    val service = new ParquetService(
+      new FakeParquetRepository(metadataResult =
+        Failure(new RuntimeException("metadata missing"))
+      )
+    )
+    val result = service.readFile("/tmp/test.parquet")
+    result.isFailure shouldBe true
+    result.failed.get.getMessage should include("metadata missing")
+  }
+
+  "ParquetService.getFileInfo" should "propagate Failure when readSchema fails" in {
+    val service = new ParquetService(
+      new FakeParquetRepository(schemaResult =
+        Failure(new RuntimeException("no schema"))
+      )
+    )
+    val result = service.getFileInfo("/tmp/test.parquet")
+    result.isFailure shouldBe true
+    result.failed.get.getMessage should include("no schema")
+  }
+
+  it should "propagate Failure when readMetadata fails" in {
+    val service = new ParquetService(
+      new FakeParquetRepository(metadataResult =
+        Failure(new RuntimeException("no metadata"))
+      )
+    )
+    val result = service.getFileInfo("/tmp/test.parquet")
+    result.isFailure shouldBe true
+    result.failed.get.getMessage should include("no metadata")
+  }
+
+  "ParquetService.validateFile" should "propagate Failure when repository validateFile fails" in {
+    val service = new ParquetService(
+      new FakeParquetRepository(validateResult =
+        Failure(new RuntimeException("cannot open file"))
+      )
+    )
+    val result = service.validateFile("/tmp/test.parquet")
+    result.isFailure shouldBe true
+    result.failed.get.getMessage should include("cannot open file")
+  }
+
+  "ParquetService.writeFile" should "propagate Failure when writeContent fails" in {
+    val service = new ParquetService(
+      new FakeParquetRepository(writeResult =
+        Failure(new RuntimeException("write denied"))
+      )
+    )
+    val result = service.writeFile("/tmp/out.parquet", List(Map("id" -> 1L)))
+    result.isFailure shouldBe true
+    result.failed.get.getMessage should include("write denied")
   }
 }
