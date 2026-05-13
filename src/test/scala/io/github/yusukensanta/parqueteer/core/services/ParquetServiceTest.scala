@@ -31,7 +31,7 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
         location: StorageLocation,
         data: List[Map[String, Any]],
         schema: Option[ParquetSchema],
-        config: WriteConfig
+        config: WriteConfig = WriteConfig()
     ): Try[Unit] = writeResult
   }
 
