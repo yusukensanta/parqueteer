@@ -1,8 +1,9 @@
-# Documentation (except README)
+# Documentation (except README, CHANGELOG, CONTRIBUTING)
 .claude/
 *.md
 *.puml
 !README.md
+!CHANGELOG.md
 !CONTRIBUTING.md
 !.github/ISSUE_TEMPLATE/*
 
