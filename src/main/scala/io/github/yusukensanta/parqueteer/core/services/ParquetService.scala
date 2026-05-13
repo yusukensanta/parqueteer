@@ -167,12 +167,13 @@ class ParquetService(
           _ <- writeTextFile(outputPath, csvOutput)
         } yield ()
 
-      // JSON/CSV → Parquet (handled by writeFile which expects data)
+      // JSON/CSV → Parquet
       case ("json" | "csv", "parquet") =>
-        Failure(
-          new IllegalArgumentException(
-            s"Cannot convert $inputExt to parquet directly. Use 'write' command with --input flag instead."
-          )
+        val readResult =
+          if (inputExt == "json") readJsonFile(inputPath)
+          else readCsvFile(inputPath)
+        readResult.flatMap(data =>
+          writeFile(outputPath, data, conversionConfig.writeConfig)
         )
 
       case _ =>
@@ -209,6 +210,50 @@ class ParquetService(
       val file = File(path)
       file.createIfNotExists()
       file.write(content)
+    }
+  }
+
+  private def readJsonFile(path: String): Try[List[Map[String, Any]]] = Try {
+    import better.files._
+    import io.circe.parser._
+    val content = File(path).contentAsString
+    parse(content) match {
+      case Left(error) =>
+        throw new IllegalArgumentException(
+          s"Failed to parse JSON: ${error.getMessage}"
+        )
+      case Right(json) =>
+        json.asArray match {
+          case Some(array) =>
+            array.toList.map(
+              _.asObject.get.toMap.view
+                .mapValues {
+                  case j if j.isString  => j.asString.get
+                  case j if j.isNumber  => j.asNumber.get.toDouble
+                  case j if j.isBoolean => j.asBoolean.get
+                  case j if j.isNull    => null
+                  case j                => j.toString
+                }
+                .toMap
+            )
+          case None =>
+            throw new IllegalArgumentException(
+              "JSON input must be an array of objects"
+            )
+        }
+    }
+  }
+
+  private def readCsvFile(path: String): Try[List[Map[String, Any]]] = Try {
+    import better.files._
+    val lines = File(path).contentAsString.split("\n").filter(_.nonEmpty).toList
+    if (lines.isEmpty) List.empty[Map[String, Any]]
+    else {
+      val headers = lines.head.split(",").map(_.trim)
+      lines.tail.map { line =>
+        val values = line.split(",", -1).map(_.trim)
+        headers.zip(values).toMap.asInstanceOf[Map[String, Any]]
+      }
     }
   }
 

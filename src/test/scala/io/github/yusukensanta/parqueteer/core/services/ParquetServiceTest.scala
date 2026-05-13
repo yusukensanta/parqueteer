@@ -134,13 +134,6 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     result.isSuccess shouldBe true
   }
 
-  it should "fail for unsupported csv-to-parquet conversion" in {
-    val service = new ParquetService(new FakeParquetRepository())
-    val result = service.convertFile("/in.csv", "/out.parquet")
-    result.isFailure shouldBe true
-    result.failed.get.getMessage should include("Cannot convert")
-  }
-
   // ── formatContent ─────────────────────────────────────────────────────────
   "ParquetService.formatContent" should "format with Table format" in {
     val service = new ParquetService(new FakeParquetRepository())
