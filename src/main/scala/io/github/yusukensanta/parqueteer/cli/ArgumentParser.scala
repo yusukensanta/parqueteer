@@ -109,7 +109,7 @@ object ArgumentParser {
         .children(
           arg[String]("<output>")
             .required()
-            .action((x, c) => c.copy(command = Some(WriteCommand("", x))))
+            .action((x, c) => c.copy(command = Some(WriteCommand(x, ""))))
             .text("Output parquet file path"),
           opt[String]("input")
             .abbr("i")

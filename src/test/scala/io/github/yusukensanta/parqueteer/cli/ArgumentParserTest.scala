@@ -63,6 +63,7 @@ class ArgumentParserTest extends AnyFlatSpec with Matchers {
     result.get.command.get shouldBe a[WriteCommand]
 
     val writeCmd = result.get.command.get.asInstanceOf[WriteCommand]
+    writeCmd.outputPath shouldBe "output.parquet"
     writeCmd.inputPath shouldBe "data.json"
     writeCmd.compression shouldBe CompressionType.Gzip
   }
