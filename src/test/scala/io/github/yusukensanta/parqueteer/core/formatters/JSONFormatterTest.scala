@@ -42,10 +42,11 @@ class JSONFormatterTest extends AnyFlatSpec with Matchers {
     parse(result).isRight shouldBe true
   }
 
-  it should "include rows array" in {
+  it should "include rows array with correct length" in {
     val result = formatter.formatContent(sampleContent, None)
     val json = parse(result).getOrElse(fail("not JSON"))
-    json.hcursor.downField("rows").focus shouldBe defined
+    val rows = json.hcursor.downField("rows").as[List[io.circe.Json]]
+    rows.map(_.length) shouldBe Right(2)
   }
 
   it should "report correct totalRows" in {
@@ -90,10 +91,11 @@ class JSONFormatterTest extends AnyFlatSpec with Matchers {
     parse(result).isRight shouldBe true
   }
 
-  it should "include columns array" in {
+  it should "include columns array with correct length" in {
     val result = formatter.formatSchema(sampleSchema)
     val json = parse(result).getOrElse(fail("not JSON"))
-    json.hcursor.downField("columns").focus shouldBe defined
+    val columns = json.hcursor.downField("columns").as[List[io.circe.Json]]
+    columns.map(_.length) shouldBe Right(2)
   }
 
   it should "include rowGroupCount" in {
