@@ -248,4 +248,93 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     result.isFailure shouldBe true
     result.failed.get.getMessage should include("write denied")
   }
+
+  // ── CSV/JSON → Parquet conversion ─────────────────────────────────────────
+
+  private class CapturingRepository extends ParquetRepository {
+    var lastWrittenData: List[Map[String, Any]] = List.empty
+    override def readContent(
+        file: ParquetFile,
+        config: ReadConfig
+    ): Try[FileContent] = Success(defaultContent)
+    override def readSchema(file: ParquetFile): Try[ParquetSchema] = Success(
+      defaultSchema
+    )
+    override def readMetadata(file: ParquetFile): Try[FileMetadata] = Success(
+      defaultMetadata
+    )
+    override def validateFile(file: ParquetFile): Try[List[String]] = Success(
+      List.empty
+    )
+    override def writeContent(
+        location: StorageLocation,
+        data: List[Map[String, Any]],
+        schema: Option[ParquetSchema],
+        config: WriteConfig = WriteConfig()
+    ): Try[Unit] = {
+      lastWrittenData = data
+      Success(())
+    }
+  }
+
+  "ParquetService.convertFile" should "succeed for json-to-parquet and pass parsed data to repository" in {
+    import java.nio.file.Files
+    val jsonFile = java.io.File.createTempFile("parqueteer_test_input", ".json")
+    jsonFile.deleteOnExit()
+    Files.writeString(
+      jsonFile.toPath,
+      """[{"id": 1, "name": "Alice"}, {"id": 2, "name": "Bob"}]"""
+    )
+
+    val repo = new CapturingRepository()
+    val service = new ParquetService(repo)
+    val result = service.convertFile(
+      jsonFile.getAbsolutePath,
+      "/tmp/parqueteer_test_out.parquet"
+    )
+
+    result.isSuccess shouldBe true
+    repo.lastWrittenData should have length 2
+    repo.lastWrittenData.head("name") shouldBe "Alice"
+    repo.lastWrittenData(1)("name") shouldBe "Bob"
+  }
+
+  it should "succeed for csv-to-parquet and pass parsed data to repository" in {
+    import java.nio.file.Files
+    val csvFile = java.io.File.createTempFile("parqueteer_test_input", ".csv")
+    csvFile.deleteOnExit()
+    Files.writeString(csvFile.toPath, "id,name\n1,Alice\n2,Bob\n")
+
+    val repo = new CapturingRepository()
+    val service = new ParquetService(repo)
+    val result = service.convertFile(
+      csvFile.getAbsolutePath,
+      "/tmp/parqueteer_test_out2.parquet"
+    )
+
+    result.isSuccess shouldBe true
+    repo.lastWrittenData should have length 2
+    repo.lastWrittenData.head("name") shouldBe "Alice"
+  }
+
+  it should "fail for json-to-parquet when input file does not exist" in {
+    val service = new ParquetService(new FakeParquetRepository())
+    val result = service.convertFile(
+      "/tmp/nonexistent_parqueteer.json",
+      "/tmp/out.parquet"
+    )
+    result.isFailure shouldBe true
+  }
+
+  it should "fail for json-to-parquet when input is not a JSON array" in {
+    import java.nio.file.Files
+    val badFile = java.io.File.createTempFile("parqueteer_bad_input", ".json")
+    badFile.deleteOnExit()
+    Files.writeString(badFile.toPath, """{"not": "an array"}""")
+
+    val service = new ParquetService(new FakeParquetRepository())
+    val result =
+      service.convertFile(badFile.getAbsolutePath, "/tmp/out.parquet")
+    result.isFailure shouldBe true
+  }
 }
