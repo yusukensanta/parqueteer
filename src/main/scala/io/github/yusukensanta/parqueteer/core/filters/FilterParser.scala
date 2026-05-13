@@ -158,17 +158,6 @@ class FilterParser extends JavaTokenParsers {
       case _ => Filter.noopFilter
     }
   }
-
-  /** Convert parsed value to parquet4s-compatible type
-    */
-  @annotation.nowarn("msg=unused")
-  private def convertValue(value: Any): Any = value match {
-    case s: String  => s
-    case l: Long    => l.toInt // parquet4s uses Int for integer columns
-    case d: Double  => d
-    case b: Boolean => b
-    case other      => other
-  }
 }
 
 /** Companion object with convenient parse method
