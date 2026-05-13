@@ -97,13 +97,13 @@ object HelpFormatter {
   def writeHelp(): String = {
     """
        |USAGE:
-       |  parqueteer write [OPTIONS] <OUTPUT>
+       |  parqueteer write [OPTIONS] <INPUT> <OUTPUT>
        |
        |ARGUMENTS:
+       |  <INPUT>     Input data file path (JSON or CSV)
        |  <OUTPUT>    Output parquet file path
        |
        |OPTIONS:
-       |  -i, --input <FILE>         Input data file path (required)
        |      --input-format <FMT>   Input file format: json, csv, tsv (default: json)
        |  -c, --compression <TYPE>   Compression: none, snappy, gzip, lzo, brotli, lz4, zstd
        |      --row-group-size <N>   Row group size (e.g., 128MB)
@@ -111,13 +111,13 @@ object HelpFormatter {
        |
        |EXAMPLES:
        |  # Convert JSON to Parquet with snappy compression
-       |  parqueteer write output.parquet --input data.json
+       |  parqueteer write data.json output.parquet
        |
        |  # Convert CSV with gzip compression
-       |  parqueteer write output.parquet --input data.csv --input-format csv --compression gzip
+       |  parqueteer write data.csv output.parquet --input-format csv --compression gzip
        |
        |  # Specify row group size
-       |  parqueteer write output.parquet --input data.json --row-group-size 256MB
+       |  parqueteer write data.json output.parquet --row-group-size 256MB
        |""".stripMargin
   }
 

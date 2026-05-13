@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **BREAKING**: `write` command now takes `<INPUT> <OUTPUT>` positional args instead of `<OUTPUT> --input <INPUT>`, matching UNIX conventions and `convert` command (closes #41)
+
 ## [0.2.0] - 2026-05-14
 
 ### Added

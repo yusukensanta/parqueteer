@@ -49,9 +49,8 @@ class ArgumentParserTest extends AnyFlatSpec with Matchers {
   it should "parse write command correctly" in {
     val args = Array(
       "write",
-      "output.parquet",
-      "--input",
       "data.json",
+      "output.parquet",
       "--compression",
       "gzip"
     )

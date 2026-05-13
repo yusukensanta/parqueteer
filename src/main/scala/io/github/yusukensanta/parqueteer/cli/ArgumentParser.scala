@@ -107,15 +107,14 @@ object ArgumentParser {
       cmd("write")
         .text("Create parquet file from input data")
         .children(
+          arg[String]("<input>")
+            .required()
+            .action((x, c) => c.copy(command = Some(WriteCommand("", x))))
+            .text("Input data file path (JSON or CSV)"),
           arg[String]("<output>")
             .required()
-            .action((x, c) => c.copy(command = Some(WriteCommand(x, ""))))
+            .action((x, c) => updateWriteCommand(c, _.copy(outputPath = x)))
             .text("Output parquet file path"),
-          opt[String]("input")
-            .abbr("i")
-            .required()
-            .action((x, c) => updateWriteCommand(c, _.copy(inputPath = x)))
-            .text("Input data file path"),
           opt[String]("input-format")
             .action((x, c) => updateWriteCommand(c, _.copy(inputFormat = x)))
             .validate(x =>
