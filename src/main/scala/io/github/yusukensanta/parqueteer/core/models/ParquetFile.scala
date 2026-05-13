@@ -62,21 +62,6 @@ case class WriteConfig(
     enableStatistics: Boolean = true
 )
 
-case class PerformanceConfig(
-    readBufferSize: String = "64MB",
-    writeBufferSize: String = "64MB",
-    maxConcurrency: Int = 4,
-    enableCaching: Boolean = true,
-    cacheSize: String = "256MB"
-)
-
-case class LoggingConfig(
-    level: String = "INFO",
-    file: Option[String] = None,
-    enableConsole: Boolean = true,
-    enableStructured: Boolean = false
-)
-
 sealed trait CompressionType
 object CompressionType {
   case object Uncompressed extends CompressionType
