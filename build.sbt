@@ -37,12 +37,10 @@ ThisBuild / scmInfo := Some(
   )
 )
 
-ThisBuild / javaOptions ++= Seq("-source", "25", "-target", "25")
 ThisBuild / scalacOptions ++= Seq(
   "-encoding",
   "utf8",
   "-feature",
-  "-language:higherKinds",
   "-language:implicitConversions",
   "-unchecked",
   "-Werror",

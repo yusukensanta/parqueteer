@@ -12,6 +12,8 @@ GREEN := \033[0;32m
 YELLOW := \033[0;33m
 NC := \033[0m # No Color
 
+SCALA_VERSION := 3.7.3
+
 ##@ General
 
 help: ## Display this help message
@@ -68,7 +70,7 @@ test: sync-versions ## Run all tests
 assembly: sync-versions ## Create fat JAR with all dependencies
 	@echo "$(BLUE)Creating assembly JAR...$(NC)"
 	sbt assembly
-	@echo "$(GREEN)✓$(NC) JAR created at: target/scala-3.7.3/parqueteer.jar"
+	@echo "$(GREEN)✓$(NC) JAR created at: target/scala-$(SCALA_VERSION)/parqueteer.jar"
 
 package: sync-versions ## Create distribution package (with launch scripts)
 	@echo "$(BLUE)Creating distribution package...$(NC)"
