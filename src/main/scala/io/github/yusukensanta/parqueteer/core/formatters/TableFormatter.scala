@@ -27,7 +27,7 @@ class TableFormatter extends OutputFormatter {
     sb.append(drawTopBorder(columnWidths))
     sb.append("\n")
 
-    sb.append(drawHeaderRow(columns, columnWidths))
+    sb.append(drawRow(columns, columnWidths))
     sb.append("\n")
 
     sb.append(drawSeparator(columnWidths))
@@ -162,13 +162,6 @@ class TableFormatter extends OutputFormatter {
     "├" + segments.mkString("┼") + "┤"
   }
 
-  private def drawHeaderRow(
-      columns: List[String],
-      widths: List[Int]
-  ): String = {
-    drawRow(columns, widths)
-  }
-
   private def drawDataRow(
       row: Map[String, Any],
       columns: List[String],
@@ -224,14 +217,11 @@ class TableFormatter extends OutputFormatter {
 
   private[formatters] def formatBytes(bytes: Long): String = {
     val units = List("B", "KB", "MB", "GB", "TB")
-    var size = bytes.toDouble
-    var unitIndex = 0
-
-    while (size >= 1024 && unitIndex < units.length - 1) {
-      size /= 1024
-      unitIndex += 1
-    }
-
-    f"$size%.2f ${units(unitIndex)}"
+    @annotation.tailrec
+    def loop(size: Double, unitIndex: Int): String =
+      if (size < 1024 || unitIndex >= units.length - 1)
+        f"$size%.2f ${units(unitIndex)}"
+      else loop(size / 1024, unitIndex + 1)
+    loop(bytes.toDouble, 0)
   }
 }

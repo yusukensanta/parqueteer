@@ -7,7 +7,7 @@ import io.github.yusukensanta.parqueteer.core.models.{
 import org.apache.hadoop.conf.Configuration
 import com.google.auth.oauth2.{GoogleCredentials, ServiceAccountCredentials}
 import com.google.cloud.storage.StorageOptions
-import scala.util.{Try, Success, Failure}
+import scala.util.{Try, Success, Failure, Using}
 import java.io.FileInputStream
 import java.nio.file.{Files, Paths}
 
@@ -144,7 +144,7 @@ class GCSCredentialManager extends CloudCredentialManager {
       }
 
       // Validate JSON format
-      using(new FileInputStream(credPath)) { stream =>
+      Using.resource(new FileInputStream(credPath)) { stream =>
         ServiceAccountCredentials.fromStream(stream)
       }
 
@@ -189,12 +189,4 @@ class GCSCredentialManager extends CloudCredentialManager {
     }
   }
 
-  // Helper method for resource management
-  private def using[A <: AutoCloseable, B](resource: A)(f: A => B): B = {
-    try {
-      f(resource)
-    } finally {
-      if (resource != null) resource.close()
-    }
-  }
 }

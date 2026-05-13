@@ -6,6 +6,7 @@ import io.github.yusukensanta.parqueteer.core.models.{
 }
 import org.apache.hadoop.conf.Configuration
 import software.amazon.awssdk.auth.credentials.{
+  AwsSessionCredentials,
   DefaultCredentialsProvider,
   ProfileCredentialsProvider,
   InstanceProfileCredentialsProvider
@@ -148,15 +149,8 @@ class S3CredentialManager extends CloudCredentialManager {
       val credentials = provider.resolveCredentials()
 
       val sessionToken = credentials match {
-        case sessionCreds
-            if sessionCreds.getClass.getSimpleName.contains("Session") =>
-          try {
-            val sessionTokenMethod =
-              sessionCreds.getClass.getMethod("sessionToken")
-            Some(sessionTokenMethod.invoke(sessionCreds).asInstanceOf[String])
-          } catch {
-            case _: Exception => None
-          }
+        case sessionCreds: AwsSessionCredentials =>
+          Some(sessionCreds.sessionToken())
         case _ => None
       }
 

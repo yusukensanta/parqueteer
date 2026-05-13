@@ -4,7 +4,7 @@ object HelpFormatter {
 
   /** Generate top-level help showing all subcommands */
   def topLevelHelp(): String = {
-    s"""parqueteer 0.1.0 - A modern CLI toolkit for Apache Parquet files
+    """parqueteer 0.1.0 - A modern CLI toolkit for Apache Parquet files
        |
        |USAGE:
        |  parqueteer [OPTIONS] <COMMAND>
@@ -37,7 +37,7 @@ object HelpFormatter {
 
   /** Generate help for the 'read' command */
   def readHelp(): String = {
-    s"""
+    """
        |USAGE:
        |  parqueteer read [OPTIONS] <FILE>
        |
@@ -68,7 +68,7 @@ object HelpFormatter {
 
   /** Generate help for the 'info' command */
   def infoHelp(): String = {
-    s"""
+    """
        |USAGE:
        |  parqueteer info [OPTIONS] <FILE>
        |
@@ -95,7 +95,7 @@ object HelpFormatter {
 
   /** Generate help for the 'write' command */
   def writeHelp(): String = {
-    s"""
+    """
        |USAGE:
        |  parqueteer write [OPTIONS] <OUTPUT>
        |
@@ -123,7 +123,7 @@ object HelpFormatter {
 
   /** Generate help for the 'validate' command */
   def validateHelp(): String = {
-    s"""
+    """
        |USAGE:
        |  parqueteer validate [OPTIONS] <FILE>
        |
@@ -145,7 +145,7 @@ object HelpFormatter {
 
   /** Generate help for the 'convert' command */
   def convertHelp(): String = {
-    s"""
+    """
        |USAGE:
        |  parqueteer convert [OPTIONS] <INPUT> <OUTPUT>
        |
