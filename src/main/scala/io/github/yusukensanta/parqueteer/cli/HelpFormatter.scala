@@ -4,7 +4,7 @@ object HelpFormatter {
 
   /** Generate top-level help showing all subcommands */
   def topLevelHelp(): String = {
-    """parqueteer 0.1.0 - A modern CLI toolkit for Apache Parquet files
+    s"""parqueteer ${io.github.yusukensanta.parqueteer.BuildInfo.version} - A modern CLI toolkit for Apache Parquet files
        |
        |USAGE:
        |  parqueteer [OPTIONS] <COMMAND>

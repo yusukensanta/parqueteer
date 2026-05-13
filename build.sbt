@@ -48,8 +48,10 @@ ThisBuild / scalacOptions ++= Seq(
 )
 
 lazy val root = (project in file("."))
-  .enablePlugins(JavaAppPackaging)
+  .enablePlugins(JavaAppPackaging, BuildInfoPlugin)
   .settings(
+    buildInfoKeys := Seq[BuildInfoKey](version),
+    buildInfoPackage := "io.github.yusukensanta.parqueteer",
     assembly / mainClass := Some(
       "io.github.yusukensanta.parqueteer.cli.CliApp"
     ),

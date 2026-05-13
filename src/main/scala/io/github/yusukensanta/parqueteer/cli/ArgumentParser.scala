@@ -19,7 +19,7 @@ object ArgumentParser {
 
     OParser.sequence(
       programName("parqueteer"),
-      head("parqueteer", "0.1.0"),
+      head("parqueteer", io.github.yusukensanta.parqueteer.BuildInfo.version),
       help("help").abbr("h").text("Show help information"),
       version("version").abbr("V").text("Show version information"),
       opt[Unit]("verbose")

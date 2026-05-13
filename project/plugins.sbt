@@ -6,3 +6,5 @@ addSbtPlugin("ch.epfl.scala" % "sbt-scalafix" % "0.13.0")
 // Maven Central publishing via CI
 // Note: sbt-ci-release automatically manages versions from git tags
 addSbtPlugin("com.github.sbt" % "sbt-ci-release" % "1.9.3")
+
+addSbtPlugin("com.eed3si9n" % "sbt-buildinfo" % "0.12.0")
