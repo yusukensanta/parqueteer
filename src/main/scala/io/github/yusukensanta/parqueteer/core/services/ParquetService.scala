@@ -225,8 +225,15 @@ class ParquetService(
       case Right(json) =>
         json.asArray match {
           case Some(array) =>
-            array.toList.map(
-              _.asObject.get.toMap.view
+            array.toList.map { elem =>
+              elem.asObject
+                .getOrElse(
+                  throw new IllegalArgumentException(
+                    s"Each element of the JSON array must be an object, got: ${elem.noSpaces}"
+                  )
+                )
+                .toMap
+                .view
                 .mapValues {
                   case j if j.isString  => j.asString.get
                   case j if j.isNumber  => j.asNumber.get.toDouble
@@ -235,7 +242,7 @@ class ParquetService(
                   case j                => j.toString
                 }
                 .toMap
-            )
+            }
           case None =>
             throw new IllegalArgumentException(
               "JSON input must be an array of objects"
@@ -246,15 +253,41 @@ class ParquetService(
 
   private def readCsvFile(path: String): Try[List[Map[String, Any]]] = Try {
     import better.files._
-    val lines = File(path).contentAsString.split("\n").filter(_.nonEmpty).toList
+    val content =
+      File(path).contentAsString.replace("\r\n", "\n").replace("\r", "\n")
+    val lines = content.split("\n").filter(_.nonEmpty).toList
     if (lines.isEmpty) List.empty[Map[String, Any]]
     else {
-      val headers = lines.head.split(",").map(_.trim)
-      lines.tail.map { line =>
-        val values = line.split(",", -1).map(_.trim)
+      val headers = parseCsvLine(lines.head)
+      lines.tail.zipWithIndex.map { case (line, idx) =>
+        val values = parseCsvLine(line)
+        if (values.length != headers.length)
+          throw new IllegalArgumentException(
+            s"Row ${idx + 2} has ${values.length} fields, expected ${headers.length}"
+          )
         headers.zip(values).toMap.asInstanceOf[Map[String, Any]]
       }
     }
+  }
+
+  private def parseCsvLine(line: String): Array[String] = {
+    val fields = scala.collection.mutable.ArrayBuffer.empty[String]
+    val current = new StringBuilder
+    var inQuote = false
+    var i = 0
+    while (i < line.length) {
+      line(i) match {
+        case '"' if !inQuote => inQuote = true
+        case '"' if inQuote && i + 1 < line.length && line(i + 1) == '"' =>
+          current.append('"'); i += 1
+        case '"' if inQuote  => inQuote = false
+        case ',' if !inQuote => fields += current.toString.trim; current.clear()
+        case c               => current.append(c)
+      }
+      i += 1
+    }
+    fields += current.toString.trim
+    fields.toArray
   }
 
   def formatContent(file: ParquetFile, format: OutputFormat): String = {

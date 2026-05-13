@@ -290,6 +290,8 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     repo.lastWrittenData should have length 2
     repo.lastWrittenData.head("name") shouldBe "Alice"
     repo.lastWrittenData(1)("name") shouldBe "Bob"
+    repo.lastWrittenData.head("id") shouldBe 1.0
+    repo.lastWrittenData(1)("id") shouldBe 2.0
   }
 
   it should "succeed for csv-to-parquet and pass parsed data to repository" in {
