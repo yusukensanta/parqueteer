@@ -1,0 +1,98 @@
+package io.github.yusukensanta.parqueteer.core.formatters
+
+import io.github.yusukensanta.parqueteer.core.models._
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
+
+class CSVFormatterTest extends AnyFlatSpec with Matchers {
+
+  private val formatter = new CSVFormatter()
+
+  private val sampleContent = FileContent(
+    rows = List(
+      Map("age" -> 30L, "name" -> "Alice"),
+      Map("age" -> 25L, "name" -> "Bob")
+    ),
+    totalRows = 2L,
+    isPartial = false
+  )
+
+  private val sampleSchema = ParquetSchema(
+    columns = List(
+      ColumnInfo("name", "BINARY", isOptional = true, 1, 0, "SNAPPY"),
+      ColumnInfo("age", "INT64", isOptional = false, 1, 0, "SNAPPY")
+    ),
+    rowGroupCount = 1L,
+    totalRowCount = 2L
+  )
+
+  "CSVFormatter.formatContent" should "produce header row from column names" in {
+    val result = formatter.formatContent(sampleContent, None)
+    val lines = result.split("\n")
+    lines.head should include("age")
+    lines.head should include("name")
+  }
+
+  it should "produce correct number of lines (header + 2 data)" in {
+    val result = formatter.formatContent(sampleContent, None)
+    val lines = result.strip().split("\n")
+    lines.length shouldBe 3
+  }
+
+  it should "contain row values" in {
+    val result = formatter.formatContent(sampleContent, None)
+    result should include("Alice")
+    result should include("Bob")
+    result should include("30")
+  }
+
+  it should "return empty string for empty rows" in {
+    val empty = FileContent(List.empty, 0L, false)
+    formatter.formatContent(empty, None) shouldBe ""
+  }
+
+  it should "quote fields containing commas" in {
+    val withComma = FileContent(
+      rows = List(Map("desc" -> "hello, world")),
+      totalRows = 1L,
+      isPartial = false
+    )
+    val result = formatter.formatContent(withComma, None)
+    result should include(""""hello, world"""")
+  }
+
+  it should "escape internal quotes by doubling them" in {
+    val withQuote = FileContent(
+      rows = List(Map("desc" -> """say "hi"""")),
+      totalRows = 1L,
+      isPartial = false
+    )
+    val result = formatter.formatContent(withQuote, None)
+    result should include(""""say ""hi""""")
+  }
+
+  it should "render null as empty field" in {
+    val withNull = FileContent(
+      rows = List(Map("key" -> null)),
+      totalRows = 1L,
+      isPartial = false
+    )
+    val result = formatter.formatContent(withNull, None)
+    val lines = result.split("\n", -1)
+    lines.length shouldBe 3
+    lines(0) shouldBe "key"
+    lines(1) shouldBe ""
+  }
+
+  "CSVFormatter.formatSchema" should "include header with Column Name and Data Type" in {
+    val result = formatter.formatSchema(sampleSchema)
+    result should include("Column Name")
+    result should include("Data Type")
+  }
+
+  it should "include column rows" in {
+    val result = formatter.formatSchema(sampleSchema)
+    result should include("name")
+    result should include("BINARY")
+  }
+}
