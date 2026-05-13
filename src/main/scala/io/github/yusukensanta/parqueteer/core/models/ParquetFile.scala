@@ -46,13 +46,8 @@ case class ReadConfig(
     outputFormat: OutputFormat = OutputFormat.Table
 )
 
-sealed trait OutputFormat
-object OutputFormat {
-  case object Table extends OutputFormat
-  case object JSON extends OutputFormat
-  case object CSV extends OutputFormat
-  case object Pretty extends OutputFormat
-}
+enum OutputFormat:
+  case Table, JSON, CSV, Pretty
 
 case class WriteConfig(
     compressionType: CompressionType = CompressionType.Snappy,
@@ -62,13 +57,5 @@ case class WriteConfig(
     enableStatistics: Boolean = true
 )
 
-sealed trait CompressionType
-object CompressionType {
-  case object Uncompressed extends CompressionType
-  case object Snappy extends CompressionType
-  case object Gzip extends CompressionType
-  case object Lzo extends CompressionType
-  case object Brotli extends CompressionType
-  case object Lz4 extends CompressionType
-  case object Zstd extends CompressionType
-}
+enum CompressionType:
+  case Uncompressed, Snappy, Gzip, Lzo, Brotli, Lz4, Zstd

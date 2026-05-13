@@ -25,14 +25,11 @@ object CloudCredentialManager {
   }
 }
 
-sealed trait CredentialError
-case class AuthenticationFailed(message: String) extends CredentialError
-case class ConfigurationError(message: String) extends CredentialError
-case class NetworkError(message: String) extends CredentialError
+enum CredentialError:
+  case AuthenticationFailed(message: String)
+  case ConfigurationError(message: String)
+  case NetworkError(message: String)
 
-sealed trait CredentialResolutionStrategy
-case object EnvironmentVariables extends CredentialResolutionStrategy
-case object ProfileBased extends CredentialResolutionStrategy
-case object InstanceMetadata extends CredentialResolutionStrategy
-case object ServiceAccount extends CredentialResolutionStrategy
-case object ManagedIdentity extends CredentialResolutionStrategy
+enum CredentialResolutionStrategy:
+  case EnvironmentVariables, ProfileBased, InstanceMetadata, ServiceAccount,
+    ManagedIdentity
