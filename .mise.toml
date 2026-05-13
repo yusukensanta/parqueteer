@@ -23,3 +23,6 @@ depends = ["sync-sbt"]
 # Auto-sync sbt version when .tool-versions changes
 [hooks]
 "enter" = "mise run sync-sbt"
+
+[tools]
+sbt = "1.12.2"
