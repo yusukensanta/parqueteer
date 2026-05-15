@@ -182,12 +182,10 @@ class ParquetService(
 
       // JSON/CSV → Parquet
       case ("json" | "csv", "parquet") =>
-        val readResult =
-          if (inputExt == "json") readJsonFile(inputPath)
-          else readCsvFile(inputPath)
-        readResult.flatMap(data =>
-          writeFile(outputPath, data, conversionConfig.writeConfig)
-        )
+        readDataFile(inputPath, inputExt)
+          .flatMap(data =>
+            writeFile(outputPath, data, conversionConfig.writeConfig)
+          )
 
       case _ =>
         Failure(
