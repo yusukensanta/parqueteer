@@ -37,4 +37,10 @@ class SizeParserTest extends AnyFlatSpec with Matchers {
   it should "throw for number with no unit" in {
     an[IllegalArgumentException] should be thrownBy SizeParser.parse("128")
   }
+
+  it should "throw for number that overflows Long" in {
+    an[IllegalArgumentException] should be thrownBy SizeParser.parse(
+      "99999999999999999999GB"
+    )
+  }
 }

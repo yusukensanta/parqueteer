@@ -11,7 +11,12 @@ object SizeParser {
 
   def parse(sizeStr: String): Long =
     sizeStr.toUpperCase match {
-      case pattern(size, unit) => size.toLong * units(unit)
+      case pattern(size, unit) =>
+        scala.util
+          .Try(size.toLong)
+          .getOrElse(
+            throw new IllegalArgumentException(s"Invalid size format: $sizeStr")
+          ) * units(unit)
       case _ =>
         throw new IllegalArgumentException(s"Invalid size format: $sizeStr")
     }
