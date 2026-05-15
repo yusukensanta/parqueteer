@@ -204,7 +204,7 @@ object CliApp {
   ): Int = {
     val writeConfig = WriteConfig(
       compressionType = compression,
-      rowGroupSize = rowGroupSize.getOrElse(128 * 1024 * 1024L)
+      rowGroupSize = rowGroupSize.getOrElse(WriteConfig.DefaultRowGroupSize)
     )
     service.readDataFile(inputPath, inputFormat) match {
       case Failure(error) =>

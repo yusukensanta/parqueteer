@@ -51,11 +51,15 @@ enum OutputFormat:
 
 case class WriteConfig(
     compressionType: CompressionType = CompressionType.Snappy,
-    rowGroupSize: Long = 128 * 1024 * 1024, // 128MB as default
+    rowGroupSize: Long = WriteConfig.DefaultRowGroupSize,
     pageSize: Long = 1024 * 1024,
     enableDictionary: Boolean = true,
     enableStatistics: Boolean = true
 )
+
+object WriteConfig {
+  val DefaultRowGroupSize: Long = 128L * 1024 * 1024
+}
 
 enum CompressionType:
   case Uncompressed, Snappy, Gzip, Lzo, Brotli, Lz4, Zstd

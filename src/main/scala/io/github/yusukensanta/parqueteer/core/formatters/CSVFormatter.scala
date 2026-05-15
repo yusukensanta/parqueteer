@@ -65,7 +65,7 @@ class CSVFormatter extends OutputFormatter {
   override def formatMetadata(metadata: FileMetadata): String = {
     val sb = new StringBuilder()
 
-    sb.append(formatRow(List("Propetry", "Value")))
+    sb.append(formatRow(List("Property", "Value")))
     sb.append(Newline)
 
     sb.append(formatRow(List("File Size", metadata.fileSize.toString)))
