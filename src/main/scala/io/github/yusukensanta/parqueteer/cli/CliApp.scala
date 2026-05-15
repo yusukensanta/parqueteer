@@ -9,7 +9,8 @@ import io.github.yusukensanta.parqueteer.core.models.{
   ReadConfig,
   WriteConfig,
   OutputFormat,
-  CompressionType
+  CompressionType,
+  ParqueteerError
 }
 import io.github.yusukensanta.parqueteer.config.{
   ConfigurationManager,
@@ -158,14 +159,16 @@ object CliApp {
     )
 
     service.readFile(filePath, readConfig) match {
-      case Success(file) =>
-        val output = service.formatContent(file, format)
-        println(output)
+      case Right(file) =>
+        println(service.formatContent(file, format))
         0
-      case Failure(error) =>
-        System.err.println(s"Failed to read file: ${error.getMessage}")
-        if (globalOptions.verbose) error.printStackTrace()
-        1
+      case Left(error) =>
+        System.err.println(s"Error: ${error.userMessage}")
+        if (globalOptions.verbose) error match {
+          case ParqueteerError.IOError(cause) => cause.printStackTrace()
+          case _                              => ()
+        }
+        error.exitCode
     }
   }
 

@@ -57,28 +57,28 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
   )
 
   // ── readFile ─────────────────────────────────────────────────────────────
-  "ParquetService.readFile" should "return Success with populated ParquetFile" in {
+  "ParquetService.readFile" should "return Right with populated ParquetFile" in {
     val service = new ParquetService(new FakeParquetRepository())
     val result = service.readFile("/tmp/test.parquet")
 
-    result.isSuccess shouldBe true
-    result.get.content shouldBe defined
-    result.get.schema shouldBe defined
-    result.get.metadata shouldBe defined
+    result.isRight shouldBe true
+    result.toOption.get.content shouldBe defined
+    result.toOption.get.schema shouldBe defined
+    result.toOption.get.metadata shouldBe defined
   }
 
   it should "propagate content rows" in {
     val service = new ParquetService(new FakeParquetRepository())
     val result = service.readFile("/tmp/test.parquet")
 
-    result.get.content.get.rows should have length 1
-    result.get.content.get.rows.head("name") shouldBe "Alice"
+    result.toOption.get.content.get.rows should have length 1
+    result.toOption.get.content.get.rows.head("name") shouldBe "Alice"
   }
 
-  it should "return Failure for invalid path" in {
+  it should "return Left for invalid path" in {
     val service = new ParquetService(new FakeParquetRepository())
     val result = service.readFile("ftp://unsupported/path")
-    result.isFailure shouldBe true
+    result.isLeft shouldBe true
   }
 
   // ── getFileInfo ───────────────────────────────────────────────────────────
@@ -165,37 +165,37 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
   }
 
   // ── Error propagation ────────────────────────────────────────────────────
-  "ParquetService.readFile" should "propagate Failure when readContent fails" in {
+  "ParquetService.readFile" should "propagate Left(IOError) when readContent fails" in {
     val service = new ParquetService(
       new FakeParquetRepository(contentResult =
         Failure(new RuntimeException("disk error"))
       )
     )
     val result = service.readFile("/tmp/test.parquet")
-    result.isFailure shouldBe true
-    result.failed.get.getMessage should include("disk error")
+    result.isLeft shouldBe true
+    result.left.toOption.get.userMessage should include("disk error")
   }
 
-  it should "propagate Failure when readSchema fails" in {
+  it should "propagate Left(IOError) when readSchema fails" in {
     val service = new ParquetService(
       new FakeParquetRepository(schemaResult =
         Failure(new RuntimeException("schema corrupt"))
       )
     )
     val result = service.readFile("/tmp/test.parquet")
-    result.isFailure shouldBe true
-    result.failed.get.getMessage should include("schema corrupt")
+    result.isLeft shouldBe true
+    result.left.toOption.get.userMessage should include("schema corrupt")
   }
 
-  it should "propagate Failure when readMetadata fails" in {
+  it should "propagate Left(IOError) when readMetadata fails" in {
     val service = new ParquetService(
       new FakeParquetRepository(metadataResult =
         Failure(new RuntimeException("metadata missing"))
       )
     )
     val result = service.readFile("/tmp/test.parquet")
-    result.isFailure shouldBe true
-    result.failed.get.getMessage should include("metadata missing")
+    result.isLeft shouldBe true
+    result.left.toOption.get.userMessage should include("metadata missing")
   }
 
   "ParquetService.getFileInfo" should "propagate Failure when readSchema fails" in {

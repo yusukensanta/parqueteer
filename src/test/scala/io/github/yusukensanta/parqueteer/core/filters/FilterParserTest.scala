@@ -105,7 +105,7 @@ class FilterParserTest extends AnyFlatSpec with Matchers {
   it should "include error message in Left" in {
     val result = FilterParser.parse("age >")
     result.isLeft shouldBe true
-    result.left.getOrElse("") should include("Filter parse error")
+    result.left.toOption.get.message should include("Filter parse error")
   }
 
   it should "return noopFilter (not an error) when numeric operator is applied to string value" in {

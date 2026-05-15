@@ -3,6 +3,7 @@ package io.github.yusukensanta.parqueteer.core.services
 import io.github.yusukensanta.parqueteer.core.models._
 import io.github.yusukensanta.parqueteer.core.models.StorageLocationParser
 import io.github.yusukensanta.parqueteer.core.repositories.ParquetRepository
+import io.github.yusukensanta.parqueteer.core.filters.FilterParser
 import scala.util.{Try, Success, Failure}
 import io.circe.{Encoder, Json}
 
@@ -32,25 +33,38 @@ class ParquetService(
   def readFile(
       path: String,
       readConfig: ReadConfig = ReadConfig()
-  ): Try[ParquetFile] = {
+  ): Either[ParqueteerError, ParquetFile] = {
     for {
+      _ <- readConfig.filter
+        .map(FilterParser.parse)
+        .getOrElse(Right(()))
+        .left
+        .map(identity)
       location <- StorageLocationParser
         .parse(path)
-        .fold(
-          error => Failure(new IllegalArgumentException(error)),
-          Success.apply
-        )
+        .left
+        .map(msg => ParqueteerError.InvalidFormat(path, msg))
       file = ParquetFile(location)
-      content <- repository.readContent(file, readConfig)
-      schema <- repository.readSchema(file)
-      metadata <- repository.readMetadata(file)
-    } yield {
-      file.copy(
-        content = Some(content),
-        schema = Some(schema),
-        metadata = Some(metadata)
-      )
-    }
+      content <- repository
+        .readContent(file, readConfig)
+        .toEither
+        .left
+        .map(ParqueteerError.IOError.apply)
+      schema <- repository
+        .readSchema(file)
+        .toEither
+        .left
+        .map(ParqueteerError.IOError.apply)
+      metadata <- repository
+        .readMetadata(file)
+        .toEither
+        .left
+        .map(ParqueteerError.IOError.apply)
+    } yield file.copy(
+      content = Some(content),
+      schema = Some(schema),
+      metadata = Some(metadata)
+    )
   }
 
   def getFileInfo(path: String): Try[ParquetFile] = {
@@ -71,6 +85,12 @@ class ParquetService(
       )
     }
   }
+
+  private def readFileAsTry(path: String): Try[ParquetFile] =
+    readFile(path).fold(
+      err => Failure(new RuntimeException(err.userMessage)),
+      Success.apply
+    )
 
   def writeFile(
       path: String,
@@ -131,7 +151,7 @@ class ParquetService(
       // Parquet → Parquet (cloud/local copy with optional compression change)
       case ("parquet", "parquet") =>
         for {
-          inputFile <- readFile(inputPath)
+          inputFile <- readFileAsTry(inputPath)
           data = inputFile.content.map(_.rows).getOrElse(List.empty)
           _ <- writeFile(outputPath, data, conversionConfig.writeConfig)
         } yield ()
@@ -139,7 +159,7 @@ class ParquetService(
       // Parquet → JSON
       case ("parquet", "json") =>
         for {
-          inputFile <- readFile(inputPath)
+          inputFile <- readFileAsTry(inputPath)
           content = inputFile.content.getOrElse(
             FileContent(List.empty, 0, false)
           )
@@ -150,7 +170,7 @@ class ParquetService(
       // Parquet → CSV
       case ("parquet", "csv") =>
         for {
-          inputFile <- readFile(inputPath)
+          inputFile <- readFileAsTry(inputPath)
           content = inputFile.content.getOrElse(
             FileContent(List.empty, 0, false)
           )
