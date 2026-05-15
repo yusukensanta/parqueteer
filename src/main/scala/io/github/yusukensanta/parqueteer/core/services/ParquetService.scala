@@ -34,6 +34,13 @@ class ParquetService(
       path: String,
       readConfig: ReadConfig = ReadConfig()
   ): Either[ParqueteerError, ParquetFile] = {
+    if (path == "-")
+      return Left(
+        ParqueteerError.InvalidFormat(
+          "-",
+          "Parquet files require random-access I/O and cannot be read from stdin"
+        )
+      )
     for {
       _ <- readConfig.filter
         .map(FilterParser.parse)
@@ -110,16 +117,32 @@ class ParquetService(
 
   def readDataFile(
       path: String,
-      inputFormat: String
+      inputFormat: String,
+      stdin: java.io.InputStream = System.in
   ): Try[List[Map[String, Any]]] =
+    if (path == "-") readFromStdin(inputFormat, stdin)
+    else
+      inputFormat.toLowerCase match {
+        case "json" => readJsonFile(path)
+        case "csv"  => readCsvFile(path)
+        case fmt =>
+          Failure(
+            new IllegalArgumentException(s"Unsupported input format: $fmt")
+          )
+      }
+
+  private[services] def readFromStdin(
+      inputFormat: String,
+      stdin: java.io.InputStream = System.in
+  ): Try[List[Map[String, Any]]] = Try {
+    val content = scala.io.Source.fromInputStream(stdin).mkString
     inputFormat.toLowerCase match {
-      case "json" => readJsonFile(path)
-      case "csv"  => readCsvFile(path)
+      case "json" => parseJsonContent(content)
+      case "csv"  => parseCsvContent(content)
       case fmt =>
-        Failure(
-          new IllegalArgumentException(s"Unsupported input format: $fmt")
-        )
+        throw new IllegalArgumentException(s"Unsupported input format: $fmt")
     }
+  }
 
   def validateFile(path: String): Try[ValidationResult] = {
     for {
@@ -224,8 +247,18 @@ class ParquetService(
 
   private def readJsonFile(path: String): Try[List[Map[String, Any]]] = Try {
     import better.files._
+    parseJsonContent(File(path).contentAsString)
+  }
+
+  private def readCsvFile(path: String): Try[List[Map[String, Any]]] = Try {
+    import better.files._
+    parseCsvContent(File(path).contentAsString)
+  }
+
+  private[services] def parseJsonContent(
+      content: String
+  ): List[Map[String, Any]] = {
     import io.circe.parser._
-    val content = File(path).contentAsString
     parse(content) match {
       case Left(error) =>
         throw new IllegalArgumentException(
@@ -260,11 +293,11 @@ class ParquetService(
     }
   }
 
-  private def readCsvFile(path: String): Try[List[Map[String, Any]]] = Try {
-    import better.files._
-    val content =
-      File(path).contentAsString.replace("\r\n", "\n").replace("\r", "\n")
-    val lines = content.split("\n").filter(_.nonEmpty).toList
+  private[services] def parseCsvContent(
+      content: String
+  ): List[Map[String, Any]] = {
+    val normalised = content.replace("\r\n", "\n").replace("\r", "\n")
+    val lines = normalised.split("\n").filter(_.nonEmpty).toList
     if (lines.isEmpty) List.empty[Map[String, Any]]
     else {
       val headers = parseCsvLine(lines.head)
