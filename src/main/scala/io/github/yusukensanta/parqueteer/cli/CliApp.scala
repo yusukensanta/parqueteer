@@ -160,7 +160,7 @@ object CliApp {
 
     service.readFile(filePath, readConfig) match {
       case Right(file) =>
-        println(service.formatContent(file, format))
+        if (!globalOptions.quiet) println(service.formatContent(file, format))
         0
       case Left(error) =>
         System.err.println(s"Error: ${error.userMessage}")
@@ -181,12 +181,14 @@ object CliApp {
   ): Int = {
     service.getFileInfo(filePath) match {
       case Success(file) =>
-        if (showMetadata) {
-          println(service.formatMetadata(file))
-          println()
-        }
-        if (showSchema) {
-          println(service.formatSchema(file))
+        if (!globalOptions.quiet) {
+          if (showMetadata) {
+            println(service.formatMetadata(file))
+            println()
+          }
+          if (showSchema) {
+            println(service.formatSchema(file))
+          }
         }
         0
       case Failure(error) =>
@@ -217,7 +219,8 @@ object CliApp {
       case Success(inputData) =>
         service.writeFile(outputPath, inputData, writeConfig) match {
           case Success(_) =>
-            println(s"Successfully wrote data to $outputPath")
+            if (!globalOptions.quiet)
+              println(s"Successfully wrote data to $outputPath")
             0
           case Failure(error) =>
             System.err.println(s"Failed to write file: ${error.getMessage}")
@@ -235,7 +238,7 @@ object CliApp {
     service.validateFile(filePath) match {
       case Success(result) =>
         if (result.isValid) {
-          println(s"✓ File $filePath is valid")
+          if (!globalOptions.quiet) println(s"✓ File $filePath is valid")
           0
         } else {
           println(s"✗ File $filePath has issues:")
@@ -262,7 +265,8 @@ object CliApp {
 
     service.convertFile(inputPath, outputPath, conversionConfig) match {
       case Success(_) =>
-        println(s"Successfully converted $inputPath to $outputPath")
+        if (!globalOptions.quiet)
+          println(s"Successfully converted $inputPath to $outputPath")
         0
       case Failure(error) =>
         System.err.println(s"Failed to convert file: ${error.getMessage}")

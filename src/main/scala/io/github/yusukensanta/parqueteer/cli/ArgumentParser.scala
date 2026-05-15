@@ -28,6 +28,12 @@ object ArgumentParser {
           c.copy(globalOptions = c.globalOptions.copy(verbose = true))
         )
         .text("Enable verbose output"),
+      opt[Unit]("quiet")
+        .abbr("q")
+        .action((_, c) =>
+          c.copy(globalOptions = c.globalOptions.copy(quiet = true))
+        )
+        .text("Suppress non-error output"),
       opt[String]("config")
         .action((x, c) =>
           c.copy(globalOptions = c.globalOptions.copy(configPath = Some(x)))
@@ -43,11 +49,17 @@ object ArgumentParser {
           c.copy(globalOptions = c.globalOptions.copy(region = Some(x)))
         )
         .text("Cloud region to use"),
-      opt[Unit]("no-color")
-        .action((_, c) =>
-          c.copy(globalOptions = c.globalOptions.copy(noColor = true))
+      opt[String]("color")
+        .action((x, c) =>
+          c.copy(globalOptions =
+            c.globalOptions.copy(colorMode = parseColorMode(x))
+          )
         )
-        .text("Disable colored output"),
+        .validate(x =>
+          if (List("auto", "always", "never").contains(x.toLowerCase)) success
+          else failure(s"Invalid color mode: $x. Use auto, always, or never")
+        )
+        .text("Color output mode: auto, always, never (default: auto)"),
       cmd("read")
         .text("Display parquet file content")
         .children(
@@ -75,11 +87,14 @@ object ArgumentParser {
             )
             .validate(x =>
               if (
-                List("table", "json", "csv", "pretty").contains(x.toLowerCase)
+                List("table", "json", "csv", "pretty", "markdown", "ndjson")
+                  .contains(x.toLowerCase)
               ) success
               else failure(s"Invalid format: $x")
             )
-            .text("Output format: table, json, csv, pretty(default: table)")
+            .text(
+              "Output format: table, json, csv, pretty, markdown, ndjson (default: table)"
+            )
         ),
       cmd("info")
         .text("Show file metadata and schema information")
@@ -232,11 +247,21 @@ object ArgumentParser {
 
   private def parseOutputFormat(format: String): OutputFormat = {
     format.toLowerCase match {
-      case "table"  => OutputFormat.Table
-      case "json"   => OutputFormat.JSON
-      case "csv"    => OutputFormat.CSV
-      case "pretty" => OutputFormat.Pretty
-      case _        => OutputFormat.Table
+      case "table"    => OutputFormat.Table
+      case "json"     => OutputFormat.JSON
+      case "csv"      => OutputFormat.CSV
+      case "pretty"   => OutputFormat.Pretty
+      case "markdown" => OutputFormat.Markdown
+      case "ndjson"   => OutputFormat.NDJSON
+      case _          => OutputFormat.Table
+    }
+  }
+
+  private def parseColorMode(mode: String): ColorMode = {
+    mode.toLowerCase match {
+      case "always" => ColorMode.Always
+      case "never"  => ColorMode.Never
+      case _        => ColorMode.Auto
     }
   }
 
