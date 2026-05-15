@@ -107,15 +107,8 @@ object CliApp {
           globalOptions
         )
 
-      case InfoCommand(filePath, format, showSchema, showMetadata) =>
-        executeInfo(
-          service,
-          filePath,
-          format,
-          showSchema,
-          showMetadata,
-          globalOptions
-        )
+      case InfoCommand(filePath, _, showSchema, showMetadata) =>
+        executeInfo(service, filePath, showSchema, showMetadata, globalOptions)
 
       case WriteCommand(
             outputPath,
@@ -134,21 +127,15 @@ object CliApp {
           globalOptions
         )
 
-      case ValidateCommand(filePath, verbose) =>
-        executeValidate(
-          service,
-          filePath,
-          verbose || globalOptions.verbose,
-          globalOptions
-        )
+      case ValidateCommand(filePath, _) =>
+        executeValidate(service, filePath, globalOptions)
 
-      case ConvertCommand(inputPath, outputPath, compression, maxRows) =>
+      case ConvertCommand(inputPath, outputPath, compression, _) =>
         executeConvert(
           service,
           inputPath,
           outputPath,
           compression,
-          maxRows,
           globalOptions
         )
     }
@@ -185,12 +172,10 @@ object CliApp {
   private def executeInfo(
       service: ParquetService,
       filePath: String,
-      format: OutputFormat,
       showSchema: Boolean,
       showMetadata: Boolean,
       globalOptions: GlobalOptions
   ): Int = {
-    val _ = (format, globalOptions) // suppress unused warnings
     service.getFileInfo(filePath) match {
       case Success(file) =>
         if (showMetadata) {
@@ -245,10 +230,8 @@ object CliApp {
   private def executeValidate(
       service: ParquetService,
       filePath: String,
-      verbose: Boolean,
       globalOptions: GlobalOptions
   ): Int = {
-    val _ = (verbose, globalOptions) // suppress unused warnings
     service.validateFile(filePath) match {
       case Success(result) =>
         if (result.isValid) {
@@ -271,10 +254,8 @@ object CliApp {
       inputPath: String,
       outputPath: String,
       compression: CompressionType,
-      maxRows: Option[Long],
       globalOptions: GlobalOptions
   ): Int = {
-    val _ = (maxRows, globalOptions) // suppress unused warnings
     val conversionConfig = ConversionConfig(
       writeConfig = WriteConfig(compressionType = compression)
     )
