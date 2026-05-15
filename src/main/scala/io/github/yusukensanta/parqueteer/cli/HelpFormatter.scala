@@ -47,9 +47,17 @@ object HelpFormatter {
        |OPTIONS:
        |  -n, --max-rows <N>        Maximum number of rows to display
        |  -c, --columns <COLS>      Comma-separated list of columns to display
-       |  -f, --filter <EXPR>       Filter expression for rows (e.g., "age > 25")
+       |  -f, --filter <EXPR>       Filter expression for rows
        |      --format <FORMAT>     Output format: table, json, csv, pretty (default: table)
        |  -h, --help                Show this help message
+       |
+       |FILTER EXPRESSIONS:
+       |  Comparison:  age > 25, name = "Alice", active != false
+       |  BETWEEN:     age BETWEEN 25 AND 35
+       |  IN:          status IN ("active", "pending")
+       |  IS NULL:     email IS NULL, phone IS NOT NULL
+       |  Nested:      user.address.city = "NYC"
+       |  Logical:     age > 18 AND active = true, NOT deleted = true
        |
        |EXAMPLES:
        |  # Display first 10 rows as a table
@@ -58,8 +66,11 @@ object HelpFormatter {
        |  # Show specific columns only
        |  parqueteer read data.parquet --columns name,age,city
        |
-       |  # Filter rows and output as JSON
-       |  parqueteer read data.parquet --filter "age > 25" --format json
+       |  # Filter rows using BETWEEN
+       |  parqueteer read data.parquet --filter "age BETWEEN 25 AND 35" --format json
+       |
+       |  # Filter with IN operator
+       |  parqueteer read data.parquet --filter 'status IN ("active", "pending")'
        |
        |  # Read from S3
        |  parqueteer read s3://bucket/data.parquet --max-rows 100
