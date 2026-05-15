@@ -1,9 +1,20 @@
 package io.github.yusukensanta.parqueteer.cli
 
-import io.github.yusukensanta.parqueteer.core.services.ParquetService
+import io.github.yusukensanta.parqueteer.core.services.{
+  ParquetService,
+  ConversionConfig
+}
 import io.github.yusukensanta.parqueteer.core.repositories.ParquetRepository
-import io.github.yusukensanta.parqueteer.core.models.{ReadConfig, WriteConfig}
-import io.github.yusukensanta.parqueteer.config.ConfigurationManager
+import io.github.yusukensanta.parqueteer.core.models.{
+  ReadConfig,
+  WriteConfig,
+  OutputFormat,
+  CompressionType
+}
+import io.github.yusukensanta.parqueteer.config.{
+  ConfigurationManager,
+  LoggingConfig
+}
 import scopt.OParser
 import scala.util.{Success, Failure}
 import org.slf4j.LoggerFactory
@@ -157,7 +168,7 @@ object CliApp {
       maxRows: Option[Long],
       columns: Option[List[String]],
       filter: Option[String],
-      format: io.github.yusukensanta.parqueteer.core.models.OutputFormat,
+      format: OutputFormat,
       globalOptions: GlobalOptions
   ): Int = {
     val readConfig = ReadConfig(
@@ -182,7 +193,7 @@ object CliApp {
   private def executeInfo(
       service: ParquetService,
       filePath: String,
-      format: io.github.yusukensanta.parqueteer.core.models.OutputFormat,
+      format: OutputFormat,
       showSchema: Boolean,
       showMetadata: Boolean,
       globalOptions: GlobalOptions
@@ -210,7 +221,7 @@ object CliApp {
       outputPath: String,
       inputPath: String,
       inputFormat: String,
-      compression: io.github.yusukensanta.parqueteer.core.models.CompressionType,
+      compression: CompressionType,
       rowGroupSize: Option[Long],
       globalOptions: GlobalOptions
   ): Int = {
@@ -267,15 +278,14 @@ object CliApp {
       service: ParquetService,
       inputPath: String,
       outputPath: String,
-      compression: io.github.yusukensanta.parqueteer.core.models.CompressionType,
+      compression: CompressionType,
       maxRows: Option[Long],
       globalOptions: GlobalOptions
   ): Int = {
     val _ = (maxRows, globalOptions) // suppress unused warnings
-    val conversionConfig =
-      io.github.yusukensanta.parqueteer.core.services.ConversionConfig(
-        writeConfig = WriteConfig(compressionType = compression)
-      )
+    val conversionConfig = ConversionConfig(
+      writeConfig = WriteConfig(compressionType = compression)
+    )
 
     service.convertFile(inputPath, outputPath, conversionConfig) match {
       case Success(_) =>
@@ -342,7 +352,7 @@ object CliApp {
   }
 
   private def setupLogging(
-      loggingConfig: io.github.yusukensanta.parqueteer.config.LoggingConfig,
+      loggingConfig: LoggingConfig,
       verbose: Boolean
   ): Unit = {
     // Note: Using slf4j-simple which doesn't support programmatic configuration
