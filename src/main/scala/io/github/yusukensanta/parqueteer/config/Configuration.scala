@@ -183,6 +183,26 @@ class ConfigurationManager {
     }
   }
 
+  def validate(configPath: Option[String] = None): Try[List[String]] = {
+    val configFile = configPath.map(File(_)).getOrElse(defaultConfigPath)
+    if (!configFile.exists) {
+      Success(
+        List(
+          s"Config file not found: ${configFile.pathAsString} (using defaults)"
+        )
+      )
+    } else {
+      parseConfigFile(configFile).map(_ => List.empty).recover { case ex =>
+        List(ex.getMessage)
+      }
+    }
+  }
+
+  def resolvedConfigPath(configPath: Option[String]): String =
+    configPath
+      .orElse(EnvConfig.configPath)
+      .getOrElse(defaultConfigPath.pathAsString)
+
   def parseSizeString(sizeStr: String): Long =
     io.github.yusukensanta.parqueteer.core.util.SizeParser.parse(sizeStr)
 }

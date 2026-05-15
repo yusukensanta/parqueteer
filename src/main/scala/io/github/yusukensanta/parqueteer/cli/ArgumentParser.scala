@@ -5,6 +5,7 @@ import io.github.yusukensanta.parqueteer.core.models.{
   OutputFormat,
   CompressionType
 }
+import io.github.yusukensanta.parqueteer.config.EnvConfig
 
 object ArgumentParser {
   case class Config(
@@ -65,7 +66,18 @@ object ArgumentParser {
         .children(
           arg[String]("<file>")
             .required()
-            .action((x, c) => c.copy(command = Some(ReadCommand(x))))
+            .action((x, c) =>
+              c.copy(command =
+                Some(
+                  ReadCommand(
+                    x,
+                    maxRows = EnvConfig.parsedMaxRows,
+                    format = EnvConfig.parsedDefaultFormat
+                      .getOrElse(OutputFormat.Table)
+                  )
+                )
+              )
+            )
             .text("Path to parquet file (local, s3://, gs://, abfss://)"),
           opt[Long]("max-rows")
             .abbr("n")
@@ -190,6 +202,20 @@ object ArgumentParser {
               updateConvertCommand(c, _.copy(maxRows = Some(x)))
             )
             .text("Maximum number of rows to convert")
+        ),
+      cmd("config")
+        .text("Show or validate configuration")
+        .children(
+          cmd("show")
+            .text("Display resolved configuration with source annotations")
+            .action((_, c) =>
+              c.copy(command = Some(ConfigCommand(ConfigShowSubcommand)))
+            ),
+          cmd("validate")
+            .text("Validate the configuration file")
+            .action((_, c) =>
+              c.copy(command = Some(ConfigCommand(ConfigValidateSubcommand)))
+            )
         )
     )
   }

@@ -42,8 +42,20 @@ case class ConvertCommand(
     maxRows: Option[Long] = None
 ) extends Command
 
+sealed trait ConfigSubcommand
+case object ConfigShowSubcommand extends ConfigSubcommand
+case object ConfigValidateSubcommand extends ConfigSubcommand
+
+case class ConfigCommand(sub: ConfigSubcommand) extends Command
+
 enum ColorMode:
   case Auto, Always, Never
+
+object ColorMode:
+  def fromString(s: String): ColorMode = s.toLowerCase match
+    case "always" => Always
+    case "never"  => Never
+    case _        => Auto
 
 case class GlobalOptions(
     verbose: Boolean = false,
