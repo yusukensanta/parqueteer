@@ -161,4 +161,30 @@ class ArgumentParserTest extends AnyFlatSpec with Matchers {
       OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
     result shouldBe None
   }
+
+  "ArgumentParser config show" should "parse config show subcommand" in {
+    val args = Array("config", "show")
+    val result =
+      OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
+
+    result shouldBe defined
+    result.get.command shouldBe defined
+    result.get.command.get shouldBe a[ConfigCommand]
+    result.get.command.get
+      .asInstanceOf[ConfigCommand]
+      .sub shouldBe ConfigShowSubcommand
+  }
+
+  "ArgumentParser config validate" should "parse config validate subcommand" in {
+    val args = Array("config", "validate")
+    val result =
+      OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
+
+    result shouldBe defined
+    result.get.command shouldBe defined
+    result.get.command.get shouldBe a[ConfigCommand]
+    result.get.command.get
+      .asInstanceOf[ConfigCommand]
+      .sub shouldBe ConfigValidateSubcommand
+  }
 }

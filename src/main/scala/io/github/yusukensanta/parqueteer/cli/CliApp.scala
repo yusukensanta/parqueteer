@@ -14,6 +14,7 @@ import io.github.yusukensanta.parqueteer.core.models.{
 }
 import io.github.yusukensanta.parqueteer.config.{
   ConfigurationManager,
+  EnvConfig,
   LoggingConfig
 }
 import scopt.OParser
@@ -30,7 +31,10 @@ object CliApp {
       System.exit(0)
     }
 
-    OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config()) match {
+    val initialConfig = ArgumentParser.Config(
+      globalOptions = EnvConfig.buildInitialGlobalOptions
+    )
+    OParser.parse(ArgumentParser.parser, args, initialConfig) match {
       case Some(config) =>
         val exitCode = run(config)
         System.exit(exitCode)
@@ -139,6 +143,9 @@ object CliApp {
           compression,
           globalOptions
         )
+
+      case ConfigCommand(sub) =>
+        executeConfig(sub, globalOptions)
     }
   }
 
@@ -272,6 +279,78 @@ object CliApp {
         System.err.println(s"Failed to convert file: ${error.getMessage}")
         if (globalOptions.verbose) error.printStackTrace()
         1
+    }
+  }
+
+  private def executeConfig(
+      sub: ConfigSubcommand,
+      globalOptions: GlobalOptions
+  ): Int = {
+    val configManager = new ConfigurationManager()
+    val configPath = globalOptions.configPath
+    sub match {
+      case ConfigShowSubcommand =>
+        if (!globalOptions.quiet) {
+          val resolvedPath = configManager.resolvedConfigPath(configPath)
+          val fileExists = better.files.File(resolvedPath).exists
+          println(s"Config file: $resolvedPath [${
+              if (fileExists) "exists" else "not found"
+            }]")
+          println()
+
+          val envVars = EnvConfig.allSet
+          if (envVars.isEmpty) {
+            println("Environment variables: (none set)")
+          } else {
+            println("Environment variables:")
+            EnvConfig.SupportedVars.foreach { key =>
+              envVars.get(key) match {
+                case Some(v) => println(s"  $key=$v")
+                case None    => ()
+              }
+            }
+          }
+          println()
+
+          println("Resolved settings:")
+          val fmt = EnvConfig.parsedDefaultFormat
+            .map(_.toString.toLowerCase + " [env]")
+            .getOrElse("table [default]")
+          println(s"  format:   $fmt")
+          val color = {
+            val cm = globalOptions.colorMode
+            val src =
+              if (sys.env.get("NO_COLOR").exists(_.nonEmpty)) "[env: NO_COLOR]"
+              else if (sys.env.contains("PARQUETEER_COLOR")) "[env]"
+              else "[default]"
+            s"${cm.toString.toLowerCase} $src"
+          }
+          println(s"  color:    $color")
+          val verboseFlag =
+            if (globalOptions.verbose) "true [cli/env]" else "false [default]"
+          println(s"  verbose:  $verboseFlag")
+          val quiet =
+            if (globalOptions.quiet) "true [cli]" else "false [default]"
+          println(s"  quiet:    $quiet")
+          EnvConfig.parsedMaxRows.foreach { n =>
+            println(s"  max-rows: $n [env]")
+          }
+        }
+        0
+
+      case ConfigValidateSubcommand =>
+        configManager.validate(configPath) match {
+          case scala.util.Success(Nil) =>
+            if (!globalOptions.quiet)
+              println(s"✓ Configuration is valid")
+            0
+          case scala.util.Success(issues) =>
+            issues.foreach(i => println(s"  $i"))
+            0
+          case scala.util.Failure(ex) =>
+            System.err.println(s"Config error: ${ex.getMessage}")
+            1
+        }
     }
   }
 
