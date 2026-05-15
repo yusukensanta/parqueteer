@@ -60,7 +60,9 @@ class JsonEncoderTest extends AnyFlatSpec with Matchers {
   it should "encode Array[Byte] as Base64 string" in {
     val bytes = "hello".getBytes
     val result = JsonEncoder.encodeAny(bytes)
-    result.asString.get should not be empty
+    result shouldBe Json.fromString(
+      java.util.Base64.getEncoder.encodeToString(bytes)
+    )
   }
 
   it should "encode unknown types as toString" in {
@@ -68,5 +70,32 @@ class JsonEncoderTest extends AnyFlatSpec with Matchers {
       java.util.UUID.fromString("00000000-0000-0000-0000-000000000000")
     ) shouldBe
       Json.fromString("00000000-0000-0000-0000-000000000000")
+  }
+
+  it should "encode Float" in {
+    JsonEncoder.encodeAny(1.5f: Float) shouldBe Json.fromFloatOrNull(1.5f)
+  }
+
+  it should "encode NaN Float as Json.Null" in {
+    JsonEncoder.encodeAny(Float.NaN) shouldBe Json.Null
+  }
+
+  it should "encode Infinity Float as Json.Null" in {
+    JsonEncoder.encodeAny(Float.PositiveInfinity) shouldBe Json.Null
+  }
+
+  it should "encode BigDecimal" in {
+    JsonEncoder.encodeAny(BigDecimal("3.14")) shouldBe Json.fromBigDecimal(
+      BigDecimal("3.14")
+    )
+  }
+
+  it should "encode BigInt" in {
+    JsonEncoder.encodeAny(BigInt(42)) shouldBe Json.fromBigInt(BigInt(42))
+  }
+
+  it should "encode Array of non-bytes recursively" in {
+    val result = JsonEncoder.encodeAny(Array("x", "y"))
+    result shouldBe Json.arr(Json.fromString("x"), Json.fromString("y"))
   }
 }
