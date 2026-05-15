@@ -47,22 +47,8 @@ class JSONFormatter extends OutputFormatter {
     Json.obj(fields.toSeq*)
   }
 
-  private def encodeValue(value: Any): Json = value match {
-    case null           => Json.Null
-    case s: String      => Json.fromString(s)
-    case i: Int         => Json.fromInt(i)
-    case l: Long        => Json.fromLong(l)
-    case d: Double      => Json.fromDoubleOrNull(d)
-    case f: Float       => Json.fromFloatOrNull(f)
-    case b: Boolean     => Json.fromBoolean(b)
-    case bd: BigDecimal => Json.fromBigDecimal(bd)
-    case bi: BigInt     => Json.fromBigInt(bi)
-    case list: List[_]  => Json.arr(list.map(encodeValue)*)
-    case map: Map[_, _] =>
-      val stringMap = map.asInstanceOf[Map[String, Any]]
-      encodeRow(stringMap)
-    case other => Json.fromString(other.toString)
-  }
+  private def encodeValue(value: Any): Json =
+    io.github.yusukensanta.parqueteer.core.util.JsonEncoder.encodeAny(value)
 }
 
 object JSONFormatter {

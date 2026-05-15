@@ -7,32 +7,10 @@ import scala.util.{Try, Success, Failure}
 import io.circe.{Encoder, Json}
 
 object ParquetServiceEncoders {
-  given anyEncoder: Encoder[Any] = Encoder.instance {
-    case null      => Json.Null
-    case s: String => Json.fromString(s)
-    case i: Int    => Json.fromInt(i)
-    case l: Long   => Json.fromLong(l)
-    case d: Double =>
-      if (d.isNaN || d.isInfinity) Json.Null
-      else Json.fromDoubleOrNull(d)
-    case f: Float =>
-      if (f.isNaN || f.isInfinity) Json.Null
-      else Json.fromFloatOrNull(f)
-    case b: Boolean     => Json.fromBoolean(b)
-    case bd: BigDecimal => Json.fromBigDecimal(bd)
-    case bi: BigInt     => Json.fromBigInt(bi)
-    case bytes: Array[Byte] =>
-      Json.fromString(java.util.Base64.getEncoder.encodeToString(bytes))
-    case list: List[_] => Json.arr(list.map(anyEncoder.apply)*)
-    case arr: Array[_] => Json.arr(arr.map(anyEncoder.apply)*)
-    case map: Map[_, _] =>
-      Json.obj(map.map { case (k, v) =>
-        k.toString -> anyEncoder.apply(v)
-      }.toSeq*)
-    case Some(value) => anyEncoder.apply(value)
-    case None        => Json.Null
-    case other       => Json.fromString(other.toString)
-  }
+  given anyEncoder: Encoder[Any] =
+    Encoder.instance(
+      io.github.yusukensanta.parqueteer.core.util.JsonEncoder.encodeAny
+    )
 
   given mapStringAnyEncoder: Encoder[Map[String, Any]] =
     Encoder.instance { map =>
