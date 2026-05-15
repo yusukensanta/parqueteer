@@ -47,7 +47,7 @@ case class ReadConfig(
 )
 
 enum OutputFormat:
-  case Table, JSON, CSV, Pretty
+  case Table, JSON, CSV, Pretty, Markdown, NDJSON
 
 case class WriteConfig(
     compressionType: CompressionType = CompressionType.Snappy,

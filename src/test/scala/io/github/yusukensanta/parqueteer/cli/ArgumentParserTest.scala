@@ -68,19 +68,97 @@ class ArgumentParserTest extends AnyFlatSpec with Matchers {
   }
 
   it should "parse global options correctly" in {
-    // In scopt, for global options to work before commands, test with read command
-    val args =
-      Array("read", "file.parquet", "--verbose")
+    val args = Array("read", "file.parquet", "--verbose")
     val result =
       OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
 
     result shouldBe defined
     result.get.globalOptions.verbose shouldBe true
 
-    // Also test with config option
     val args2 = Array("read", "file.parquet")
     val result2 =
       OParser.parse(ArgumentParser.parser, args2, ArgumentParser.Config())
     result2 shouldBe defined
+  }
+
+  it should "parse --quiet / -q flag" in {
+    val args = Array("read", "file.parquet", "--quiet")
+    val result =
+      OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
+
+    result shouldBe defined
+    result.get.globalOptions.quiet shouldBe true
+  }
+
+  it should "parse -q shorthand for quiet" in {
+    val args = Array("read", "file.parquet", "-q")
+    val result =
+      OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
+
+    result shouldBe defined
+    result.get.globalOptions.quiet shouldBe true
+  }
+
+  it should "parse --color=never" in {
+    val args = Array("read", "file.parquet", "--color", "never")
+    val result =
+      OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
+
+    result shouldBe defined
+    result.get.globalOptions.colorMode shouldBe ColorMode.Never
+  }
+
+  it should "parse --color=always" in {
+    val args = Array("read", "file.parquet", "--color", "always")
+    val result =
+      OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
+
+    result shouldBe defined
+    result.get.globalOptions.colorMode shouldBe ColorMode.Always
+  }
+
+  it should "default colorMode to Auto" in {
+    val args = Array("read", "file.parquet")
+    val result =
+      OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
+
+    result shouldBe defined
+    result.get.globalOptions.colorMode shouldBe ColorMode.Auto
+  }
+
+  it should "reject --color with invalid value" in {
+    val args = Array("read", "file.parquet", "--color", "rainbow")
+    val result =
+      OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
+    result shouldBe None
+  }
+
+  it should "parse markdown output format" in {
+    val args = Array("read", "file.parquet", "--format", "markdown")
+    val result =
+      OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
+
+    result shouldBe defined
+    result.get.command.get
+      .asInstanceOf[ReadCommand]
+      .format shouldBe OutputFormat.Markdown
+  }
+
+  it should "parse ndjson output format" in {
+    val args = Array("read", "file.parquet", "--format", "ndjson")
+    val result =
+      OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
+
+    result shouldBe defined
+    result.get.command.get
+      .asInstanceOf[ReadCommand]
+      .format shouldBe OutputFormat.NDJSON
+  }
+
+  it should "reject unknown output format" in {
+    val args = Array("read", "file.parquet", "--format", "xml")
+    val result =
+      OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
+    result shouldBe None
   }
 }

@@ -42,10 +42,14 @@ case class ConvertCommand(
     maxRows: Option[Long] = None
 ) extends Command
 
+enum ColorMode:
+  case Auto, Always, Never
+
 case class GlobalOptions(
     verbose: Boolean = false,
+    quiet: Boolean = false,
     configPath: Option[String] = None,
     profile: Option[String] = None,
     region: Option[String] = None,
-    noColor: Boolean = false
+    colorMode: ColorMode = ColorMode.Auto
 )
