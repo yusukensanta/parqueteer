@@ -226,7 +226,7 @@ object CliApp {
       case Success(inputData) =>
         service.writeFile(outputPath, inputData, writeConfig) match {
           case Success(_) =>
-            if (!globalOptions.quiet)
+            if (showStatus(globalOptions))
               println(s"Successfully wrote data to $outputPath")
             0
           case Failure(error) =>
@@ -245,7 +245,7 @@ object CliApp {
     service.validateFile(filePath) match {
       case Success(result) =>
         if (result.isValid) {
-          if (!globalOptions.quiet) println(s"✓ File $filePath is valid")
+          if (showStatus(globalOptions)) println(s"✓ File $filePath is valid")
           0
         } else {
           println(s"✗ File $filePath has issues:")
@@ -272,7 +272,7 @@ object CliApp {
 
     service.convertFile(inputPath, outputPath, conversionConfig) match {
       case Success(_) =>
-        if (!globalOptions.quiet)
+        if (showStatus(globalOptions))
           println(s"Successfully converted $inputPath to $outputPath")
         0
       case Failure(error) =>
@@ -353,6 +353,11 @@ object CliApp {
         }
     }
   }
+
+  private def isStdoutTTY: Boolean = System.console() != null
+
+  private def showStatus(opts: GlobalOptions): Boolean =
+    !opts.quiet && isStdoutTTY
 
   private def setupLogging(
       loggingConfig: LoggingConfig,

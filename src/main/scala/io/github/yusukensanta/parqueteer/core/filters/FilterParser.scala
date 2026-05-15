@@ -25,7 +25,7 @@ class FilterParser extends JavaTokenParsers {
   /** Main entry point: parse filter expression
     */
   def parseFilter(input: String): Try[Filter] = {
-    parseAll(expression, input) match {
+    Try(parseAll(expression, input)).flatMap {
       case Success(filter, _) => TrySuccess(filter.asInstanceOf[Filter])
       case NoSuccess(msg, _) =>
         TryFailure(
@@ -136,27 +136,40 @@ class FilterParser extends JavaTokenParsers {
         value match {
           case l: Long   => col > l
           case d: Double => col > d
-          case _         => Filter.noopFilter
+          case _ =>
+            throw new IllegalArgumentException(
+              s"Operator '>' requires a numeric value, got: ${value.getClass.getSimpleName} '$value'"
+            )
         }
       case ">=" =>
         value match {
           case l: Long   => col >= l
           case d: Double => col >= d
-          case _         => Filter.noopFilter
+          case _ =>
+            throw new IllegalArgumentException(
+              s"Operator '>=' requires a numeric value, got: ${value.getClass.getSimpleName} '$value'"
+            )
         }
       case "<" =>
         value match {
           case l: Long   => col < l
           case d: Double => col < d
-          case _         => Filter.noopFilter
+          case _ =>
+            throw new IllegalArgumentException(
+              s"Operator '<' requires a numeric value, got: ${value.getClass.getSimpleName} '$value'"
+            )
         }
       case "<=" =>
         value match {
           case l: Long   => col <= l
           case d: Double => col <= d
-          case _         => Filter.noopFilter
+          case _ =>
+            throw new IllegalArgumentException(
+              s"Operator '<=' requires a numeric value, got: ${value.getClass.getSimpleName} '$value'"
+            )
         }
-      case _ => Filter.noopFilter
+      case _ =>
+        throw new IllegalArgumentException(s"Unknown operator: $operator")
     }
   }
 }

@@ -463,9 +463,7 @@ class ParquetRepository {
         FilterParser.parse(expr) match {
           case Right(filter) => filter
           case Left(error) =>
-            System.err.println(s"Warning: ${error.userMessage}")
-            System.err.println("Proceeding without filter")
-            Filter.noopFilter
+            throw new IllegalArgumentException(error.userMessage)
         }
     }
   }

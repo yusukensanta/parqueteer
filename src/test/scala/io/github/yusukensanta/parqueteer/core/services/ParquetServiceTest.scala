@@ -5,6 +5,7 @@ import io.github.yusukensanta.parqueteer.core.repositories.ParquetRepository
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import scala.util.{Try, Success, Failure}
+import java.io.ByteArrayInputStream
 import java.time.Instant
 
 class ParquetServiceTest extends AnyFlatSpec with Matchers {
@@ -290,8 +291,8 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     repo.lastWrittenData should have length 2
     repo.lastWrittenData.head("name") shouldBe "Alice"
     repo.lastWrittenData(1)("name") shouldBe "Bob"
-    repo.lastWrittenData.head("id") shouldBe 1.0
-    repo.lastWrittenData(1)("id") shouldBe 2.0
+    repo.lastWrittenData.head("id") shouldBe 1L
+    repo.lastWrittenData(1)("id") shouldBe 2L
   }
 
   it should "succeed for csv-to-parquet and pass parsed data to repository" in {
@@ -366,5 +367,84 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     val result = service.readDataFile("/any/file.tsv", "tsv")
     result.isFailure shouldBe true
     result.failed.get.getMessage should include("Unsupported input format")
+  }
+
+  // ── stdin / pipe support (#42) ────────────────────────────────────────────
+  "ParquetService.readDataFile" should "read JSON from stdin when path is -" in {
+    val json = """[{"id": 1, "name": "Alice"}]""".getBytes("UTF-8")
+    val stdin = new ByteArrayInputStream(json)
+
+    val service = new ParquetService(new FakeParquetRepository())
+    val result = service.readDataFile("-", "json", stdin)
+
+    result.isSuccess shouldBe true
+    result.get should have length 1
+    result.get.head("name") shouldBe "Alice"
+  }
+
+  it should "read CSV from stdin when path is -" in {
+    val csv = "id,name\n1,Alice\n2,Bob\n".getBytes("UTF-8")
+    val stdin = new ByteArrayInputStream(csv)
+
+    val service = new ParquetService(new FakeParquetRepository())
+    val result = service.readDataFile("-", "csv", stdin)
+
+    result.isSuccess shouldBe true
+    result.get should have length 2
+    result.get.head("name") shouldBe "Alice"
+  }
+
+  it should "return Failure for unsupported format from stdin" in {
+    val stdin = new ByteArrayInputStream("data".getBytes("UTF-8"))
+    val service = new ParquetService(new FakeParquetRepository())
+    val result = service.readDataFile("-", "tsv", stdin)
+    result.isFailure shouldBe true
+    result.failed.get.getMessage should include("Unsupported input format")
+  }
+
+  "ParquetService.readFile" should "return Left for stdin path (-)" in {
+    val service = new ParquetService(new FakeParquetRepository())
+    val result = service.readFile("-")
+    result.isLeft shouldBe true
+    result.left.toOption.get.userMessage should include("stdin")
+  }
+
+  "ParquetService.parseJsonContent" should "parse JSON array" in {
+    val service = new ParquetService(new FakeParquetRepository())
+    val rows = service.parseJsonContent("""[{"x": 1}]""")
+    rows should have length 1
+    rows.head("x") shouldBe 1L
+  }
+
+  it should "preserve Long precision for large integers" in {
+    val service = new ParquetService(new FakeParquetRepository())
+    val largeId = 9876543210L
+    val rows = service.parseJsonContent(s"""[{"id": $largeId}]""")
+    rows.head("id") shouldBe largeId
+  }
+
+  it should "keep Double for fractional numbers" in {
+    val service = new ParquetService(new FakeParquetRepository())
+    val rows = service.parseJsonContent("""[{"score": 9.5}]""")
+    rows.head("score") shouldBe 9.5
+  }
+
+  it should "throw for non-array JSON" in {
+    val service = new ParquetService(new FakeParquetRepository())
+    an[IllegalArgumentException] should be thrownBy {
+      service.parseJsonContent("""{"not": "array"}""")
+    }
+  }
+
+  "ParquetService.parseCsvContent" should "parse CSV string" in {
+    val service = new ParquetService(new FakeParquetRepository())
+    val rows = service.parseCsvContent("a,b\n1,2\n3,4\n")
+    rows should have length 2
+    rows.head("a") shouldBe "1"
+  }
+
+  it should "return empty list for empty input" in {
+    val service = new ParquetService(new FakeParquetRepository())
+    service.parseCsvContent("") shouldBe empty
   }
 }
