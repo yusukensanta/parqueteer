@@ -26,7 +26,7 @@ jobs:
           cache: 'sbt'
 
       - name: Run OWASP Dependency Check
-        uses: dependency-check/Dependency-Check_Action@v1.1.0
+        uses: dependency-check/Dependency-Check_Action@main  # maintainers use @main as stable; only 2 releases both from 2021
         with:
           project: 'parqueteer'
           path: '.'
