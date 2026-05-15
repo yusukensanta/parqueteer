@@ -332,4 +332,39 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
       service.convertFile(badFile.getAbsolutePath, "/tmp/out.parquet")
     result.isFailure shouldBe true
   }
+
+  // ── readDataFile ──────────────────────────────────────────────────────────
+  "ParquetService.readDataFile" should "parse JSON file into rows" in {
+    import java.nio.file.Files
+    val f = java.io.File.createTempFile("parqueteer_rdf", ".json")
+    f.deleteOnExit()
+    Files.writeString(f.toPath, """[{"id": 1, "name": "Alice"}]""")
+
+    val service = new ParquetService(new FakeParquetRepository())
+    val result = service.readDataFile(f.getAbsolutePath, "json")
+
+    result.isSuccess shouldBe true
+    result.get should have length 1
+    result.get.head("name") shouldBe "Alice"
+  }
+
+  it should "parse CSV file into rows" in {
+    import java.nio.file.Files
+    val f = java.io.File.createTempFile("parqueteer_rdf", ".csv")
+    f.deleteOnExit()
+    Files.writeString(f.toPath, "id,name\n1,Alice\n")
+
+    val service = new ParquetService(new FakeParquetRepository())
+    val result = service.readDataFile(f.getAbsolutePath, "csv")
+
+    result.isSuccess shouldBe true
+    result.get.head("name") shouldBe "Alice"
+  }
+
+  it should "return Failure for unsupported format" in {
+    val service = new ParquetService(new FakeParquetRepository())
+    val result = service.readDataFile("/any/file.tsv", "tsv")
+    result.isFailure shouldBe true
+    result.failed.get.getMessage should include("Unsupported input format")
+  }
 }

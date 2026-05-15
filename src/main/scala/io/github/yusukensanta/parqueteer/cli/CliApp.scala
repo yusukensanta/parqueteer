@@ -202,28 +202,25 @@ object CliApp {
       rowGroupSize: Option[Long],
       globalOptions: GlobalOptions
   ): Int = {
-    try {
-      val inputData = readInputData(inputPath, inputFormat)
-
-      val writeConfig = WriteConfig(
-        compressionType = compression,
-        rowGroupSize = rowGroupSize.getOrElse(128 * 1024 * 1024L)
-      )
-
-      service.writeFile(outputPath, inputData, writeConfig) match {
-        case Success(_) =>
-          println(s"Successfully wrote data to $outputPath")
-          0
-        case Failure(error) =>
-          System.err.println(s"Failed to write file: ${error.getMessage}")
-          if (globalOptions.verbose) error.printStackTrace()
-          1
-      }
-    } catch {
-      case e: Exception =>
-        System.err.println(s"Failed to read input data: ${e.getMessage}")
-        if (globalOptions.verbose) e.printStackTrace()
+    val writeConfig = WriteConfig(
+      compressionType = compression,
+      rowGroupSize = rowGroupSize.getOrElse(128 * 1024 * 1024L)
+    )
+    service.readDataFile(inputPath, inputFormat) match {
+      case Failure(error) =>
+        System.err.println(s"Failed to read input data: ${error.getMessage}")
+        if (globalOptions.verbose) error.printStackTrace()
         1
+      case Success(inputData) =>
+        service.writeFile(outputPath, inputData, writeConfig) match {
+          case Success(_) =>
+            println(s"Successfully wrote data to $outputPath")
+            0
+          case Failure(error) =>
+            System.err.println(s"Failed to write file: ${error.getMessage}")
+            if (globalOptions.verbose) error.printStackTrace()
+            1
+        }
     }
   }
 
@@ -268,59 +265,6 @@ object CliApp {
         System.err.println(s"Failed to convert file: ${error.getMessage}")
         if (globalOptions.verbose) error.printStackTrace()
         1
-    }
-  }
-
-  private def readInputData(
-      inputPath: String,
-      inputFormat: String
-  ): List[Map[String, Any]] = {
-    import better.files._
-    import io.circe.parser._
-
-    val content = File(inputPath).contentAsString
-
-    inputFormat.toLowerCase match {
-      case "json" =>
-        parse(content) match {
-          case Left(error) =>
-            throw new IllegalArgumentException(
-              s"Failed to parse JSON: ${error.getMessage}"
-            )
-          case Right(json) =>
-            json.asArray match {
-              case Some(array) =>
-                array.toList.map(
-                  _.asObject.get.toMap.view
-                    .mapValues {
-                      case json if json.isString => json.asString.get
-                      case json if json.isNumber =>
-                        json.asNumber.get.toDouble
-                      case json if json.isBoolean => json.asBoolean.get
-                      case json if json.isNull    => null
-                      case json                   => json.toString
-                    }
-                    .toMap
-                )
-              case None =>
-                throw new java.lang.IllegalArgumentException(
-                  "JSON must be an array of objects"
-                )
-            }
-        }
-      case "csv" =>
-        val lines = content.split("\n").toList
-        if (lines.isEmpty) return List.empty
-
-        val headers = lines.head.split(",").map(_.trim)
-        lines.tail.map { line =>
-          val values = line.split(",").map(_.trim)
-          headers.zip(values).toMap.asInstanceOf[Map[String, Any]]
-        }
-      case _ =>
-        throw new java.lang.IllegalArgumentException(
-          s"Unsupported input format: $inputFormat"
-        )
     }
   }
 

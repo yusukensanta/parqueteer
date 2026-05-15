@@ -110,6 +110,19 @@ class ParquetService(
     } yield ()
   }
 
+  def readDataFile(
+      path: String,
+      inputFormat: String
+  ): Try[List[Map[String, Any]]] =
+    inputFormat.toLowerCase match {
+      case "json" => readJsonFile(path)
+      case "csv"  => readCsvFile(path)
+      case fmt =>
+        Failure(
+          new IllegalArgumentException(s"Unsupported input format: $fmt")
+        )
+    }
+
   def validateFile(path: String): Try[ValidationResult] = {
     for {
       location <- StorageLocationParser
