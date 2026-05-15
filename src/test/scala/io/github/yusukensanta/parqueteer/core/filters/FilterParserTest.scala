@@ -113,4 +113,87 @@ class FilterParserTest extends AnyFlatSpec with Matchers {
     result.isLeft shouldBe true
     result.left.toOption.get.message should include("requires a numeric value")
   }
+
+  // ── BETWEEN ───────────────────────────────────────────────────────────────
+  "FilterParser BETWEEN" should "parse integer range" in {
+    val result = FilterParser.parse("age BETWEEN 25 AND 35")
+    result shouldBe a[Right[?, ?]]
+    result.exists(_ ne Filter.noopFilter) shouldBe true
+  }
+
+  it should "parse floating-point range" in {
+    val result = FilterParser.parse("score BETWEEN 7.5 AND 9.9")
+    result shouldBe a[Right[?, ?]]
+    result.exists(_ ne Filter.noopFilter) shouldBe true
+  }
+
+  it should "parse mixed Long and Double bounds" in {
+    val result = FilterParser.parse("price BETWEEN 10 AND 99.9")
+    result shouldBe a[Right[?, ?]]
+    result.exists(_ ne Filter.noopFilter) shouldBe true
+  }
+
+  it should "combine with AND" in {
+    val result = FilterParser.parse("age BETWEEN 18 AND 65 AND active = true")
+    result shouldBe a[Right[?, ?]]
+    result.exists(_ ne Filter.noopFilter) shouldBe true
+  }
+
+  // ── IN ───────────────────────────────────────────────────────────────────
+  "FilterParser IN" should "parse list of strings" in {
+    val result =
+      FilterParser.parse("""status IN ("active", "pending", "review")""")
+    result shouldBe a[Right[?, ?]]
+    result.exists(_ ne Filter.noopFilter) shouldBe true
+  }
+
+  it should "parse list of integers" in {
+    val result = FilterParser.parse("priority IN (1, 2, 3)")
+    result shouldBe a[Right[?, ?]]
+    result.exists(_ ne Filter.noopFilter) shouldBe true
+  }
+
+  it should "parse single-element list" in {
+    val result = FilterParser.parse("""type IN ("admin")""")
+    result shouldBe a[Right[?, ?]]
+    result.exists(_ ne Filter.noopFilter) shouldBe true
+  }
+
+  it should "return Left for mixed string and numeric values" in {
+    val result = FilterParser.parse("""id IN (1, "two", 3)""")
+    result.isLeft shouldBe true
+    result.left.toOption.get.message should include("same type")
+  }
+
+  // ── IS NULL / IS NOT NULL ─────────────────────────────────────────────────
+  "FilterParser IS NULL" should "parse IS NULL" in {
+    val result = FilterParser.parse("email IS NULL")
+    result shouldBe a[Right[?, ?]]
+    result.exists(_ ne Filter.noopFilter) shouldBe true
+  }
+
+  it should "parse IS NOT NULL" in {
+    val result = FilterParser.parse("email IS NOT NULL")
+    result shouldBe a[Right[?, ?]]
+    result.exists(_ ne Filter.noopFilter) shouldBe true
+  }
+
+  it should "combine IS NULL with AND" in {
+    val result = FilterParser.parse("active = true AND email IS NOT NULL")
+    result shouldBe a[Right[?, ?]]
+    result.exists(_ ne Filter.noopFilter) shouldBe true
+  }
+
+  // ── Nested column access ──────────────────────────────────────────────────
+  "FilterParser nested columns" should "parse dotted path" in {
+    val result = FilterParser.parse("""user.address.city = "NYC"""")
+    result shouldBe a[Right[?, ?]]
+    result.exists(_ ne Filter.noopFilter) shouldBe true
+  }
+
+  it should "parse dotted path in BETWEEN" in {
+    val result = FilterParser.parse("metrics.score BETWEEN 80 AND 100")
+    result shouldBe a[Right[?, ?]]
+    result.exists(_ ne Filter.noopFilter) shouldBe true
+  }
 }
