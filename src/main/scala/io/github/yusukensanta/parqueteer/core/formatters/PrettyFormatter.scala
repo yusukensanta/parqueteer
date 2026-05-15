@@ -208,8 +208,6 @@ class PrettyFormatter extends OutputFormatter {
   }
 
   // Delegate to TableFormatter helpers
-  private def extractColumns(rows: List[Map[String, Any]]) =
-    tableFormatter.extractColumns(rows)
   private def calculateColumnWidths(
       cols: List[String],
       rows: List[Map[String, Any]]

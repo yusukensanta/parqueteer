@@ -87,10 +87,6 @@ class CSVFormatter extends OutputFormatter {
     sb.toString
   }
 
-  private def extractColumns(rows: List[Map[String, Any]]): List[String] = {
-    rows.flatMap(_.keys).distinct.sorted
-  }
-
   private def formatRow(values: List[String]): String = {
     values.map(escapeField).mkString(Delimiter)
   }

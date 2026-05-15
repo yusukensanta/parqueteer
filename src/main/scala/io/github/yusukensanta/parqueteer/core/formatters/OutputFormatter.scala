@@ -10,6 +10,9 @@ trait OutputFormatter {
   def formatContent(content: FileContent, schema: Option[ParquetSchema]): String
   def formatSchema(schema: ParquetSchema): String
   def formatMetadata(metadata: FileMetadata): String
+
+  protected def extractColumns(rows: List[Map[String, Any]]): List[String] =
+    rows.flatMap(_.keys).distinct.sorted
 }
 
 object OutputFormatter {

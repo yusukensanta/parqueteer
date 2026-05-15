@@ -118,13 +118,6 @@ class TableFormatter extends OutputFormatter {
     sb.toString
   }
 
-  // Package-private for access from PrettyFormatter
-  private[formatters] def extractColumns(
-      rows: List[Map[String, Any]]
-  ): List[String] = {
-    rows.flatMap(_.keys).distinct.sorted
-  }
-
   private[formatters] def calculateColumnWidths(
       columns: List[String],
       rows: List[Map[String, Any]]
