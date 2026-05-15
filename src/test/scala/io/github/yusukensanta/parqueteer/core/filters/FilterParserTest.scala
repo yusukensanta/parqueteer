@@ -108,9 +108,9 @@ class FilterParserTest extends AnyFlatSpec with Matchers {
     result.left.toOption.get.message should include("Filter parse error")
   }
 
-  it should "return noopFilter (not an error) when numeric operator is applied to string value" in {
+  it should "return Left when numeric operator is applied to string value" in {
     val result = FilterParser.parse("""name > "Alice"""")
-    result.isRight shouldBe true
-    result.exists(_ eq Filter.noopFilter) shouldBe true
+    result.isLeft shouldBe true
+    result.left.toOption.get.message should include("requires a numeric value")
   }
 }

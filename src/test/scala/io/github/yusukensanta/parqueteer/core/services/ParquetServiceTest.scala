@@ -291,8 +291,8 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     repo.lastWrittenData should have length 2
     repo.lastWrittenData.head("name") shouldBe "Alice"
     repo.lastWrittenData(1)("name") shouldBe "Bob"
-    repo.lastWrittenData.head("id") shouldBe 1.0
-    repo.lastWrittenData(1)("id") shouldBe 2.0
+    repo.lastWrittenData.head("id") shouldBe 1L
+    repo.lastWrittenData(1)("id") shouldBe 2L
   }
 
   it should "succeed for csv-to-parquet and pass parsed data to repository" in {
@@ -413,7 +413,20 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     val service = new ParquetService(new FakeParquetRepository())
     val rows = service.parseJsonContent("""[{"x": 1}]""")
     rows should have length 1
-    rows.head("x") shouldBe 1.0
+    rows.head("x") shouldBe 1L
+  }
+
+  it should "preserve Long precision for large integers" in {
+    val service = new ParquetService(new FakeParquetRepository())
+    val largeId = 9876543210L
+    val rows = service.parseJsonContent(s"""[{"id": $largeId}]""")
+    rows.head("id") shouldBe largeId
+  }
+
+  it should "keep Double for fractional numbers" in {
+    val service = new ParquetService(new FakeParquetRepository())
+    val rows = service.parseJsonContent("""[{"score": 9.5}]""")
+    rows.head("score") shouldBe 9.5
   }
 
   it should "throw for non-array JSON" in {

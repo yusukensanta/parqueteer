@@ -277,8 +277,10 @@ class ParquetService(
                 .toMap
                 .view
                 .mapValues {
-                  case j if j.isString  => j.asString.get
-                  case j if j.isNumber  => j.asNumber.get.toDouble
+                  case j if j.isString => j.asString.get
+                  case j if j.isNumber =>
+                    val n = j.asNumber.get
+                    n.toLong.fold[Any](n.toDouble)(identity)
                   case j if j.isBoolean => j.asBoolean.get
                   case j if j.isNull    => null
                   case j                => j.toString
