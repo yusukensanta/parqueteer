@@ -61,42 +61,34 @@ object CliApp {
     }
   }
 
-  private def run(config: ArgumentParser.Config): Int = {
-    // Show help if no command specified
+  private def run(config: ArgumentParser.Config): Int =
     config.command match {
       case None =>
         println(HelpFormatter.topLevelHelp())
-        return 1
-      case Some(_) => // Continue execution
-    }
-
-    try {
-      val configManager = new ConfigurationManager()
-      val appConfig =
-        configManager.loadConfig(config.globalOptions.configPath) match {
-          case Success(cfg) => cfg
-          case Failure(error) =>
-            System.err.println(
-              s"Failed to load configuration: ${error.getMessage}"
-            )
-            return 1
-        }
-      setupLogging(appConfig.logging, config.globalOptions.verbose)
-
-      val repository = new ParquetRepository()
-      val service = new ParquetService(repository)
-
-      executeCommand(config.command.get, service, config.globalOptions)
-    } catch {
-      case e: Exception =>
-        logger.error("Unexpected error", e)
-        System.err.println(s"Error: ${e.getMessage}")
-        if (config.globalOptions.verbose) {
-          e.printStackTrace()
-        }
         1
+      case Some(cmd) =>
+        try {
+          val configManager = new ConfigurationManager()
+          configManager.loadConfig(config.globalOptions.configPath) match {
+            case Failure(error) =>
+              System.err.println(
+                s"Failed to load configuration: ${error.getMessage}"
+              )
+              1
+            case Success(appConfig) =>
+              setupLogging(appConfig.logging, config.globalOptions.verbose)
+              val repository = new ParquetRepository()
+              val service = new ParquetService(repository)
+              executeCommand(cmd, service, config.globalOptions)
+          }
+        } catch {
+          case e: Exception =>
+            logger.error("Unexpected error", e)
+            System.err.println(s"Error: ${e.getMessage}")
+            if (config.globalOptions.verbose) e.printStackTrace()
+            1
+        }
     }
-  }
 
   private def executeCommand(
       command: Command,
