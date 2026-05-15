@@ -1,6 +1,7 @@
 package io.github.yusukensanta.parqueteer.core.filters
 
 import com.github.mjakubowski84.parquet4s.{Filter, Col}
+import io.github.yusukensanta.parqueteer.core.models.ParqueteerError
 import scala.util.{Try, Success => TrySuccess, Failure => TryFailure}
 import scala.util.parsing.combinator._
 
@@ -167,10 +168,13 @@ object FilterParser {
 
   /** Parse filter expression string into parquet4s Filter
     */
-  def parse(filterExpr: String): Either[String, Filter] = {
+  def parse(
+      filterExpr: String
+  ): Either[ParqueteerError.FilterParseError, Filter] = {
     parser.parseFilter(filterExpr) match {
       case TrySuccess(filter) => Right(filter)
-      case TryFailure(ex)     => Left(ex.getMessage)
+      case TryFailure(ex) =>
+        Left(ParqueteerError.FilterParseError(filterExpr, ex.getMessage))
     }
   }
 }
