@@ -29,7 +29,8 @@ case class WriteCommand(
     inputPath: String,
     inputFormat: String = "json",
     compression: CompressionType = CompressionType.Snappy,
-    rowGroupSize: Option[Long] = None
+    rowGroupSize: Option[Long] = None,
+    dryRun: Boolean = false
 ) extends Command
 
 case class ValidateCommand(
@@ -41,7 +42,8 @@ case class ConvertCommand(
     inputPath: String,
     outputPath: String,
     compression: CompressionType = CompressionType.Snappy,
-    maxRows: Option[Long] = None
+    maxRows: Option[Long] = None,
+    dryRun: Boolean = false
 ) extends Command
 
 sealed trait ConfigSubcommand

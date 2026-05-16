@@ -121,11 +121,15 @@ object HelpFormatter {
        |      --input-format <FMT>   Input file format: json, csv, tsv (default: json)
        |  -c, --compression <TYPE>   Compression: none, snappy, gzip, lzo, brotli, lz4, zstd
        |      --row-group-size <N>   Row group size (e.g., 128MB)
+       |      --dry-run              Preview what would be written without writing
        |  -h, --help                 Show this help message
        |
        |EXAMPLES:
        |  # Convert JSON to Parquet with snappy compression
        |  parqueteer write data.json output.parquet
+       |
+       |  # Preview without writing
+       |  parqueteer write data.json output.parquet --dry-run
        |
        |  # Convert CSV with gzip compression
        |  parqueteer write data.csv output.parquet --input-format csv --compression gzip
@@ -170,11 +174,15 @@ object HelpFormatter {
        |OPTIONS:
        |      --compression <TYPE>   Compression type for output
        |  -n, --max-rows <N>         Maximum number of rows to convert
+       |      --dry-run              Preview what would be converted without converting
        |  -h, --help                 Show this help message
        |
        |EXAMPLES:
        |  # Convert CSV to Parquet
        |  parqueteer convert data.csv data.parquet
+       |
+       |  # Preview without converting
+       |  parqueteer convert data.parquet data.json --dry-run
        |
        |  # Convert Parquet to JSON with row limit
        |  parqueteer convert data.parquet data.json --max-rows 1000

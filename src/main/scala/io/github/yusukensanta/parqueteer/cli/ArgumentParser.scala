@@ -176,7 +176,12 @@ object ArgumentParser {
             .action((x, c) =>
               updateWriteCommand(c, _.copy(rowGroupSize = Some(parseSize(x))))
             )
-            .text("Row group size (e.g., 128MB)")
+            .text("Row group size (e.g., 128MB)"),
+          opt[Unit]("dry-run")
+            .action((_, c) => updateWriteCommand(c, _.copy(dryRun = true)))
+            .text(
+              "Preview what would be written without performing the operation"
+            )
         ),
       cmd("validate")
         .text("Verify parquet file integrity")
@@ -213,7 +218,12 @@ object ArgumentParser {
             .action((x, c) =>
               updateConvertCommand(c, _.copy(maxRows = Some(x)))
             )
-            .text("Maximum number of rows to convert")
+            .text("Maximum number of rows to convert"),
+          opt[Unit]("dry-run")
+            .action((_, c) => updateConvertCommand(c, _.copy(dryRun = true)))
+            .text(
+              "Preview what would be converted without performing the operation"
+            )
         ),
       cmd("schema")
         .text("Schema inspection commands")
