@@ -2,7 +2,8 @@ package io.github.yusukensanta.parqueteer.cli
 
 import io.github.yusukensanta.parqueteer.core.services.{
   ParquetService,
-  ConversionConfig
+  ConversionConfig,
+  SchemaDiff
 }
 import io.github.yusukensanta.parqueteer.core.repositories.ParquetRepository
 import io.github.yusukensanta.parqueteer.core.models.{
@@ -10,8 +11,10 @@ import io.github.yusukensanta.parqueteer.core.models.{
   WriteConfig,
   OutputFormat,
   CompressionType,
-  ParqueteerError
+  ParqueteerError,
+  ColumnInfo
 }
+import io.circe.Json
 import io.github.yusukensanta.parqueteer.config.{
   ConfigurationManager,
   EnvConfig,
@@ -50,7 +53,7 @@ object CliApp {
 
   /** Show appropriate help based on command context */
   private def showHelp(args: Array[String]): Unit = {
-    val commands = Set("read", "info", "write", "validate", "convert")
+    val commands = Set("read", "info", "write", "validate", "convert", "schema")
     val commandBeforeHelp = args
       .takeWhile(arg => !arg.startsWith("--help") && !arg.startsWith("-h"))
       .find(commands.contains)
@@ -146,6 +149,9 @@ object CliApp {
 
       case ConfigCommand(sub) =>
         executeConfig(sub, globalOptions)
+
+      case SchemaCommand(sub) =>
+        executeSchemaDiff(service, sub, globalOptions)
     }
   }
 
@@ -280,6 +286,91 @@ object CliApp {
         if (globalOptions.verbose) error.printStackTrace()
         1
     }
+  }
+
+  private def executeSchemaDiff(
+      service: ParquetService,
+      sub: SchemaDiffSubcommand,
+      globalOptions: GlobalOptions
+  ): Int = {
+    service.diffSchemas(sub.file1, sub.file2) match {
+      case Failure(error) =>
+        System.err.println(s"Failed to diff schemas: ${error.getMessage}")
+        if (globalOptions.verbose) error.printStackTrace()
+        1
+      case Success(diff) =>
+        if (!globalOptions.quiet)
+          sub.format match {
+            case OutputFormat.JSON => println(formatSchemaDiffJson(diff))
+            case _ => println(formatSchemaDiffTable(sub.file1, sub.file2, diff))
+          }
+        if (diff.identical) 0 else 1
+    }
+  }
+
+  private def formatSchemaDiffTable(
+      file1: String,
+      file2: String,
+      diff: SchemaDiff
+  ): String = {
+    val sb = new StringBuilder
+    sb.append(s"Schema diff: $file1 → $file2\n")
+
+    if (diff.identical) {
+      sb.append("Schemas are identical.")
+    } else {
+      diff.removed.foreach { c =>
+        val opt = if (c.isOptional) "optional" else "required"
+        sb.append(s"- ${c.name} (${c.dataType}, $opt)\n")
+      }
+      diff.added.foreach { c =>
+        val opt = if (c.isOptional) "optional" else "required"
+        sb.append(s"+ ${c.name} (${c.dataType}, $opt)\n")
+      }
+      diff.changed.foreach { c =>
+        val fromOpt = if (c.fromOptional) "optional" else "required"
+        val toOpt = if (c.toOptional) "optional" else "required"
+        if (c.fromType != c.toType && c.fromOptional != c.toOptional)
+          sb.append(
+            s"~ ${c.name}: ${c.fromType} $fromOpt → ${c.toType} $toOpt\n"
+          )
+        else if (c.fromType != c.toType)
+          sb.append(s"~ ${c.name}: ${c.fromType} → ${c.toType}\n")
+        else
+          sb.append(s"~ ${c.name}: $fromOpt → $toOpt\n")
+      }
+      if (diff.unchanged.nonEmpty)
+        sb.append(s"= ${diff.unchanged.mkString(", ")}")
+    }
+
+    sb.toString.stripTrailing()
+  }
+
+  private def formatSchemaDiffJson(diff: SchemaDiff): String = {
+    def colJson(c: ColumnInfo) =
+      Json.obj(
+        "name" -> Json.fromString(c.name),
+        "type" -> Json.fromString(c.dataType),
+        "optional" -> Json.fromBoolean(c.isOptional)
+      )
+
+    Json
+      .obj(
+        "identical" -> Json.fromBoolean(diff.identical),
+        "added" -> Json.fromValues(diff.added.map(colJson)),
+        "removed" -> Json.fromValues(diff.removed.map(colJson)),
+        "changed" -> Json.fromValues(diff.changed.map { c =>
+          Json.obj(
+            "name" -> Json.fromString(c.name),
+            "from_type" -> Json.fromString(c.fromType),
+            "to_type" -> Json.fromString(c.toType),
+            "from_optional" -> Json.fromBoolean(c.fromOptional),
+            "to_optional" -> Json.fromBoolean(c.toOptional)
+          )
+        }),
+        "unchanged" -> Json.fromValues(diff.unchanged.map(Json.fromString))
+      )
+      .spaces2
   }
 
   private def executeConfig(
