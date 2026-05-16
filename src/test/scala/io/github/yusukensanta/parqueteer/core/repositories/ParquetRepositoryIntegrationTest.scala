@@ -350,4 +350,46 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
     val result = repo.writeContent(loc, List.empty, None)
     result.isFailure shouldBe true
   }
+
+  // ── Stats ───────────────────────────────────────────────────────────────
+
+  "ParquetRepository.readStats" should "return stats for all columns" taggedAs IntegrationTest in {
+    val loc = LocalPath(tempFile().getAbsolutePath)
+    repo.writeContent(loc, sampleData, None).isSuccess shouldBe true
+
+    val result = repo.readStats(ParquetFile(loc))
+    result.isSuccess shouldBe true
+
+    val stats = result.get
+    stats.totalRows shouldBe 3L
+    stats.rowGroupCount shouldBe 1L
+
+    val cols = stats.columns.map(_.name)
+    cols should contain allOf ("id", "name", "score")
+  }
+
+  it should "have correct null count (0) when no nulls present" taggedAs IntegrationTest in {
+    val loc = LocalPath(tempFile().getAbsolutePath)
+    repo.writeContent(loc, sampleData, None).isSuccess shouldBe true
+
+    val result = repo.readStats(ParquetFile(loc))
+    result.isSuccess shouldBe true
+
+    val idStats = result.get.columns.find(_.name == "id").get
+    idStats.nullCount shouldBe 0L
+  }
+
+  it should "return min and max values for numeric columns" taggedAs IntegrationTest in {
+    val loc = LocalPath(tempFile().getAbsolutePath)
+    repo.writeContent(loc, sampleData, None).isSuccess shouldBe true
+
+    val result = repo.readStats(ParquetFile(loc))
+    result.isSuccess shouldBe true
+
+    val idStats = result.get.columns.find(_.name == "id").get
+    idStats.minValue shouldBe defined
+    idStats.maxValue shouldBe defined
+    idStats.minValue.get shouldBe "1"
+    idStats.maxValue.get shouldBe "3"
+  }
 }

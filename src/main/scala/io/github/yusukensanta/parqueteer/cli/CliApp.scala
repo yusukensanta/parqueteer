@@ -12,7 +12,8 @@ import io.github.yusukensanta.parqueteer.core.models.{
   OutputFormat,
   CompressionType,
   ParqueteerError,
-  ColumnInfo
+  ColumnInfo,
+  FileStats
 }
 import io.circe.Json
 import io.github.yusukensanta.parqueteer.config.{
@@ -60,6 +61,7 @@ object CliApp {
       "validate",
       "convert",
       "merge",
+      "stats",
       "schema",
       "completions"
     )
@@ -184,6 +186,9 @@ object CliApp {
           schemaMode,
           globalOptions
         )
+
+      case StatsCommand(filePath, format) =>
+        executeStats(service, filePath, format, globalOptions)
 
       case CompletionsCommand(shell) =>
         executeCompletions(shell, globalOptions)
@@ -430,6 +435,67 @@ object CliApp {
         if (globalOptions.verbose) error.printStackTrace()
         1
     }
+  }
+
+  private def executeStats(
+      service: ParquetService,
+      filePath: String,
+      format: OutputFormat,
+      globalOptions: GlobalOptions
+  ): Int = {
+    service.getStats(filePath) match {
+      case scala.util.Success(stats) =>
+        if (!globalOptions.quiet) {
+          format match {
+            case OutputFormat.JSON => println(formatStatsJson(stats))
+            case _                 => println(formatStatsTable(stats))
+          }
+        }
+        0
+      case scala.util.Failure(error) =>
+        System.err.println(s"Failed to get stats: ${error.getMessage}")
+        if (globalOptions.verbose) error.printStackTrace()
+        1
+    }
+  }
+
+  private def formatStatsTable(stats: FileStats): String = {
+    val sb = new StringBuilder
+    sb.append(
+      s"Rows: ${stats.totalRows}  Row groups: ${stats.rowGroupCount}\n\n"
+    )
+    val header =
+      f"${"Column"}%-30s ${"Type"}%-15s ${"Nulls"}%10s ${"Min"}%-20s ${"Max"}%-20s"
+    sb.append(header + "\n")
+    sb.append("-" * header.length + "\n")
+    stats.columns.foreach { col =>
+      val nulls = if (col.nullCount < 0) "n/a" else col.nullCount.toString
+      val min = col.minValue.getOrElse("n/a")
+      val max = col.maxValue.getOrElse("n/a")
+      sb.append(
+        f"${col.name}%-30s ${col.dataType}%-15s ${nulls}%10s ${min}%-20s ${max}%-20s\n"
+      )
+    }
+    sb.toString.stripTrailing()
+  }
+
+  private def formatStatsJson(stats: FileStats): String = {
+    import io.circe.Json
+    Json
+      .obj(
+        "totalRows" -> Json.fromLong(stats.totalRows),
+        "rowGroupCount" -> Json.fromLong(stats.rowGroupCount),
+        "columns" -> Json.fromValues(stats.columns.map { col =>
+          Json.obj(
+            "name" -> Json.fromString(col.name),
+            "dataType" -> Json.fromString(col.dataType),
+            "nullCount" -> Json.fromLong(col.nullCount),
+            "minValue" -> col.minValue.fold(Json.Null)(Json.fromString),
+            "maxValue" -> col.maxValue.fold(Json.Null)(Json.fromString)
+          )
+        })
+      )
+      .spaces2
   }
 
   private def executeCompletions(

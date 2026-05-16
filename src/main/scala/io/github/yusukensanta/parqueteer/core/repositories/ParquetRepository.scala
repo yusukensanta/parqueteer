@@ -594,6 +594,67 @@ class ParquetRepository {
     }
   }
 
+  def readStats(file: ParquetFile): Try[FileStats] = {
+    setupHadoopConfiguration(file.location).flatMap { hadoopConfig =>
+      Try {
+        val path = new HadoopPath(file.location.path)
+        val inputFile = HadoopInputFile.fromPath(path, hadoopConfig)
+        Using.resource(ParquetFileReader.open(inputFile)) { reader =>
+          val footer = reader.getFooter
+          val schema = footer.getFileMetaData.getSchema
+          val blocks = footer.getBlocks.asScala.toList
+          val totalRows = blocks.map(_.getRowCount).sum
+
+          val columns = schema.getColumns.asScala.toList.map { colDescriptor =>
+            val colPath = colDescriptor.getPath.mkString(".")
+            val typeName = colDescriptor.getPrimitiveType.getPrimitiveTypeName
+            val dataType = typeName.name()
+
+            val chunkStats = blocks
+              .flatMap { block =>
+                block.getColumns.asScala
+                  .find(_.getPath.toDotString == colPath)
+                  .map(_.getStatistics)
+              }
+              .filter(_ != null)
+
+            val nullCount = {
+              val counts = chunkStats.filter(_.isNumNullsSet).map(_.getNumNulls)
+              if (counts.nonEmpty) counts.sum else -1L
+            }
+
+            val withValues =
+              chunkStats.filter(s => !s.isEmpty && s.hasNonNullValue)
+            val minVal = withValues
+              .flatMap(s =>
+                Option(s.genericGetMin()).map(v => formatStatVal(v, typeName))
+              )
+              .minOption
+            val maxVal = withValues
+              .flatMap(s =>
+                Option(s.genericGetMax()).map(v => formatStatVal(v, typeName))
+              )
+              .maxOption
+
+            ColumnStats(colPath, dataType, nullCount, minVal, maxVal)
+          }
+
+          FileStats(columns, totalRows, blocks.size.toLong)
+        }
+      }
+    }
+  }
+
+  private def formatStatVal(value: Any, typeName: PrimitiveTypeName): String =
+    typeName match {
+      case PrimitiveTypeName.BINARY | PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY =>
+        value match {
+          case b: org.apache.parquet.io.api.Binary => b.toStringUsingUTF8
+          case other                               => other.toString
+        }
+      case _ => value.toString
+    }
+
   private def setupHadoopConfiguration(
       location: StorageLocation
   ): Try[Configuration] = {

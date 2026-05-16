@@ -223,6 +223,19 @@ class ParquetService(
     } yield mergedRows.size.toLong
   }
 
+  def getStats(path: String): Try[FileStats] = {
+    for {
+      location <- StorageLocationParser
+        .parse(path)
+        .fold(
+          error => Failure(new IllegalArgumentException(error)),
+          Success.apply
+        )
+      file = ParquetFile(location)
+      stats <- repository.readStats(file)
+    } yield stats
+  }
+
   private def readFileAsTry(path: String): Try[ParquetFile] =
     readFile(path).fold(
       err => Failure(new RuntimeException(err.userMessage)),

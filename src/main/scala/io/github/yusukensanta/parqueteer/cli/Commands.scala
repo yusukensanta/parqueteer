@@ -70,6 +70,11 @@ case class MergeCommand(
     schemaMode: SchemaMode = SchemaMode.Strict
 ) extends Command
 
+case class StatsCommand(
+    filePath: String,
+    format: OutputFormat = OutputFormat.Table
+) extends Command
+
 case class CompletionsCommand(shell: String) extends Command
 
 enum ColorMode:

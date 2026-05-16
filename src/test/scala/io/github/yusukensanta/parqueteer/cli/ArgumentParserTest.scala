@@ -289,4 +289,29 @@ class ArgumentParserTest extends AnyFlatSpec with Matchers {
       OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
     result shouldBe None
   }
+
+  "ArgumentParser stats" should "parse stats command with default format" in {
+    val args = Array("stats", "/tmp/test.parquet")
+    val result =
+      OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
+
+    result shouldBe defined
+    result.get.command shouldBe defined
+    result.get.command.get shouldBe a[StatsCommand]
+
+    val statsCmd = result.get.command.get.asInstanceOf[StatsCommand]
+    statsCmd.filePath shouldBe "/tmp/test.parquet"
+    statsCmd.format shouldBe OutputFormat.Table
+  }
+
+  it should "parse stats command with json format" in {
+    val args = Array("stats", "/tmp/test.parquet", "--format", "json")
+    val result =
+      OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
+
+    result shouldBe defined
+    result.get.command.get
+      .asInstanceOf[StatsCommand]
+      .format shouldBe OutputFormat.JSON
+  }
 }
