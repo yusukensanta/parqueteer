@@ -71,6 +71,49 @@ class ParquetRepository {
     }
   }
 
+  def streamContent(
+      file: ParquetFile,
+      config: ReadConfig
+  )(process: Map[String, Any] => Unit): Try[Long] = {
+    setupHadoopConfiguration(file.location).flatMap { hadoopConfig =>
+      Try {
+        val path4s = Parquet4sPath(file.location.path)
+        val filter = createFilter(config.filter)
+
+        val iterable = config.columns match {
+          case Some(cols) if cols.nonEmpty =>
+            val hadoopPath = new HadoopPath(file.location.path)
+            val projectedSchema =
+              buildProjectedSchema(hadoopPath, hadoopConfig, cols)
+            ParquetReader
+              .projectedGeneric(projectedSchema)
+              .options(ParquetReader.Options(hadoopConf = hadoopConfig))
+              .filter(filter)
+              .read(path4s)
+          case _ =>
+            ParquetReader
+              .as[RowParquetRecord]
+              .options(ParquetReader.Options(hadoopConf = hadoopConfig))
+              .filter(filter)
+              .read(path4s)
+        }
+
+        Using.resource(iterable) { source =>
+          val iter = config.maxRows match {
+            case Some(limit) => source.iterator.take(limit.toInt)
+            case None        => source.iterator
+          }
+          var count = 0L
+          iter.foreach { record =>
+            process(convertRecordToMap(record))
+            count += 1
+          }
+          count
+        }
+      }
+    }
+  }
+
   private def buildProjectedSchema(
       path: HadoopPath,
       conf: Configuration,

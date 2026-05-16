@@ -171,7 +171,10 @@ class TableFormatter extends OutputFormatter {
     drawRow(values, widths)
   }
 
-  private def drawRow(values: List[String], widths: List[Int]): String = {
+  private[formatters] def drawRow(
+      values: List[String],
+      widths: List[Int]
+  ): String = {
     val paddedValues = values.zip(widths).map { case (value, width) =>
       val truncated = truncate(value, width)
       padRight(truncated, width)

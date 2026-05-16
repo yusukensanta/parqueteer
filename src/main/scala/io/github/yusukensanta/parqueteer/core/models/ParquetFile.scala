@@ -43,7 +43,8 @@ case class ReadConfig(
     maxRows: Option[Long] = None,
     columns: Option[List[String]] = None,
     filter: Option[String] = None,
-    outputFormat: OutputFormat = OutputFormat.Table
+    outputFormat: OutputFormat = OutputFormat.Table,
+    streamingMode: Boolean = false
 )
 
 enum OutputFormat:

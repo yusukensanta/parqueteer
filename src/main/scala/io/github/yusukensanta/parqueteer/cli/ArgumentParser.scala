@@ -106,6 +106,11 @@ object ArgumentParser {
             )
             .text(
               "Output format: table, json, csv, pretty, markdown, ndjson (default: table)"
+            ),
+          opt[Unit]("stream")
+            .action((_, c) => updateReadCommand(c, _.copy(streaming = true)))
+            .text(
+              "Stream rows progressively (memory-bounded, safe for large files)"
             )
         ),
       cmd("info")

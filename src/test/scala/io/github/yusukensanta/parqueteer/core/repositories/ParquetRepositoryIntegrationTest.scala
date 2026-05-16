@@ -193,6 +193,64 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
     )
   }
 
+  // ── Streaming ──────────────────────────────────────────────────────────
+
+  it should "stream all rows via streamContent callback" taggedAs IntegrationTest in {
+    val loc = LocalPath(tempFile().getAbsolutePath)
+    repo.writeContent(loc, sampleData, None).isSuccess shouldBe true
+
+    val collected = scala.collection.mutable.ListBuffer[Map[String, Any]]()
+    val result =
+      repo.streamContent(ParquetFile(loc), ReadConfig())(collected += _)
+    result.isSuccess shouldBe true
+    result.get shouldBe 3L
+    collected.map(_("name")).toSet shouldBe Set("Alice", "Bob", "Charlie")
+  }
+
+  it should "stream respects maxRows limit" taggedAs IntegrationTest in {
+    val loc = LocalPath(tempFile().getAbsolutePath)
+    repo.writeContent(loc, sampleData, None).isSuccess shouldBe true
+
+    val collected = scala.collection.mutable.ListBuffer[Map[String, Any]]()
+    val result =
+      repo.streamContent(ParquetFile(loc), ReadConfig(maxRows = Some(2L)))(
+        collected += _
+      )
+    result.isSuccess shouldBe true
+    result.get shouldBe 2L
+    collected should have length 2
+  }
+
+  it should "stream projects requested columns" taggedAs IntegrationTest in {
+    val loc = LocalPath(tempFile().getAbsolutePath)
+    repo.writeContent(loc, sampleData, None).isSuccess shouldBe true
+
+    val collected = scala.collection.mutable.ListBuffer[Map[String, Any]]()
+    val result = repo.streamContent(
+      ParquetFile(loc),
+      ReadConfig(columns = Some(List("name")))
+    )(collected += _)
+    result.isSuccess shouldBe true
+    collected.foreach { row =>
+      row.keys should contain("name")
+      row.keys should not contain "id"
+    }
+  }
+
+  it should "stream returns rows matching filter" taggedAs IntegrationTest in {
+    val loc = LocalPath(tempFile().getAbsolutePath)
+    repo.writeContent(loc, sampleData, None).isSuccess shouldBe true
+
+    val collected = scala.collection.mutable.ListBuffer[Map[String, Any]]()
+    val result = repo.streamContent(
+      ParquetFile(loc),
+      ReadConfig(filter = Some("""name = "Alice""""))
+    )(collected += _)
+    result.isSuccess shouldBe true
+    collected should have length 1
+    collected.head("name") shouldBe "Alice"
+  }
+
   // ── Edge cases ─────────────────────────────────────────────────────────
 
   it should "fail to write empty data (no schema to infer)" taggedAs IntegrationTest in {

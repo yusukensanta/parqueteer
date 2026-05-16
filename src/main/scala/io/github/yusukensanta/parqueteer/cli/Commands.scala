@@ -12,7 +12,8 @@ case class ReadCommand(
     maxRows: Option[Long] = None,
     columns: Option[List[String]] = None,
     filter: Option[String] = None,
-    format: OutputFormat = OutputFormat.Table
+    format: OutputFormat = OutputFormat.Table,
+    streaming: Boolean = false
 ) extends Command
 
 case class InfoCommand(
