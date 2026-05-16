@@ -231,4 +231,62 @@ class ArgumentParserTest extends AnyFlatSpec with Matchers {
       .asInstanceOf[ConfigCommand]
       .sub shouldBe ConfigValidateSubcommand
   }
+
+  "ArgumentParser merge" should "parse merge command with required output" in {
+    val args =
+      Array("merge", "a.parquet", "b.parquet", "--output", "out.parquet")
+    val result =
+      OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
+
+    result shouldBe defined
+    result.get.command shouldBe defined
+    result.get.command.get shouldBe a[MergeCommand]
+
+    val cmd = result.get.command.get.asInstanceOf[MergeCommand]
+    cmd.inputPaths shouldBe List("a.parquet", "b.parquet")
+    cmd.outputPath shouldBe "out.parquet"
+    cmd.compression shouldBe CompressionType.Snappy
+    cmd.schemaMode shouldBe SchemaMode.Strict
+  }
+
+  it should "parse schema-mode union" in {
+    val args = Array(
+      "merge",
+      "a.parquet",
+      "b.parquet",
+      "--output",
+      "out.parquet",
+      "--schema-mode",
+      "union"
+    )
+    val result =
+      OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
+
+    result shouldBe defined
+    result.get.command.get
+      .asInstanceOf[MergeCommand]
+      .schemaMode shouldBe SchemaMode.Union
+  }
+
+  it should "reject invalid schema-mode" in {
+    val args = Array(
+      "merge",
+      "a.parquet",
+      "b.parquet",
+      "--output",
+      "out.parquet",
+      "--schema-mode",
+      "lax"
+    )
+    val result =
+      OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
+    result shouldBe None
+  }
+
+  it should "fail when output is not specified" in {
+    val args = Array("merge", "a.parquet", "b.parquet")
+    val result =
+      OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
+    result shouldBe None
+  }
 }

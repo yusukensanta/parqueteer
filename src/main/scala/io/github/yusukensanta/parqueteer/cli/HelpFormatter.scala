@@ -15,6 +15,7 @@ object HelpFormatter {
        |  write       Create parquet file from input data
        |  validate    Verify parquet file integrity
        |  convert     Convert between parquet and other formats
+       |  merge       Combine multiple parquet files into one
        |
        |GLOBAL OPTIONS:
        |  -h, --help         Show this help message
@@ -192,6 +193,37 @@ object HelpFormatter {
        |""".stripMargin
   }
 
+  /** Generate help for the 'merge' command */
+  def mergeHelp(): String = {
+    """
+       |USAGE:
+       |  parqueteer merge [OPTIONS] <INPUT...> --output <OUTPUT>
+       |
+       |ARGUMENTS:
+       |  <INPUT...>   Two or more input parquet files
+       |
+       |OPTIONS:
+       |  -o, --output <FILE>           Output parquet file path (required)
+       |  -c, --compression <TYPE>      Compression: none, snappy, gzip, lzo, brotli, lz4, zstd
+       |      --schema-mode <MODE>      Schema compatibility: strict (default) or union
+       |  -h, --help                    Show this help message
+       |
+       |SCHEMA MODES:
+       |  strict   All input files must have identical schemas (default)
+       |  union    Merge schemas; missing columns filled with null
+       |
+       |EXAMPLES:
+       |  # Merge two files with default settings
+       |  parqueteer merge a.parquet b.parquet --output merged.parquet
+       |
+       |  # Merge with union schema mode and gzip compression
+       |  parqueteer merge a.parquet b.parquet --output out.parquet --schema-mode union --compression gzip
+       |
+       |  # Merge files from S3
+       |  parqueteer merge s3://bucket/a.parquet s3://bucket/b.parquet --output s3://bucket/merged.parquet
+       |""".stripMargin
+  }
+
   /** Get help for a specific command */
   def commandHelp(command: String): Option[String] = {
     command.toLowerCase match {
@@ -200,6 +232,7 @@ object HelpFormatter {
       case "write"    => Some(writeHelp())
       case "validate" => Some(validateHelp())
       case "convert"  => Some(convertHelp())
+      case "merge"    => Some(mergeHelp())
       case _          => None
     }
   }

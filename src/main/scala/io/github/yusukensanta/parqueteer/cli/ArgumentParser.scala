@@ -258,6 +258,54 @@ object ArgumentParser {
                 .text("Output format: table, json (default: table)")
             )
         ),
+      cmd("merge")
+        .text("Merge multiple parquet files into one")
+        .action((_, c) => c.copy(command = Some(MergeCommand())))
+        .children(
+          arg[String]("<input>")
+            .unbounded()
+            .required()
+            .action((x, c) =>
+              updateMergeCommand(c, m => m.copy(inputPaths = m.inputPaths :+ x))
+            )
+            .text("Input parquet files (specify two or more)"),
+          opt[String]("output")
+            .abbr("o")
+            .required()
+            .action((x, c) => updateMergeCommand(c, _.copy(outputPath = x)))
+            .text("Output parquet file path"),
+          opt[String]("compression")
+            .abbr("c")
+            .action((x, c) =>
+              updateMergeCommand(
+                c,
+                _.copy(compression = parseCompressionType(x))
+              )
+            )
+            .validate(x =>
+              if (
+                List("none", "snappy", "gzip", "lzo", "brotli", "lz4", "zstd")
+                  .contains(x.toLowerCase)
+              ) success
+              else failure(s"Unknown compression: $x")
+            )
+            .text("Output compression (default: snappy)"),
+          opt[String]("schema-mode")
+            .action((x, c) =>
+              updateMergeCommand(
+                c,
+                _.copy(schemaMode = x.toLowerCase match {
+                  case "union" => SchemaMode.Union
+                  case _       => SchemaMode.Strict
+                })
+              )
+            )
+            .validate(x =>
+              if (List("strict", "union").contains(x.toLowerCase)) success
+              else failure(s"Unknown schema-mode: $x. Use strict or union")
+            )
+            .text("Schema compatibility mode: strict (default) or union")
+        ),
       cmd("completions")
         .text("Generate shell completion scripts")
         .children(
@@ -346,6 +394,16 @@ object ArgumentParser {
       case Some(SchemaCommand(sub)) =>
         config.copy(command = Some(SchemaCommand(update(sub))))
       case _ => config
+    }
+  }
+
+  private def updateMergeCommand(
+      config: Config,
+      update: MergeCommand => MergeCommand
+  ): Config = {
+    config.command match {
+      case Some(cmd: MergeCommand) => config.copy(command = Some(update(cmd)))
+      case _                       => config
     }
   }
 
