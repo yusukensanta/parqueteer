@@ -65,3 +65,17 @@ object WriteConfig {
 
 enum CompressionType:
   case Uncompressed, Snappy, Gzip, Lzo, Brotli, Lz4, Zstd
+
+case class ColumnStats(
+    name: String,
+    dataType: String,
+    nullCount: Long,
+    minValue: Option[String],
+    maxValue: Option[String]
+)
+
+case class FileStats(
+    columns: List[ColumnStats],
+    totalRows: Long,
+    rowGroupCount: Long
+)

@@ -16,6 +16,7 @@ object HelpFormatter {
        |  validate    Verify parquet file integrity
        |  convert     Convert between parquet and other formats
        |  merge       Combine multiple parquet files into one
+       |  stats       Show column statistics (min, max, null count)
        |
        |GLOBAL OPTIONS:
        |  -h, --help         Show this help message
@@ -224,6 +225,28 @@ object HelpFormatter {
        |""".stripMargin
   }
 
+  /** Generate help for the 'stats' command */
+  def statsHelp(): String = {
+    """
+       |USAGE:
+       |  parqueteer stats [OPTIONS] <FILE>
+       |
+       |ARGUMENTS:
+       |  <FILE>    Path to parquet file
+       |
+       |OPTIONS:
+       |      --format <FORMAT>     Output format: table, json (default: table)
+       |  -h, --help                Show this help message
+       |
+       |EXAMPLES:
+       |  # Show column statistics as table
+       |  parqueteer stats data.parquet
+       |
+       |  # Output statistics as JSON
+       |  parqueteer stats data.parquet --format json
+       |""".stripMargin
+  }
+
   /** Get help for a specific command */
   def commandHelp(command: String): Option[String] = {
     command.toLowerCase match {
@@ -233,6 +256,7 @@ object HelpFormatter {
       case "validate" => Some(validateHelp())
       case "convert"  => Some(convertHelp())
       case "merge"    => Some(mergeHelp())
+      case "stats"    => Some(statsHelp())
       case _          => None
     }
   }

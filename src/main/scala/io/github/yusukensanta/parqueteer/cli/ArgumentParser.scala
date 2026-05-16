@@ -306,6 +306,26 @@ object ArgumentParser {
             )
             .text("Schema compatibility mode: strict (default) or union")
         ),
+      cmd("stats")
+        .text("Show column statistics (min, max, null count)")
+        .children(
+          arg[String]("<file>")
+            .required()
+            .action((x, c) => c.copy(command = Some(StatsCommand(x))))
+            .text("Path to parquet file"),
+          opt[String]("format")
+            .action((x, c) =>
+              updateStatsCommand(c, _.copy(format = parseOutputFormat(x)))
+            )
+            .validate(x =>
+              if (
+                List("table", "json", "csv", "pretty", "markdown", "ndjson")
+                  .contains(x.toLowerCase)
+              ) success
+              else failure(s"Unknown format: $x")
+            )
+            .text("Output format: table, json (default: table)")
+        ),
       cmd("completions")
         .text("Generate shell completion scripts")
         .children(
@@ -403,6 +423,16 @@ object ArgumentParser {
   ): Config = {
     config.command match {
       case Some(cmd: MergeCommand) => config.copy(command = Some(update(cmd)))
+      case _                       => config
+    }
+  }
+
+  private def updateStatsCommand(
+      config: Config,
+      update: StatsCommand => StatsCommand
+  ): Config = {
+    config.command match {
+      case Some(cmd: StatsCommand) => config.copy(command = Some(update(cmd)))
       case _                       => config
     }
   }
