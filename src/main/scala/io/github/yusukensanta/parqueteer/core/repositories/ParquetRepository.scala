@@ -23,7 +23,14 @@ import org.apache.parquet.hadoop.ParquetFileReader
 import org.apache.parquet.hadoop.util.HadoopInputFile
 import org.apache.parquet.hadoop.metadata.CompressionCodecName
 import org.apache.parquet.schema.MessageType
+import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
+import org.apache.parquet.column.page.PageReadStore
+import org.apache.parquet.io.ColumnIOFactory
 import org.apache.parquet.example.data.Group
+import org.apache.parquet.example.data.simple.convert.GroupRecordConverter
+import scala.concurrent.{Future, Await, ExecutionContext}
+import scala.concurrent.duration.Duration
+import java.util.concurrent.Executors
 import scala.util.{Try, Success, Using}
 import scala.jdk.CollectionConverters._
 
@@ -32,43 +39,140 @@ class ParquetRepository {
   def readContent(file: ParquetFile, config: ReadConfig): Try[FileContent] = {
     setupHadoopConfiguration(file.location).flatMap { hadoopConfig =>
       Try {
-        val path = Parquet4sPath(file.location.path)
-        val filter = createFilter(config.filter)
+        val hadoopPath = new HadoopPath(file.location.path)
+        val totalRows = getRowCount(hadoopPath, hadoopConfig)
 
-        val reader = config.columns match {
-          case Some(cols) if cols.nonEmpty =>
-            val projectedSchema = buildProjectedSchema(
-              new HadoopPath(file.location.path),
-              hadoopConfig,
-              cols
-            )
-            ParquetReader
-              .projectedGeneric(projectedSchema)
-              .options(ParquetReader.Options(hadoopConf = hadoopConfig))
-              .filter(filter)
-              .read(path)
-          case _ =>
-            ParquetReader
-              .as[RowParquetRecord]
-              .options(ParquetReader.Options(hadoopConf = hadoopConfig))
-              .filter(filter)
-              .read(path)
+        if (config.parallelism > 1 && config.filter.isEmpty) {
+          val rows = readParallel(hadoopPath, hadoopConfig, config)
+          val isPartial = config.maxRows.exists(_ < totalRows)
+          FileContent(rows = rows, totalRows = totalRows, isPartial = isPartial)
+        } else {
+          val path4s = Parquet4sPath(file.location.path)
+          val filter = createFilter(config.filter)
+          val reader = config.columns match {
+            case Some(cols) if cols.nonEmpty =>
+              val projectedSchema =
+                buildProjectedSchema(hadoopPath, hadoopConfig, cols)
+              ParquetReader
+                .projectedGeneric(projectedSchema)
+                .options(ParquetReader.Options(hadoopConf = hadoopConfig))
+                .filter(filter)
+                .read(path4s)
+            case _ =>
+              ParquetReader
+                .as[RowParquetRecord]
+                .options(ParquetReader.Options(hadoopConf = hadoopConfig))
+                .filter(filter)
+                .read(path4s)
+          }
+          val records = config.maxRows match {
+            case Some(limit) => reader.take(limit.toInt).toList
+            case None        => reader.toList
+          }
+          val rows = records.map(convertRecordToMap)
+          val isPartial =
+            config.maxRows.exists(_ < totalRows) || filter != Filter.noopFilter
+          FileContent(rows = rows, totalRows = totalRows, isPartial = isPartial)
         }
-
-        val records = config.maxRows match {
-          case Some(limit) => reader.take(limit.toInt).toList
-          case None        => reader.toList
-        }
-
-        val rows = records.map(convertRecordToMap)
-        val totalRows =
-          getRowCount(new HadoopPath(file.location.path), hadoopConfig)
-        val isPartial =
-          config.maxRows.exists(_ < totalRows) || filter != Filter.noopFilter
-
-        FileContent(rows = rows, totalRows = totalRows, isPartial = isPartial)
       }
     }
+  }
+
+  private def readParallel(
+      path: HadoopPath,
+      conf: Configuration,
+      config: ReadConfig
+  ): List[Map[String, Any]] = {
+    val inputFile = HadoopInputFile.fromPath(path, conf)
+    val (blocks, fileSchema) =
+      Using.resource(ParquetFileReader.open(inputFile)) { reader =>
+        (
+          reader.getFooter.getBlocks.asScala.toList,
+          reader.getFooter.getFileMetaData.getSchema
+        )
+      }
+
+    val requestedSchema = config.columns match {
+      case Some(cols) if cols.nonEmpty =>
+        val columnSet = cols.toSet
+        val filteredFields = fileSchema.getFields.asScala
+          .filter(f => columnSet.contains(f.getName))
+          .toList
+        if (filteredFields.isEmpty)
+          throw new IllegalArgumentException(
+            s"None of the requested columns exist in the file: ${cols.mkString(", ")}"
+          )
+        new MessageType("root", filteredFields.asJava)
+      case _ => fileSchema
+    }
+
+    val threadCount = math.min(config.parallelism, math.max(1, blocks.size))
+    val executor = Executors.newFixedThreadPool(threadCount)
+    implicit val ec: ExecutionContext =
+      ExecutionContext.fromExecutorService(executor)
+
+    try {
+      val futures = blocks.indices.toList.map { rgIndex =>
+        Future {
+          Using.resource(
+            ParquetFileReader.open(HadoopInputFile.fromPath(path, conf))
+          ) { reader =>
+            (0 until rgIndex).foreach(_ => reader.skipNextRowGroup())
+            val pageStore = reader.readNextRowGroup()
+            if (pageStore == null) List.empty[Map[String, Any]]
+            else decodePageStore(pageStore, fileSchema, requestedSchema)
+          }
+        }
+      }
+      val allRows = Await.result(Future.sequence(futures), Duration.Inf).flatten
+      config.maxRows match {
+        case Some(limit) => allRows.take(limit.toInt)
+        case None        => allRows
+      }
+    } finally {
+      executor.shutdown()
+    }
+  }
+
+  private def decodePageStore(
+      pageStore: PageReadStore,
+      fileSchema: MessageType,
+      requestedSchema: MessageType
+  ): List[Map[String, Any]] = {
+    val columnIO =
+      new ColumnIOFactory().getColumnIO(requestedSchema, fileSchema)
+    val converter = new GroupRecordConverter(requestedSchema)
+    val recordReader = columnIO.getRecordReader(pageStore, converter)
+    val rowCount = pageStore.getRowCount
+    (0L until rowCount).map { _ =>
+      val group = recordReader.read()
+      if (group == null) Map.empty[String, Any]
+      else decodeGroup(group, requestedSchema)
+    }.toList
+  }
+
+  private def decodeGroup(
+      group: Group,
+      schema: MessageType
+  ): Map[String, Any] = {
+    (0 until schema.getFieldCount).flatMap { i =>
+      if (group.getFieldRepetitionCount(i) == 0) None
+      else {
+        val name = schema.getType(i).getName
+        val value: Any =
+          schema.getType(i).asPrimitiveType().getPrimitiveTypeName match {
+            case PrimitiveTypeName.INT32   => group.getInteger(i, 0)
+            case PrimitiveTypeName.INT64   => group.getLong(i, 0)
+            case PrimitiveTypeName.FLOAT   => group.getFloat(i, 0)
+            case PrimitiveTypeName.DOUBLE  => group.getDouble(i, 0)
+            case PrimitiveTypeName.BOOLEAN => group.getBoolean(i, 0)
+            case PrimitiveTypeName.BINARY =>
+              group.getBinary(i, 0).toStringUsingUTF8
+            case _ => group.getValueToString(i, 0)
+          }
+        Some(name -> value)
+      }
+    }.toMap
   }
 
   private def buildProjectedSchema(

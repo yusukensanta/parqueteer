@@ -193,6 +193,98 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
     )
   }
 
+  // ── Parallel row group reading ──────────────────────────────────────────
+
+  it should "return same rows with parallelism > 1 as sequential (single row group)" taggedAs IntegrationTest in {
+    val loc = LocalPath(tempFile().getAbsolutePath)
+    repo.writeContent(loc, sampleData, None).isSuccess shouldBe true
+
+    val sequential = repo.readContent(ParquetFile(loc), ReadConfig()).get
+    val parallel =
+      repo.readContent(ParquetFile(loc), ReadConfig(parallelism = 4)).get
+
+    parallel.rows.map(_("name")).toSet shouldBe sequential.rows
+      .map(_("name"))
+      .toSet
+    parallel.totalRows shouldBe sequential.totalRows
+  }
+
+  it should "read multiple row groups in parallel and return all rows" taggedAs IntegrationTest in {
+    val loc = LocalPath(tempFile().getAbsolutePath)
+    val manyRows = (1 to 30)
+      .map(i => Map[String, Any]("id" -> i.toLong, "name" -> s"user$i"))
+      .toList
+    repo
+      .writeContent(loc, manyRows, None, WriteConfig(rowGroupSize = 1L))
+      .isSuccess shouldBe true
+
+    val result = repo.readContent(ParquetFile(loc), ReadConfig(parallelism = 4))
+    result.isSuccess shouldBe true
+    result.get.rows should have length 30
+    result.get.rows
+      .map(_("id").asInstanceOf[Long])
+      .toSet shouldBe (1L to 30L).toSet
+  }
+
+  it should "respect maxRows limit in parallel mode" taggedAs IntegrationTest in {
+    val loc = LocalPath(tempFile().getAbsolutePath)
+    val manyRows = (1 to 20)
+      .map(i => Map[String, Any]("id" -> i.toLong, "name" -> s"u$i"))
+      .toList
+    repo
+      .writeContent(loc, manyRows, None, WriteConfig(rowGroupSize = 1L))
+      .isSuccess shouldBe true
+
+    val result = repo.readContent(
+      ParquetFile(loc),
+      ReadConfig(parallelism = 4, maxRows = Some(5L))
+    )
+    result.isSuccess shouldBe true
+    result.get.rows should have length 5
+    result.get.isPartial shouldBe true
+  }
+
+  it should "project columns in parallel mode" taggedAs IntegrationTest in {
+    val loc = LocalPath(tempFile().getAbsolutePath)
+    val manyRows = (1 to 10)
+      .map(i =>
+        Map[String, Any](
+          "id" -> i.toLong,
+          "name" -> s"u$i",
+          "score" -> i.toDouble
+        )
+      )
+      .toList
+    repo
+      .writeContent(loc, manyRows, None, WriteConfig(rowGroupSize = 1L))
+      .isSuccess shouldBe true
+
+    val result = repo.readContent(
+      ParquetFile(loc),
+      ReadConfig(parallelism = 4, columns = Some(List("id", "name")))
+    )
+    result.isSuccess shouldBe true
+    result.get.rows should have length 10
+    result.get.rows.foreach { row =>
+      row.keys should contain allOf ("id", "name")
+      row.keys should not contain "score"
+    }
+  }
+
+  it should "fall back to sequential when filter is set (no parallel + filter)" taggedAs IntegrationTest in {
+    val loc = LocalPath(tempFile().getAbsolutePath)
+    repo.writeContent(loc, sampleData, None).isSuccess shouldBe true
+
+    // filter = Some(...) forces sequential path even with parallelism > 1
+    val result = repo.readContent(
+      ParquetFile(loc),
+      ReadConfig(parallelism = 4, filter = Some("""name = "Alice""""))
+    )
+    result.isSuccess shouldBe true
+    result.get.rows should have length 1
+    result.get.rows.head("name") shouldBe "Alice"
+  }
+
   // ── Edge cases ─────────────────────────────────────────────────────────
 
   it should "fail to write empty data (no schema to infer)" taggedAs IntegrationTest in {

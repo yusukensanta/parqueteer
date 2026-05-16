@@ -112,7 +112,14 @@ object CliApp {
       globalOptions: GlobalOptions
   ): Int = {
     command match {
-      case ReadCommand(filePath, maxRows, columns, filter, format) =>
+      case ReadCommand(
+            filePath,
+            maxRows,
+            columns,
+            filter,
+            format,
+            parallelism
+          ) =>
         executeRead(
           service,
           filePath,
@@ -120,6 +127,7 @@ object CliApp {
           columns,
           filter,
           format,
+          parallelism,
           globalOptions
         )
 
@@ -173,13 +181,15 @@ object CliApp {
       columns: Option[List[String]],
       filter: Option[String],
       format: OutputFormat,
+      parallelism: Int,
       globalOptions: GlobalOptions
   ): Int = {
     val readConfig = ReadConfig(
       maxRows = maxRows,
       columns = columns,
       filter = filter,
-      outputFormat = format
+      outputFormat = format,
+      parallelism = parallelism
     )
 
     service.readFile(filePath, readConfig) match {
