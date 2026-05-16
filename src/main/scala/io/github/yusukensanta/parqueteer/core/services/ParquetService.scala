@@ -162,6 +162,47 @@ class ParquetService(
     }
   }
 
+  def diffSchemas(path1: String, path2: String): Try[SchemaDiff] = {
+    for {
+      f1 <- getFileInfo(path1)
+      f2 <- getFileInfo(path2)
+    } yield {
+      val cols1 = f1.schema.map(_.columns).getOrElse(List.empty)
+      val cols2 = f2.schema.map(_.columns).getOrElse(List.empty)
+      val map1 = cols1.map(c => c.name -> c).toMap
+      val map2 = cols2.map(c => c.name -> c).toMap
+
+      val added = cols2.filterNot(c => map1.contains(c.name))
+      val removed = cols1.filterNot(c => map2.contains(c.name))
+      val changed = cols1.flatMap { c1 =>
+        map2.get(c1.name).flatMap { c2 =>
+          if (c1.dataType != c2.dataType || c1.isOptional != c2.isOptional)
+            Some(
+              ColumnChange(
+                c1.name,
+                c1.dataType,
+                c2.dataType,
+                c1.isOptional,
+                c2.isOptional
+              )
+            )
+          else None
+        }
+      }
+      val unchanged = cols1.collect {
+        case c
+            if map2
+              .get(c.name)
+              .exists(c2 =>
+                c.dataType == c2.dataType && c.isOptional == c2.isOptional
+              ) =>
+          c.name
+      }
+
+      SchemaDiff(added, removed, changed, unchanged)
+    }
+  }
+
   def convertFile(
       inputPath: String,
       outputPath: String,
@@ -374,6 +415,23 @@ case class ValidationResult(
     isValid: Boolean,
     issues: List[String]
 )
+
+case class ColumnChange(
+    name: String,
+    fromType: String,
+    toType: String,
+    fromOptional: Boolean,
+    toOptional: Boolean
+)
+
+case class SchemaDiff(
+    added: List[ColumnInfo],
+    removed: List[ColumnInfo],
+    changed: List[ColumnChange],
+    unchanged: List[String]
+) {
+  def identical: Boolean = added.isEmpty && removed.isEmpty && changed.isEmpty
+}
 
 case class ConversionConfig(
     writeConfig: WriteConfig = WriteConfig(),

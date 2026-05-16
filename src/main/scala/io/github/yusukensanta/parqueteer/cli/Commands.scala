@@ -48,6 +48,14 @@ case object ConfigValidateSubcommand extends ConfigSubcommand
 
 case class ConfigCommand(sub: ConfigSubcommand) extends Command
 
+case class SchemaDiffSubcommand(
+    file1: String,
+    file2: String,
+    format: OutputFormat = OutputFormat.Table
+)
+
+case class SchemaCommand(sub: SchemaDiffSubcommand) extends Command
+
 enum ColorMode:
   case Auto, Always, Never
 

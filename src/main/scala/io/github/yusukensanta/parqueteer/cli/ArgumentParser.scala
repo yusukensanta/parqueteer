@@ -203,6 +203,39 @@ object ArgumentParser {
             )
             .text("Maximum number of rows to convert")
         ),
+      cmd("schema")
+        .text("Schema inspection commands")
+        .children(
+          cmd("diff")
+            .text("Compare schemas of two parquet files")
+            .action((_, c) =>
+              c.copy(command =
+                Some(SchemaCommand(SchemaDiffSubcommand("", "")))
+              )
+            )
+            .children(
+              arg[String]("<file1>")
+                .required()
+                .action((x, c) => updateSchemaDiffCommand(c, _.copy(file1 = x)))
+                .text("First parquet file path"),
+              arg[String]("<file2>")
+                .required()
+                .action((x, c) => updateSchemaDiffCommand(c, _.copy(file2 = x)))
+                .text("Second parquet file path"),
+              opt[String]("format")
+                .action((x, c) =>
+                  updateSchemaDiffCommand(
+                    c,
+                    _.copy(format = parseOutputFormat(x))
+                  )
+                )
+                .validate(x =>
+                  if (List("table", "json").contains(x.toLowerCase)) success
+                  else failure(s"Invalid format: $x. Use table or json")
+                )
+                .text("Output format: table, json (default: table)")
+            )
+        ),
       cmd("config")
         .text("Show or validate configuration")
         .children(
@@ -268,6 +301,17 @@ object ArgumentParser {
     config.command match {
       case Some(cmd: ConvertCommand) => config.copy(command = Some(update(cmd)))
       case _                         => config
+    }
+  }
+
+  private def updateSchemaDiffCommand(
+      config: Config,
+      update: SchemaDiffSubcommand => SchemaDiffSubcommand
+  ): Config = {
+    config.command match {
+      case Some(SchemaCommand(sub)) =>
+        config.copy(command = Some(SchemaCommand(update(sub))))
+      case _ => config
     }
   }
 
