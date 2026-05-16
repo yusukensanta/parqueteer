@@ -148,33 +148,23 @@ jobs:
             target/universal/checksums.txt
           retention-days: 30
 
-      - name: Update Homebrew Formula
+      - name: Update Homebrew Tap
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          RELEASE_VERSION: ${{ steps.version.outputs.VERSION }}
         run: |
-          VERSION="${{ steps.version.outputs.VERSION }}"
-          TGZ_FILE="parqueteer-${VERSION}.tgz"
-
-          # Get SHA256 from checksums.txt
+          TGZ_FILE="parqueteer-${RELEASE_VERSION}.tgz"
           SHA256=$(grep "$TGZ_FILE" target/universal/checksums.txt | awk '{print $1}')
 
-          # Update Formula/parqueteer.rb
-          sed -i "s/version \".*\"/version \"${VERSION}\"/" Formula/parqueteer.rb
-          sed -i "s|url \".*\"|url \"https://github.com/yusukensanta/parqueteer/releases/download/v${VERSION}/parqueteer-${VERSION}.tgz\"|" Formula/parqueteer.rb
+          git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/yusukensanta/homebrew-parqueteer.git" /tmp/homebrew-tap
+          cd /tmp/homebrew-tap
+
+          sed -i "s/version \".*\"/version \"${RELEASE_VERSION}\"/" Formula/parqueteer.rb
+          sed -i "s|url \".*\"|url \"https://github.com/yusukensanta/parqueteer/releases/download/v${RELEASE_VERSION}/parqueteer-${RELEASE_VERSION}.tgz\"|" Formula/parqueteer.rb
           sed -i "s/sha256 \".*\"/sha256 \"${SHA256}\"/" Formula/parqueteer.rb
 
-          echo "Updated Homebrew formula:"
-          cat Formula/parqueteer.rb
-
-      - name: Commit and push updated formula
-        run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          git stash
-          git fetch origin main
-          git checkout main
-          git pull origin main
-          git stash pop
-
           git add Formula/parqueteer.rb
-          git commit -m "chore: update Homebrew formula to v${{ steps.version.outputs.VERSION }}" || echo "No changes to commit"
-          git push origin HEAD:main || echo "Failed to push formula update"
+          git commit -m "chore: update parqueteer to v${RELEASE_VERSION}"
+          git push

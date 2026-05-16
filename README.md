@@ -177,7 +177,14 @@ export PARQUETEER_CONFIG=/path/to/config.yaml
 
 ## Installation
 
-### Option 1: Distribution Package (Recommended)
+### Option 1: Homebrew (macOS / Linux)
+
+```bash
+brew tap yusukensanta/parqueteer
+brew install parqueteer
+```
+
+### Option 2: Distribution Package
 
 ```bash
 # Download and extract
@@ -189,7 +196,7 @@ cd parqueteer-0.4.1/
 bin/parqueteer --help
 ```
 
-### Option 2: Standalone JAR (Universal)
+### Option 3: Standalone JAR (Universal)
 
 ```bash
 wget https://github.com/yusukensanta/parqueteer/releases/download/v0.4.1/parqueteer.jar
