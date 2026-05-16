@@ -59,6 +59,7 @@ object CliApp {
       "write",
       "validate",
       "convert",
+      "merge",
       "schema",
       "completions"
     )
@@ -173,6 +174,16 @@ object CliApp {
 
       case SchemaCommand(sub) =>
         executeSchemaDiff(service, sub, globalOptions)
+
+      case MergeCommand(inputPaths, outputPath, compression, schemaMode) =>
+        executeMerge(
+          service,
+          inputPaths,
+          outputPath,
+          compression,
+          schemaMode,
+          globalOptions
+        )
 
       case CompletionsCommand(shell) =>
         executeCompletions(shell, globalOptions)
@@ -383,6 +394,42 @@ object CliApp {
       if (size < 1024 || idx >= units.length - 1) f"$size%.1f ${units(idx)}"
       else loop(size / 1024, idx + 1)
     loop(bytes.toDouble, 0)
+  }
+
+  private def executeMerge(
+      service: ParquetService,
+      inputPaths: List[String],
+      outputPath: String,
+      compression: CompressionType,
+      schemaMode: SchemaMode,
+      globalOptions: GlobalOptions
+  ): Int = {
+    if (inputPaths.size < 2) {
+      System.err.println("Error: merge requires at least two input files")
+      return 1
+    }
+    val writeConfig = WriteConfig(compressionType = compression)
+    val total = inputPaths.size
+    val onProgress: (Int, Int, String) => Unit = (i, n, path) =>
+      if (!globalOptions.quiet)
+        System.err.println(s"[$i/$n] Merging: $path")
+
+    service.mergeFiles(
+      inputPaths,
+      outputPath,
+      writeConfig,
+      schemaMode,
+      onProgress
+    ) match {
+      case scala.util.Success(count) =>
+        if (showStatus(globalOptions))
+          println(s"Merged $total files ($count rows) → $outputPath")
+        0
+      case scala.util.Failure(error) =>
+        System.err.println(s"Failed to merge: ${error.getMessage}")
+        if (globalOptions.verbose) error.printStackTrace()
+        1
+    }
   }
 
   private def executeCompletions(

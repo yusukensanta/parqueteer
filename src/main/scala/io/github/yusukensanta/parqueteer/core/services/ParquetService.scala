@@ -123,6 +123,106 @@ class ParquetService(
     }
   }
 
+  def mergeFiles(
+      inputPaths: List[String],
+      outputPath: String,
+      writeConfig: WriteConfig,
+      schemaMode: io.github.yusukensanta.parqueteer.cli.SchemaMode,
+      onProgress: (Int, Int, String) => Unit = (_, _, _) => ()
+  ): Try[Long] = {
+    import io.github.yusukensanta.parqueteer.cli.SchemaMode
+
+    if (inputPaths.size < 2)
+      return Failure(
+        new IllegalArgumentException("merge requires at least two input files")
+      )
+
+    for {
+      inputLocations <- Try {
+        inputPaths.map { p =>
+          StorageLocationParser
+            .parse(p)
+            .fold(
+              err =>
+                throw new IllegalArgumentException(s"Invalid path '$p': $err"),
+              identity
+            )
+        }
+      }
+      schemas <- Try {
+        inputLocations.map { loc =>
+          repository
+            .readSchemaFields(ParquetFile(loc))
+            .fold(
+              err =>
+                throw new RuntimeException(
+                  s"Cannot read schema: ${err.getMessage}"
+                ),
+              identity
+            )
+        }
+      }
+      mergedFields <- Try {
+        schemaMode match {
+          case SchemaMode.Strict =>
+            val first = schemas.head
+            schemas.zipWithIndex.foreach { case (s, i) =>
+              if (s != first)
+                throw new IllegalArgumentException(
+                  s"Schema mismatch at file '${inputPaths(i)}'. Use --schema-mode union to allow schema differences."
+                )
+            }
+            first
+          case SchemaMode.Union =>
+            schemas
+              .foldLeft(List.empty[(String, String, Boolean)]) {
+                (acc, fields) =>
+                  val existing = acc.map(_._1).toSet
+                  acc ++ fields.filterNot(f => existing.contains(f._1))
+              }
+              .map { case (name, t, _) => (name, t, true) }
+        }
+      }
+      allColumnNames = mergedFields.map(_._1).toSet
+      outputLocation <- StorageLocationParser
+        .parse(outputPath)
+        .fold(
+          err => Failure(new IllegalArgumentException(err)),
+          Success.apply
+        )
+      mergedRows <- Try {
+        inputLocations.zipWithIndex.flatMap { case (loc, i) =>
+          onProgress(i + 1, inputLocations.size, inputPaths(i))
+          val content =
+            repository
+              .readContent(ParquetFile(loc), ReadConfig())
+              .fold(
+                err => throw new RuntimeException(err.getMessage),
+                identity
+              )
+          content.rows.map { row =>
+            val missing = allColumnNames -- row.keySet
+            if (missing.isEmpty) row
+            else row ++ missing.map(_ -> null)
+          }
+        }
+      }
+      explicitSchema = ParquetSchema(
+        columns = mergedFields.map { case (name, dataType, optional) =>
+          ColumnInfo(name, dataType, optional, 1, 0, "SNAPPY")
+        },
+        rowGroupCount = 1L,
+        totalRowCount = mergedRows.size.toLong
+      )
+      _ <- repository.writeContent(
+        outputLocation,
+        mergedRows,
+        Some(explicitSchema),
+        writeConfig
+      )
+    } yield mergedRows.size.toLong
+  }
+
   private def readFileAsTry(path: String): Try[ParquetFile] =
     readFile(path).fold(
       err => Failure(new RuntimeException(err.userMessage)),

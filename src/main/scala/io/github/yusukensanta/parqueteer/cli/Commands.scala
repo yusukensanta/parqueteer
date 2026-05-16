@@ -60,6 +60,16 @@ case class SchemaDiffSubcommand(
 
 case class SchemaCommand(sub: SchemaDiffSubcommand) extends Command
 
+enum SchemaMode:
+  case Strict, Union
+
+case class MergeCommand(
+    inputPaths: List[String] = List.empty,
+    outputPath: String = "",
+    compression: CompressionType = CompressionType.Snappy,
+    schemaMode: SchemaMode = SchemaMode.Strict
+) extends Command
+
 case class CompletionsCommand(shell: String) extends Command
 
 enum ColorMode:

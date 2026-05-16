@@ -571,6 +571,29 @@ class ParquetRepository {
     }
   }
 
+  def readSchemaFields(
+      file: ParquetFile
+  ): Try[List[(String, String, Boolean)]] = {
+    setupHadoopConfiguration(file.location).flatMap { hadoopConfig =>
+      Try {
+        val path = new HadoopPath(file.location.path)
+        val inputFile = HadoopInputFile.fromPath(path, hadoopConfig)
+        Using.resource(ParquetFileReader.open(inputFile)) { reader =>
+          val schema = reader.getFooter.getFileMetaData.getSchema
+          schema.getFields.asScala.toList.map { field =>
+            val typeName =
+              if (field.isPrimitive)
+                field.asPrimitiveType().getPrimitiveTypeName.name()
+              else field.asGroupType().getName
+            val optional =
+              field.getRepetition == org.apache.parquet.schema.Type.Repetition.OPTIONAL
+            (field.getName, typeName, optional)
+          }
+        }
+      }
+    }
+  }
+
   private def setupHadoopConfiguration(
       location: StorageLocation
   ): Try[Configuration] = {
