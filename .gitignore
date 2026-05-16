@@ -1,10 +1,11 @@
-# Documentation (except README, CHANGELOG, CONTRIBUTING)
+# Documentation (except README, CHANGELOG, CONTRIBUTING, and docs/)
 .claude/
 *.md
 *.puml
 !README.md
 !CHANGELOG.md
 !CONTRIBUTING.md
+!docs/*.md
 !.github/ISSUE_TEMPLATE/*
 
 # SBT / Scala Build
