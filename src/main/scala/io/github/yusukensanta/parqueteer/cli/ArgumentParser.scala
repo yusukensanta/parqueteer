@@ -134,16 +134,14 @@ object ArgumentParser {
               updateInfoCommand(c, _.copy(format = parseOutputFormat(x)))
             )
             .text("Output format: table, json"),
-          opt[Unit]("no-schema")
+          opt[Unit]("schema")
             .abbr("s")
-            .action((_, c) => updateInfoCommand(c, _.copy(showSchema = false)))
-            .text("Don't show schema information"),
-          opt[Unit]("no-metadata")
+            .action((_, c) => updateInfoCommand(c, _.copy(showSchema = true)))
+            .text("Show schema information (default: show all)"),
+          opt[Unit]("metadata")
             .abbr("m")
-            .action((_, c) =>
-              updateInfoCommand(c, _.copy(showMetadata = false))
-            )
-            .text("Don't show metadata information")
+            .action((_, c) => updateInfoCommand(c, _.copy(showMetadata = true)))
+            .text("Show metadata information (default: show all)")
         ),
       cmd("write")
         .text("Create parquet file from input data")

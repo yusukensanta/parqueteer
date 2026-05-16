@@ -32,8 +32,8 @@ class ArgumentParserTest extends AnyFlatSpec with Matchers {
     readCmd.format shouldBe OutputFormat.JSON
   }
 
-  it should "parse info command correctly" in {
-    val args = Array("info", "/local/file.parquet", "--no-schema")
+  it should "parse info command with --schema flag" in {
+    val args = Array("info", "/local/file.parquet", "--schema")
     val result =
       OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
 
@@ -43,7 +43,30 @@ class ArgumentParserTest extends AnyFlatSpec with Matchers {
 
     val infoCmd = result.get.command.get.asInstanceOf[InfoCommand]
     infoCmd.filePath shouldBe "/local/file.parquet"
+    infoCmd.showSchema shouldBe true
+    infoCmd.showMetadata shouldBe false
+  }
+
+  it should "parse info command with --metadata flag" in {
+    val args = Array("info", "/local/file.parquet", "--metadata")
+    val result =
+      OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
+
+    result shouldBe defined
+    val infoCmd = result.get.command.get.asInstanceOf[InfoCommand]
     infoCmd.showSchema shouldBe false
+    infoCmd.showMetadata shouldBe true
+  }
+
+  it should "parse info command with no flags (show all)" in {
+    val args = Array("info", "/local/file.parquet")
+    val result =
+      OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
+
+    result shouldBe defined
+    val infoCmd = result.get.command.get.asInstanceOf[InfoCommand]
+    infoCmd.showSchema shouldBe false
+    infoCmd.showMetadata shouldBe false
   }
 
   it should "parse write command correctly" in {
