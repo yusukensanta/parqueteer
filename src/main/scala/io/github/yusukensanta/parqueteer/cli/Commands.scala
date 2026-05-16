@@ -56,6 +56,8 @@ case class SchemaDiffSubcommand(
 
 case class SchemaCommand(sub: SchemaDiffSubcommand) extends Command
 
+case class CompletionsCommand(shell: String) extends Command
+
 enum ColorMode:
   case Auto, Always, Never
 
