@@ -140,6 +140,59 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
     result.get.isPartial shouldBe true
   }
 
+  it should "return only requested columns (column projection)" taggedAs IntegrationTest in {
+    val loc = LocalPath(tempFile().getAbsolutePath)
+    repo.writeContent(loc, sampleData, None).isSuccess shouldBe true
+
+    val result = repo.readContent(
+      ParquetFile(loc),
+      ReadConfig(columns = Some(List("id", "name")))
+    )
+    result.isSuccess shouldBe true
+    result.get.rows should have length 3
+    result.get.rows.foreach { row =>
+      row.keys should contain allOf ("id", "name")
+      row.keys should not contain "score"
+    }
+  }
+
+  it should "return all columns when columns is None" taggedAs IntegrationTest in {
+    val loc = LocalPath(tempFile().getAbsolutePath)
+    repo.writeContent(loc, sampleData, None).isSuccess shouldBe true
+
+    val result = repo.readContent(ParquetFile(loc), ReadConfig())
+    result.isSuccess shouldBe true
+    result.get.rows.head.keys should contain allOf ("id", "name", "score")
+  }
+
+  it should "return single projected column" taggedAs IntegrationTest in {
+    val loc = LocalPath(tempFile().getAbsolutePath)
+    repo.writeContent(loc, sampleData, None).isSuccess shouldBe true
+
+    val result = repo.readContent(
+      ParquetFile(loc),
+      ReadConfig(columns = Some(List("name")))
+    )
+    result.isSuccess shouldBe true
+    result.get.rows.map(_("name")) shouldBe List("Alice", "Bob", "Charlie")
+    result.get.rows.head.keys should not contain "id"
+    result.get.rows.head.keys should not contain "score"
+  }
+
+  it should "fail when no requested columns exist in the file" taggedAs IntegrationTest in {
+    val loc = LocalPath(tempFile().getAbsolutePath)
+    repo.writeContent(loc, sampleData, None).isSuccess shouldBe true
+
+    val result = repo.readContent(
+      ParquetFile(loc),
+      ReadConfig(columns = Some(List("nonexistent")))
+    )
+    result.isFailure shouldBe true
+    result.failed.get.getMessage should include(
+      "None of the requested columns exist"
+    )
+  }
+
   // ── Edge cases ─────────────────────────────────────────────────────────
 
   it should "fail to write empty data (no schema to infer)" taggedAs IntegrationTest in {

@@ -6,7 +6,16 @@ import com.github.mjakubowski84.parquet4s.{
   ParquetReader,
   RowParquetRecord,
   Path => Parquet4sPath,
-  Filter
+  Filter,
+  Value,
+  NullValue,
+  BooleanValue,
+  IntValue,
+  LongValue,
+  FloatValue,
+  DoubleValue,
+  BinaryValue,
+  DateTimeValue
 }
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path => HadoopPath}
@@ -24,41 +33,61 @@ class ParquetRepository {
     setupHadoopConfiguration(file.location).flatMap { hadoopConfig =>
       Try {
         val path = Parquet4sPath(file.location.path)
-
-        // Create filter from config
         val filter = createFilter(config.filter)
 
-        // Create ParquetReader with filter
-        val reader = ParquetReader
-          .as[RowParquetRecord]
-          .options(
-            ParquetReader.Options(
-              hadoopConf = hadoopConfig
+        val reader = config.columns match {
+          case Some(cols) if cols.nonEmpty =>
+            val projectedSchema = buildProjectedSchema(
+              new HadoopPath(file.location.path),
+              hadoopConfig,
+              cols
             )
-          )
-          .filter(filter) // Apply filter here!
-          .read(path)
+            ParquetReader
+              .projectedGeneric(projectedSchema)
+              .options(ParquetReader.Options(hadoopConf = hadoopConfig))
+              .filter(filter)
+              .read(path)
+          case _ =>
+            ParquetReader
+              .as[RowParquetRecord]
+              .options(ParquetReader.Options(hadoopConf = hadoopConfig))
+              .filter(filter)
+              .read(path)
+        }
 
-        // Read records with limit
         val records = config.maxRows match {
           case Some(limit) => reader.take(limit.toInt).toList
           case None        => reader.toList
         }
 
-        // Convert RowParquetRecord to Map[String, Any]
         val rows = records.map(convertRecordToMap)
-
         val totalRows =
           getRowCount(new HadoopPath(file.location.path), hadoopConfig)
         val isPartial =
           config.maxRows.exists(_ < totalRows) || filter != Filter.noopFilter
 
-        FileContent(
-          rows = rows,
-          totalRows = totalRows,
-          isPartial = isPartial
-        )
+        FileContent(rows = rows, totalRows = totalRows, isPartial = isPartial)
       }
+    }
+  }
+
+  private def buildProjectedSchema(
+      path: HadoopPath,
+      conf: Configuration,
+      columns: List[String]
+  ): MessageType = {
+    val inputFile = HadoopInputFile.fromPath(path, conf)
+    val columnSet = columns.toSet
+    Using.resource(ParquetFileReader.open(inputFile)) { reader =>
+      val fullSchema = reader.getFooter.getFileMetaData.getSchema
+      val projectedFields = fullSchema.getFields.asScala
+        .filter(f => columnSet.contains(f.getName))
+        .toList
+      if (projectedFields.isEmpty)
+        throw new IllegalArgumentException(
+          s"None of the requested columns exist in the file: ${columns.mkString(", ")}"
+        )
+      new MessageType("root", projectedFields.asJava)
     }
   }
 
@@ -413,15 +442,19 @@ class ParquetRepository {
     }
   }
 
-  private def convertRecordToMap(record: RowParquetRecord): Map[String, Any] = {
-    // RowParquetRecord in 2.x has a toMap method or similar
-    // Check actual API - this might need adjustment
-    record.iterator.map { case (key, value) =>
-      key -> (value match {
-        case null => null
-        case v    => v
-      })
-    }.toMap
+  private def convertRecordToMap(record: RowParquetRecord): Map[String, Any] =
+    record.iterator.map { case (key, value) => key -> decodeValue(value) }.toMap
+
+  private def decodeValue(value: Value): Any = value match {
+    case NullValue           => null
+    case BooleanValue(b)     => b
+    case IntValue(i)         => i
+    case LongValue(l)        => l
+    case FloatValue(f)       => f
+    case DoubleValue(d)      => d
+    case BinaryValue(binary) => binary.toStringUsingUTF8
+    case DateTimeValue(l, _) => l
+    case _                   => value.toString
   }
 
   @annotation.nowarn("msg=unused")
