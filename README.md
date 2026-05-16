@@ -24,32 +24,43 @@
 ### Read Parquet Files
 
 ```bash
-# Display as table
+# Display as table (default)
 parqueteer read data.parquet
 
-# With filters
+# Select specific columns (I/O-level projection — only reads requested column chunks)
+parqueteer read data.parquet --columns "id,name,email"
+
+# Limit rows
+parqueteer read data.parquet --max-rows 100
+
+# Filter expressions
 parqueteer read data.parquet --filter "age > 25"
 parqueteer read data.parquet --filter "status IN ('active', 'pending')"
 parqueteer read data.parquet --filter "score BETWEEN 80 AND 100"
 parqueteer read data.parquet --filter "deleted_at IS NULL"
+parqueteer read data.parquet --filter "address.city = 'Tokyo'"  # nested column
 
-# Nested column
-parqueteer read data.parquet --filter "address.city = 'Tokyo'"
-
-# Output as JSON
+# Output formats: table (default), json, csv, pretty, markdown, ndjson
 parqueteer read data.parquet --format json
+parqueteer read data.parquet --format csv
+parqueteer read data.parquet --format ndjson
 
-# From S3
+# Combine flags
+parqueteer read data.parquet --columns "id,name" --filter "age > 25" --max-rows 50 --format csv
+
+# From cloud storage
 parqueteer read s3://bucket/data.parquet
-
-# Read from stdin
-cat data.json | parqueteer write - output.parquet
+parqueteer read gs://bucket/data.parquet
+parqueteer read abfss://container@account.dfs.core.windows.net/data.parquet
 ```
 
 ### File Information
 
 ```bash
 parqueteer info data.parquet
+
+# JSON output (for scripting)
+parqueteer info data.parquet --format json
 ```
 
 ### Write Parquet Files
@@ -58,8 +69,14 @@ parqueteer info data.parquet
 # JSON to Parquet
 parqueteer write data.json output.parquet
 
-# CSV to Parquet with compression
+# CSV to Parquet
+parqueteer write data.csv output.parquet --input-format csv
+
+# With compression (uncompressed, snappy, gzip, lzo, brotli, lz4, zstd)
 parqueteer write data.csv output.parquet --input-format csv --compression zstd
+
+# From stdin
+cat data.json | parqueteer write - output.parquet
 ```
 
 ### Convert Files
@@ -70,6 +87,9 @@ parqueteer convert data.csv data.parquet --compression snappy
 
 # Parquet to JSON
 parqueteer convert data.parquet data.json
+
+# Parquet to CSV
+parqueteer convert data.parquet data.csv
 ```
 
 ### Compare Schemas
@@ -82,6 +102,25 @@ parqueteer schema diff old.parquet new.parquet
 parqueteer schema diff old.parquet new.parquet --format json
 
 # Exit code 0 = identical, 1 = schemas differ
+```
+
+### Validate Files
+
+```bash
+parqueteer validate data.parquet
+
+# Verbose: show all checks performed
+parqueteer validate data.parquet --verbose
+```
+
+### Configuration
+
+```bash
+# Show effective configuration (all sources: CLI, env vars, config file, defaults)
+parqueteer config show
+
+# Validate config file syntax
+parqueteer config validate
 ```
 
 ### Shell Completions
@@ -98,6 +137,41 @@ parqueteer completions zsh > ~/.zfunc/_parqueteer
 # fish
 parqueteer completions fish > ~/.config/fish/completions/parqueteer.fish
 ```
+
+---
+
+## Global Flags
+
+These flags work with every command:
+
+```bash
+parqueteer --verbose read data.parquet    # -v: show stack traces on error
+parqueteer --quiet read data.parquet      # -q: suppress non-error output
+parqueteer --color=never read data.parquet  # color: auto (default), always, never
+```
+
+---
+
+## Environment Variables
+
+```bash
+# Set default output format (table, json, csv, pretty, markdown, ndjson)
+export PARQUETEER_DEFAULT_FORMAT=json
+
+# Color output control (auto, always, never). NO_COLOR is also respected.
+export PARQUETEER_COLOR=never
+
+# Enable verbose mode
+export PARQUETEER_VERBOSE=true
+
+# Default max rows for read
+export PARQUETEER_MAX_ROWS=1000
+
+# Path to config file (default: ~/.config/parqueteer/config.yaml)
+export PARQUETEER_CONFIG=/path/to/config.yaml
+```
+
+**Precedence**: CLI flags > environment variables > config file > defaults
 
 ---
 
