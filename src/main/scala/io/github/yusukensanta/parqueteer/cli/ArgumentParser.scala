@@ -236,6 +236,18 @@ object ArgumentParser {
                 .text("Output format: table, json (default: table)")
             )
         ),
+      cmd("completions")
+        .text("Generate shell completion scripts")
+        .children(
+          arg[String]("<shell>")
+            .required()
+            .action((x, c) => c.copy(command = Some(CompletionsCommand(x))))
+            .validate(x =>
+              if (List("bash", "zsh", "fish").contains(x.toLowerCase)) success
+              else failure(s"Unsupported shell: $x. Use bash, zsh, or fish")
+            )
+            .text("Shell type: bash, zsh, fish")
+        ),
       cmd("config")
         .text("Show or validate configuration")
         .children(

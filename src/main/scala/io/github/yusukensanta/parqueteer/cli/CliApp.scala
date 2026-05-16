@@ -53,7 +53,15 @@ object CliApp {
 
   /** Show appropriate help based on command context */
   private def showHelp(args: Array[String]): Unit = {
-    val commands = Set("read", "info", "write", "validate", "convert", "schema")
+    val commands = Set(
+      "read",
+      "info",
+      "write",
+      "validate",
+      "convert",
+      "schema",
+      "completions"
+    )
     val commandBeforeHelp = args
       .takeWhile(arg => !arg.startsWith("--help") && !arg.startsWith("-h"))
       .find(commands.contains)
@@ -152,6 +160,9 @@ object CliApp {
 
       case SchemaCommand(sub) =>
         executeSchemaDiff(service, sub, globalOptions)
+
+      case CompletionsCommand(shell) =>
+        executeCompletions(shell, globalOptions)
     }
   }
 
@@ -286,6 +297,22 @@ object CliApp {
         if (globalOptions.verbose) error.printStackTrace()
         1
     }
+  }
+
+  private def executeCompletions(
+      shell: String,
+      globalOptions: GlobalOptions
+  ): Int = {
+    val script = shell.toLowerCase match {
+      case "bash" => ShellCompletions.bash
+      case "zsh"  => ShellCompletions.zsh
+      case "fish" => ShellCompletions.fish
+      case other =>
+        System.err.println(s"Unsupported shell: $other")
+        return 1
+    }
+    if (!globalOptions.quiet) println(script)
+    0
   }
 
   private def executeSchemaDiff(
