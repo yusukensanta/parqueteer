@@ -44,7 +44,8 @@ case class ReadConfig(
     columns: Option[List[String]] = None,
     filter: Option[String] = None,
     outputFormat: OutputFormat = OutputFormat.Table,
-    parallelism: Int = 1
+    parallelism: Int = 1,
+    streamingMode: Boolean = false
 )
 
 enum OutputFormat:

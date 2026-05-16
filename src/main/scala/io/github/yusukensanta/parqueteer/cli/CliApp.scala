@@ -118,7 +118,8 @@ object CliApp {
             columns,
             filter,
             format,
-            parallelism
+            parallelism,
+            streaming
           ) =>
         executeRead(
           service,
@@ -128,6 +129,7 @@ object CliApp {
           filter,
           format,
           parallelism,
+          streaming,
           globalOptions
         )
 
@@ -182,6 +184,7 @@ object CliApp {
       filter: Option[String],
       format: OutputFormat,
       parallelism: Int,
+      streaming: Boolean,
       globalOptions: GlobalOptions
   ): Int = {
     val readConfig = ReadConfig(
@@ -189,20 +192,42 @@ object CliApp {
       columns = columns,
       filter = filter,
       outputFormat = format,
-      parallelism = parallelism
+      parallelism = parallelism,
+      streamingMode = streaming
     )
 
-    service.readFile(filePath, readConfig) match {
-      case Right(file) =>
-        if (!globalOptions.quiet) println(service.formatContent(file, format))
-        0
-      case Left(error) =>
-        System.err.println(s"Error: ${error.userMessage}")
-        if (globalOptions.verbose) error match {
-          case ParqueteerError.IOError(cause) => cause.printStackTrace()
-          case _                              => ()
-        }
-        error.exitCode
+    if (streaming) {
+      import io.github.yusukensanta.parqueteer.core.formatters.RowStreamWriter
+      val writer = if (globalOptions.quiet) new RowStreamWriter {
+        override def writeRow(row: Map[String, Any]): Unit = ()
+      }
+      else RowStreamWriter(format, System.out)
+      writer.begin()
+      service.streamRead(filePath, readConfig)(writer.writeRow) match {
+        case Right(_) =>
+          writer.end()
+          0
+        case Left(error) =>
+          System.err.println(s"Error: ${error.userMessage}")
+          if (globalOptions.verbose) error match {
+            case ParqueteerError.IOError(cause) => cause.printStackTrace()
+            case _                              => ()
+          }
+          error.exitCode
+      }
+    } else {
+      service.readFile(filePath, readConfig) match {
+        case Right(file) =>
+          if (!globalOptions.quiet) println(service.formatContent(file, format))
+          0
+        case Left(error) =>
+          System.err.println(s"Error: ${error.userMessage}")
+          if (globalOptions.verbose) error match {
+            case ParqueteerError.IOError(cause) => cause.printStackTrace()
+            case _                              => ()
+          }
+          error.exitCode
+      }
     }
   }
 

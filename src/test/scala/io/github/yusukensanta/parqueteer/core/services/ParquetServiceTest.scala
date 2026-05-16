@@ -16,7 +16,8 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
       schemaResult: Try[ParquetSchema] = Success(defaultSchema),
       metadataResult: Try[FileMetadata] = Success(defaultMetadata),
       validateResult: Try[List[String]] = Success(List.empty),
-      writeResult: Try[Unit] = Success(())
+      writeResult: Try[Unit] = Success(()),
+      streamResult: Try[Unit] = Success(())
   ) extends ParquetRepository {
     override def readContent(
         file: ParquetFile,
@@ -34,6 +35,14 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
         schema: Option[ParquetSchema],
         config: WriteConfig = WriteConfig()
     ): Try[Unit] = writeResult
+    override def streamContent(
+        file: ParquetFile,
+        config: ReadConfig
+    )(process: Map[String, Any] => Unit): Try[Long] =
+      streamResult.map { _ =>
+        contentResult.get.rows.foreach(process)
+        contentResult.get.rows.length.toLong
+      }
   }
 
   // ── Shared fixtures ──────────────────────────────────────────────────────
@@ -446,5 +455,41 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
   it should "return empty list for empty input" in {
     val service = new ParquetService(new FakeParquetRepository())
     service.parseCsvContent("") shouldBe empty
+  }
+
+  // ── streamRead ────────────────────────────────────────────────────────────
+  "ParquetService.streamRead" should "stream all rows via callback" in {
+    val service = new ParquetService(new FakeParquetRepository())
+    val collected = scala.collection.mutable.ListBuffer[Map[String, Any]]()
+    val result =
+      service.streamRead("/tmp/test.parquet", ReadConfig())(collected += _)
+    result.isRight shouldBe true
+    result.toOption.get shouldBe 1L
+    collected should have length 1
+    collected.head("name") shouldBe "Alice"
+  }
+
+  it should "return Left for invalid path" in {
+    val service = new ParquetService(new FakeParquetRepository())
+    val result =
+      service.streamRead("ftp://unsupported/path", ReadConfig())(_ => ())
+    result.isLeft shouldBe true
+  }
+
+  it should "return Left for stdin path" in {
+    val service = new ParquetService(new FakeParquetRepository())
+    val result = service.streamRead("-", ReadConfig())(_ => ())
+    result.isLeft shouldBe true
+  }
+
+  it should "propagate Left(IOError) when streamContent fails" in {
+    val service = new ParquetService(
+      new FakeParquetRepository(streamResult =
+        Failure(new RuntimeException("stream error"))
+      )
+    )
+    val result = service.streamRead("/tmp/test.parquet", ReadConfig())(_ => ())
+    result.isLeft shouldBe true
+    result.left.toOption.get.userMessage should include("stream error")
   }
 }

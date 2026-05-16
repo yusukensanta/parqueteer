@@ -115,6 +115,11 @@ object ArgumentParser {
             )
             .text(
               "Number of parallel threads for row group reading (default: 1)"
+            ),
+          opt[Unit]("stream")
+            .action((_, c) => updateReadCommand(c, _.copy(streaming = true)))
+            .text(
+              "Stream rows progressively (memory-bounded, safe for large files)"
             )
         ),
       cmd("info")

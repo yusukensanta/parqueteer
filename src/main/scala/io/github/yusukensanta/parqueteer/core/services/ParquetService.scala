@@ -74,6 +74,36 @@ class ParquetService(
     )
   }
 
+  def streamRead(
+      path: String,
+      readConfig: ReadConfig
+  )(process: Map[String, Any] => Unit): Either[ParqueteerError, Long] = {
+    if (path == "-")
+      return Left(
+        ParqueteerError.InvalidFormat(
+          "-",
+          "Parquet files require random-access I/O and cannot be read from stdin"
+        )
+      )
+    for {
+      _ <- readConfig.filter
+        .map(FilterParser.parse)
+        .getOrElse(Right(()))
+        .left
+        .map(identity)
+      location <- StorageLocationParser
+        .parse(path)
+        .left
+        .map(msg => ParqueteerError.InvalidFormat(path, msg))
+      file = ParquetFile(location)
+      count <- repository
+        .streamContent(file, readConfig)(process)
+        .toEither
+        .left
+        .map(ParqueteerError.IOError.apply)
+    } yield count
+  }
+
   def getFileInfo(path: String): Try[ParquetFile] = {
     for {
       location <- StorageLocationParser
