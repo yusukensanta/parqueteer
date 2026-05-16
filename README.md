@@ -10,10 +10,12 @@
 ## Features
 
 - 🚀 **Fast & Lightweight** - No Spark required
-- ☁️ **Cloud Native** - S3, GCS, Azure support  
-- 📊 **Multiple Formats** - Table, JSON, CSV output
-- 🔍 **Filtering** - SQL-like filter expressions
+- ☁️ **Cloud Native** - S3, GCS, Azure support
+- 📊 **Multiple Formats** - Table, JSON, CSV, Markdown, NDJSON output
+- 🔍 **Advanced Filtering** - SQL-like filter expressions with BETWEEN, IN, IS NULL, nested columns
 - 🛠️ **Data Conversion** - CSV/JSON ↔ Parquet
+- 🔀 **Schema Diff** - Compare schemas of two Parquet files
+- 🐚 **Shell Completions** - bash, zsh, and fish tab-completion
 
 ---
 
@@ -27,18 +29,37 @@ parqueteer read data.parquet
 
 # With filters
 parqueteer read data.parquet --filter "age > 25"
+parqueteer read data.parquet --filter "status IN ('active', 'pending')"
+parqueteer read data.parquet --filter "score BETWEEN 80 AND 100"
+parqueteer read data.parquet --filter "deleted_at IS NULL"
+
+# Nested column
+parqueteer read data.parquet --filter "address.city = 'Tokyo'"
 
 # Output as JSON
 parqueteer read data.parquet --format json
 
 # From S3
 parqueteer read s3://bucket/data.parquet
+
+# Read from stdin
+cat data.json | parqueteer write - output.parquet
 ```
 
 ### File Information
 
 ```bash
 parqueteer info data.parquet
+```
+
+### Write Parquet Files
+
+```bash
+# JSON to Parquet
+parqueteer write data.json output.parquet
+
+# CSV to Parquet with compression
+parqueteer write data.csv output.parquet --input-format csv --compression zstd
 ```
 
 ### Convert Files
@@ -51,38 +72,61 @@ parqueteer convert data.csv data.parquet --compression snappy
 parqueteer convert data.parquet data.json
 ```
 
+### Compare Schemas
+
+```bash
+# Table output (default)
+parqueteer schema diff old.parquet new.parquet
+
+# JSON output (for CI scripting)
+parqueteer schema diff old.parquet new.parquet --format json
+
+# Exit code 0 = identical, 1 = schemas differ
+```
+
+### Shell Completions
+
+```bash
+# bash
+eval "$(parqueteer completions bash)"
+# or persist:
+parqueteer completions bash > /etc/bash_completion.d/parqueteer
+
+# zsh
+parqueteer completions zsh > ~/.zfunc/_parqueteer
+
+# fish
+parqueteer completions fish > ~/.config/fish/completions/parqueteer.fish
+```
+
 ---
 
 ## Installation
 
-### Option 1: Distribution Package (Recommended - Clean Output)
+### Option 1: Distribution Package (Recommended)
 
 ```bash
 # Download and extract
-wget https://github.com/yusukensanta/parqueteer/releases/download/v0.1.0/parqueteer-0.1.0.zip
-unzip parqueteer-0.1.0.zip
-cd parqueteer-0.1.0/
+wget https://github.com/yusukensanta/parqueteer/releases/download/v0.4.1/parqueteer-0.4.1.zip
+unzip parqueteer-0.4.1.zip
+cd parqueteer-0.4.1/
 
-# Run (no warnings!)
+# Run
 bin/parqueteer --help
 ```
 
 ### Option 2: Standalone JAR (Universal)
 
 ```bash
-# Download
-wget https://github.com/yusukensanta/parqueteer/releases/download/v0.1.0/parqueteer.jar
-
-# Run
+wget https://github.com/yusukensanta/parqueteer/releases/download/v0.4.1/parqueteer.jar
 java -jar parqueteer.jar --help
 ```
 
-**Note**: For the best experience with clean output, use Java 21 (LTS). Java 25+ may show harmless JVM deprecation warnings from the Scala runtime.
+**Note**: Java 21 (LTS) recommended for clean output. Java 25+ may show harmless JVM deprecation warnings from the Scala runtime.
 
 ### Build from Source
 
 ```bash
-# Clone the repository
 git clone https://github.com/yusukensanta/parqueteer.git
 cd parqueteer
 
@@ -94,11 +138,6 @@ make assembly     # Create standalone JAR
 # Or use sbt directly
 sbt compile
 sbt assembly
-```
-
-**See all available commands:**
-```bash
-make help
 ```
 
 **Common commands:**
@@ -145,10 +184,18 @@ export AZURE_STORAGE_CONNECTION_STRING="..."
 
 ## Commands
 
-- `read` - Display file content
-- `info` - Show metadata and schema
-- `convert` - Convert between formats  
-- `validate` - Verify file integrity
+| Command | Description |
+|---------|-------------|
+| `read` | Display Parquet file content with optional filtering and format selection |
+| `info` | Show file metadata and schema |
+| `write` | Create a Parquet file from JSON or CSV input |
+| `convert` | Convert between Parquet, JSON, and CSV formats |
+| `validate` | Verify Parquet file integrity |
+| `schema diff` | Compare schemas of two Parquet files |
+| `config` | Show or validate configuration |
+| `completions` | Generate shell completion scripts for bash, zsh, or fish |
+
+Run `parqueteer <command> --help` for per-command options.
 
 ---
 
