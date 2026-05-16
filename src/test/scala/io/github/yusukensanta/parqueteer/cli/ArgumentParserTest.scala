@@ -65,6 +65,27 @@ class ArgumentParserTest extends AnyFlatSpec with Matchers {
     writeCmd.outputPath shouldBe "output.parquet"
     writeCmd.inputPath shouldBe "data.json"
     writeCmd.compression shouldBe CompressionType.Gzip
+    writeCmd.dryRun shouldBe false
+  }
+
+  it should "parse write --dry-run flag" in {
+    val args = Array("write", "data.json", "output.parquet", "--dry-run")
+    val result =
+      OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
+
+    result shouldBe defined
+    val writeCmd = result.get.command.get.asInstanceOf[WriteCommand]
+    writeCmd.dryRun shouldBe true
+  }
+
+  it should "parse convert --dry-run flag" in {
+    val args = Array("convert", "input.parquet", "output.json", "--dry-run")
+    val result =
+      OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
+
+    result shouldBe defined
+    val convertCmd = result.get.command.get.asInstanceOf[ConvertCommand]
+    convertCmd.dryRun shouldBe true
   }
 
   it should "parse global options correctly" in {

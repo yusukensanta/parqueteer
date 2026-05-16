@@ -141,7 +141,8 @@ object CliApp {
             inputPath,
             inputFormat,
             compression,
-            rowGroupSize
+            rowGroupSize,
+            dryRun
           ) =>
         executeWrite(
           service,
@@ -150,18 +151,20 @@ object CliApp {
           inputFormat,
           compression,
           rowGroupSize,
+          dryRun,
           globalOptions
         )
 
       case ValidateCommand(filePath, _) =>
         executeValidate(service, filePath, globalOptions)
 
-      case ConvertCommand(inputPath, outputPath, compression, _) =>
+      case ConvertCommand(inputPath, outputPath, compression, _, dryRun) =>
         executeConvert(
           service,
           inputPath,
           outputPath,
           compression,
+          dryRun,
           globalOptions
         )
 
@@ -264,6 +267,7 @@ object CliApp {
       inputFormat: String,
       compression: CompressionType,
       rowGroupSize: Option[Long],
+      dryRun: Boolean,
       globalOptions: GlobalOptions
   ): Int = {
     val writeConfig = WriteConfig(
@@ -276,15 +280,26 @@ object CliApp {
         if (globalOptions.verbose) error.printStackTrace()
         1
       case Success(inputData) =>
-        service.writeFile(outputPath, inputData, writeConfig) match {
-          case Success(_) =>
-            if (showStatus(globalOptions))
-              println(s"Successfully wrote data to $outputPath")
-            0
-          case Failure(error) =>
-            System.err.println(s"Failed to write file: ${error.getMessage}")
-            if (globalOptions.verbose) error.printStackTrace()
-            1
+        if (dryRun) {
+          val columns =
+            inputData.headOption.map(_.keys.toList.sorted).getOrElse(Nil)
+          println(s"Dry run: would write $outputPath")
+          println(s"  Input:       $inputPath ($inputFormat)")
+          println(s"  Rows:        ${inputData.size}")
+          println(s"  Columns:     ${columns.mkString(", ")}")
+          println(s"  Compression: ${compression.toString.toLowerCase}")
+          0
+        } else {
+          service.writeFile(outputPath, inputData, writeConfig) match {
+            case Success(_) =>
+              if (showStatus(globalOptions))
+                println(s"Successfully wrote data to $outputPath")
+              0
+            case Failure(error) =>
+              System.err.println(s"Failed to write file: ${error.getMessage}")
+              if (globalOptions.verbose) error.printStackTrace()
+              1
+          }
         }
     }
   }
@@ -316,22 +331,57 @@ object CliApp {
       inputPath: String,
       outputPath: String,
       compression: CompressionType,
+      dryRun: Boolean,
       globalOptions: GlobalOptions
   ): Int = {
     val conversionConfig = ConversionConfig(
       writeConfig = WriteConfig(compressionType = compression)
     )
 
-    service.convertFile(inputPath, outputPath, conversionConfig) match {
-      case Success(_) =>
-        if (showStatus(globalOptions))
-          println(s"Successfully converted $inputPath to $outputPath")
-        0
-      case Failure(error) =>
-        System.err.println(s"Failed to convert file: ${error.getMessage}")
-        if (globalOptions.verbose) error.printStackTrace()
-        1
+    if (dryRun) {
+      service.getFileInfo(inputPath) match {
+        case Failure(error) =>
+          System.err.println(s"Failed to read input: ${error.getMessage}")
+          if (globalOptions.verbose) error.printStackTrace()
+          1
+        case Success(file) =>
+          println(s"Dry run: would convert $inputPath → $outputPath")
+          println(s"  Input:       $inputPath")
+          file.metadata.foreach(m =>
+            println(s"  File size:   ${formatBytesForDisplay(m.fileSize)}")
+          )
+          file.schema.foreach { s =>
+            println(s"  Rows:        ${s.totalRowCount}")
+            println(s"  Columns:     ${s.columns.size}")
+            s.columns.headOption.foreach(c =>
+              println(
+                s"  Compression: ${c.compressionType.toLowerCase} → ${compression.toString.toLowerCase}"
+              )
+            )
+          }
+          0
+      }
+    } else {
+      service.convertFile(inputPath, outputPath, conversionConfig) match {
+        case Success(_) =>
+          if (showStatus(globalOptions))
+            println(s"Successfully converted $inputPath to $outputPath")
+          0
+        case Failure(error) =>
+          System.err.println(s"Failed to convert file: ${error.getMessage}")
+          if (globalOptions.verbose) error.printStackTrace()
+          1
+      }
     }
+  }
+
+  private def formatBytesForDisplay(bytes: Long): String = {
+    val units = List("B", "KB", "MB", "GB", "TB")
+    @annotation.tailrec
+    def loop(size: Double, idx: Int): String =
+      if (size < 1024 || idx >= units.length - 1) f"$size%.1f ${units(idx)}"
+      else loop(size / 1024, idx + 1)
+    loop(bytes.toDouble, 0)
   }
 
   private def executeCompletions(
