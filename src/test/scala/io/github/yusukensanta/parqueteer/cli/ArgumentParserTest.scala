@@ -2,7 +2,8 @@ package io.github.yusukensanta.parqueteer.cli
 
 import io.github.yusukensanta.parqueteer.core.models.{
   OutputFormat,
-  CompressionType
+  CompressionType,
+  SchemaMode
 }
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -216,7 +217,7 @@ class ArgumentParserTest extends AnyFlatSpec with Matchers {
     result.get.command.get shouldBe a[ConfigCommand]
     result.get.command.get
       .asInstanceOf[ConfigCommand]
-      .sub shouldBe ConfigShowSubcommand
+      .sub shouldBe ConfigSubcommand.Show
   }
 
   "ArgumentParser config validate" should "parse config validate subcommand" in {
@@ -229,7 +230,7 @@ class ArgumentParserTest extends AnyFlatSpec with Matchers {
     result.get.command.get shouldBe a[ConfigCommand]
     result.get.command.get
       .asInstanceOf[ConfigCommand]
-      .sub shouldBe ConfigValidateSubcommand
+      .sub shouldBe ConfigSubcommand.Validate
   }
 
   "ArgumentParser merge" should "parse merge command with required output" in {

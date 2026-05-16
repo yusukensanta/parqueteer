@@ -79,3 +79,6 @@ case class FileStats(
     totalRows: Long,
     rowGroupCount: Long
 )
+
+enum SchemaMode:
+  case Strict, Union

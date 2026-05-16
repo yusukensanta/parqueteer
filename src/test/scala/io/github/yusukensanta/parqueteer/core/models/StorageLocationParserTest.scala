@@ -35,12 +35,4 @@ class StorageLocationParserTest extends AnyFlatSpec with Matchers {
     result.isLeft shouldBe true
   }
 
-  it should "parse S3 with region parameter" in {
-    val result = StorageLocationParser.parseS3WithRegion(
-      "s3://my-bucket/file.parquet?region=ap-northeast-1"
-    )
-    result shouldBe Right(
-      S3Location("my-bucket", "file.parquet", Some("ap-northeast-1"))
-    )
-  }
 }

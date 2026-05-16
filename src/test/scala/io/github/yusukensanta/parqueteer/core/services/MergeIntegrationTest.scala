@@ -2,7 +2,7 @@ package io.github.yusukensanta.parqueteer.core.services
 
 import io.github.yusukensanta.parqueteer.core.models._
 import io.github.yusukensanta.parqueteer.core.repositories.ParquetRepository
-import io.github.yusukensanta.parqueteer.cli.SchemaMode
+import io.github.yusukensanta.parqueteer.core.models.SchemaMode
 import org.scalatest.Tag
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers

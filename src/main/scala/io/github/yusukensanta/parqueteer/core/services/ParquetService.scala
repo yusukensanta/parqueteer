@@ -15,9 +15,8 @@ object ParquetServiceEncoders {
 
   given mapStringAnyEncoder: Encoder[Map[String, Any]] =
     Encoder.instance { map =>
-      val typedMap = map.asInstanceOf[Map[Any, Any]]
-      Json.obj(typedMap.map { case (k, v) =>
-        k.toString -> anyEncoder.apply(v)
+      Json.obj(map.map { case (k, v) =>
+        k -> anyEncoder.apply(v)
       }.toSeq*)
     }
 
@@ -127,10 +126,9 @@ class ParquetService(
       inputPaths: List[String],
       outputPath: String,
       writeConfig: WriteConfig,
-      schemaMode: io.github.yusukensanta.parqueteer.cli.SchemaMode,
+      schemaMode: SchemaMode,
       onProgress: (Int, Int, String) => Unit = (_, _, _) => ()
   ): Try[Long] = {
-    import io.github.yusukensanta.parqueteer.cli.SchemaMode
 
     if (inputPaths.size < 2)
       return Failure(
@@ -576,12 +574,4 @@ case class SchemaDiff(
   def identical: Boolean = added.isEmpty && removed.isEmpty && changed.isEmpty
 }
 
-case class ConversionConfig(
-    writeConfig: WriteConfig = WriteConfig(),
-    transformations: List[DataTransformation] = List.empty
-)
-
-sealed trait DataTransformation
-case class ColumnRename(from: String, to: String) extends DataTransformation
-case class ColumnFilter(columns: List[String]) extends DataTransformation
-case class RowFilter(expression: String) extends DataTransformation
+case class ConversionConfig(writeConfig: WriteConfig = WriteConfig())

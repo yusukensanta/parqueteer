@@ -13,13 +13,13 @@ import io.github.yusukensanta.parqueteer.core.models.{
   CompressionType,
   ParqueteerError,
   ColumnInfo,
-  FileStats
+  FileStats,
+  SchemaMode
 }
 import io.circe.Json
 import io.github.yusukensanta.parqueteer.config.{
   ConfigurationManager,
-  EnvConfig,
-  LoggingConfig
+  EnvConfig
 }
 import scopt.OParser
 import scala.util.{Success, Failure}
@@ -94,8 +94,7 @@ object CliApp {
                 s"Failed to load configuration: ${error.getMessage}"
               )
               1
-            case Success(appConfig) =>
-              setupLogging(appConfig.logging, config.globalOptions.verbose)
+            case Success(_) =>
               val repository = new ParquetRepository()
               val service = new ParquetService(repository)
               executeCommand(cmd, service, config.globalOptions)
@@ -606,7 +605,7 @@ object CliApp {
     val configManager = new ConfigurationManager()
     val configPath = globalOptions.configPath
     sub match {
-      case ConfigShowSubcommand =>
+      case ConfigSubcommand.Show =>
         if (!globalOptions.quiet) {
           val resolvedPath = configManager.resolvedConfigPath(configPath)
           val fileExists = better.files.File(resolvedPath).exists
@@ -655,7 +654,7 @@ object CliApp {
         }
         0
 
-      case ConfigValidateSubcommand =>
+      case ConfigSubcommand.Validate =>
         configManager.validate(configPath) match {
           case scala.util.Success(Nil) =>
             if (!globalOptions.quiet)
@@ -675,15 +674,4 @@ object CliApp {
 
   private def showStatus(opts: GlobalOptions): Boolean =
     !opts.quiet && isStdoutTTY
-
-  private def setupLogging(
-      loggingConfig: LoggingConfig,
-      verbose: Boolean
-  ): Unit = {
-    // Note: Using slf4j-simple which doesn't support programmatic configuration
-    // To configure logging level, set system property before JVM starts:
-    //   -Dorg.slf4j.simpleLogger.defaultLogLevel=DEBUG
-    // We keep this method for compatibility but logging config is now static
-    ()
-  }
 }

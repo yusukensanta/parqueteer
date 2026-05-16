@@ -435,11 +435,14 @@ class ParquetRepository {
     }
 
     val builder = Types.buildMessage()
-    val firstRow = data.head
+    val allKeys = data.flatMap(_.keys).distinct
 
-    firstRow.foreach { case (key, value) =>
-      value match {
-        case _: Int =>
+    allKeys.foreach { key =>
+      val sample = data.collectFirst {
+        case row if row.get(key).exists(_ != null) => row(key)
+      }
+      sample match {
+        case Some(_: Int) =>
           builder.addField(
             Types
               .primitive(
@@ -448,7 +451,7 @@ class ParquetRepository {
               )
               .named(key)
           )
-        case _: Long =>
+        case Some(_: Long) =>
           builder.addField(
             Types
               .primitive(
@@ -457,7 +460,7 @@ class ParquetRepository {
               )
               .named(key)
           )
-        case _: Double =>
+        case Some(_: Double) =>
           builder.addField(
             Types
               .primitive(
@@ -466,7 +469,7 @@ class ParquetRepository {
               )
               .named(key)
           )
-        case _: Float =>
+        case Some(_: Float) =>
           builder.addField(
             Types
               .primitive(
@@ -475,7 +478,7 @@ class ParquetRepository {
               )
               .named(key)
           )
-        case _: Boolean =>
+        case Some(_: Boolean) =>
           builder.addField(
             Types
               .primitive(
@@ -484,7 +487,7 @@ class ParquetRepository {
               )
               .named(key)
           )
-        case _: String =>
+        case Some(_: String) =>
           builder.addField(
             Types
               .primitive(
@@ -686,27 +689,6 @@ class ParquetRepository {
     case BinaryValue(binary) => binary.toStringUsingUTF8
     case DateTimeValue(l, _) => l
     case _                   => value.toString
-  }
-
-  @annotation.nowarn("msg=unused")
-  private def convertMapToRecord(data: Map[String, Any]): RowParquetRecord = {
-    import com.github.mjakubowski84.parquet4s._
-    // In parquet4s 2.x, build RowParquetRecord manually
-    val fields: Iterable[(String, Value)] = data.map { case (key, value) =>
-      val parquetValue: Value = value match {
-        case null       => NullValue
-        case s: String  => BinaryValue(s)
-        case i: Int     => IntValue(i)
-        case l: Long    => LongValue(l)
-        case d: Double  => DoubleValue(d)
-        case f: Float   => FloatValue(f)
-        case b: Boolean => BooleanValue(b)
-        case other      => BinaryValue(other.toString)
-      }
-      key -> parquetValue
-    }
-
-    RowParquetRecord(fields)
   }
 
   /** Create parquet4s Filter from filter expression

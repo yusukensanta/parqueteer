@@ -2,7 +2,8 @@ package io.github.yusukensanta.parqueteer.cli
 
 import io.github.yusukensanta.parqueteer.core.models.{
   OutputFormat,
-  CompressionType
+  CompressionType,
+  SchemaMode
 }
 
 sealed trait Command
@@ -46,9 +47,8 @@ case class ConvertCommand(
     dryRun: Boolean = false
 ) extends Command
 
-sealed trait ConfigSubcommand
-case object ConfigShowSubcommand extends ConfigSubcommand
-case object ConfigValidateSubcommand extends ConfigSubcommand
+enum ConfigSubcommand:
+  case Show, Validate
 
 case class ConfigCommand(sub: ConfigSubcommand) extends Command
 
@@ -59,9 +59,6 @@ case class SchemaDiffSubcommand(
 )
 
 case class SchemaCommand(sub: SchemaDiffSubcommand) extends Command
-
-enum SchemaMode:
-  case Strict, Union
 
 case class MergeCommand(
     inputPaths: List[String] = List.empty,

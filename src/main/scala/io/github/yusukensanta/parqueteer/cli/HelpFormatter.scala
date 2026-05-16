@@ -10,13 +10,16 @@ object HelpFormatter {
        |  parqueteer [OPTIONS] <COMMAND>
        |
        |COMMANDS:
-       |  read        Display parquet file content
-       |  info        Show file metadata and schema information
-       |  write       Create parquet file from input data
-       |  validate    Verify parquet file integrity
-       |  convert     Convert between parquet and other formats
-       |  merge       Combine multiple parquet files into one
-       |  stats       Show column statistics (min, max, null count)
+       |  read         Display parquet file content
+       |  info         Show file metadata and schema information
+       |  write        Create parquet file from input data
+       |  validate     Verify parquet file integrity
+       |  convert      Convert between parquet and other formats
+       |  merge        Combine multiple parquet files into one
+       |  stats        Show column statistics (min, max, null count)
+       |  schema diff  Compare schemas of two parquet files
+       |  config       Show or validate configuration
+       |  completions  Generate shell completion scripts
        |
        |GLOBAL OPTIONS:
        |  -h, --help         Show this help message
@@ -25,7 +28,7 @@ object HelpFormatter {
        |      --config       Path to configuration file
        |      --profile      Cloud credentials profile to use
        |      --region       Cloud region to use
-       |      --no-color     Disable colored output
+       |      --color        Color mode: auto, always, never (default: auto)
        |
        |For detailed command usage, run:
        |  parqueteer <COMMAND> --help

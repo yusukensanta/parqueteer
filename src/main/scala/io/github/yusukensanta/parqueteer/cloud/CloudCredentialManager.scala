@@ -24,12 +24,3 @@ object CloudCredentialManager {
     }
   }
 }
-
-enum CredentialError:
-  case AuthenticationFailed(message: String)
-  case ConfigurationError(message: String)
-  case NetworkError(message: String)
-
-enum CredentialResolutionStrategy:
-  case EnvironmentVariables, ProfileBased, InstanceMetadata, ServiceAccount,
-    ManagedIdentity

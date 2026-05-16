@@ -3,7 +3,8 @@ package io.github.yusukensanta.parqueteer.cli
 import scopt.OParser
 import io.github.yusukensanta.parqueteer.core.models.{
   OutputFormat,
-  CompressionType
+  CompressionType,
+  SchemaMode
 }
 import io.github.yusukensanta.parqueteer.config.EnvConfig
 
@@ -14,6 +15,9 @@ object ArgumentParser {
   )
 
   private val builder = OParser.builder[Config]
+
+  private val validCompressions =
+    List("none", "snappy", "gzip", "lzo", "brotli", "lz4", "zstd")
 
   val parser: OParser[Unit, Config] = {
     import builder._
@@ -81,21 +85,25 @@ object ArgumentParser {
             .text("Path to parquet file (local, s3://, gs://, abfss://)"),
           opt[Long]("max-rows")
             .abbr("n")
-            .action((x, c) => updateReadCommand(c, _.copy(maxRows = Some(x))))
+            .action((x, c) =>
+              updateCmd[ReadCommand](c, _.copy(maxRows = Some(x)))
+            )
             .text("Maximum number of rows to display"),
           opt[Seq[String]]("columns")
             .abbr("c")
             .action((x, c) =>
-              updateReadCommand(c, _.copy(columns = Some(x.toList)))
+              updateCmd[ReadCommand](c, _.copy(columns = Some(x.toList)))
             )
             .text("Comma-separated list of columns to display"),
           opt[String]("filter")
             .abbr("f")
-            .action((x, c) => updateReadCommand(c, _.copy(filter = Some(x))))
+            .action((x, c) =>
+              updateCmd[ReadCommand](c, _.copy(filter = Some(x)))
+            )
             .text("Filter expression for rows"),
           opt[String]("format")
             .action((x, c) =>
-              updateReadCommand(c, _.copy(format = parseOutputFormat(x)))
+              updateCmd[ReadCommand](c, _.copy(format = parseOutputFormat(x)))
             )
             .validate(x =>
               if (
@@ -108,7 +116,9 @@ object ArgumentParser {
               "Output format: table, json, csv, pretty, markdown, ndjson (default: table)"
             ),
           opt[Int]("parallel")
-            .action((x, c) => updateReadCommand(c, _.copy(parallelism = x)))
+            .action((x, c) =>
+              updateCmd[ReadCommand](c, _.copy(parallelism = x))
+            )
             .validate(x =>
               if (x >= 1) success
               else failure("Parallelism must be at least 1")
@@ -117,7 +127,9 @@ object ArgumentParser {
               "Number of parallel threads for row group reading (default: 1)"
             ),
           opt[Unit]("stream")
-            .action((_, c) => updateReadCommand(c, _.copy(streaming = true)))
+            .action((_, c) =>
+              updateCmd[ReadCommand](c, _.copy(streaming = true))
+            )
             .text(
               "Stream rows progressively (memory-bounded, safe for large files)"
             )
@@ -131,16 +143,20 @@ object ArgumentParser {
             .text("Path to parquet file"),
           opt[String]("format")
             .action((x, c) =>
-              updateInfoCommand(c, _.copy(format = parseOutputFormat(x)))
+              updateCmd[InfoCommand](c, _.copy(format = parseOutputFormat(x)))
             )
             .text("Output format: table, json"),
           opt[Unit]("schema")
             .abbr("s")
-            .action((_, c) => updateInfoCommand(c, _.copy(showSchema = true)))
+            .action((_, c) =>
+              updateCmd[InfoCommand](c, _.copy(showSchema = true))
+            )
             .text("Show schema information (default: show all)"),
           opt[Unit]("metadata")
             .abbr("m")
-            .action((_, c) => updateInfoCommand(c, _.copy(showMetadata = true)))
+            .action((_, c) =>
+              updateCmd[InfoCommand](c, _.copy(showMetadata = true))
+            )
             .text("Show metadata information (default: show all)")
         ),
       cmd("write")
@@ -152,10 +168,14 @@ object ArgumentParser {
             .text("Input data file path (JSON or CSV)"),
           arg[String]("<output>")
             .required()
-            .action((x, c) => updateWriteCommand(c, _.copy(outputPath = x)))
+            .action((x, c) =>
+              updateCmd[WriteCommand](c, _.copy(outputPath = x))
+            )
             .text("Output parquet file path"),
           opt[String]("input-format")
-            .action((x, c) => updateWriteCommand(c, _.copy(inputFormat = x)))
+            .action((x, c) =>
+              updateCmd[WriteCommand](c, _.copy(inputFormat = x))
+            )
             .validate(x =>
               if (List("json", "csv").contains(x.toLowerCase)) success
               else failure(s"Invalid input format: $x")
@@ -164,21 +184,28 @@ object ArgumentParser {
           opt[String]("compression")
             .abbr("c")
             .action((x, c) =>
-              updateWriteCommand(
+              updateCmd[WriteCommand](
                 c,
                 _.copy(compression = parseCompressionType(x))
               )
+            )
+            .validate(x =>
+              if (validCompressions.contains(x.toLowerCase)) success
+              else failure(s"Unknown compression: $x")
             )
             .text(
               "Compression type: none, snappy, gzip, lzo, brotli, lz4, zstd"
             ),
           opt[String]("row-group-size")
             .action((x, c) =>
-              updateWriteCommand(c, _.copy(rowGroupSize = Some(parseSize(x))))
+              updateCmd[WriteCommand](
+                c,
+                _.copy(rowGroupSize = Some(parseSize(x)))
+              )
             )
             .text("Row group size (e.g., 128MB)"),
           opt[Unit]("dry-run")
-            .action((_, c) => updateWriteCommand(c, _.copy(dryRun = true)))
+            .action((_, c) => updateCmd[WriteCommand](c, _.copy(dryRun = true)))
             .text(
               "Preview what would be written without performing the operation"
             )
@@ -191,7 +218,9 @@ object ArgumentParser {
             .action((x, c) => c.copy(command = Some(ValidateCommand(x))))
             .text("Path to parquet file"),
           opt[Unit]("verbose")
-            .action((_, c) => updateValidateCommand(c, _.copy(verbose = true)))
+            .action((_, c) =>
+              updateCmd[ValidateCommand](c, _.copy(verbose = true))
+            )
             .text("Show detailed validation information")
         ),
       cmd("convert")
@@ -203,11 +232,13 @@ object ArgumentParser {
             .text("Input file path"),
           arg[String]("<output>")
             .required()
-            .action((x, c) => updateConvertCommand(c, _.copy(outputPath = x)))
+            .action((x, c) =>
+              updateCmd[ConvertCommand](c, _.copy(outputPath = x))
+            )
             .text("Output file path"),
           opt[String]("compression")
             .action((x, c) =>
-              updateConvertCommand(
+              updateCmd[ConvertCommand](
                 c,
                 _.copy(compression = parseCompressionType(x))
               )
@@ -216,11 +247,13 @@ object ArgumentParser {
           opt[Long]("max-rows")
             .abbr("n")
             .action((x, c) =>
-              updateConvertCommand(c, _.copy(maxRows = Some(x)))
+              updateCmd[ConvertCommand](c, _.copy(maxRows = Some(x)))
             )
             .text("Maximum number of rows to convert"),
           opt[Unit]("dry-run")
-            .action((_, c) => updateConvertCommand(c, _.copy(dryRun = true)))
+            .action((_, c) =>
+              updateCmd[ConvertCommand](c, _.copy(dryRun = true))
+            )
             .text(
               "Preview what would be converted without performing the operation"
             )
@@ -266,33 +299,35 @@ object ArgumentParser {
             .unbounded()
             .required()
             .action((x, c) =>
-              updateMergeCommand(c, m => m.copy(inputPaths = m.inputPaths :+ x))
+              updateCmd[MergeCommand](
+                c,
+                m => m.copy(inputPaths = m.inputPaths :+ x)
+              )
             )
             .text("Input parquet files (specify two or more)"),
           opt[String]("output")
             .abbr("o")
             .required()
-            .action((x, c) => updateMergeCommand(c, _.copy(outputPath = x)))
+            .action((x, c) =>
+              updateCmd[MergeCommand](c, _.copy(outputPath = x))
+            )
             .text("Output parquet file path"),
           opt[String]("compression")
             .abbr("c")
             .action((x, c) =>
-              updateMergeCommand(
+              updateCmd[MergeCommand](
                 c,
                 _.copy(compression = parseCompressionType(x))
               )
             )
             .validate(x =>
-              if (
-                List("none", "snappy", "gzip", "lzo", "brotli", "lz4", "zstd")
-                  .contains(x.toLowerCase)
-              ) success
+              if (validCompressions.contains(x.toLowerCase)) success
               else failure(s"Unknown compression: $x")
             )
             .text("Output compression (default: snappy)"),
           opt[String]("schema-mode")
             .action((x, c) =>
-              updateMergeCommand(
+              updateCmd[MergeCommand](
                 c,
                 _.copy(schemaMode = x.toLowerCase match {
                   case "union" => SchemaMode.Union
@@ -315,7 +350,7 @@ object ArgumentParser {
             .text("Path to parquet file"),
           opt[String]("format")
             .action((x, c) =>
-              updateStatsCommand(c, _.copy(format = parseOutputFormat(x)))
+              updateCmd[StatsCommand](c, _.copy(format = parseOutputFormat(x)))
             )
             .validate(x =>
               if (
@@ -344,98 +379,35 @@ object ArgumentParser {
           cmd("show")
             .text("Display resolved configuration with source annotations")
             .action((_, c) =>
-              c.copy(command = Some(ConfigCommand(ConfigShowSubcommand)))
+              c.copy(command = Some(ConfigCommand(ConfigSubcommand.Show)))
             ),
           cmd("validate")
             .text("Validate the configuration file")
             .action((_, c) =>
-              c.copy(command = Some(ConfigCommand(ConfigValidateSubcommand)))
+              c.copy(command = Some(ConfigCommand(ConfigSubcommand.Validate)))
             )
         )
     )
   }
 
-  private def updateReadCommand(
+  private def updateCmd[C <: Command: reflect.ClassTag](
       config: Config,
-      update: ReadCommand => ReadCommand
-  ): Config = {
+      update: C => C
+  ): Config =
     config.command match {
-      case Some(cmd: ReadCommand) => config.copy(command = Some(update(cmd)))
-      case _                      => config
+      case Some(cmd: C) => config.copy(command = Some(update(cmd)))
+      case _            => config
     }
-  }
-
-  private def updateInfoCommand(
-      config: Config,
-      update: InfoCommand => InfoCommand
-  ): Config = {
-    config.command match {
-      case Some(cmd: InfoCommand) => config.copy(command = Some(update(cmd)))
-      case _                      => config
-    }
-  }
-
-  private def updateWriteCommand(
-      config: Config,
-      update: WriteCommand => WriteCommand
-  ): Config = {
-    config.command match {
-      case Some(cmd: WriteCommand) => config.copy(command = Some(update(cmd)))
-      case _                       => config
-    }
-  }
-
-  private def updateValidateCommand(
-      config: Config,
-      update: ValidateCommand => ValidateCommand
-  ): Config = {
-    config.command match {
-      case Some(cmd: ValidateCommand) =>
-        config.copy(command = Some(update(cmd)))
-      case _ => config
-    }
-  }
-
-  private def updateConvertCommand(
-      config: Config,
-      update: ConvertCommand => ConvertCommand
-  ): Config = {
-    config.command match {
-      case Some(cmd: ConvertCommand) => config.copy(command = Some(update(cmd)))
-      case _                         => config
-    }
-  }
 
   private def updateSchemaDiffCommand(
       config: Config,
       update: SchemaDiffSubcommand => SchemaDiffSubcommand
-  ): Config = {
+  ): Config =
     config.command match {
       case Some(SchemaCommand(sub)) =>
         config.copy(command = Some(SchemaCommand(update(sub))))
       case _ => config
     }
-  }
-
-  private def updateMergeCommand(
-      config: Config,
-      update: MergeCommand => MergeCommand
-  ): Config = {
-    config.command match {
-      case Some(cmd: MergeCommand) => config.copy(command = Some(update(cmd)))
-      case _                       => config
-    }
-  }
-
-  private def updateStatsCommand(
-      config: Config,
-      update: StatsCommand => StatsCommand
-  ): Config = {
-    config.command match {
-      case Some(cmd: StatsCommand) => config.copy(command = Some(update(cmd)))
-      case _                       => config
-    }
-  }
 
   private def parseOutputFormat(format: String): OutputFormat = {
     format.toLowerCase match {

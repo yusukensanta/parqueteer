@@ -61,19 +61,4 @@ object StorageLocationParser {
     }
   }
 
-  def parseS3WithRegion(url: String): Either[String, S3Location] = {
-    parse(url) match {
-      case Right(s3: S3Location) =>
-        val regionRegex = """.*\?.*region=([^&]+)""".r
-        val region = url match {
-          case regionRegex(r) => Some(r)
-          case _              => None
-        }
-        // Strip query string from key
-        val cleanKey = s3.key.split("\\?").head
-        Right(s3.copy(key = cleanKey, region = region))
-      case Right(_) => Left(s"Expected S3 location, got different storage type")
-      case Left(error) => Left(error)
-    }
-  }
 }
