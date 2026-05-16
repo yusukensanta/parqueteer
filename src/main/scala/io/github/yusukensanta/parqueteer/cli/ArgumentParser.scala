@@ -107,6 +107,15 @@ object ArgumentParser {
             .text(
               "Output format: table, json, csv, pretty, markdown, ndjson (default: table)"
             ),
+          opt[Int]("parallel")
+            .action((x, c) => updateReadCommand(c, _.copy(parallelism = x)))
+            .validate(x =>
+              if (x >= 1) success
+              else failure("Parallelism must be at least 1")
+            )
+            .text(
+              "Number of parallel threads for row group reading (default: 1)"
+            ),
           opt[Unit]("stream")
             .action((_, c) => updateReadCommand(c, _.copy(streaming = true)))
             .text(

@@ -13,6 +13,7 @@ case class ReadCommand(
     columns: Option[List[String]] = None,
     filter: Option[String] = None,
     format: OutputFormat = OutputFormat.Table,
+    parallelism: Int = 1,
     streaming: Boolean = false
 ) extends Command
 

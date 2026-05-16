@@ -112,7 +112,15 @@ object CliApp {
       globalOptions: GlobalOptions
   ): Int = {
     command match {
-      case ReadCommand(filePath, maxRows, columns, filter, format, streaming) =>
+      case ReadCommand(
+            filePath,
+            maxRows,
+            columns,
+            filter,
+            format,
+            parallelism,
+            streaming
+          ) =>
         executeRead(
           service,
           filePath,
@@ -120,6 +128,7 @@ object CliApp {
           columns,
           filter,
           format,
+          parallelism,
           streaming,
           globalOptions
         )
@@ -174,6 +183,7 @@ object CliApp {
       columns: Option[List[String]],
       filter: Option[String],
       format: OutputFormat,
+      parallelism: Int,
       streaming: Boolean,
       globalOptions: GlobalOptions
   ): Int = {
@@ -182,6 +192,7 @@ object CliApp {
       columns = columns,
       filter = filter,
       outputFormat = format,
+      parallelism = parallelism,
       streamingMode = streaming
     )
 
