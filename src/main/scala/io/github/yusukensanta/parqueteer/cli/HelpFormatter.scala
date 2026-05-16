@@ -88,16 +88,19 @@ object HelpFormatter {
        |
        |OPTIONS:
        |      --format <FORMAT>     Output format: table, json (default: table)
-       |  -s, --no-schema          Don't show schema information
-       |  -m, --no-metadata        Don't show metadata information
+       |  -s, --schema             Show schema information only
+       |  -m, --metadata           Show metadata information only
        |  -h, --help               Show this help message
        |
        |EXAMPLES:
-       |  # Show all metadata and schema
+       |  # Show all metadata and schema (default)
        |  parqueteer info data.parquet
        |
        |  # Show only schema
-       |  parqueteer info data.parquet --no-metadata
+       |  parqueteer info data.parquet --schema
+       |
+       |  # Show only metadata
+       |  parqueteer info data.parquet --metadata
        |
        |  # Output as JSON
        |  parqueteer info data.parquet --format json

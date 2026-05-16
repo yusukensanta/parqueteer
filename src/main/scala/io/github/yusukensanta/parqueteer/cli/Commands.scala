@@ -20,8 +20,8 @@ case class ReadCommand(
 case class InfoCommand(
     filePath: String,
     format: OutputFormat = OutputFormat.Table,
-    showSchema: Boolean = true,
-    showMetadata: Boolean = true
+    showSchema: Boolean = false,
+    showMetadata: Boolean = false
 ) extends Command
 
 case class WriteCommand(

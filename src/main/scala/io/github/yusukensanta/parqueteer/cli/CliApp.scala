@@ -238,14 +238,15 @@ object CliApp {
       showMetadata: Boolean,
       globalOptions: GlobalOptions
   ): Int = {
+    val showAll = !showSchema && !showMetadata
     service.getFileInfo(filePath) match {
       case Success(file) =>
         if (!globalOptions.quiet) {
-          if (showMetadata) {
+          if (showAll || showMetadata) {
             println(service.formatMetadata(file))
             println()
           }
-          if (showSchema) {
+          if (showAll || showSchema) {
             println(service.formatSchema(file))
           }
         }
