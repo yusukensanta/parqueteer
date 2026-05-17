@@ -107,23 +107,22 @@ lazy val root = (project in file("."))
       }
     },
     libraryDependencies ++= {
-      val parquet4sVersion =
-        "2.18.0" // Latest that definitely exists for Scala 3
+      val parquet4sVersion = "2.22.0" // parquet-hadoop 1.15.2 — fixes CVE-2025-30065 + CVE-2025-46762
       val circeVersion = "0.14.10"
       val circeYamlVersion = "0.15.3"
       val scoptVersion = "4.1.0"
       val betterFilesVersion = "3.9.2"
       val slf4jVersion = "2.0.16"
       val scalatestVersion = "3.2.18"
-      val scalamockVersion = "6.0.0" // Latest for Scala 3
+      val scalamockVersion = "6.0.0"
       val scalatestScalacheckVersion = "3.2.18.0"
       val parserCombinatorsVersion = "2.4.0"
-      val awsSdkVersion = "2.29.35"
-      val googleCloudStorageVersion = "2.45.0"
-      val azureStorageVersion = "12.28.1"
-      val azureIdentityVersion = "1.15.1"
-      val hadoopVersion = "3.4.2"
-      val gcsConnectorVersion = "hadoop3-2.2.19"
+      val awsSdkVersion = "2.34.0"
+      val googleCloudStorageVersion = "2.68.0"
+      val azureStorageVersion = "12.30.0"
+      val azureIdentityVersion = "1.16.2"
+      val hadoopVersion = "3.4.3"
+      val gcsConnectorVersion = "hadoop3-2.2.28"
 
       Seq(
         "com.github.mjakubowski84" %% "parquet4s-core" % parquet4sVersion,
@@ -194,6 +193,16 @@ lazy val root = (project in file("."))
         "org.scalatestplus" %% "scalacheck-1-17" % scalatestScalacheckVersion % Test
       )
     },
+    // Force Netty to latest 4.1.x to patch transitive CVEs from AWS SDK
+    dependencyOverrides ++= Seq(
+      "io.netty" % "netty-common"        % "4.1.121.Final",
+      "io.netty" % "netty-buffer"        % "4.1.121.Final",
+      "io.netty" % "netty-handler"       % "4.1.121.Final",
+      "io.netty" % "netty-transport"     % "4.1.121.Final",
+      "io.netty" % "netty-codec"         % "4.1.121.Final",
+      "io.netty" % "netty-codec-http"    % "4.1.121.Final",
+      "io.netty" % "netty-codec-http2"   % "4.1.121.Final"
+    ),
     assembly / assemblyMergeStrategy := {
       case PathList("META-INF", "services", xs @ _*) => MergeStrategy.concat
       case PathList("META-INF", "versions", xs @ _*) => MergeStrategy.first
