@@ -19,6 +19,27 @@
 
 ---
 
+## Project Scope
+
+Parqueteer is a **Parquet lifecycle tool for pipelines** — the gap between basic inspection CLIs and full query engines.
+
+**In scope:**
+- Schema operations: `schema diff`, `validate`, `info` — designed to wire into CI/CD and data quality gates
+- Cloud-native Parquet I/O: read, write, merge across local, S3, GCS, and Azure
+- Format conversion: JSON/CSV ↔ Parquet with compression control
+- Operational inspection: `stats`, column-level metadata — quick answers without a query engine
+
+**Out of scope:**
+- **SQL analytics, joins, aggregations** — use [DuckDB](https://duckdb.org/) for ad-hoc queries
+- **General data exploration** — for quick local inspection, [pqrs](https://github.com/manojkarthick/pqrs) or [parquet-cli](https://github.com/apache/parquet-java/tree/master/parquet-cli) are lighter
+- **Streaming/batch processing** — use Spark or Flink
+- **Schema inference from Avro, ORC, Arrow** — out of format scope
+- **Interactive/REPL mode** — parqueteer is a scriptable CLI, not an interactive shell
+
+Feature requests outside this scope will be closed. When in doubt, open a discussion first.
+
+---
+
 ## Quick Start
 
 ### Read Parquet Files

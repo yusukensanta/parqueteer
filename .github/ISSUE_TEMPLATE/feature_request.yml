@@ -5,7 +5,26 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for your feature suggestion! We appreciate ideas to make Parqueteer better.
+        ## Project Scope
+
+        Parqueteer is a **Parquet lifecycle tool for pipelines** — schema diff, validate, cloud I/O, format conversion, and operational inspection.
+
+        **Please check before submitting:**
+        - SQL analytics, joins, aggregations → use [DuckDB](https://duckdb.org/) instead
+        - General data exploration on local files → use [pqrs](https://github.com/manojkarthick/pqrs) or [parquet-cli](https://github.com/apache/parquet-java/tree/master/parquet-cli) instead
+        - Streaming/batch processing → use Spark or Flink instead
+        - Interactive/REPL mode → out of scope; parqueteer is a scriptable CLI
+
+        Feature requests outside this scope will be closed. See the [README](../../README.md#project-scope) for the full scope definition.
+
+  - type: checkboxes
+    id: scope_check
+    attributes:
+      label: Scope Check
+      description: Confirm this request fits within the project scope
+      options:
+        - label: This feature is related to Parquet lifecycle operations (schema, validate, cloud I/O, convert, merge, inspect) — not SQL analytics or general data exploration
+          required: true
 
   - type: dropdown
     id: area
