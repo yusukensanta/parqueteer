@@ -1,6 +1,6 @@
 package io.github.yusukensanta.parqueteer.config
 
-import io.circe.{Decoder, Encoder}
+import io.circe.{ACursor, Decoder, Encoder, JsonObject}
 import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 import better.files.File
 import scala.util.{Try, Success}
@@ -64,38 +64,31 @@ case class LoggingConfig(
 )
 
 object AppConfig {
-  given Decoder[S3Config] = deriveDecoder[S3Config]
+  private def normalizeKeys(cursor: ACursor): ACursor =
+    cursor.withFocus(_.mapObject { obj =>
+      JsonObject.fromIterable(obj.toIterable.map { case (k, v) =>
+        "_([a-z\\d])".r.replaceAllIn(k, m => m.group(1).toUpperCase) -> v
+      })
+    })
+
+  given Decoder[S3Config] = deriveDecoder[S3Config].prepare(normalizeKeys)
   given Encoder[S3Config] = deriveEncoder[S3Config]
-
-  given Decoder[GCSConfig] = deriveDecoder[GCSConfig]
+  given Decoder[GCSConfig] = deriveDecoder[GCSConfig].prepare(normalizeKeys)
   given Encoder[GCSConfig] = deriveEncoder[GCSConfig]
-
-  given Decoder[AzureConfig] =
-    deriveDecoder[AzureConfig]
-  given Encoder[AzureConfig] =
-    deriveEncoder[AzureConfig]
-
-  given Decoder[CloudConfig] =
-    deriveDecoder[CloudConfig]
-  given Encoder[CloudConfig] =
-    deriveEncoder[CloudConfig]
-
+  given Decoder[AzureConfig] = deriveDecoder[AzureConfig].prepare(normalizeKeys)
+  given Encoder[AzureConfig] = deriveEncoder[AzureConfig]
+  given Decoder[CloudConfig] = deriveDecoder[CloudConfig].prepare(normalizeKeys)
+  given Encoder[CloudConfig] = deriveEncoder[CloudConfig]
   given Decoder[OutputConfig] =
-    deriveDecoder[OutputConfig]
-  given Encoder[OutputConfig] =
-    deriveEncoder[OutputConfig]
-
+    deriveDecoder[OutputConfig].prepare(normalizeKeys)
+  given Encoder[OutputConfig] = deriveEncoder[OutputConfig]
   given Decoder[PerformanceConfig] =
-    deriveDecoder[PerformanceConfig]
-  given Encoder[PerformanceConfig] =
-    deriveEncoder[PerformanceConfig]
-
+    deriveDecoder[PerformanceConfig].prepare(normalizeKeys)
+  given Encoder[PerformanceConfig] = deriveEncoder[PerformanceConfig]
   given Decoder[LoggingConfig] =
-    deriveDecoder[LoggingConfig]
-  given Encoder[LoggingConfig] =
-    deriveEncoder[LoggingConfig]
-
-  given Decoder[AppConfig] = deriveDecoder[AppConfig]
+    deriveDecoder[LoggingConfig].prepare(normalizeKeys)
+  given Encoder[LoggingConfig] = deriveEncoder[LoggingConfig]
+  given Decoder[AppConfig] = deriveDecoder[AppConfig].prepare(normalizeKeys)
   given Encoder[AppConfig] = deriveEncoder[AppConfig]
 }
 
