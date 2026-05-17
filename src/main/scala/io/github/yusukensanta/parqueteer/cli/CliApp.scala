@@ -248,6 +248,14 @@ object CliApp {
           0
         case Left(error) =>
           System.err.println(s"Error: ${error.userMessage}")
+          if (
+            filter.isDefined &&
+            error.userMessage.contains("FilterPredicate") &&
+            error.userMessage.contains("BINARY")
+          )
+            System.err.println(
+              "Hint: CSV-imported files store all columns as BINARY (string). Use string comparisons instead: column = \"value\""
+            )
           if (globalOptions.verbose) error match {
             case ParqueteerError.IOError(cause) => cause.printStackTrace()
             case _                              => ()

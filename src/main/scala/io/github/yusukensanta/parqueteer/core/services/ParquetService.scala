@@ -175,8 +175,17 @@ class ParquetService(
             schemas
               .foldLeft(List.empty[(String, String, Boolean)]) {
                 (acc, fields) =>
-                  val existing = acc.map(_._1).toSet
-                  acc ++ fields.filterNot(f => existing.contains(f._1))
+                  val existingMap = acc.map(f => f._1 -> f._2).toMap
+                  val conflicts = fields.collect {
+                    case (name, t, _) if existingMap.get(name).exists(_ != t) =>
+                      s"'$name' (${existingMap(name)} vs $t)"
+                  }
+                  if (conflicts.nonEmpty)
+                    throw new IllegalArgumentException(
+                      s"Type conflicts in union merge: ${conflicts.mkString(", ")}. " +
+                        "Cannot union-merge columns with incompatible types."
+                    )
+                  acc ++ fields.filterNot(f => existingMap.contains(f._1))
               }
               .map { case (name, t, _) => (name, t, true) }
         }

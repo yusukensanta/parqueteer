@@ -44,7 +44,8 @@ class ParquetRepository {
 
         if (config.parallelism > 1 && config.filter.isEmpty) {
           val rows = readParallel(hadoopPath, hadoopConfig, config)
-          val isPartial = config.maxRows.exists(_ < totalRows)
+          val isPartial =
+            config.maxRows.exists(limit => rows.size.toLong >= limit)
           FileContent(rows = rows, totalRows = totalRows, isPartial = isPartial)
         } else {
           val path4s = Parquet4sPath(file.location.path)
@@ -71,7 +72,7 @@ class ParquetRepository {
           }
           val rows = records.map(convertRecordToMap)
           val isPartial =
-            config.maxRows.exists(_ < totalRows) || filter != Filter.noopFilter
+            config.maxRows.exists(limit => rows.size.toLong >= limit)
           FileContent(rows = rows, totalRows = totalRows, isPartial = isPartial)
         }
       }
