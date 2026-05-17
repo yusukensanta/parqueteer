@@ -14,6 +14,7 @@ import io.github.yusukensanta.parqueteer.core.models.{
   ParqueteerError,
   ColumnInfo,
   FileStats,
+  ParquetFile,
   SchemaMode
 }
 import io.circe.Json
@@ -135,8 +136,15 @@ object CliApp {
           globalOptions
         )
 
-      case InfoCommand(filePath, _, showSchema, showMetadata) =>
-        executeInfo(service, filePath, showSchema, showMetadata, globalOptions)
+      case InfoCommand(filePath, format, showSchema, showMetadata) =>
+        executeInfo(
+          service,
+          filePath,
+          format,
+          showSchema,
+          showMetadata,
+          globalOptions
+        )
 
       case WriteCommand(
             outputPath,
@@ -252,6 +260,7 @@ object CliApp {
   private def executeInfo(
       service: ParquetService,
       filePath: String,
+      format: OutputFormat,
       showSchema: Boolean,
       showMetadata: Boolean,
       globalOptions: GlobalOptions
@@ -260,12 +269,17 @@ object CliApp {
     service.getFileInfo(filePath) match {
       case Success(file) =>
         if (!globalOptions.quiet) {
-          if (showAll || showMetadata) {
-            println(service.formatMetadata(file))
-            println()
-          }
-          if (showAll || showSchema) {
-            println(service.formatSchema(file))
+          format match {
+            case OutputFormat.JSON =>
+              println(formatInfoJson(file, showAll, showSchema, showMetadata))
+            case _ =>
+              if (showAll || showMetadata) {
+                println(service.formatMetadata(file))
+                println()
+              }
+              if (showAll || showSchema) {
+                println(service.formatSchema(file))
+              }
           }
         }
         0
@@ -274,6 +288,52 @@ object CliApp {
         if (globalOptions.verbose) error.printStackTrace()
         1
     }
+  }
+
+  private def formatInfoJson(
+      file: ParquetFile,
+      showAll: Boolean,
+      showSchema: Boolean,
+      showMetadata: Boolean
+  ): String = {
+    val fields = scala.collection.mutable.ListBuffer.empty[(String, Json)]
+    if (showAll || showMetadata) {
+      val metaJson = file.metadata.fold(Json.Null) { m =>
+        Json.obj(
+          "fileSize" -> Json.fromLong(m.fileSize),
+          "createdAt" -> m.createdAt.fold(Json.Null)(t =>
+            Json.fromString(t.toString)
+          ),
+          "modifiedAt" -> m.modifiedAt.fold(Json.Null)(t =>
+            Json.fromString(t.toString)
+          ),
+          "compressionRatio" -> m.compressionRatio.fold(Json.Null)(
+            Json.fromDoubleOrNull
+          ),
+          "version" -> Json.fromString(m.version),
+          "createdBy" -> m.createdBy.fold(Json.Null)(Json.fromString)
+        )
+      }
+      fields += ("metadata" -> metaJson)
+    }
+    if (showAll || showSchema) {
+      val schemaJson = file.schema.fold(Json.Null) { s =>
+        Json.obj(
+          "totalRowCount" -> Json.fromLong(s.totalRowCount),
+          "rowGroupCount" -> Json.fromLong(s.rowGroupCount),
+          "columns" -> Json.fromValues(s.columns.map { c =>
+            Json.obj(
+              "name" -> Json.fromString(c.name),
+              "dataType" -> Json.fromString(c.dataType),
+              "optional" -> Json.fromBoolean(c.isOptional),
+              "compressionType" -> Json.fromString(c.compressionType)
+            )
+          })
+        )
+      }
+      fields += ("schema" -> schemaJson)
+    }
+    Json.obj(fields.toSeq*).spaces2
   }
 
   private def executeWrite(
@@ -328,7 +388,7 @@ object CliApp {
     service.validateFile(filePath) match {
       case Success(result) =>
         if (result.isValid) {
-          if (showStatus(globalOptions)) println(s"✓ File $filePath is valid")
+          if (!globalOptions.quiet) println(s"✓ File $filePath is valid")
           0
         } else {
           println(s"✗ File $filePath has issues:")
@@ -355,27 +415,42 @@ object CliApp {
     )
 
     if (dryRun) {
-      service.getFileInfo(inputPath) match {
-        case Failure(error) =>
-          System.err.println(s"Failed to read input: ${error.getMessage}")
-          if (globalOptions.verbose) error.printStackTrace()
-          1
-        case Success(file) =>
-          println(s"Dry run: would convert $inputPath → $outputPath")
-          println(s"  Input:       $inputPath")
-          file.metadata.foreach(m =>
-            println(s"  File size:   ${formatBytesForDisplay(m.fileSize)}")
-          )
-          file.schema.foreach { s =>
-            println(s"  Rows:        ${s.totalRowCount}")
-            println(s"  Columns:     ${s.columns.size}")
-            s.columns.headOption.foreach(c =>
-              println(
-                s"  Compression: ${c.compressionType.toLowerCase} → ${compression.toString.toLowerCase}"
-              )
+      val inputExt =
+        inputPath
+          .split("\\.")
+          .lastOption
+          .map(_.toLowerCase)
+          .getOrElse("unknown")
+      if (inputExt == "parquet") {
+        service.getFileInfo(inputPath) match {
+          case Failure(error) =>
+            System.err.println(s"Failed to read input: ${error.getMessage}")
+            if (globalOptions.verbose) error.printStackTrace()
+            1
+          case Success(file) =>
+            println(s"Dry run: would convert $inputPath → $outputPath")
+            println(s"  Input:       $inputPath")
+            file.metadata.foreach(m =>
+              println(s"  File size:   ${formatBytesForDisplay(m.fileSize)}")
             )
-          }
-          0
+            file.schema.foreach { s =>
+              println(s"  Rows:        ${s.totalRowCount}")
+              println(s"  Columns:     ${s.columns.size}")
+              s.columns.headOption.foreach(c =>
+                println(
+                  s"  Compression: ${c.compressionType.toLowerCase} → ${compression.toString.toLowerCase}"
+                )
+              )
+            }
+            0
+        }
+      } else {
+        println(s"Dry run: would convert $inputPath → $outputPath")
+        println(s"  Input format: $inputExt")
+        println(
+          s"  Compression:  ${compression.toString.toLowerCase} (output)"
+        )
+        0
       }
     } else {
       service.convertFile(inputPath, outputPath, conversionConfig) match {

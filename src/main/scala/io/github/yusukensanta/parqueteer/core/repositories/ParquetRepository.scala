@@ -265,7 +265,7 @@ class ParquetRepository {
             val columnPath = column.getPath.mkString(".")
             ColumnInfo(
               name = columnPath,
-              dataType = column.getPrimitiveType.getName,
+              dataType = column.getPrimitiveType.getPrimitiveTypeName.name(),
               isOptional = column.getMaxRepetitionLevel == 0,
               maxDefinitionLevel = column.getMaxDefinitionLevel,
               maxRepetitionLevel = column.getMaxRepetitionLevel,
@@ -521,9 +521,22 @@ class ParquetRepository {
     row.foreach { case (key, value) =>
       val fieldIndex = schema.getFieldIndex(key)
       if (fieldIndex >= 0 && value != null) {
+        val fieldTypeName =
+          schema.getType(fieldIndex).asPrimitiveType().getPrimitiveTypeName
         value match {
-          case i: Int     => group.add(fieldIndex, i)
-          case l: Long    => group.add(fieldIndex, l)
+          case i: Int =>
+            fieldTypeName match {
+              case PrimitiveTypeName.INT64  => group.add(fieldIndex, i.toLong)
+              case PrimitiveTypeName.DOUBLE => group.add(fieldIndex, i.toDouble)
+              case PrimitiveTypeName.FLOAT  => group.add(fieldIndex, i.toFloat)
+              case _                        => group.add(fieldIndex, i)
+            }
+          case l: Long =>
+            fieldTypeName match {
+              case PrimitiveTypeName.DOUBLE => group.add(fieldIndex, l.toDouble)
+              case PrimitiveTypeName.FLOAT  => group.add(fieldIndex, l.toFloat)
+              case _                        => group.add(fieldIndex, l)
+            }
           case d: Double  => group.add(fieldIndex, d)
           case f: Float   => group.add(fieldIndex, f)
           case b: Boolean => group.add(fieldIndex, b)
