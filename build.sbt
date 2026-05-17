@@ -1,14 +1,17 @@
 ThisBuild / organization := "io.github.yusukensanta"
 // Version managed by sbt-ci-release from git tags
 name := "parqueteer"
-ThisBuild / scalaVersion := "3.7.3"
+ThisBuild / scalaVersion := "3.7.4"
 
 // sbt-ci-release configuration
 ThisBuild / versionScheme := Some("early-semver")
 
-// Maven Central publishing configuration
-ThisBuild / sonatypeCredentialHost := "central.sonatype.com"
-ThisBuild / publishTo := sonatypePublishToBundle.value
+// Maven Central publishing configuration (Central Portal via sbt 1.11+)
+ThisBuild / publishTo := {
+  val centralSnapshots = "https://central.sonatype.com/repository/maven-snapshots/"
+  if (isSnapshot.value) Some("central-snapshots" at centralSnapshots)
+  else localStaging.value
+}
 ThisBuild / publishMavenStyle := true
 ThisBuild / pomIncludeRepository := { _ => false }
 
@@ -121,7 +124,7 @@ lazy val root = (project in file("."))
       val googleCloudStorageVersion = "2.68.0"
       val azureStorageVersion = "12.30.0"
       val azureIdentityVersion = "1.16.2"
-      val hadoopVersion = "3.4.3"
+      val hadoopVersion = "3.5.0"
       val gcsConnectorVersion = "hadoop3-2.2.28"
 
       Seq(
