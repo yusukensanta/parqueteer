@@ -1,4 +1,4 @@
-.PHONY: help install sync-versions clean compile test assembly package run fmt lint check pre-commit setup-dev setup-hooks
+.PHONY: help install sync-versions clean compile test coverage assembly package run fmt lint check pre-commit setup-dev setup-hooks
 
 # Default target: show help
 .DEFAULT_GOAL := help
@@ -12,7 +12,7 @@ GREEN := \033[0;32m
 YELLOW := \033[0;33m
 NC := \033[0m # No Color
 
-SCALA_VERSION := 3.7.3
+SCALA_VERSION := 3.7.4
 
 ##@ General
 
@@ -99,6 +99,11 @@ lint: ## Check code style
 
 check: lint test ## Run all checks (lint + test)
 	@echo "$(GREEN)✓$(NC) All checks passed!"
+
+coverage: ## Run tests with coverage report (HTML at target/scala-$(SCALA_VERSION)/scoverage-report/index.html)
+	@echo "$(BLUE)Running tests with coverage...$(NC)"
+	sbt coverage test coverageReport
+	@echo "$(GREEN)✓$(NC) Coverage report: target/scala-$(SCALA_VERSION)/scoverage-report/index.html"
 
 pre-commit: ## Run pre-commit checks (same as git hook: format, compile, test)
 	@echo "$(BLUE)=== Pre-commit Quality Checks ===$(NC)"

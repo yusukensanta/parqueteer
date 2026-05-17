@@ -198,8 +198,8 @@ parqueteer/
 
 ### Adding a New Command
 
-1. Create command class in `src/main/scala/parqueteer/commands/`
-2. Add tests in `src/test/scala/parqueteer/commands/`
+1. Create command class in `src/main/scala/io/github/yusukensanta/parqueteer/cli/`
+2. Add tests in `src/test/scala/io/github/yusukensanta/parqueteer/cli/`
 3. Register in `Main.scala`
 4. Update documentation
 

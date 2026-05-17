@@ -2,7 +2,7 @@
 
 **A modern CLI toolkit for Apache Parquet files with cloud storage support**
 
-[![Scala Version](https://img.shields.io/badge/scala-3.7.3-red)]()
+[![Scala Version](https://img.shields.io/badge/scala-3.7.4-red)]()
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen)]()
 
 ---
@@ -245,7 +245,7 @@ sbt assembly
 **Common commands:**
 - `make compile` - Compile the project
 - `make test` - Run tests
-- `make assembly` - Create fat JAR (target/scala-3.7.3/parqueteer.jar)
+- `make assembly` - Create fat JAR (target/scala-3.7.4/parqueteer.jar)
 - `make package` - Create distribution with launch scripts
 - `make clean` - Remove build artifacts
 
