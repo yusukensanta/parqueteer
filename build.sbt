@@ -50,6 +50,9 @@ ThisBuild / scalacOptions ++= Seq(
   "-Wunused:all"
 )
 
+coverageMinimumStmtTotal := 80
+coverageFailOnMinimum := false
+
 lazy val root = (project in file("."))
   .enablePlugins(JavaAppPackaging, BuildInfoPlugin)
   .settings(
