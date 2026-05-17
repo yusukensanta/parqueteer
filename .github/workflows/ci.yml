@@ -5,6 +5,10 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+    paths:
+      - '**/*.scala'
+      - '**/*.sbt'
+      - 'project/**'
 
 permissions:
   contents: read
