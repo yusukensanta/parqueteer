@@ -48,12 +48,12 @@ object ArgumentParser {
         .action((x, c) =>
           c.copy(globalOptions = c.globalOptions.copy(profile = Some(x)))
         )
-        .text("Cloud credentials profile to use"),
+        .text("AWS S3 credentials profile (from ~/.aws/credentials)"),
       opt[String]("region")
         .action((x, c) =>
           c.copy(globalOptions = c.globalOptions.copy(region = Some(x)))
         )
-        .text("Cloud region to use"),
+        .text("AWS S3 region (e.g. us-east-1, ap-northeast-1)"),
       opt[String]("color")
         .action((x, c) =>
           c.copy(globalOptions =
