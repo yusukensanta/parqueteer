@@ -26,8 +26,8 @@ object HelpFormatter {
        |  -V, --version      Show version information
        |  -v, --verbose      Enable verbose output
        |      --config       Path to configuration file
-       |      --profile      Cloud credentials profile to use
-       |      --region       Cloud region to use
+       |      --profile      AWS S3 credentials profile (from ~/.aws/credentials)
+       |      --region       AWS S3 region (e.g. us-east-1, ap-northeast-1)
        |      --color        Color mode: auto, always, never (default: auto)
        |
        |For detailed command usage, run:
