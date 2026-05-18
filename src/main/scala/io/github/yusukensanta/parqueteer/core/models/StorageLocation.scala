@@ -13,7 +13,7 @@ case class S3Location(
     key: String,
     region: Option[String] = None
 ) extends StorageLocation {
-  override def path: String = s"s3://$bucket/$key"
+  override def path: String = s"s3a://$bucket/$key"
 }
 
 case class GCSLocation(

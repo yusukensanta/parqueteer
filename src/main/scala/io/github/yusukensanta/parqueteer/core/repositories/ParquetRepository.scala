@@ -288,7 +288,7 @@ class ParquetRepository {
     setupHadoopConfiguration(file.location).flatMap { hadoopConfig =>
       Try {
         val path = new HadoopPath(file.location.path)
-        val fs = FileSystem.get(hadoopConfig)
+        val fs = FileSystem.get(path.toUri, hadoopConfig)
         val fileStatus = fs.getFileStatus(path)
 
         // Use ParquetFileReader.open with InputFile
@@ -552,7 +552,7 @@ class ParquetRepository {
     setupHadoopConfiguration(file.location).flatMap { hadoopConfig =>
       Try {
         val path = new HadoopPath(file.location.path)
-        val fs = FileSystem.get(hadoopConfig)
+        val fs = FileSystem.get(path.toUri, hadoopConfig)
         val issues = scala.collection.mutable.ListBuffer[String]()
 
         if (!fs.exists(path)) {
