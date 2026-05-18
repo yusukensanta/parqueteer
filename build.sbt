@@ -53,6 +53,10 @@ ThisBuild / scalacOptions ++= Seq(
 coverageMinimumStmtTotal := 80
 coverageFailOnMinimum := false
 
+// AWS SDK v2 service registry references transfer manager classes across module
+// boundaries; the default layered class loader hides them from the test loader.
+Test / classLoaderLayeringStrategy := ClassLoaderLayeringStrategy.Flat
+
 lazy val root = (project in file("."))
   .enablePlugins(JavaAppPackaging, BuildInfoPlugin)
   .settings(
