@@ -159,8 +159,10 @@ lazy val root = (project in file("."))
 
         // Add only the AWS SDK v2 modules we need (instead of 641 MB bundle)
         "software.amazon.awssdk" % "s3" % awsSdkVersion,
-        "software.amazon.awssdk" % "sts" % awsSdkVersion, // For credential management
-        "software.amazon.awssdk" % "apache-client" % awsSdkVersion, // HTTP client
+        "software.amazon.awssdk" % "sts" % awsSdkVersion,
+        "software.amazon.awssdk" % "sso" % awsSdkVersion,
+        "software.amazon.awssdk" % "ssooidc" % awsSdkVersion,
+        "software.amazon.awssdk" % "apache-client" % awsSdkVersion,
 
         // ================================================================
         // Cloud Storage - Google Cloud (Optimized)

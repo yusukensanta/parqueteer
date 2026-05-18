@@ -258,9 +258,41 @@ sbt assembly
 ### Cloud Credentials
 
 **AWS S3**:
+
+Static credentials:
 ```bash
 export AWS_ACCESS_KEY_ID=your_key
 export AWS_SECRET_ACCESS_KEY=your_secret
+```
+
+AWS SSO (Identity Center):
+```bash
+# Configure a profile once
+aws configure sso --profile my-profile
+
+# Authenticate before use
+aws sso login --profile my-profile
+
+# Use the profile
+parqueteer read s3://bucket/data.parquet --profile my-profile
+# or set as default
+export AWS_PROFILE=my-profile
+parqueteer read s3://bucket/data.parquet
+```
+
+saml2aws (SAML-based SSO):
+```bash
+# saml2aws writes standard credentials to ~/.aws/credentials
+saml2aws login
+
+# Use the generated profile (default: saml)
+export AWS_PROFILE=saml
+parqueteer read s3://bucket/data.parquet
+```
+
+Named profile (any auth method):
+```bash
+parqueteer read s3://bucket/data.parquet --profile my-profile
 ```
 
 **Google Cloud**:
