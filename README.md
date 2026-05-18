@@ -209,11 +209,11 @@ brew install parqueteer
 
 ### Option 2: Distribution Package
 
+Download the latest `.zip` from the [releases page](https://github.com/yusukensanta/parqueteer/releases/latest), then:
+
 ```bash
-# Download and extract
-wget https://github.com/yusukensanta/parqueteer/releases/download/v0.5.5/parqueteer-0.5.5.zip
-unzip parqueteer-0.5.5.zip
-cd parqueteer-0.5.5/
+unzip parqueteer-VERSION.zip
+cd parqueteer-VERSION/
 
 # Run
 bin/parqueteer --help
@@ -222,7 +222,7 @@ bin/parqueteer --help
 ### Option 3: Standalone JAR (Universal)
 
 ```bash
-wget https://github.com/yusukensanta/parqueteer/releases/download/v0.5.5/parqueteer.jar
+wget https://github.com/yusukensanta/parqueteer/releases/latest/download/parqueteer.jar
 java -jar parqueteer.jar --help
 ```
 

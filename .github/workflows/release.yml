@@ -168,23 +168,3 @@ jobs:
           git add Formula/parqueteer.rb
           git commit -m "chore: update parqueteer to v${RELEASE_VERSION}"
           git push
-
-      - name: Update README download links
-        env:
-          RELEASE_PAT: ${{ secrets.RELEASE_PAT }}
-        run: |
-          VERSION="${{ steps.version.outputs.VERSION }}"
-
-          sed -i "s|releases/download/v[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*/|releases/download/v${VERSION}/|g" README.md
-          sed -i "s|parqueteer-[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*|parqueteer-${VERSION}|g" README.md
-
-          if git diff --quiet README.md; then
-            echo "README already up to date"
-            exit 0
-          fi
-
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add README.md
-          git commit -m "docs: update README download links to v${VERSION}"
-          git push "https://x-access-token:${RELEASE_PAT}@github.com/yusukensanta/parqueteer.git" HEAD:main
