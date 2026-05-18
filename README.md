@@ -2,8 +2,10 @@
 
 **A modern CLI toolkit for Apache Parquet files with cloud storage support**
 
-[![Scala Version](https://img.shields.io/badge/scala-3.7.4-red)]()
-[![Build Status](https://img.shields.io/badge/build-passing-brightgreen)]()
+[![CI](https://github.com/yusukensanta/parqueteer/actions/workflows/ci.yml/badge.svg)](https://github.com/yusukensanta/parqueteer/actions/workflows/ci.yml)
+[![Latest Release](https://img.shields.io/github/v/release/yusukensanta/parqueteer)](https://github.com/yusukensanta/parqueteer/releases/latest)
+[![Maven Central](https://img.shields.io/maven-central/v/io.github.yusukensanta/parqueteer_3)](https://central.sonatype.com/artifact/io.github.yusukensanta/parqueteer_3)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
 ---
 
