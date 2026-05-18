@@ -95,12 +95,8 @@ jobs:
           RUSTFS_VOLUMES: /data
           RUSTFS_ADDRESS: ":9000"
           RUSTFS_CONSOLE_ENABLE: "false"
-        options: >-
-          --health-cmd "curl -f http://localhost:9000/ || exit 1"
-          --health-interval 5s
-          --health-timeout 3s
-          --health-retries 12
-          --health-start-period 10s
+        # No in-container health check: RustFS image is distroless (no curl/wget).
+        # We wait from the runner instead (see "Wait for RustFS" step below).
 
     steps:
       - name: Checkout code
@@ -131,6 +127,22 @@ jobs:
           key: ${{ runner.os }}-java21-sbt-s3-${{ hashFiles('**/build.sbt', 'project/**') }}
           restore-keys: |
             ${{ runner.os }}-java21-sbt-
+
+      - name: Wait for RustFS to be ready
+        run: |
+          echo "Waiting for RustFS S3 API on port 9000..."
+          for i in $(seq 1 30); do
+            STATUS=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:9000/ 2>/dev/null || echo "000")
+            # RustFS returns 403 for unsigned requests — that means it is up
+            if [ "$STATUS" = "200" ] || [ "$STATUS" = "403" ]; then
+              echo "RustFS ready (HTTP $STATUS)"
+              exit 0
+            fi
+            echo "Attempt $i/30: HTTP $STATUS — waiting 3s..."
+            sleep 3
+          done
+          echo "ERROR: RustFS did not become ready after 90s"
+          exit 1
 
       - name: Run S3 integration tests
         env:
