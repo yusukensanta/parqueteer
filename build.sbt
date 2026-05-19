@@ -201,6 +201,9 @@ lazy val root = (project in file("."))
         "org.apache.hadoop" % "hadoop-client-api" % hadoopVersion,
         "org.apache.hadoop" % "hadoop-client-runtime" % hadoopVersion,
 
+        // commons-lang3 required by hadoop-aws 3.5.0 S3AUtils at S3AFileSystem.initialize()
+        "org.apache.commons" % "commons-lang3" % "3.14.0",
+
         // Testing
         "org.scalatest" %% "scalatest" % scalatestVersion % Test,
         "org.scalamock" %% "scalamock" % scalamockVersion % Test,
