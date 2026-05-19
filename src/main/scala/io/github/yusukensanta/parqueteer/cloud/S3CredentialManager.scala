@@ -56,8 +56,8 @@ class S3CredentialManager extends CloudCredentialManager {
               conf.set("fs.s3a.buffer.dir", "/tmp")
               conf.set("fs.s3a.fast.upload", "true")
               conf.set("fs.s3a.fast.upload.buffer", "disk")
-              conf.set("fs.s3a.multipart.size", "100MB")
-              conf.set("fs.s3a.multipart.threshold", "100MB")
+              conf.set("fs.s3a.multipart.size", "100m")
+              conf.set("fs.s3a.multipart.threshold", "100m")
 
               // Support custom S3-compatible endpoints (RustFS, LocalStack, etc.)
               // AWS_ENDPOINT_URL is the standard override used by AWS CLI v2 and SDKs
