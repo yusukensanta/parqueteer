@@ -49,31 +49,22 @@ class ParquetRepository {
           FileContent(rows = rows, totalRows = totalRows, isPartial = isPartial)
         } else {
           val path4s = Parquet4sPath(file.location.path)
-          val filter = createFilter(config.filter)
-          val reader = config.columns match {
-            case Some(cols) if cols.nonEmpty =>
-              val projectedSchema =
-                buildProjectedSchema(hadoopPath, hadoopConfig, cols)
-              ParquetReader
-                .projectedGeneric(projectedSchema)
-                .options(ParquetReader.Options(hadoopConf = hadoopConfig))
-                .filter(filter)
-                .read(path4s)
-            case _ =>
-              ParquetReader
-                .as[RowParquetRecord]
-                .options(ParquetReader.Options(hadoopConf = hadoopConfig))
-                .filter(filter)
-                .read(path4s)
+          Using.resource(
+            openParquetReader(path4s, hadoopPath, hadoopConfig, config)
+          ) { reader =>
+            val rows = config.maxRows match {
+              case Some(limit) =>
+                reader.take(limit.toInt).map(convertRecordToMap).toList
+              case None => reader.map(convertRecordToMap).toList
+            }
+            val isPartial =
+              config.maxRows.exists(limit => rows.size.toLong >= limit)
+            FileContent(
+              rows = rows,
+              totalRows = totalRows,
+              isPartial = isPartial
+            )
           }
-          val rows = config.maxRows match {
-            case Some(limit) =>
-              reader.take(limit.toInt).map(convertRecordToMap).toList
-            case None => reader.map(convertRecordToMap).toList
-          }
-          val isPartial =
-            config.maxRows.exists(limit => rows.size.toLong >= limit)
-          FileContent(rows = rows, totalRows = totalRows, isPartial = isPartial)
         }
       }
     }
@@ -86,27 +77,10 @@ class ParquetRepository {
     setupHadoopConfiguration(file.location).flatMap { hadoopConfig =>
       Try {
         val path4s = Parquet4sPath(file.location.path)
-        val filter = createFilter(config.filter)
-
-        val iterable = config.columns match {
-          case Some(cols) if cols.nonEmpty =>
-            val hadoopPath = new HadoopPath(file.location.path)
-            val projectedSchema =
-              buildProjectedSchema(hadoopPath, hadoopConfig, cols)
-            ParquetReader
-              .projectedGeneric(projectedSchema)
-              .options(ParquetReader.Options(hadoopConf = hadoopConfig))
-              .filter(filter)
-              .read(path4s)
-          case _ =>
-            ParquetReader
-              .as[RowParquetRecord]
-              .options(ParquetReader.Options(hadoopConf = hadoopConfig))
-              .filter(filter)
-              .read(path4s)
-        }
-
-        Using.resource(iterable) { source =>
+        val hadoopPath = new HadoopPath(file.location.path)
+        Using.resource(
+          openParquetReader(path4s, hadoopPath, hadoopConfig, config)
+        ) { source =>
           val iter = config.maxRows match {
             case Some(limit) => source.iterator.take(limit.toInt)
             case None        => source.iterator
@@ -137,17 +111,8 @@ class ParquetRepository {
       }
 
     val requestedSchema = config.columns match {
-      case Some(cols) if cols.nonEmpty =>
-        val columnSet = cols.toSet
-        val filteredFields = fileSchema.getFields.asScala
-          .filter(f => columnSet.contains(f.getName))
-          .toList
-        if (filteredFields.isEmpty)
-          throw new IllegalArgumentException(
-            s"None of the requested columns exist in the file: ${cols.mkString(", ")}"
-          )
-        new MessageType("root", filteredFields.asJava)
-      case _ => fileSchema
+      case Some(cols) if cols.nonEmpty => projectSchema(fileSchema, cols)
+      case _                           => fileSchema
     }
 
     val threadCount = math.min(config.parallelism, math.max(1, blocks.size))
@@ -227,23 +192,53 @@ class ParquetRepository {
     }.toMap
   }
 
+  private def projectSchema(
+      fileSchema: MessageType,
+      columns: List[String]
+  ): MessageType = {
+    val columnSet = columns.toSet
+    val fields = fileSchema.getFields.asScala
+      .filter(f => columnSet.contains(f.getName))
+      .toList
+    if (fields.isEmpty)
+      throw new IllegalArgumentException(
+        s"None of the requested columns exist in the file: ${columns.mkString(", ")}"
+      )
+    new MessageType("root", fields.asJava)
+  }
+
   private def buildProjectedSchema(
       path: HadoopPath,
       conf: Configuration,
       columns: List[String]
   ): MessageType = {
     val inputFile = HadoopInputFile.fromPath(path, conf)
-    val columnSet = columns.toSet
     Using.resource(ParquetFileReader.open(inputFile)) { reader =>
-      val fullSchema = reader.getFooter.getFileMetaData.getSchema
-      val projectedFields = fullSchema.getFields.asScala
-        .filter(f => columnSet.contains(f.getName))
-        .toList
-      if (projectedFields.isEmpty)
-        throw new IllegalArgumentException(
-          s"None of the requested columns exist in the file: ${columns.mkString(", ")}"
-        )
-      new MessageType("root", projectedFields.asJava)
+      projectSchema(reader.getFooter.getFileMetaData.getSchema, columns)
+    }
+  }
+
+  private def openParquetReader(
+      path4s: Parquet4sPath,
+      hadoopPath: HadoopPath,
+      hadoopConfig: Configuration,
+      config: ReadConfig
+  ): com.github.mjakubowski84.parquet4s.ParquetIterable[RowParquetRecord] = {
+    val filter = createFilter(config.filter)
+    config.columns match {
+      case Some(cols) if cols.nonEmpty =>
+        val schema = buildProjectedSchema(hadoopPath, hadoopConfig, cols)
+        ParquetReader
+          .projectedGeneric(schema)
+          .options(ParquetReader.Options(hadoopConf = hadoopConfig))
+          .filter(filter)
+          .read(path4s)
+      case _ =>
+        ParquetReader
+          .as[RowParquetRecord]
+          .options(ParquetReader.Options(hadoopConf = hadoopConfig))
+          .filter(filter)
+          .read(path4s)
     }
   }
 
