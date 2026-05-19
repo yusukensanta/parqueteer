@@ -148,23 +148,5 @@ jobs:
             target/universal/checksums.txt
           retention-days: 30
 
-      - name: Update Homebrew Tap
-        env:
-          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-          RELEASE_VERSION: ${{ steps.version.outputs.VERSION }}
-        run: |
-          TGZ_FILE="parqueteer-${RELEASE_VERSION}.tgz"
-          SHA256=$(grep "$TGZ_FILE" target/universal/checksums.txt | awk '{print $1}')
-
-          git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/yusukensanta/homebrew-parqueteer.git" /tmp/homebrew-tap
-          cd /tmp/homebrew-tap
-
-          sed -i "s/version \".*\"/version \"${RELEASE_VERSION}\"/" Formula/parqueteer.rb
-          sed -i "s|url \".*\"|url \"https://github.com/yusukensanta/parqueteer/releases/download/v${RELEASE_VERSION}/parqueteer-${RELEASE_VERSION}.tgz\"|" Formula/parqueteer.rb
-          sed -i "s/sha256 \".*\"/sha256 \"${SHA256}\"/" Formula/parqueteer.rb
-
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add Formula/parqueteer.rb
-          git commit -m "chore: update parqueteer to v${RELEASE_VERSION}"
-          git push
+      # Homebrew tap update runs in maven-central.yml after artifact is published
+      # so that `cs launch` in the formula can resolve the artifact immediately.
