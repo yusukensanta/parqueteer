@@ -79,3 +79,75 @@ jobs:
 
       - name: Check formatting
         run: sbt scalafmtCheckAll
+
+  s3-integration:
+    name: S3 Integration Tests (RustFS)
+    runs-on: ubuntu-latest
+
+    services:
+      rustfs:
+        image: rustfs/rustfs:latest
+        ports:
+          - 9000:9000
+        env:
+          RUSTFS_ACCESS_KEY: testkey
+          RUSTFS_SECRET_KEY: testsecret
+          RUSTFS_VOLUMES: /data
+          RUSTFS_ADDRESS: ":9000"
+          RUSTFS_CONSOLE_ENABLE: "false"
+        # No in-container health check: RustFS image is distroless (no curl/wget).
+        # We wait from the runner instead (see "Wait for RustFS" step below).
+
+    steps:
+      - name: Checkout code
+        # actions/checkout@v6.0.2
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+
+      - name: Setup Java 21
+        # actions/setup-java@v5.2.0
+        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+          cache: 'sbt'
+
+      - name: Setup sbt via Coursier
+        run: |
+          curl -fL https://github.com/coursier/coursier/releases/latest/download/cs-x86_64-pc-linux.gz | gzip -d > cs
+          chmod +x cs
+          ./cs setup --yes --jvm 21
+          echo "$HOME/.local/share/coursier/bin" >> $GITHUB_PATH
+
+      - name: Cache sbt dependencies
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae
+        with:
+          path: |
+            ~/.sbt
+            ~/.cache/coursier
+          key: ${{ runner.os }}-java21-sbt-s3-${{ hashFiles('**/build.sbt', 'project/**') }}
+          restore-keys: |
+            ${{ runner.os }}-java21-sbt-
+
+      - name: Wait for RustFS to be ready
+        run: |
+          echo "Waiting for RustFS S3 API on port 9000..."
+          for i in $(seq 1 30); do
+            STATUS=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:9000/ 2>/dev/null || echo "000")
+            # RustFS returns 403 for unsigned requests — that means it is up
+            if [ "$STATUS" = "200" ] || [ "$STATUS" = "403" ]; then
+              echo "RustFS ready (HTTP $STATUS)"
+              exit 0
+            fi
+            echo "Attempt $i/30: HTTP $STATUS — waiting 3s..."
+            sleep 3
+          done
+          echo "ERROR: RustFS did not become ready after 90s"
+          exit 1
+
+      - name: Run S3 integration tests
+        env:
+          AWS_ENDPOINT_URL: http://localhost:9000
+          AWS_ACCESS_KEY_ID: testkey
+          AWS_SECRET_ACCESS_KEY: testsecret
+          AWS_REGION: us-east-1
+        run: sbt "testOnly io.github.yusukensanta.parqueteer.cloud.S3IntegrationTest io.github.yusukensanta.parqueteer.cloud.CloudCredentialManagerTest"

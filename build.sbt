@@ -53,6 +53,11 @@ ThisBuild / scalacOptions ++= Seq(
 coverageMinimumStmtTotal := 80
 coverageFailOnMinimum := false
 
+// Fork test JVM so AWS SDK service registry has a flat classpath.
+// Without forking, sbt's layered classloader hides transitive deps that
+// S3Client initialization scans via SPI, causing NoClassDefFoundError.
+Test / fork := true
+
 lazy val root = (project in file("."))
   .enablePlugins(JavaAppPackaging, BuildInfoPlugin)
   .settings(
@@ -162,6 +167,7 @@ lazy val root = (project in file("."))
         "software.amazon.awssdk" % "sts" % awsSdkVersion,
         "software.amazon.awssdk" % "sso" % awsSdkVersion,
         "software.amazon.awssdk" % "ssooidc" % awsSdkVersion,
+        "software.amazon.awssdk" % "s3-transfer-manager" % awsSdkVersion,
         "software.amazon.awssdk" % "apache-client" % awsSdkVersion,
 
         // ================================================================
@@ -194,6 +200,9 @@ lazy val root = (project in file("."))
 
         "org.apache.hadoop" % "hadoop-client-api" % hadoopVersion,
         "org.apache.hadoop" % "hadoop-client-runtime" % hadoopVersion,
+
+        // commons-lang3 required by hadoop-aws 3.5.0 S3AUtils at S3AFileSystem.initialize()
+        "org.apache.commons" % "commons-lang3" % "3.14.0",
 
         // Testing
         "org.scalatest" %% "scalatest" % scalatestVersion % Test,
