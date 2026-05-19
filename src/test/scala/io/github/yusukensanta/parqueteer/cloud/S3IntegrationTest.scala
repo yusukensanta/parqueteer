@@ -102,29 +102,34 @@ class S3IntegrationTest
 
   // ── Write + Read roundtrip ───────────────────────────────────────────────
 
+  private def assertSuccess[A](result: scala.util.Try[A], label: String): A =
+    result.fold(
+      e => fail(s"$label failed: ${e.getClass.getName}: ${e.getMessage}", e),
+      identity
+    )
+
   "ParquetRepository" should "write a parquet file to S3 and read it back" taggedAs S3IntegrationTest in {
     assumeS3Available()
 
     val loc = S3Location(testBucket, "roundtrip/test.parquet")
-    val write = repo.writeContent(loc, sampleData, None)
-    write.isSuccess shouldBe true
+    assertSuccess(repo.writeContent(loc, sampleData, None), "write")
 
-    val result = repo.readContent(ParquetFile(loc), ReadConfig())
-    result.isSuccess shouldBe true
-    result.get.rows should have length 3
-    result.get.totalRows shouldBe 3L
+    val content =
+      assertSuccess(repo.readContent(ParquetFile(loc), ReadConfig()), "read")
+    content.rows should have length 3
+    content.totalRows shouldBe 3L
   }
 
   it should "read correct column values from S3" taggedAs S3IntegrationTest in {
     assumeS3Available()
 
     val loc = S3Location(testBucket, "roundtrip/cols.parquet")
-    repo.writeContent(loc, sampleData, None).isSuccess shouldBe true
+    assertSuccess(repo.writeContent(loc, sampleData, None), "write")
 
-    val result = repo.readContent(ParquetFile(loc), ReadConfig())
-    result.isSuccess shouldBe true
-    result.get.rows.head.keys should contain allOf ("id", "name", "score")
-    val names = result.get.rows.flatMap(_.get("name"))
+    val content =
+      assertSuccess(repo.readContent(ParquetFile(loc), ReadConfig()), "read")
+    content.rows.head.keys should contain allOf ("id", "name", "score")
+    val names = content.rows.flatMap(_.get("name"))
     names should contain("Alice")
   }
 
@@ -134,13 +139,13 @@ class S3IntegrationTest
     assumeS3Available()
 
     val loc = S3Location(testBucket, "roundtrip/proj.parquet")
-    repo.writeContent(loc, sampleData, None).isSuccess shouldBe true
+    assertSuccess(repo.writeContent(loc, sampleData, None), "write")
 
     val config = ReadConfig(columns = Some(List("id", "name")))
-    val result = repo.readContent(ParquetFile(loc), config)
-    result.isSuccess shouldBe true
-    result.get.rows.head.keys should contain allOf ("id", "name")
-    result.get.rows.head.keys should not contain "score"
+    val content =
+      assertSuccess(repo.readContent(ParquetFile(loc), config), "read")
+    content.rows.head.keys should contain allOf ("id", "name")
+    content.rows.head.keys should not contain "score"
   }
 
   // ── Schema read ─────────────────────────────────────────────────────────
@@ -149,12 +154,11 @@ class S3IntegrationTest
     assumeS3Available()
 
     val loc = S3Location(testBucket, "roundtrip/schema.parquet")
-    repo.writeContent(loc, sampleData, None).isSuccess shouldBe true
+    assertSuccess(repo.writeContent(loc, sampleData, None), "write")
 
-    val result = repo.readSchema(ParquetFile(loc))
-    result.isSuccess shouldBe true
-    result.get.columns.map(_.name) should contain allOf ("id", "name", "score")
-    result.get.totalRowCount shouldBe 3L
+    val schema = assertSuccess(repo.readSchema(ParquetFile(loc)), "readSchema")
+    schema.columns.map(_.name) should contain allOf ("id", "name", "score")
+    schema.totalRowCount shouldBe 3L
   }
 
   // ── Metadata / info ─────────────────────────────────────────────────────
@@ -163,11 +167,11 @@ class S3IntegrationTest
     assumeS3Available()
 
     val loc = S3Location(testBucket, "roundtrip/meta.parquet")
-    repo.writeContent(loc, sampleData, None).isSuccess shouldBe true
+    assertSuccess(repo.writeContent(loc, sampleData, None), "write")
 
-    val result = repo.readMetadata(ParquetFile(loc))
-    result.isSuccess shouldBe true
-    result.get.fileSize should be > 0L
+    val meta =
+      assertSuccess(repo.readMetadata(ParquetFile(loc)), "readMetadata")
+    meta.fileSize should be > 0L
   }
 
   // ── Validate ────────────────────────────────────────────────────────────
@@ -176,11 +180,11 @@ class S3IntegrationTest
     assumeS3Available()
 
     val loc = S3Location(testBucket, "roundtrip/validate.parquet")
-    repo.writeContent(loc, sampleData, None).isSuccess shouldBe true
+    assertSuccess(repo.writeContent(loc, sampleData, None), "write")
 
-    val result = repo.validateFile(ParquetFile(loc))
-    result.isSuccess shouldBe true
-    result.get shouldBe empty
+    val issues =
+      assertSuccess(repo.validateFile(ParquetFile(loc)), "validateFile")
+    issues shouldBe empty
   }
 
   // ── Row limit ───────────────────────────────────────────────────────────
@@ -189,12 +193,13 @@ class S3IntegrationTest
     assumeS3Available()
 
     val loc = S3Location(testBucket, "roundtrip/limit.parquet")
-    repo.writeContent(loc, sampleData, None).isSuccess shouldBe true
+    assertSuccess(repo.writeContent(loc, sampleData, None), "write")
 
-    val result =
-      repo.readContent(ParquetFile(loc), ReadConfig(maxRows = Some(2L)))
-    result.isSuccess shouldBe true
-    result.get.rows should have length 2
-    result.get.isPartial shouldBe true
+    val content = assertSuccess(
+      repo.readContent(ParquetFile(loc), ReadConfig(maxRows = Some(2L))),
+      "read"
+    )
+    content.rows should have length 2
+    content.isPartial shouldBe true
   }
 }
