@@ -95,17 +95,20 @@ class FilterParser extends JavaTokenParsers {
 
   private def operator: Parser[String] = "=" | ">=" | ">" | "<=" | "<" | "!="
 
+  private val decimalFloatRx = """(-?\d+\.\d*|-?\d*\.\d+)([eE][+-]?\d+)?""".r
+
+  private def decimalFloat: Parser[Double] = decimalFloatRx ^^ { _.toDouble }
+
   private def value: Parser[Any] = {
     stringLiteral ^^ { s => s.substring(1, s.length - 1) } |
-      floatingPointNumber ^^ { _.toDouble } |
-      wholeNumber ^^ { _.toLong } |
       "true" ^^^ true |
-      "false" ^^^ false
+      "false" ^^^ false |
+      decimalFloat |
+      wholeNumber ^^ { _.toLong }
   }
 
   private def numericValue: Parser[AnyVal] = {
-    floatingPointNumber ^^ { _.toDouble } |
-      wholeNumber ^^ { _.toLong }
+    decimalFloat | wholeNumber ^^ { _.toLong }
   }
 
   // ==================== Filter Construction ====================

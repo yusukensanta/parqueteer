@@ -168,11 +168,8 @@ class PrettyFormatter extends OutputFormatter {
       columns: List[String],
       widths: List[Int]
   ): String = {
-    val coloredColumns = columns.map(col => colorize(col, Bold + Cyan))
-    val paddedValues = coloredColumns.zip(widths).map { case (value, width) =>
-      val displayLength = columns(coloredColumns.indexOf(value)).length
-      val padding = " " * (width - displayLength)
-      value + padding
+    val paddedValues = columns.zip(widths).map { case (col, width) =>
+      colorize(col, Bold + Cyan) + " " * (width - col.length)
     }
     colorize("│", Dim) + paddedValues.mkString(colorize("│", Dim)) + colorize(
       "│",

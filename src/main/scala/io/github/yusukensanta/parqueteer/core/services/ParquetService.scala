@@ -197,37 +197,32 @@ class ParquetService(
           err => Failure(new IllegalArgumentException(err)),
           Success.apply
         )
-      mergedRows <- Try {
-        inputLocations.zipWithIndex.flatMap { case (loc, i) =>
-          onProgress(i + 1, inputLocations.size, inputPaths(i))
-          val content =
-            repository
-              .readContent(ParquetFile(loc), ReadConfig())
-              .fold(
-                err => throw new RuntimeException(err.getMessage),
-                identity
-              )
-          content.rows.map { row =>
-            val missing = allColumnNames -- row.keySet
-            if (missing.isEmpty) row
-            else row ++ missing.map(_ -> null)
-          }
-        }
-      }
       explicitSchema = ParquetSchema(
         columns = mergedFields.map { case (name, dataType, optional) =>
           ColumnInfo(name, dataType, optional, 1, 0, "SNAPPY")
         },
         rowGroupCount = 1L,
-        totalRowCount = mergedRows.size.toLong
+        totalRowCount = 0L
       )
-      _ <- repository.writeContent(
+      count <- repository.writeContentStream(
         outputLocation,
-        mergedRows,
-        Some(explicitSchema),
+        explicitSchema,
         writeConfig
-      )
-    } yield mergedRows.size.toLong
+      ) { write =>
+        inputLocations.zipWithIndex.foreach { case (loc, i) =>
+          onProgress(i + 1, inputLocations.size, inputPaths(i))
+          repository
+            .streamContent(ParquetFile(loc), ReadConfig()) { row =>
+              val missing = allColumnNames -- row.keySet
+              val finalRow =
+                if (missing.isEmpty) row
+                else row ++ missing.map(_ -> null)
+              write(finalRow)
+            }
+            .fold(err => throw new RuntimeException(err.getMessage), _ => ())
+        }
+      }
+    } yield count
   }
 
   def getStats(path: String): Try[FileStats] = {
@@ -489,40 +484,58 @@ class ParquetService(
   private[services] def parseCsvContent(
       content: String
   ): List[Map[String, Any]] = {
-    val normalised = content.replace("\r\n", "\n").replace("\r", "\n")
-    val lines = normalised.split("\n").filter(_.nonEmpty).toList
-    if (lines.isEmpty) List.empty[Map[String, Any]]
-    else {
-      val headers = parseCsvLine(lines.head)
-      lines.tail.zipWithIndex.map { case (line, idx) =>
-        val values = parseCsvLine(line)
-        if (values.length != headers.length)
-          throw new IllegalArgumentException(
-            s"Row ${idx + 2} has ${values.length} fields, expected ${headers.length}"
-          )
-        headers.zip(values).toMap.asInstanceOf[Map[String, Any]]
-      }
+    val records = parseRfc4180(content)
+    if (records.isEmpty) return List.empty
+    val headers = records.head
+    records.tail.zipWithIndex.map { case (values, idx) =>
+      if (values.length != headers.length)
+        throw new IllegalArgumentException(
+          s"Row ${idx + 2} has ${values.length} fields, expected ${headers.length}"
+        )
+      headers.zip(values).toMap.asInstanceOf[Map[String, Any]]
     }
   }
 
-  private def parseCsvLine(line: String): Array[String] = {
+  private def parseRfc4180(content: String): List[Array[String]] = {
+    val records = scala.collection.mutable.ListBuffer.empty[Array[String]]
     val fields = scala.collection.mutable.ArrayBuffer.empty[String]
     val current = new StringBuilder
     var inQuote = false
     var i = 0
-    while (i < line.length) {
-      line(i) match {
-        case '"' if !inQuote => inQuote = true
-        case '"' if inQuote && i + 1 < line.length && line(i + 1) == '"' =>
+    val n = content.length
+
+    while (i < n) {
+      content(i) match {
+        case '"' if !inQuote =>
+          inQuote = true
+        case '"' if inQuote && i + 1 < n && content(i + 1) == '"' =>
           current.append('"'); i += 1
-        case '"' if inQuote  => inQuote = false
-        case ',' if !inQuote => fields += current.toString.trim; current.clear()
-        case c               => current.append(c)
+        case '"' if inQuote =>
+          inQuote = false
+        case ',' if !inQuote =>
+          fields += current.toString
+          current.clear()
+        case '\r' if !inQuote =>
+          fields += current.toString
+          current.clear()
+          if (fields.exists(_.nonEmpty)) records += fields.toArray
+          fields.clear()
+          if (i + 1 < n && content(i + 1) == '\n') i += 1
+        case '\n' if !inQuote =>
+          fields += current.toString
+          current.clear()
+          if (fields.exists(_.nonEmpty)) records += fields.toArray
+          fields.clear()
+        case c =>
+          current.append(c)
       }
       i += 1
     }
-    fields += current.toString.trim
-    fields.toArray
+    if (current.nonEmpty || fields.nonEmpty) {
+      fields += current.toString
+      if (fields.exists(_.nonEmpty)) records += fields.toArray
+    }
+    records.toList
   }
 
   def formatContent(file: ParquetFile, format: OutputFormat): String = {

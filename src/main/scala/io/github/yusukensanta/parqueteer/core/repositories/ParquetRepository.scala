@@ -66,11 +66,11 @@ class ParquetRepository {
                 .filter(filter)
                 .read(path4s)
           }
-          val records = config.maxRows match {
-            case Some(limit) => reader.take(limit.toInt).toList
-            case None        => reader.toList
+          val rows = config.maxRows match {
+            case Some(limit) =>
+              reader.take(limit.toInt).map(convertRecordToMap).toList
+            case None => reader.map(convertRecordToMap).toList
           }
-          val rows = records.map(convertRecordToMap)
           val isPartial =
             config.maxRows.exists(limit => rows.size.toLong >= limit)
           FileContent(rows = rows, totalRows = totalRows, isPartial = isPartial)
@@ -156,12 +156,20 @@ class ParquetRepository {
       ExecutionContext.fromExecutorService(executor)
 
     try {
-      val futures = blocks.indices.toList.map { rgIndex =>
+      val futures = blocks.toList.map { block =>
         Future {
+          val rangeStart = block.getStartingPos
+          val rangeLength = block.getColumns.asScala.map(_.getTotalSize).sum
+          val readOptions = org.apache.parquet.ParquetReadOptions
+            .builder()
+            .withRange(rangeStart, rangeLength)
+            .build()
           Using.resource(
-            ParquetFileReader.open(HadoopInputFile.fromPath(path, conf))
+            ParquetFileReader.open(
+              HadoopInputFile.fromPath(path, conf),
+              readOptions
+            )
           ) { reader =>
-            (0 until rgIndex).foreach(_ => reader.skipNextRowGroup())
             val pageStore = reader.readNextRowGroup()
             if (pageStore == null) List.empty[Map[String, Any]]
             else decodePageStore(pageStore, fileSchema, requestedSchema)
@@ -361,6 +369,46 @@ class ParquetRepository {
         } finally {
           writer.close()
         }
+      }
+    }
+  }
+
+  def writeContentStream(
+      location: StorageLocation,
+      schema: ParquetSchema,
+      config: WriteConfig = WriteConfig()
+  )(feed: (Map[String, Any] => Unit) => Unit): Try[Long] = {
+    setupHadoopConfiguration(location).flatMap { hadoopConfig =>
+      Try {
+        import org.apache.parquet.hadoop.example.ExampleParquetWriter
+        import org.apache.parquet.example.data.simple.SimpleGroupFactory
+        import org.apache.hadoop.fs.{Path => HadoopPath}
+
+        val parquetSchema = buildMessageType(schema)
+        val writer = ExampleParquetWriter
+          .builder(new HadoopPath(location.path))
+          .withType(parquetSchema)
+          .withConf(hadoopConfig)
+          .withCompressionCodec(convertCompressionType(config.compressionType))
+          .withRowGroupSize(config.rowGroupSize)
+          .withPageSize(config.pageSize.toInt)
+          .withDictionaryEncoding(config.enableDictionary)
+          .withValidation(true)
+          .build()
+
+        var count = 0L
+        val factory = new SimpleGroupFactory(parquetSchema)
+        try {
+          feed { row =>
+            val group = factory.newGroup()
+            writeRowToGroup(group, row, parquetSchema)
+            writer.write(group)
+            count += 1
+          }
+        } finally {
+          writer.close()
+        }
+        count
       }
     }
   }

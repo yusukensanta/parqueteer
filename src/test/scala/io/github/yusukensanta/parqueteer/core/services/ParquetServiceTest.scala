@@ -43,6 +43,16 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
         contentResult.get.rows.foreach(process)
         contentResult.get.rows.length.toLong
       }
+    override def writeContentStream(
+        location: StorageLocation,
+        schema: ParquetSchema,
+        config: WriteConfig
+    )(feed: (Map[String, Any] => Unit) => Unit): Try[Long] =
+      writeResult.map { _ =>
+        var count = 0L
+        feed { _ => count += 1 }
+        count
+      }
   }
 
   // ── Shared fixtures ──────────────────────────────────────────────────────
@@ -278,6 +288,16 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
       lastWrittenData = data
       Success(())
     }
+    override def writeContentStream(
+        location: StorageLocation,
+        schema: ParquetSchema,
+        config: WriteConfig
+    )(feed: (Map[String, Any] => Unit) => Unit): Try[Long] = {
+      val buf = scala.collection.mutable.ListBuffer.empty[Map[String, Any]]
+      feed { row => buf += row }
+      lastWrittenData = buf.toList
+      Success(buf.size.toLong)
+    }
   }
 
   "ParquetService.convertFile" should "succeed for json-to-parquet and pass parsed data to repository" in {
@@ -455,6 +475,17 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
   it should "return empty list for empty input" in {
     val service = new ParquetService(new FakeParquetRepository())
     service.parseCsvContent("") shouldBe empty
+  }
+
+  it should "parse CSV with quoted fields containing newlines" in {
+    val service = new ParquetService(new FakeParquetRepository())
+    val csv =
+      "name,bio\n\"Alice\",\"Line one\nLine two\"\n\"Bob\",\"Single line\"\n"
+    val result = service.parseCsvContent(csv)
+    result should have length 2
+    result.head("name") shouldBe "Alice"
+    result.head("bio") shouldBe "Line one\nLine two"
+    result(1)("name") shouldBe "Bob"
   }
 
   // ── streamRead ────────────────────────────────────────────────────────────
