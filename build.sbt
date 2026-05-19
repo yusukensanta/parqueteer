@@ -53,6 +53,11 @@ ThisBuild / scalacOptions ++= Seq(
 coverageMinimumStmtTotal := 80
 coverageFailOnMinimum := false
 
+// Fork test JVM so AWS SDK service registry has a flat classpath.
+// Without forking, sbt's layered classloader hides transitive deps that
+// S3Client initialization scans via SPI, causing NoClassDefFoundError.
+Test / fork := true
+
 lazy val root = (project in file("."))
   .enablePlugins(JavaAppPackaging, BuildInfoPlugin)
   .settings(
@@ -198,10 +203,7 @@ lazy val root = (project in file("."))
         // Testing
         "org.scalatest" %% "scalatest" % scalatestVersion % Test,
         "org.scalamock" %% "scalamock" % scalamockVersion % Test,
-        "org.scalatestplus" %% "scalacheck-1-17" % scalatestScalacheckVersion % Test,
-        // AWS SDK s3 module's service registry references s3-transfer-manager
-        // classes at S3Client initialization; add to test scope to satisfy it
-        "software.amazon.awssdk" % "s3-transfer-manager" % awsSdkVersion % Test
+        "org.scalatestplus" %% "scalacheck-1-17" % scalatestScalacheckVersion % Test
       )
     },
     // Force Netty to latest 4.1.x to patch transitive CVEs from AWS SDK
