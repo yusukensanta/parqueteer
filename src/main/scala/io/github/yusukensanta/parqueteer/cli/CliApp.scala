@@ -62,7 +62,6 @@ object CliApp {
       "validate",
       "convert",
       "merge",
-      "stats",
       "schema",
       "config",
       "completions"
@@ -183,6 +182,9 @@ object CliApp {
         executeConfig(cmd, globalOptions)
 
       case cmd: SchemaCommand =>
+        executeSchemaInfo(service, cmd, globalOptions)
+
+      case cmd: SchemaDiffCommand =>
         executeSchemaDiff(service, cmd, globalOptions)
 
       case MergeCommand(inputPaths, outputPath, compression, schemaMode) =>
@@ -194,9 +196,6 @@ object CliApp {
           schemaMode,
           globalOptions
         )
-
-      case StatsCommand(filePath, format) =>
-        executeStats(service, filePath, format, globalOptions)
 
       case CompletionsCommand(shell) =>
         executeCompletions(shell, globalOptions)
@@ -520,32 +519,72 @@ object CliApp {
     }
   }
 
-  private def executeStats(
+  private def executeSchemaInfo(
       service: ParquetService,
-      filePath: String,
-      format: OutputFormat,
+      cmd: SchemaCommand,
       globalOptions: GlobalOptions
   ): Int = {
-    service.getStats(filePath) match {
-      case scala.util.Success(stats) =>
+    if (cmd.filePath.isEmpty) {
+      System.err.println(
+        "Error: schema requires a file path, or use 'schema diff FILE1 FILE2'"
+      )
+      return 2
+    }
+    service.getFileInfo(cmd.filePath) match {
+      case Failure(error) =>
+        System.err.println(s"Failed to read schema: ${error.getMessage}")
+        if (globalOptions.verbose) error.printStackTrace()
+        1
+      case Success(file) =>
         if (!globalOptions.quiet) {
-          format match {
-            case OutputFormat.JSON => println(formatStatsJson(stats))
-            case _                 => println(formatStatsTable(stats))
+          val statsOpt: Option[FileStats] =
+            if (cmd.showStats)
+              service.getStats(cmd.filePath).toOption
+            else None
+          cmd.format match {
+            case OutputFormat.JSON =>
+              println(formatSchemaInfoJson(file, statsOpt))
+            case _ =>
+              println(service.formatSchema(file))
+              statsOpt.foreach { stats =>
+                println()
+                println(formatStatsTable(stats))
+              }
           }
         }
         0
-      case scala.util.Failure(error) =>
-        System.err.println(s"Failed to get stats: ${error.getMessage}")
-        if (globalOptions.verbose) error.printStackTrace()
-        1
     }
+  }
+
+  private def formatSchemaInfoJson(
+      file: ParquetFile,
+      statsOpt: Option[FileStats]
+  ): String = {
+    val schemaJson = file.schema.fold(Json.Null) { s =>
+      Json.obj(
+        "totalRowCount" -> Json.fromLong(s.totalRowCount),
+        "rowGroupCount" -> Json.fromLong(s.rowGroupCount),
+        "columns" -> Json.fromValues(s.columns.map { c =>
+          Json.obj(
+            "name" -> Json.fromString(c.name),
+            "dataType" -> Json.fromString(c.dataType),
+            "optional" -> Json.fromBoolean(c.isOptional),
+            "compressionType" -> Json.fromString(c.compressionType)
+          )
+        })
+      )
+    }
+    val fields = scala.collection.mutable.ListBuffer("schema" -> schemaJson)
+    statsOpt.foreach { stats =>
+      fields += "stats" -> formatStatsJson(stats)
+    }
+    Json.obj(fields.toSeq*).spaces2
   }
 
   private def formatStatsTable(stats: FileStats): String = {
     val sb = new StringBuilder
     sb.append(
-      s"Rows: ${stats.totalRows}  Row groups: ${stats.rowGroupCount}\n\n"
+      s"Stats: ${stats.totalRows} rows, ${stats.rowGroupCount} row groups\n\n"
     )
     val header =
       f"${"Column"}%-30s ${"Type"}%-15s ${"Nulls"}%10s ${"Min"}%-20s ${"Max"}%-20s"
@@ -562,24 +601,20 @@ object CliApp {
     sb.toString.stripTrailing()
   }
 
-  private def formatStatsJson(stats: FileStats): String = {
-    import io.circe.Json
-    Json
-      .obj(
-        "totalRows" -> Json.fromLong(stats.totalRows),
-        "rowGroupCount" -> Json.fromLong(stats.rowGroupCount),
-        "columns" -> Json.fromValues(stats.columns.map { col =>
-          Json.obj(
-            "name" -> Json.fromString(col.name),
-            "dataType" -> Json.fromString(col.dataType),
-            "nullCount" -> Json.fromLong(col.nullCount),
-            "minValue" -> col.minValue.fold(Json.Null)(Json.fromString),
-            "maxValue" -> col.maxValue.fold(Json.Null)(Json.fromString)
-          )
-        })
-      )
-      .spaces2
-  }
+  private def formatStatsJson(stats: FileStats): Json =
+    Json.obj(
+      "totalRows" -> Json.fromLong(stats.totalRows),
+      "rowGroupCount" -> Json.fromLong(stats.rowGroupCount),
+      "columns" -> Json.fromValues(stats.columns.map { col =>
+        Json.obj(
+          "name" -> Json.fromString(col.name),
+          "dataType" -> Json.fromString(col.dataType),
+          "nullCount" -> Json.fromLong(col.nullCount),
+          "minValue" -> col.minValue.fold(Json.Null)(Json.fromString),
+          "maxValue" -> col.maxValue.fold(Json.Null)(Json.fromString)
+        )
+      })
+    )
 
   private def executeCompletions(
       shell: String,
@@ -599,7 +634,7 @@ object CliApp {
 
   private def executeSchemaDiff(
       service: ParquetService,
-      cmd: SchemaCommand,
+      cmd: SchemaDiffCommand,
       globalOptions: GlobalOptions
   ): Int = {
     service.diffSchemas(cmd.file1, cmd.file2) match {

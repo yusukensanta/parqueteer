@@ -50,6 +50,12 @@ case class ConvertCommand(
 case class ConfigCommand(validate: Boolean = false) extends Command
 
 case class SchemaCommand(
+    filePath: String,
+    showStats: Boolean = false,
+    format: OutputFormat = OutputFormat.Table
+) extends Command
+
+case class SchemaDiffCommand(
     file1: String,
     file2: String,
     format: OutputFormat = OutputFormat.Table
@@ -60,11 +66,6 @@ case class MergeCommand(
     outputPath: String = "",
     compression: CompressionType = CompressionType.Snappy,
     schemaMode: SchemaMode = SchemaMode.Strict
-) extends Command
-
-case class StatsCommand(
-    filePath: String,
-    format: OutputFormat = OutputFormat.Table
 ) extends Command
 
 case class CompletionsCommand(shell: String) extends Command

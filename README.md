@@ -26,10 +26,10 @@
 Parqueteer is a **Parquet lifecycle tool for pipelines** — the gap between basic inspection CLIs and full query engines.
 
 **In scope:**
-- Schema operations: `schema diff`, `validate`, `info` — designed to wire into CI/CD and data quality gates
+- Schema operations: `schema`, `schema diff`, `validate`, `info` — designed to wire into CI/CD and data quality gates
 - Cloud-native Parquet I/O: read, write, merge across local, S3, GCS, and Azure
 - Format conversion: JSON/CSV ↔ Parquet with compression control
-- Operational inspection: `stats`, column-level metadata — quick answers without a query engine
+- Operational inspection: `schema --stats`, column-level metadata — quick answers without a query engine
 
 **Out of scope:**
 - **SQL analytics, joins, aggregations** — use [DuckDB](https://duckdb.org/) for ad-hoc queries
@@ -54,7 +54,7 @@ parqueteer read data.parquet
 parqueteer read data.parquet --columns "id,name,email"
 
 # Limit rows
-parqueteer read data.parquet --max-rows 100
+parqueteer read data.parquet --limit 100
 
 # Filter expressions
 parqueteer read data.parquet --filter "age > 25"
@@ -69,7 +69,7 @@ parqueteer read data.parquet --format csv
 parqueteer read data.parquet --format ndjson
 
 # Combine flags
-parqueteer read data.parquet --columns "id,name" --filter "age > 25" --max-rows 50 --format csv
+parqueteer read data.parquet --columns "id,name" --filter "age > 25" --limit 50 --format csv
 
 # From cloud storage
 parqueteer read s3://bucket/data.parquet
@@ -115,6 +115,20 @@ parqueteer convert data.parquet data.json
 parqueteer convert data.parquet data.csv
 ```
 
+### Inspect Schema
+
+```bash
+# Show column names, types, nullability, compression
+parqueteer schema data.parquet
+
+# Include column statistics (min, max, null count) — like DuckDB's DESCRIBE
+parqueteer schema data.parquet --stats
+
+# JSON output (for scripting)
+parqueteer schema data.parquet --format json
+parqueteer schema data.parquet --stats --format json
+```
+
 ### Compare Schemas
 
 ```bash
@@ -125,6 +139,7 @@ parqueteer schema diff old.parquet new.parquet
 parqueteer schema diff old.parquet new.parquet --format json
 
 # Exit code 0 = identical, 1 = schemas differ
+# Output symbols: + added, - removed, ~ changed, = unchanged
 ```
 
 ### Validate Files
@@ -140,10 +155,10 @@ parqueteer validate data.parquet --verbose
 
 ```bash
 # Show effective configuration (all sources: CLI, env vars, config file, defaults)
-parqueteer config show
+parqueteer config
 
 # Validate config file syntax
-parqueteer config validate
+parqueteer config --validate
 ```
 
 ### Shell Completions
@@ -187,7 +202,7 @@ export PARQUETEER_COLOR=never
 # Enable verbose mode
 export PARQUETEER_VERBOSE=true
 
-# Default max rows for read
+# Default row limit for read (same as --limit)
 export PARQUETEER_MAX_ROWS=1000
 
 # Path to config file (default: ~/.config/parqueteer/config.yaml)
@@ -323,12 +338,16 @@ export AZURE_STORAGE_CONNECTION_STRING="..."
 | Command | Description |
 |---------|-------------|
 | `read` | Display Parquet file content with optional filtering and format selection |
-| `info` | Show file metadata and schema |
+| `info` | Show file metadata (file size, version, row/group counts) |
 | `write` | Create a Parquet file from JSON or CSV input |
 | `convert` | Convert between Parquet, JSON, and CSV formats |
 | `validate` | Verify Parquet file integrity |
-| `schema diff` | Compare schemas of two Parquet files |
-| `config` | Show or validate configuration |
+| `merge` | Combine multiple Parquet files into one |
+| `schema FILE` | Inspect schema — column names, types, nullability, compression |
+| `schema FILE --stats` | Schema + column statistics (min, max, null count) |
+| `schema diff FILE1 FILE2` | Compare schemas of two Parquet files |
+| `config` | Show effective configuration |
+| `config --validate` | Validate config file syntax |
 | `completions` | Generate shell completion scripts for bash, zsh, or fish |
 
 Run `parqueteer <command> --help` for per-command options.

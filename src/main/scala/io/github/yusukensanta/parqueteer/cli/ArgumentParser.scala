@@ -89,12 +89,6 @@ object ArgumentParser {
               updateCmd[ReadCommand](c, _.copy(maxRows = Some(x)))
             )
             .text("Maximum number of rows to display"),
-          opt[Long]("max-rows")
-            .hidden()
-            .action((x, c) =>
-              updateCmd[ReadCommand](c, _.copy(maxRows = Some(x)))
-            )
-            .text("Alias for --limit (deprecated)"),
           opt[Seq[String]]("columns")
             .abbr("c")
             .action((x, c) =>
@@ -256,12 +250,6 @@ object ArgumentParser {
               updateCmd[ConvertCommand](c, _.copy(maxRows = Some(x)))
             )
             .text("Maximum number of rows to convert"),
-          opt[Long]("max-rows")
-            .hidden()
-            .action((x, c) =>
-              updateCmd[ConvertCommand](c, _.copy(maxRows = Some(x)))
-            )
-            .text("Alias for --limit (deprecated)"),
           opt[Unit]("dry-run")
             .action((_, c) =>
               updateCmd[ConvertCommand](c, _.copy(dryRun = true))
@@ -271,17 +259,18 @@ object ArgumentParser {
             )
         ),
       cmd("schema")
-        .text("Compare schemas of two parquet files")
-        .action((_, c) => c.copy(command = Some(SchemaCommand("", ""))))
+        .text("Show schema information or compare two parquet files")
+        .action((_, c) => c.copy(command = Some(SchemaCommand(""))))
         .children(
-          arg[String]("<file1>")
-            .required()
-            .action((x, c) => updateCmd[SchemaCommand](c, _.copy(file1 = x)))
-            .text("First parquet file path"),
-          arg[String]("<file2>")
-            .required()
-            .action((x, c) => updateCmd[SchemaCommand](c, _.copy(file2 = x)))
-            .text("Second parquet file path"),
+          arg[String]("<file>")
+            .optional()
+            .action((x, c) => updateCmd[SchemaCommand](c, _.copy(filePath = x)))
+            .text("Path to parquet file"),
+          opt[Unit]("stats")
+            .action((_, c) =>
+              updateCmd[SchemaCommand](c, _.copy(showStats = true))
+            )
+            .text("Include column statistics (min, max, null count)"),
           opt[String]("format")
             .action((x, c) =>
               updateCmd[SchemaCommand](c, _.copy(format = parseOutputFormat(x)))
@@ -290,7 +279,36 @@ object ArgumentParser {
               if (List("table", "json").contains(x.toLowerCase)) success
               else failure(s"Invalid format: $x. Use table or json")
             )
-            .text("Output format: table, json (default: table)")
+            .text("Output format: table, json (default: table)"),
+          cmd("diff")
+            .text("Compare schemas of two parquet files")
+            .action((_, c) => c.copy(command = Some(SchemaDiffCommand("", ""))))
+            .children(
+              arg[String]("<file1>")
+                .required()
+                .action((x, c) =>
+                  updateCmd[SchemaDiffCommand](c, _.copy(file1 = x))
+                )
+                .text("First parquet file path"),
+              arg[String]("<file2>")
+                .required()
+                .action((x, c) =>
+                  updateCmd[SchemaDiffCommand](c, _.copy(file2 = x))
+                )
+                .text("Second parquet file path"),
+              opt[String]("format")
+                .action((x, c) =>
+                  updateCmd[SchemaDiffCommand](
+                    c,
+                    _.copy(format = parseOutputFormat(x))
+                  )
+                )
+                .validate(x =>
+                  if (List("table", "json").contains(x.toLowerCase)) success
+                  else failure(s"Invalid format: $x. Use table or json")
+                )
+                .text("Output format: table, json (default: table)")
+            )
         ),
       cmd("merge")
         .text("Merge multiple parquet files into one")
@@ -341,26 +359,6 @@ object ArgumentParser {
               else failure(s"Unknown schema-mode: $x. Use strict or union")
             )
             .text("Schema compatibility mode: strict (default) or union")
-        ),
-      cmd("stats")
-        .text("Show column statistics (min, max, null count)")
-        .children(
-          arg[String]("<file>")
-            .required()
-            .action((x, c) => c.copy(command = Some(StatsCommand(x))))
-            .text("Path to parquet file"),
-          opt[String]("format")
-            .action((x, c) =>
-              updateCmd[StatsCommand](c, _.copy(format = parseOutputFormat(x)))
-            )
-            .validate(x =>
-              if (
-                List("table", "json", "csv", "pretty", "markdown", "ndjson")
-                  .contains(x.toLowerCase)
-              ) success
-              else failure(s"Unknown format: $x")
-            )
-            .text("Output format: table, json (default: table)")
         ),
       cmd("completions")
         .text("Generate shell completion scripts")

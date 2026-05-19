@@ -18,6 +18,7 @@ class ShellCompletionsTest extends AnyFlatSpec with Matchers {
       "write",
       "validate",
       "convert",
+      "merge",
       "schema",
       "config",
       "completions"
@@ -49,6 +50,7 @@ class ShellCompletionsTest extends AnyFlatSpec with Matchers {
       "write",
       "validate",
       "convert",
+      "merge",
       "schema",
       "config",
       "completions"
@@ -56,9 +58,13 @@ class ShellCompletionsTest extends AnyFlatSpec with Matchers {
       .foreach(cmd => script should include(cmd))
   }
 
-  it should "complete schema command with file arguments" in {
-    ShellCompletions.zsh should include("schema")
+  it should "complete schema diff subcommand with file arguments" in {
+    ShellCompletions.zsh should include("diff")
     ShellCompletions.zsh should include("*.parquet")
+  }
+
+  it should "complete schema --stats flag" in {
+    ShellCompletions.zsh should include("--stats")
   }
 
   "ShellCompletions.fish" should "use fish complete syntax" in {
@@ -75,6 +81,7 @@ class ShellCompletionsTest extends AnyFlatSpec with Matchers {
       "write",
       "validate",
       "convert",
+      "merge",
       "schema",
       "config",
       "completions"

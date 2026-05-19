@@ -5,6 +5,7 @@ import io.github.yusukensanta.parqueteer.core.models.{
   CompressionType,
   SchemaMode
 }
+
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import scopt.OParser
@@ -287,28 +288,65 @@ class ArgumentParserTest extends AnyFlatSpec with Matchers {
     result shouldBe None
   }
 
-  "ArgumentParser stats" should "parse stats command with default format" in {
-    val args = Array("stats", "/tmp/test.parquet")
+  "ArgumentParser schema" should "parse schema command with default format" in {
+    val args = Array("schema", "/tmp/test.parquet")
     val result =
       OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
 
     result shouldBe defined
     result.get.command shouldBe defined
-    result.get.command.get shouldBe a[StatsCommand]
+    result.get.command.get shouldBe a[SchemaCommand]
 
-    val statsCmd = result.get.command.get.asInstanceOf[StatsCommand]
-    statsCmd.filePath shouldBe "/tmp/test.parquet"
-    statsCmd.format shouldBe OutputFormat.Table
+    val cmd = result.get.command.get.asInstanceOf[SchemaCommand]
+    cmd.filePath shouldBe "/tmp/test.parquet"
+    cmd.showStats shouldBe false
+    cmd.format shouldBe OutputFormat.Table
   }
 
-  it should "parse stats command with json format" in {
-    val args = Array("stats", "/tmp/test.parquet", "--format", "json")
+  it should "parse schema --stats flag" in {
+    val args = Array("schema", "/tmp/test.parquet", "--stats")
+    val result =
+      OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
+
+    result shouldBe defined
+    val cmd = result.get.command.get.asInstanceOf[SchemaCommand]
+    cmd.showStats shouldBe true
+  }
+
+  it should "parse schema --format json" in {
+    val args = Array("schema", "/tmp/test.parquet", "--format", "json")
     val result =
       OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
 
     result shouldBe defined
     result.get.command.get
-      .asInstanceOf[StatsCommand]
+      .asInstanceOf[SchemaCommand]
+      .format shouldBe OutputFormat.JSON
+  }
+
+  it should "parse schema diff subcommand" in {
+    val args = Array("schema", "diff", "a.parquet", "b.parquet")
+    val result =
+      OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
+
+    result shouldBe defined
+    result.get.command.get shouldBe a[SchemaDiffCommand]
+
+    val cmd = result.get.command.get.asInstanceOf[SchemaDiffCommand]
+    cmd.file1 shouldBe "a.parquet"
+    cmd.file2 shouldBe "b.parquet"
+    cmd.format shouldBe OutputFormat.Table
+  }
+
+  it should "parse schema diff with --format json" in {
+    val args =
+      Array("schema", "diff", "a.parquet", "b.parquet", "--format", "json")
+    val result =
+      OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
+
+    result shouldBe defined
+    result.get.command.get
+      .asInstanceOf[SchemaDiffCommand]
       .format shouldBe OutputFormat.JSON
   }
 }

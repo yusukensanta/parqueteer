@@ -9,16 +9,16 @@ object HelpFormatter {
        |  parqueteer [OPTIONS] <COMMAND>
        |
        |COMMANDS:
-       |  read         Display parquet file content
-       |  info         Show file metadata and schema information
-       |  write        Create parquet file from input data
-       |  validate     Verify parquet file integrity
-       |  convert      Convert between parquet and other formats
-       |  merge        Combine multiple parquet files into one
-       |  stats        Show column statistics (min, max, null count)
-       |  schema       Compare schemas of two parquet files
-       |  config       Show or validate configuration
-       |  completions  Generate shell completion scripts
+       |  read            Display parquet file content
+       |  info            Show file metadata and schema information
+       |  write           Create parquet file from input data
+       |  validate        Verify parquet file integrity
+       |  convert         Convert between parquet and other formats
+       |  merge           Combine multiple parquet files into one
+       |  schema          Inspect schema or compare schemas
+       |  schema diff     Compare schemas of two parquet files
+       |  config          Show or validate configuration
+       |  completions     Generate shell completion scripts
        |
        |GLOBAL OPTIONS:
        |  -h, --help         Show this help message
@@ -34,7 +34,9 @@ object HelpFormatter {
        |
        |EXAMPLES:
        |  parqueteer read data.parquet
-       |  parqueteer info s3://bucket/data.parquet
+       |  parqueteer schema data.parquet
+       |  parqueteer schema data.parquet --stats
+       |  parqueteer schema diff old.parquet new.parquet
        |  parqueteer convert data.csv data.parquet
        |""".stripMargin
   }
@@ -178,46 +180,34 @@ object HelpFormatter {
        |""".stripMargin
   }
 
-  def statsHelp(): String = {
-    """
-       |USAGE:
-       |  parqueteer stats [OPTIONS] <FILE>
-       |
-       |ARGUMENTS:
-       |  <FILE>    Path to parquet file
-       |
-       |OPTIONS:
-       |      --format <FORMAT>     Output format: table, json (default: table)
-       |  -h, --help                Show this help message
-       |
-       |EXAMPLES:
-       |  parqueteer stats data.parquet
-       |  parqueteer stats data.parquet --format json
-       |""".stripMargin
-  }
-
   def schemaHelp(): String = {
     """
        |USAGE:
-       |  parqueteer schema [OPTIONS] <FILE1> <FILE2>
+       |  parqueteer schema [OPTIONS] <FILE>
+       |  parqueteer schema diff [OPTIONS] <FILE1> <FILE2>
        |
        |ARGUMENTS:
-       |  <FILE1>   First parquet file path
-       |  <FILE2>   Second parquet file path
+       |  <FILE>    Path to parquet file (inspect mode)
+       |  <FILE1>   First parquet file path (diff mode)
+       |  <FILE2>   Second parquet file path (diff mode)
        |
        |OPTIONS:
+       |      --stats               Include column statistics (min, max, null count)
        |      --format <FORMAT>     Output format: table, json (default: table)
        |  -h, --help                Show this help message
        |
-       |OUTPUT SYMBOLS:
+       |DIFF OUTPUT SYMBOLS:
        |  +  column added in FILE2
        |  -  column removed in FILE2
        |  ~  column type or nullability changed
        |  =  unchanged columns
        |
        |EXAMPLES:
-       |  parqueteer schema old.parquet new.parquet
-       |  parqueteer schema old.parquet new.parquet --format json
+       |  parqueteer schema data.parquet
+       |  parqueteer schema data.parquet --stats
+       |  parqueteer schema data.parquet --format json
+       |  parqueteer schema diff old.parquet new.parquet
+       |  parqueteer schema diff old.parquet new.parquet --format json
        |""".stripMargin
   }
 
@@ -252,7 +242,6 @@ object HelpFormatter {
       case "validate" => Some(validateHelp())
       case "convert"  => Some(convertHelp())
       case "merge"    => Some(mergeHelp())
-      case "stats"    => Some(statsHelp())
       case "schema"   => Some(schemaHelp())
       case "config"   => Some(configHelp())
       case _          => None
