@@ -64,6 +64,7 @@ object CliApp {
       "merge",
       "stats",
       "schema",
+      "config",
       "completions"
     )
     val commandBeforeHelp = args
@@ -178,11 +179,11 @@ object CliApp {
           globalOptions
         )
 
-      case ConfigCommand(sub) =>
-        executeConfig(sub, globalOptions)
+      case cmd: ConfigCommand =>
+        executeConfig(cmd, globalOptions)
 
-      case SchemaCommand(sub) =>
-        executeSchemaDiff(service, sub, globalOptions)
+      case cmd: SchemaCommand =>
+        executeSchemaDiff(service, cmd, globalOptions)
 
       case MergeCommand(inputPaths, outputPath, compression, schemaMode) =>
         executeMerge(
@@ -598,19 +599,19 @@ object CliApp {
 
   private def executeSchemaDiff(
       service: ParquetService,
-      sub: SchemaDiffSubcommand,
+      cmd: SchemaCommand,
       globalOptions: GlobalOptions
   ): Int = {
-    service.diffSchemas(sub.file1, sub.file2) match {
+    service.diffSchemas(cmd.file1, cmd.file2) match {
       case Failure(error) =>
         System.err.println(s"Failed to diff schemas: ${error.getMessage}")
         if (globalOptions.verbose) error.printStackTrace()
         1
       case Success(diff) =>
         if (!globalOptions.quiet)
-          sub.format match {
+          cmd.format match {
             case OutputFormat.JSON => println(formatSchemaDiffJson(diff))
-            case _ => println(formatSchemaDiffTable(sub.file1, sub.file2, diff))
+            case _ => println(formatSchemaDiffTable(cmd.file1, cmd.file2, diff))
           }
         if (diff.identical) 0 else 1
     }
@@ -682,74 +683,71 @@ object CliApp {
   }
 
   private def executeConfig(
-      sub: ConfigSubcommand,
+      cmd: ConfigCommand,
       globalOptions: GlobalOptions
   ): Int = {
     val configManager = new ConfigurationManager()
     val configPath = globalOptions.configPath
-    sub match {
-      case ConfigSubcommand.Show =>
-        if (!globalOptions.quiet) {
-          val resolvedPath = configManager.resolvedConfigPath(configPath)
-          val fileExists = better.files.File(resolvedPath).exists
-          println(s"Config file: $resolvedPath [${
-              if (fileExists) "exists" else "not found"
-            }]")
-          println()
+    if (cmd.validate) {
+      configManager.validate(configPath) match {
+        case scala.util.Success(Nil) =>
+          if (!globalOptions.quiet) println(s"✓ Configuration is valid")
+          0
+        case scala.util.Success(issues) =>
+          issues.foreach(i => println(s"  $i"))
+          0
+        case scala.util.Failure(ex) =>
+          System.err.println(s"Config error: ${ex.getMessage}")
+          1
+      }
+    } else {
+      if (!globalOptions.quiet) {
+        val resolvedPath = configManager.resolvedConfigPath(configPath)
+        val fileExists = better.files.File(resolvedPath).exists
+        println(s"Config file: $resolvedPath [${
+            if (fileExists) "exists" else "not found"
+          }]")
+        println()
 
-          val envVars = EnvConfig.allSet
-          if (envVars.isEmpty) {
-            println("Environment variables: (none set)")
-          } else {
-            println("Environment variables:")
-            EnvConfig.SupportedVars.foreach { key =>
-              envVars.get(key) match {
-                case Some(v) => println(s"  $key=$v")
-                case None    => ()
-              }
+        val envVars = EnvConfig.allSet
+        if (envVars.isEmpty) {
+          println("Environment variables: (none set)")
+        } else {
+          println("Environment variables:")
+          EnvConfig.SupportedVars.foreach { key =>
+            envVars.get(key) match {
+              case Some(v) => println(s"  $key=$v")
+              case None    => ()
             }
           }
-          println()
-
-          println("Resolved settings:")
-          val fmt = EnvConfig.parsedDefaultFormat
-            .map(_.toString.toLowerCase + " [env]")
-            .getOrElse("table [default]")
-          println(s"  format:   $fmt")
-          val color = {
-            val cm = globalOptions.colorMode
-            val src =
-              if (sys.env.get("NO_COLOR").exists(_.nonEmpty)) "[env: NO_COLOR]"
-              else if (sys.env.contains("PARQUETEER_COLOR")) "[env]"
-              else "[default]"
-            s"${cm.toString.toLowerCase} $src"
-          }
-          println(s"  color:    $color")
-          val verboseFlag =
-            if (globalOptions.verbose) "true [cli/env]" else "false [default]"
-          println(s"  verbose:  $verboseFlag")
-          val quiet =
-            if (globalOptions.quiet) "true [cli]" else "false [default]"
-          println(s"  quiet:    $quiet")
-          EnvConfig.parsedMaxRows.foreach { n =>
-            println(s"  max-rows: $n [env]")
-          }
         }
-        0
+        println()
 
-      case ConfigSubcommand.Validate =>
-        configManager.validate(configPath) match {
-          case scala.util.Success(Nil) =>
-            if (!globalOptions.quiet)
-              println(s"✓ Configuration is valid")
-            0
-          case scala.util.Success(issues) =>
-            issues.foreach(i => println(s"  $i"))
-            0
-          case scala.util.Failure(ex) =>
-            System.err.println(s"Config error: ${ex.getMessage}")
-            1
+        println("Resolved settings:")
+        val fmt = EnvConfig.parsedDefaultFormat
+          .map(_.toString.toLowerCase + " [env]")
+          .getOrElse("table [default]")
+        println(s"  format:   $fmt")
+        val color = {
+          val cm = globalOptions.colorMode
+          val src =
+            if (sys.env.get("NO_COLOR").exists(_.nonEmpty)) "[env: NO_COLOR]"
+            else if (sys.env.contains("PARQUETEER_COLOR")) "[env]"
+            else "[default]"
+          s"${cm.toString.toLowerCase} $src"
         }
+        println(s"  color:    $color")
+        val verboseFlag =
+          if (globalOptions.verbose) "true [cli/env]" else "false [default]"
+        println(s"  verbose:  $verboseFlag")
+        val quiet =
+          if (globalOptions.quiet) "true [cli]" else "false [default]"
+        println(s"  quiet:    $quiet")
+        EnvConfig.parsedMaxRows.foreach { n =>
+          println(s"  limit: $n [env: PARQUETEER_MAX_ROWS]")
+        }
+      }
+      0
     }
   }
 

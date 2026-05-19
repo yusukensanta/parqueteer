@@ -2,7 +2,6 @@ package io.github.yusukensanta.parqueteer.cli
 
 object HelpFormatter {
 
-  /** Generate top-level help showing all subcommands */
   def topLevelHelp(): String = {
     s"""parqueteer ${io.github.yusukensanta.parqueteer.BuildInfo.version} - A modern CLI toolkit for Apache Parquet files
        |
@@ -17,7 +16,7 @@ object HelpFormatter {
        |  convert      Convert between parquet and other formats
        |  merge        Combine multiple parquet files into one
        |  stats        Show column statistics (min, max, null count)
-       |  schema diff  Compare schemas of two parquet files
+       |  schema       Compare schemas of two parquet files
        |  config       Show or validate configuration
        |  completions  Generate shell completion scripts
        |
@@ -40,7 +39,6 @@ object HelpFormatter {
        |""".stripMargin
   }
 
-  /** Generate help for the 'read' command */
   def readHelp(): String = {
     """
        |USAGE:
@@ -50,10 +48,12 @@ object HelpFormatter {
        |  <FILE>    Path to parquet file (local, s3://, gs://, abfss://)
        |
        |OPTIONS:
-       |  -n, --max-rows <N>        Maximum number of rows to display
+       |  -n, --limit <N>           Maximum number of rows to display
        |  -c, --columns <COLS>      Comma-separated list of columns to display
        |  -f, --filter <EXPR>       Filter expression for rows
        |      --format <FORMAT>     Output format: table, json, csv, pretty (default: table)
+       |      --parallel <N>        Number of parallel threads for reading (default: 1)
+       |      --stream              Stream rows progressively (safe for large files)
        |  -h, --help                Show this help message
        |
        |FILTER EXPRESSIONS:
@@ -65,24 +65,13 @@ object HelpFormatter {
        |  Logical:     age > 18 AND active = true, NOT deleted = true
        |
        |EXAMPLES:
-       |  # Display first 10 rows as a table
-       |  parqueteer read data.parquet --max-rows 10
-       |
-       |  # Show specific columns only
+       |  parqueteer read data.parquet --limit 10
        |  parqueteer read data.parquet --columns name,age,city
-       |
-       |  # Filter rows using BETWEEN
        |  parqueteer read data.parquet --filter "age BETWEEN 25 AND 35" --format json
-       |
-       |  # Filter with IN operator
-       |  parqueteer read data.parquet --filter 'status IN ("active", "pending")'
-       |
-       |  # Read from S3
-       |  parqueteer read s3://bucket/data.parquet --max-rows 100
+       |  parqueteer read s3://bucket/data.parquet --limit 100
        |""".stripMargin
   }
 
-  /** Generate help for the 'info' command */
   def infoHelp(): String = {
     """
        |USAGE:
@@ -98,21 +87,12 @@ object HelpFormatter {
        |  -h, --help               Show this help message
        |
        |EXAMPLES:
-       |  # Show all metadata and schema (default)
        |  parqueteer info data.parquet
-       |
-       |  # Show only schema
        |  parqueteer info data.parquet --schema
-       |
-       |  # Show only metadata
-       |  parqueteer info data.parquet --metadata
-       |
-       |  # Output as JSON
        |  parqueteer info data.parquet --format json
        |""".stripMargin
   }
 
-  /** Generate help for the 'write' command */
   def writeHelp(): String = {
     """
        |USAGE:
@@ -123,28 +103,19 @@ object HelpFormatter {
        |  <OUTPUT>    Output parquet file path
        |
        |OPTIONS:
-       |      --input-format <FMT>   Input file format: json, csv, tsv (default: json)
+       |      --input-format <FMT>   Input file format: json, csv (default: json)
        |  -c, --compression <TYPE>   Compression: none, snappy, gzip, lzo, brotli, lz4, zstd
        |      --row-group-size <N>   Row group size (e.g., 128MB)
        |      --dry-run              Preview what would be written without writing
        |  -h, --help                 Show this help message
        |
        |EXAMPLES:
-       |  # Convert JSON to Parquet with snappy compression
        |  parqueteer write data.json output.parquet
-       |
-       |  # Preview without writing
-       |  parqueteer write data.json output.parquet --dry-run
-       |
-       |  # Convert CSV with gzip compression
        |  parqueteer write data.csv output.parquet --input-format csv --compression gzip
-       |
-       |  # Specify row group size
-       |  parqueteer write data.json output.parquet --row-group-size 256MB
+       |  parqueteer write data.json output.parquet --dry-run
        |""".stripMargin
   }
 
-  /** Generate help for the 'validate' command */
   def validateHelp(): String = {
     """
        |USAGE:
@@ -154,19 +125,13 @@ object HelpFormatter {
        |  <FILE>    Path to parquet file
        |
        |OPTIONS:
-       |  -v, --verbose    Show detailed validation information
-       |  -h, --help       Show this help message
+       |  -h, --help    Show this help message
        |
        |EXAMPLES:
-       |  # Basic validation
        |  parqueteer validate data.parquet
-       |
-       |  # Detailed validation output
-       |  parqueteer validate data.parquet --verbose
        |""".stripMargin
   }
 
-  /** Generate help for the 'convert' command */
   def convertHelp(): String = {
     """
        |USAGE:
@@ -178,26 +143,17 @@ object HelpFormatter {
        |
        |OPTIONS:
        |      --compression <TYPE>   Compression type for output
-       |  -n, --max-rows <N>         Maximum number of rows to convert
+       |  -n, --limit <N>            Maximum number of rows to convert
        |      --dry-run              Preview what would be converted without converting
        |  -h, --help                 Show this help message
        |
        |EXAMPLES:
-       |  # Convert CSV to Parquet
        |  parqueteer convert data.csv data.parquet
-       |
-       |  # Preview without converting
-       |  parqueteer convert data.parquet data.json --dry-run
-       |
-       |  # Convert Parquet to JSON with row limit
-       |  parqueteer convert data.parquet data.json --max-rows 1000
-       |
-       |  # Convert with specific compression
+       |  parqueteer convert data.parquet data.json --limit 1000
        |  parqueteer convert data.csv data.parquet --compression zstd
        |""".stripMargin
   }
 
-  /** Generate help for the 'merge' command */
   def mergeHelp(): String = {
     """
        |USAGE:
@@ -217,18 +173,11 @@ object HelpFormatter {
        |  union    Merge schemas; missing columns filled with null
        |
        |EXAMPLES:
-       |  # Merge two files with default settings
        |  parqueteer merge a.parquet b.parquet --output merged.parquet
-       |
-       |  # Merge with union schema mode and gzip compression
-       |  parqueteer merge a.parquet b.parquet --output out.parquet --schema-mode union --compression gzip
-       |
-       |  # Merge files from S3
-       |  parqueteer merge s3://bucket/a.parquet s3://bucket/b.parquet --output s3://bucket/merged.parquet
+       |  parqueteer merge a.parquet b.parquet --output out.parquet --schema-mode union
        |""".stripMargin
   }
 
-  /** Generate help for the 'stats' command */
   def statsHelp(): String = {
     """
        |USAGE:
@@ -242,15 +191,59 @@ object HelpFormatter {
        |  -h, --help                Show this help message
        |
        |EXAMPLES:
-       |  # Show column statistics as table
        |  parqueteer stats data.parquet
-       |
-       |  # Output statistics as JSON
        |  parqueteer stats data.parquet --format json
        |""".stripMargin
   }
 
-  /** Get help for a specific command */
+  def schemaHelp(): String = {
+    """
+       |USAGE:
+       |  parqueteer schema [OPTIONS] <FILE1> <FILE2>
+       |
+       |ARGUMENTS:
+       |  <FILE1>   First parquet file path
+       |  <FILE2>   Second parquet file path
+       |
+       |OPTIONS:
+       |      --format <FORMAT>     Output format: table, json (default: table)
+       |  -h, --help                Show this help message
+       |
+       |OUTPUT SYMBOLS:
+       |  +  column added in FILE2
+       |  -  column removed in FILE2
+       |  ~  column type or nullability changed
+       |  =  unchanged columns
+       |
+       |EXAMPLES:
+       |  parqueteer schema old.parquet new.parquet
+       |  parqueteer schema old.parquet new.parquet --format json
+       |""".stripMargin
+  }
+
+  def configHelp(): String = {
+    """
+       |USAGE:
+       |  parqueteer config [OPTIONS]
+       |
+       |OPTIONS:
+       |      --validate    Validate the configuration file
+       |  -h, --help        Show this help message
+       |
+       |ENVIRONMENT VARIABLES:
+       |  PARQUETEER_CONFIG           Path to config file
+       |  PARQUETEER_DEFAULT_FORMAT   Default output format
+       |  PARQUETEER_COLOR            Color mode: auto, always, never
+       |  PARQUETEER_VERBOSE          Enable verbose output (true/false)
+       |  PARQUETEER_MAX_ROWS         Default row limit
+       |  NO_COLOR                    Disable color output
+       |
+       |EXAMPLES:
+       |  parqueteer config
+       |  parqueteer config --validate
+       |""".stripMargin
+  }
+
   def commandHelp(command: String): Option[String] = {
     command.toLowerCase match {
       case "read"     => Some(readHelp())
@@ -260,6 +253,8 @@ object HelpFormatter {
       case "convert"  => Some(convertHelp())
       case "merge"    => Some(mergeHelp())
       case "stats"    => Some(statsHelp())
+      case "schema"   => Some(schemaHelp())
+      case "config"   => Some(configHelp())
       case _          => None
     }
   }

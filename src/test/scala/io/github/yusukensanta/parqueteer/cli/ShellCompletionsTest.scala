@@ -56,8 +56,9 @@ class ShellCompletionsTest extends AnyFlatSpec with Matchers {
       .foreach(cmd => script should include(cmd))
   }
 
-  it should "complete schema diff subcommand" in {
-    ShellCompletions.zsh should include("diff")
+  it should "complete schema command with file arguments" in {
+    ShellCompletions.zsh should include("schema")
+    ShellCompletions.zsh should include("*.parquet")
   }
 
   "ShellCompletions.fish" should "use fish complete syntax" in {

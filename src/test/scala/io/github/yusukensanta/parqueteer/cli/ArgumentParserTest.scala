@@ -15,7 +15,7 @@ class ArgumentParserTest extends AnyFlatSpec with Matchers {
     val args = Array(
       "read",
       "s3://bucket/file.parquet",
-      "--max-rows",
+      "--limit",
       "100",
       "--format",
       "json"
@@ -207,30 +207,26 @@ class ArgumentParserTest extends AnyFlatSpec with Matchers {
     result shouldBe None
   }
 
-  "ArgumentParser config show" should "parse config show subcommand" in {
-    val args = Array("config", "show")
+  "ArgumentParser config" should "parse config command (default: show)" in {
+    val args = Array("config")
     val result =
       OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
 
     result shouldBe defined
     result.get.command shouldBe defined
-    result.get.command.get shouldBe a[ConfigCommand]
-    result.get.command.get
-      .asInstanceOf[ConfigCommand]
-      .sub shouldBe ConfigSubcommand.Show
+    val cmd = result.get.command.get.asInstanceOf[ConfigCommand]
+    cmd.validate shouldBe false
   }
 
-  "ArgumentParser config validate" should "parse config validate subcommand" in {
-    val args = Array("config", "validate")
+  it should "parse config --validate flag" in {
+    val args = Array("config", "--validate")
     val result =
       OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
 
     result shouldBe defined
     result.get.command shouldBe defined
-    result.get.command.get shouldBe a[ConfigCommand]
-    result.get.command.get
-      .asInstanceOf[ConfigCommand]
-      .sub shouldBe ConfigSubcommand.Validate
+    val cmd = result.get.command.get.asInstanceOf[ConfigCommand]
+    cmd.validate shouldBe true
   }
 
   "ArgumentParser merge" should "parse merge command with required output" in {

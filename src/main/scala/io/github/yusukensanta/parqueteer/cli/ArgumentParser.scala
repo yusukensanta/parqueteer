@@ -83,12 +83,18 @@ object ArgumentParser {
               )
             )
             .text("Path to parquet file (local, s3://, gs://, abfss://)"),
-          opt[Long]("max-rows")
+          opt[Long]("limit")
             .abbr("n")
             .action((x, c) =>
               updateCmd[ReadCommand](c, _.copy(maxRows = Some(x)))
             )
             .text("Maximum number of rows to display"),
+          opt[Long]("max-rows")
+            .hidden()
+            .action((x, c) =>
+              updateCmd[ReadCommand](c, _.copy(maxRows = Some(x)))
+            )
+            .text("Alias for --limit (deprecated)"),
           opt[Seq[String]]("columns")
             .abbr("c")
             .action((x, c) =>
@@ -244,12 +250,18 @@ object ArgumentParser {
               )
             )
             .text("Compression type for output"),
-          opt[Long]("max-rows")
+          opt[Long]("limit")
             .abbr("n")
             .action((x, c) =>
               updateCmd[ConvertCommand](c, _.copy(maxRows = Some(x)))
             )
             .text("Maximum number of rows to convert"),
+          opt[Long]("max-rows")
+            .hidden()
+            .action((x, c) =>
+              updateCmd[ConvertCommand](c, _.copy(maxRows = Some(x)))
+            )
+            .text("Alias for --limit (deprecated)"),
           opt[Unit]("dry-run")
             .action((_, c) =>
               updateCmd[ConvertCommand](c, _.copy(dryRun = true))
@@ -259,37 +271,26 @@ object ArgumentParser {
             )
         ),
       cmd("schema")
-        .text("Schema inspection commands")
+        .text("Compare schemas of two parquet files")
+        .action((_, c) => c.copy(command = Some(SchemaCommand("", ""))))
         .children(
-          cmd("diff")
-            .text("Compare schemas of two parquet files")
-            .action((_, c) =>
-              c.copy(command =
-                Some(SchemaCommand(SchemaDiffSubcommand("", "")))
-              )
+          arg[String]("<file1>")
+            .required()
+            .action((x, c) => updateCmd[SchemaCommand](c, _.copy(file1 = x)))
+            .text("First parquet file path"),
+          arg[String]("<file2>")
+            .required()
+            .action((x, c) => updateCmd[SchemaCommand](c, _.copy(file2 = x)))
+            .text("Second parquet file path"),
+          opt[String]("format")
+            .action((x, c) =>
+              updateCmd[SchemaCommand](c, _.copy(format = parseOutputFormat(x)))
             )
-            .children(
-              arg[String]("<file1>")
-                .required()
-                .action((x, c) => updateSchemaDiffCommand(c, _.copy(file1 = x)))
-                .text("First parquet file path"),
-              arg[String]("<file2>")
-                .required()
-                .action((x, c) => updateSchemaDiffCommand(c, _.copy(file2 = x)))
-                .text("Second parquet file path"),
-              opt[String]("format")
-                .action((x, c) =>
-                  updateSchemaDiffCommand(
-                    c,
-                    _.copy(format = parseOutputFormat(x))
-                  )
-                )
-                .validate(x =>
-                  if (List("table", "json").contains(x.toLowerCase)) success
-                  else failure(s"Invalid format: $x. Use table or json")
-                )
-                .text("Output format: table, json (default: table)")
+            .validate(x =>
+              if (List("table", "json").contains(x.toLowerCase)) success
+              else failure(s"Invalid format: $x. Use table or json")
             )
+            .text("Output format: table, json (default: table)")
         ),
       cmd("merge")
         .text("Merge multiple parquet files into one")
@@ -375,17 +376,13 @@ object ArgumentParser {
         ),
       cmd("config")
         .text("Show or validate configuration")
+        .action((_, c) => c.copy(command = Some(ConfigCommand())))
         .children(
-          cmd("show")
-            .text("Display resolved configuration with source annotations")
+          opt[Unit]("validate")
             .action((_, c) =>
-              c.copy(command = Some(ConfigCommand(ConfigSubcommand.Show)))
-            ),
-          cmd("validate")
-            .text("Validate the configuration file")
-            .action((_, c) =>
-              c.copy(command = Some(ConfigCommand(ConfigSubcommand.Validate)))
+              updateCmd[ConfigCommand](c, _.copy(validate = true))
             )
+            .text("Validate the configuration file instead of displaying it")
         )
     )
   }
@@ -397,16 +394,6 @@ object ArgumentParser {
     config.command match {
       case Some(cmd: C) => config.copy(command = Some(update(cmd)))
       case _            => config
-    }
-
-  private def updateSchemaDiffCommand(
-      config: Config,
-      update: SchemaDiffSubcommand => SchemaDiffSubcommand
-  ): Config =
-    config.command match {
-      case Some(SchemaCommand(sub)) =>
-        config.copy(command = Some(SchemaCommand(update(sub))))
-      case _ => config
     }
 
   private def parseOutputFormat(format: String): OutputFormat = {
