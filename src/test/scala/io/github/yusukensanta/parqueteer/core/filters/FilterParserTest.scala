@@ -90,6 +90,14 @@ class FilterParserTest extends AnyFlatSpec with Matchers {
     result.exists(_ ne Filter.noopFilter) shouldBe true
   }
 
+  it should "parse integer literal as Long not Double (prevents INT64 filter mismatch)" in {
+    // 2^53+1 cannot be exactly represented as Double; a Double filter would silently
+    // corrupt the value, causing the INT64 predicate to never match.
+    val result = FilterParser.parse("id = 9007199254740993")
+    result shouldBe a[Right[?, ?]]
+    result.exists(_ ne Filter.noopFilter) shouldBe true
+  }
+
   it should "return Left for empty string" in {
     FilterParser.parse("") shouldBe a[Left[?, ?]]
   }

@@ -50,7 +50,10 @@ object RowStreamWriter {
     private var columns: List[String] = Nil
     private def escape(s: String): String = {
       val str = if (s == null) "" else s
-      if (str.contains(",") || str.contains("\"") || str.contains("\n"))
+      if (
+        str.contains(",") || str.contains("\"") || str.contains("\n") || str
+          .contains("\r")
+      )
         "\"" + str.replace("\"", "\"\"") + "\""
       else str
     }
