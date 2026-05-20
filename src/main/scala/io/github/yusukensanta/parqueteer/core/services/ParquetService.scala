@@ -44,8 +44,6 @@ class ParquetService(
       parsedFilter <- readConfig.filter
         .map(FilterParser.parse(_).map(Some(_)))
         .getOrElse(Right(None))
-        .left
-        .map(identity)
       location <- StorageLocationParser
         .parse(path)
         .left
@@ -88,8 +86,6 @@ class ParquetService(
       parsedFilter <- readConfig.filter
         .map(FilterParser.parse(_).map(Some(_)))
         .getOrElse(Right(None))
-        .left
-        .map(identity)
       location <- StorageLocationParser
         .parse(path)
         .left
@@ -231,6 +227,9 @@ class ParquetService(
         .toEither.left.map(ParqueteerError.IOError.apply)
     } yield stats
 
+  private def getFileInfoAsTry(path: String): Try[ParquetFile] =
+    getFileInfo(path).fold(e => Failure(new RuntimeException(e.userMessage)), Success.apply)
+
   private def readFileAsTry(path: String): Try[ParquetFile] =
     readFile(path).fold(
       err => Failure(new RuntimeException(err.userMessage)),
@@ -291,8 +290,8 @@ class ParquetService(
 
   def diffSchemas(path1: String, path2: String): Try[SchemaDiff] = {
     for {
-      f1 <- getFileInfo(path1).fold(e => Failure(new RuntimeException(e.userMessage)), Success.apply)
-      f2 <- getFileInfo(path2).fold(e => Failure(new RuntimeException(e.userMessage)), Success.apply)
+      f1 <- getFileInfoAsTry(path1)
+      f2 <- getFileInfoAsTry(path2)
     } yield {
       val cols1 = f1.schema.map(_.columns).getOrElse(List.empty)
       val cols2 = f2.schema.map(_.columns).getOrElse(List.empty)

@@ -142,6 +142,34 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     result.toOption.get.issues should contain("corrupted row group")
   }
 
+  // ── getStats ──────────────────────────────────────────────────────────────
+  "ParquetService.getStats" should "return Right with correct totalRows on success" in {
+    val service = new ParquetService(new FakeParquetRepository())
+    val result = service.getStats("/tmp/test.parquet")
+
+    result.isRight shouldBe true
+    result.toOption.get.totalRows shouldBe defaultStats.totalRows
+  }
+
+  it should "return Left(IOError) when readStats fails" in {
+    val service = new ParquetService(
+      new FakeParquetRepository(statsResult =
+        Failure(new RuntimeException("stats unavailable"))
+      )
+    )
+    val result = service.getStats("/tmp/test.parquet")
+
+    result.isLeft shouldBe true
+    result.left.toOption.get.userMessage should include("stats unavailable")
+  }
+
+  it should "return Left(InvalidFormat) for an unsupported path scheme" in {
+    val service = new ParquetService(new FakeParquetRepository())
+    val result = service.getStats("ftp://unsupported/path")
+
+    result.isLeft shouldBe true
+  }
+
   // ── convertFile ───────────────────────────────────────────────────────────
   "ParquetService.convertFile" should "succeed for parquet-to-parquet" in {
     val service = new ParquetService(new FakeParquetRepository())
