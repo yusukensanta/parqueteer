@@ -119,6 +119,16 @@ class ParquetService(
       writeConfig: WriteConfig,
       schemaMode: SchemaMode,
       onProgress: (Int, Int, String) => Unit = (_, _, _) => ()
+  ): Either[ParqueteerError, Long] =
+    mergeFilesInternal(inputPaths, outputPath, writeConfig, schemaMode, onProgress)
+      .toEither.left.map(ParqueteerError.IOError.apply)
+
+  private def mergeFilesInternal(
+      inputPaths: List[String],
+      outputPath: String,
+      writeConfig: WriteConfig,
+      schemaMode: SchemaMode,
+      onProgress: (Int, Int, String) => Unit
   ): Try[Long] = {
 
     if (inputPaths.size < 2)
@@ -330,6 +340,14 @@ class ParquetService(
       inputPath: String,
       outputPath: String,
       conversionConfig: ConversionConfig = ConversionConfig()
+  ): Either[ParqueteerError, Unit] =
+    convertFileInternal(inputPath, outputPath, conversionConfig)
+      .toEither.left.map(ParqueteerError.IOError.apply)
+
+  private def convertFileInternal(
+      inputPath: String,
+      outputPath: String,
+      conversionConfig: ConversionConfig
   ): Try[Unit] = {
     val inputExt = getFileExtension(inputPath)
     val outputExt = getFileExtension(outputPath)

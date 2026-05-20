@@ -174,19 +174,19 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
   "ParquetService.convertFile" should "succeed for parquet-to-parquet" in {
     val service = new ParquetService(new FakeParquetRepository())
     val result = service.convertFile("/in.parquet", "/tmp/out_convert.parquet")
-    result.isSuccess shouldBe true
+    result.isRight shouldBe true
   }
 
   it should "succeed for parquet-to-json" in {
     val service = new ParquetService(new FakeParquetRepository())
     val result = service.convertFile("/in.parquet", "/tmp/out_convert.json")
-    result.isSuccess shouldBe true
+    result.isRight shouldBe true
   }
 
   it should "succeed for parquet-to-csv" in {
     val service = new ParquetService(new FakeParquetRepository())
     val result = service.convertFile("/in.parquet", "/tmp/out_convert.csv")
-    result.isSuccess shouldBe true
+    result.isRight shouldBe true
   }
 
   // ── Error propagation ────────────────────────────────────────────────────
@@ -321,7 +321,7 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
       "/tmp/parqueteer_test_out.parquet"
     )
 
-    result.isSuccess shouldBe true
+    result.isRight shouldBe true
     repo.lastWrittenData should have length 2
     repo.lastWrittenData.head("name") shouldBe "Alice"
     repo.lastWrittenData(1)("name") shouldBe "Bob"
@@ -342,7 +342,7 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
       "/tmp/parqueteer_test_out2.parquet"
     )
 
-    result.isSuccess shouldBe true
+    result.isRight shouldBe true
     repo.lastWrittenData should have length 2
     repo.lastWrittenData.head("name") shouldBe "Alice"
   }
@@ -353,7 +353,7 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
       "/tmp/nonexistent_parqueteer.json",
       "/tmp/out.parquet"
     )
-    result.isFailure shouldBe true
+    result.isLeft shouldBe true
   }
 
   it should "fail for json-to-parquet when input is not a JSON array" in {
@@ -365,7 +365,7 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     val service = new ParquetService(new FakeParquetRepository())
     val result =
       service.convertFile(badFile.getAbsolutePath, "/tmp/out.parquet")
-    result.isFailure shouldBe true
+    result.isLeft shouldBe true
   }
 
   // ── readDataFile ──────────────────────────────────────────────────────────

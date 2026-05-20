@@ -471,14 +471,17 @@ object CliApp {
       }
     } else {
       service.convertFile(inputPath, outputPath, conversionConfig) match {
-        case Success(_) =>
+        case Right(_) =>
           if (showStatus(globalOptions))
             println(s"Successfully converted $inputPath to $outputPath")
           0
-        case Failure(error) =>
-          System.err.println(s"Failed to convert file: ${error.getMessage}")
-          if (globalOptions.verbose) error.printStackTrace()
-          1
+        case Left(error) =>
+          System.err.println(s"Failed to convert file: ${error.userMessage}")
+          if (globalOptions.verbose) error match {
+            case ParqueteerError.IOError(cause) => cause.printStackTrace()
+            case _                              => ()
+          }
+          error.exitCode
       }
     }
   }
@@ -517,14 +520,17 @@ object CliApp {
       schemaMode,
       onProgress
     ) match {
-      case scala.util.Success(count) =>
+      case Right(count) =>
         if (showStatus(globalOptions))
           println(s"Merged $total files ($count rows) → $outputPath")
         0
-      case scala.util.Failure(error) =>
-        System.err.println(s"Failed to merge: ${error.getMessage}")
-        if (globalOptions.verbose) error.printStackTrace()
-        1
+      case Left(error) =>
+        System.err.println(s"Failed to merge: ${error.userMessage}")
+        if (globalOptions.verbose) error match {
+          case ParqueteerError.IOError(cause) => cause.printStackTrace()
+          case _                              => ()
+        }
+        error.exitCode
     }
   }
 
