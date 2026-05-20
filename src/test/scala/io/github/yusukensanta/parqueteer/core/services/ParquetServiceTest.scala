@@ -189,6 +189,15 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     result.isRight shouldBe true
   }
 
+  it should "return Left when write fails during parquet-to-parquet conversion" in {
+    val service = new ParquetService(
+      new FakeParquetRepository(writeResult = Failure(new RuntimeException("write denied")))
+    )
+    val result = service.convertFile("/in.parquet", "/tmp/out.parquet")
+    result.isLeft shouldBe true
+    result.left.toOption.get.userMessage should include("write denied")
+  }
+
   // ── Error propagation ────────────────────────────────────────────────────
   "ParquetService.readFile" should "propagate Left(IOError) when readContent fails" in {
     val service = new ParquetService(

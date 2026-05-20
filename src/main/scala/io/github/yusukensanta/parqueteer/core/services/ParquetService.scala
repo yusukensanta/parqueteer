@@ -26,6 +26,9 @@ object ParquetServiceEncoders {
     )
 }
 
+private final class ParqueteerCarrierException(val error: ParqueteerError)
+    extends RuntimeException(error.userMessage)
+
 class ParquetService(
     repository: ParquetRepository
 ) {
@@ -239,7 +242,7 @@ class ParquetService(
 
   private def readFileAsTry(path: String): Try[ParquetFile] =
     readFile(path).fold(
-      err => Failure(new RuntimeException(err.userMessage)),
+      err => Failure(new ParqueteerCarrierException(err)),
       Success.apply
     )
 
@@ -341,8 +344,10 @@ class ParquetService(
       outputPath: String,
       conversionConfig: ConversionConfig = ConversionConfig()
   ): Either[ParqueteerError, Unit] =
-    convertFileInternal(inputPath, outputPath, conversionConfig)
-      .toEither.left.map(ParqueteerError.IOError.apply)
+    convertFileInternal(inputPath, outputPath, conversionConfig).toEither.left.map {
+      case e: ParqueteerCarrierException => e.error
+      case e                             => ParqueteerError.IOError(e)
+    }
 
   private def convertFileInternal(
       inputPath: String,
