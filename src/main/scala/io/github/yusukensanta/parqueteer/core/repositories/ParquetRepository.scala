@@ -43,7 +43,9 @@ class ParquetRepository {
         val hadoopPath = new HadoopPath(file.location.path)
         val (totalRows, fileSchema) = getFileMetadata(hadoopPath, hadoopConfig)
 
-        if (config.parallelism > 1 && config.filter.isEmpty) {
+        if (
+          config.parallelism > 1 && config.parsedFilter.isEmpty && config.filter.isEmpty
+        ) {
           val rows = readParallel(hadoopPath, hadoopConfig, config)
           val isPartial =
             config.maxRows.exists(limit => rows.size.toLong >= limit)
@@ -186,9 +188,10 @@ class ParquetRepository {
       group: Group,
       schema: MessageType
   ): Map[String, Any] = {
-    (0 until schema.getFieldCount).flatMap { i =>
-      if (group.getFieldRepetitionCount(i) == 0) None
-      else {
+    val builder = Map.newBuilder[String, Any]
+    var i = 0
+    while (i < schema.getFieldCount) {
+      if (group.getFieldRepetitionCount(i) > 0) {
         val name = schema.getType(i).getName
         val fieldType = schema.getType(i).asPrimitiveType()
         val originalType = fieldType.getOriginalType
@@ -232,9 +235,11 @@ class ParquetRepository {
             group.getBinary(i, 0).toStringUsingUTF8
           case _ => group.getValueToString(i, 0)
         }
-        Some(name -> value)
+        builder += name -> value
       }
-    }.toMap
+      i += 1
+    }
+    builder.result()
   }
 
   private def projectSchema(
@@ -269,7 +274,14 @@ class ParquetRepository {
       hadoopConfig: Configuration,
       config: ReadConfig
   ): com.github.mjakubowski84.parquet4s.ParquetIterable[RowParquetRecord] = {
-    val filter = createFilter(config.filter)
+    val filter = config.parsedFilter.getOrElse {
+      config.filter
+        .flatMap { expr =>
+          import io.github.yusukensanta.parqueteer.core.filters.FilterParser
+          FilterParser.parse(expr).toOption
+        }
+        .getOrElse(Filter.noopFilter)
+    }
     config.columns match {
       case Some(cols) if cols.nonEmpty =>
         val schema = buildProjectedSchema(hadoopPath, hadoopConfig, cols)
@@ -868,29 +880,6 @@ class ParquetRepository {
     case DecimalValue(bigInt, fmt) =>
       scala.math.BigDecimal(new java.math.BigDecimal(bigInt, fmt.scale))
     case _ => value.toString
-  }
-
-  /** Create parquet4s Filter from filter expression
-    *
-    * Supports SQL-like filter expressions:
-    *   - age > 25
-    *   - name = "John"
-    *   - age > 25 AND salary >= 50000
-    *   - (age < 18 OR age > 65) AND active = true
-    */
-  private def createFilter(filterExpr: Option[String]): Filter = {
-    filterExpr match {
-      case None => Filter.noopFilter // No filter = accept all
-
-      case Some(expr) =>
-        import io.github.yusukensanta.parqueteer.core.filters.FilterParser
-
-        FilterParser.parse(expr) match {
-          case Right(filter) => filter
-          case Left(error) =>
-            throw new IllegalArgumentException(error.userMessage)
-        }
-    }
   }
 
   private def convertCompressionType(

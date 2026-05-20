@@ -41,9 +41,9 @@ class ParquetService(
         )
       )
     for {
-      _ <- readConfig.filter
-        .map(FilterParser.parse)
-        .getOrElse(Right(()))
+      parsedFilter <- readConfig.filter
+        .map(FilterParser.parse(_).map(Some(_)))
+        .getOrElse(Right(None))
         .left
         .map(identity)
       location <- StorageLocationParser
@@ -52,7 +52,7 @@ class ParquetService(
         .map(msg => ParqueteerError.InvalidFormat(path, msg))
       file = ParquetFile(location)
       content <- repository
-        .readContent(file, readConfig)
+        .readContent(file, readConfig.copy(parsedFilter = parsedFilter))
         .toEither
         .left
         .map(ParqueteerError.IOError.apply)
@@ -85,9 +85,9 @@ class ParquetService(
         )
       )
     for {
-      _ <- readConfig.filter
-        .map(FilterParser.parse)
-        .getOrElse(Right(()))
+      parsedFilter <- readConfig.filter
+        .map(FilterParser.parse(_).map(Some(_)))
+        .getOrElse(Right(None))
         .left
         .map(identity)
       location <- StorageLocationParser
@@ -96,7 +96,9 @@ class ParquetService(
         .map(msg => ParqueteerError.InvalidFormat(path, msg))
       file = ParquetFile(location)
       count <- repository
-        .streamContent(file, readConfig)(process)
+        .streamContent(file, readConfig.copy(parsedFilter = parsedFilter))(
+          process
+        )
         .toEither
         .left
         .map(ParqueteerError.IOError.apply)
@@ -172,22 +174,23 @@ class ParquetService(
             }
             first
           case SchemaMode.Union =>
-            schemas
-              .foldLeft(List.empty[(String, String, Boolean)]) {
-                (acc, fields) =>
-                  val existingMap = acc.map(f => f._1 -> f._2).toMap
-                  val conflicts = fields.collect {
-                    case (name, t, _) if existingMap.get(name).exists(_ != t) =>
-                      s"'$name' (${existingMap(name)} vs $t)"
-                  }
-                  if (conflicts.nonEmpty)
-                    throw new IllegalArgumentException(
-                      s"Type conflicts in union merge: ${conflicts.mkString(", ")}. " +
-                        "Cannot union-merge columns with incompatible types."
-                    )
-                  acc ++ fields.filterNot(f => existingMap.contains(f._1))
+            val seen =
+              scala.collection.mutable.LinkedHashMap.empty[String, String]
+            schemas.foreach { fields =>
+              val conflicts = fields.collect {
+                case (name, t, _) if seen.get(name).exists(_ != t) =>
+                  s"'$name' (${seen(name)} vs $t)"
               }
-              .map { case (name, t, _) => (name, t, true) }
+              if (conflicts.nonEmpty)
+                throw new IllegalArgumentException(
+                  s"Type conflicts in union merge: ${conflicts.mkString(", ")}. " +
+                    "Cannot union-merge columns with incompatible types."
+                )
+              fields.foreach { case (name, t, _) =>
+                seen.getOrElseUpdate(name, t)
+              }
+            }
+            seen.map { case (name, t) => (name, t, true) }.toList
         }
       }
       allColumnNames = mergedFields.map(_._1).toSet
@@ -546,12 +549,16 @@ class ParquetService(
     records.toList
   }
 
-  def formatContent(file: ParquetFile, format: OutputFormat): String = {
+  def formatContent(
+      file: ParquetFile,
+      format: OutputFormat,
+      useColors: Boolean = true
+  ): String = {
     import io.github.yusukensanta.parqueteer.core.formatters.OutputFormatter
 
     file.content match {
       case Some(content) =>
-        val formatter = OutputFormatter(format)
+        val formatter = OutputFormatter(format, useColors)
         formatter.formatContent(content, file.schema)
       case None => "No content available"
     }

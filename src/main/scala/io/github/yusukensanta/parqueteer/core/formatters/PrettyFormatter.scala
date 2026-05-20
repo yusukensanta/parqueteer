@@ -6,7 +6,8 @@ import io.github.yusukensanta.parqueteer.core.models.{
   FileMetadata
 }
 
-class PrettyFormatter extends OutputFormatter {
+class PrettyFormatter(useColors: Boolean = sys.env.get("NO_COLOR").isEmpty)
+    extends OutputFormatter {
 
   private val Reset = "\u001b[0m"
   private val Bold = "\u001b[1m"
@@ -17,8 +18,6 @@ class PrettyFormatter extends OutputFormatter {
   private val Blue = "\u001b[34m"
   private val Magenta = "\u001b[35m"
   private val Cyan = "\u001b[36m"
-
-  private val useColors = sys.env.get("NO_COLOR").isEmpty
 
   private val tableFormatter = new TableFormatter()
 

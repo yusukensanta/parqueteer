@@ -241,7 +241,15 @@ object CliApp {
     } else {
       service.readFile(filePath, readConfig) match {
         case Right(file) =>
-          if (!globalOptions.quiet) println(service.formatContent(file, format))
+          if (!globalOptions.quiet) {
+            val useColors = globalOptions.colorMode match {
+              case ColorMode.Never  => false
+              case ColorMode.Always => true
+              case ColorMode.Auto =>
+                sys.env.get("NO_COLOR").isEmpty && System.console() != null
+            }
+            println(service.formatContent(file, format, useColors))
+          }
           0
         case Left(error) =>
           System.err.println(s"Error: ${error.userMessage}")
