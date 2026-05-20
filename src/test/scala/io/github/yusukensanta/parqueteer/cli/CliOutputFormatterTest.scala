@@ -6,10 +6,10 @@ import io.github.yusukensanta.parqueteer.core.models.{
   ColumnStats,
   FileMetadata,
   FileStats,
+  LocalPath,
   ParquetFile,
   ParquetSchema
 }
-import io.github.yusukensanta.parqueteer.core.models.LocalPath
 import io.circe.parser.parse
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -117,6 +117,10 @@ class CliOutputFormatterTest extends AnyFlatSpec with Matchers {
   it should "format fractional kilobytes correctly" in {
     // 1536 bytes = 1.5 KB
     CliOutputFormatter.formatBytesForDisplay(1536L) shouldBe "1.5 KB"
+  }
+
+  it should "handle negative byte values by formatting as-is" in {
+    CliOutputFormatter.formatBytesForDisplay(-1L) should startWith("-")
   }
 
   // ─── formatInfoJson ─────────────────────────────────────────────────────────
@@ -284,6 +288,7 @@ class CliOutputFormatterTest extends AnyFlatSpec with Matchers {
     result should include("a.parquet")
     result should include("b.parquet")
     result should include("identical")
+    result should not include ("= ")
   }
 
   it should "list added columns with +" in {
