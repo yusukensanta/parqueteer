@@ -265,7 +265,13 @@ object CliApp {
               case ColorMode.Auto =>
                 sys.env.get("NO_COLOR").isEmpty && System.console() != null
             }
-            println(service.formatContent(file, format, useColors))
+            import io.github.yusukensanta.parqueteer.core.formatters.OutputFormatter
+            val formatter = OutputFormatter(format, useColors)
+            val output = file.content match {
+              case Some(content) => formatter.formatContent(content, file.schema)
+              case None          => "No content available"
+            }
+            println(output)
           }
           0
         case Left(error) =>
@@ -298,7 +304,13 @@ object CliApp {
         if (!globalOptions.quiet) {
           format match {
             case OutputFormat.JSON => println(formatInfoJson(file))
-            case _                 => println(service.formatMetadata(file))
+            case _ =>
+              import io.github.yusukensanta.parqueteer.core.formatters.TableFormatter
+              val output = file.metadata match {
+                case Some(metadata) => new TableFormatter().formatMetadata(metadata)
+                case None           => "No metadata information available"
+              }
+              println(output)
           }
         }
         0
@@ -524,7 +536,13 @@ object CliApp {
         if (!globalOptions.quiet) {
           cmd.format match {
             case OutputFormat.JSON => println(formatSchemaJson(file))
-            case _                 => println(service.formatSchema(file))
+            case _ =>
+              import io.github.yusukensanta.parqueteer.core.formatters.TableFormatter
+              val output = file.schema match {
+                case Some(schema) => new TableFormatter().formatSchema(schema)
+                case None         => "No schema information available"
+              }
+              println(output)
           }
         }
         0

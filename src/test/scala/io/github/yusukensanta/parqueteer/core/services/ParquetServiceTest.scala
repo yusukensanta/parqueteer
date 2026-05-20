@@ -154,36 +154,6 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     result.isSuccess shouldBe true
   }
 
-  // ── formatContent ─────────────────────────────────────────────────────────
-  "ParquetService.formatContent" should "format with Table format" in {
-    val service = new ParquetService(new FakeParquetRepository())
-    val file = ParquetFile(
-      LocalPath("/tmp/test.parquet"),
-      content = Some(defaultContent)
-    )
-    service.formatContent(file, OutputFormat.Table) should include("Alice")
-  }
-
-  it should "format with JSON format" in {
-    val service = new ParquetService(new FakeParquetRepository())
-    val file = ParquetFile(
-      LocalPath("/tmp/test.parquet"),
-      content = Some(defaultContent)
-    )
-    val result = service.formatContent(file, OutputFormat.JSON)
-    result should include("{")
-    result should include("Alice")
-  }
-
-  it should "return 'No content available' when file has no content" in {
-    val service = new ParquetService(new FakeParquetRepository())
-    val file = ParquetFile(LocalPath("/tmp/test.parquet"))
-    service.formatContent(
-      file,
-      OutputFormat.Table
-    ) shouldBe "No content available"
-  }
-
   // ── Error propagation ────────────────────────────────────────────────────
   "ParquetService.readFile" should "propagate Left(IOError) when readContent fails" in {
     val service = new ParquetService(

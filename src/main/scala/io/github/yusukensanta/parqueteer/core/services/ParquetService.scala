@@ -549,44 +549,6 @@ class ParquetService(
     records.toList
   }
 
-  def formatContent(
-      file: ParquetFile,
-      format: OutputFormat,
-      useColors: Boolean = true
-  ): String = {
-    import io.github.yusukensanta.parqueteer.core.formatters.OutputFormatter
-
-    file.content match {
-      case Some(content) =>
-        val formatter = OutputFormatter(format, useColors)
-        formatter.formatContent(content, file.schema)
-      case None => "No content available"
-    }
-  }
-
-  def formatSchema(file: ParquetFile): String = {
-    import io.github.yusukensanta.parqueteer.core.formatters.OutputFormatter
-
-    file.schema match {
-      case Some(schema) =>
-        // Use TableFormatter for schema display
-        val formatter = OutputFormatter(OutputFormat.Table)
-        formatter.formatSchema(schema)
-      case None => "No schema information available"
-    }
-  }
-
-  def formatMetadata(file: ParquetFile): String = {
-    import io.github.yusukensanta.parqueteer.core.formatters.OutputFormatter
-
-    file.metadata match {
-      case Some(metadata) =>
-        // Use TableFormatter for metadata display
-        val formatter = OutputFormatter(OutputFormat.Table)
-        formatter.formatMetadata(metadata)
-      case None => "No metadata information available"
-    }
-  }
 }
 
 case class ValidationResult(
