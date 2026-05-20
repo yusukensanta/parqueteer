@@ -126,5 +126,6 @@ class SchemaDiffTest extends AnyFlatSpec with Matchers {
     val service = new ParquetService(new TwoSchemaRepository(s, s, metadata))
     val result = service.diffSchemas("ftp://bad", "/file2.parquet")
     result.isLeft shouldBe true
+    result.left.toOption.get shouldBe a[ParqueteerError.InvalidFormat]
   }
 }

@@ -670,7 +670,7 @@ object CliApp {
           case ParqueteerError.IOError(cause) => cause.printStackTrace()
           case _                              => ()
         }
-        1
+        error.exitCode
       case Right(diff) =>
         if (!globalOptions.quiet)
           cmd.format match {
