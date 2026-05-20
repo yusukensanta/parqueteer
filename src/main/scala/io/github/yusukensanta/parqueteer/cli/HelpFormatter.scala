@@ -29,6 +29,7 @@ object HelpFormatter {
        |  -h, --help         Show this help message
        |  -V, --version      Show version information
        |  -v, --verbose      Enable verbose output
+       |  -q, --quiet        Suppress non-error output
        |      --config       Path to configuration file
        |      --profile      AWS S3 credentials profile (from ~/.aws/credentials)
        |      --region       AWS S3 region (e.g. us-east-1, ap-northeast-1)
@@ -58,7 +59,7 @@ object HelpFormatter {
        |  -n, --limit <N>           Maximum number of rows to display
        |  -c, --columns <COLS>      Comma-separated list of columns to display
        |  -f, --filter <EXPR>       Filter expression for rows
-       |      --format <FORMAT>     Output format: table, json, csv, pretty (default: table)
+       |      --format <FORMAT>     Output format: table, json, csv, pretty, markdown, ndjson (default: table)
        |      --parallel <N>        Number of parallel threads for reading (default: 1)
        |      --stream              Stream rows progressively (safe for large files)
        |  -h, --help                Show this help message
@@ -135,10 +136,12 @@ object HelpFormatter {
        |  <FILE>    Path to parquet file
        |
        |OPTIONS:
-       |  -h, --help    Show this help message
+       |      --verbose     Show detailed validation information for each check
+       |  -h, --help        Show this help message
        |
        |EXAMPLES:
        |  parqueteer validate data.parquet
+       |  parqueteer validate data.parquet --verbose
        |""".stripMargin
   }
 
