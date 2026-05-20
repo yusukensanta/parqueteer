@@ -1,0 +1,10 @@
+
+# Portfolio opt-in configuration for yusukensanta.github.io
+enabled: true
+
+tech_stack:
+  - Scala
+  - Apache Parquet
+  - S3
+  - GCS
+  - Azure
