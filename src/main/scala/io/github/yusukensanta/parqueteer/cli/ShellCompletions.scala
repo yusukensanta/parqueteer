@@ -10,7 +10,7 @@ object ShellCompletions {
       |  local cur prev words cword
       |  _init_completion || return
       |
-      |  local commands="read info write validate convert merge schema config completions"
+      |  local commands="read info write validate convert merge schema stats config completions"
       |  local formats="table json csv pretty markdown ndjson"
       |  local compressions="none snappy gzip lzo brotli lz4 zstd"
       |
@@ -25,7 +25,28 @@ object ShellCompletions {
       |    info)
       |      case "$prev" in
       |        --format) COMPREPLY=($(compgen -W "table json" -- "$cur")) ; return ;;
-      |        *) COMPREPLY=($(compgen -W "--format --schema --metadata" -- "$cur"))
+      |        *) COMPREPLY=($(compgen -W "--format" -- "$cur"))
+      |           COMPREPLY+=($(compgen -f -X '!*.parquet' -- "$cur")) ; return ;;
+      |      esac ;;
+      |    schema)
+      |      case "${words[2]}" in
+      |        diff)
+      |          case "$prev" in
+      |            --format) COMPREPLY=($(compgen -W "table json" -- "$cur")) ; return ;;
+      |            *) COMPREPLY=($(compgen -W "--format" -- "$cur"))
+      |               COMPREPLY+=($(compgen -f -X '!*.parquet' -- "$cur")) ; return ;;
+      |          esac ;;
+      |        *)
+      |          case "$prev" in
+      |            --format) COMPREPLY=($(compgen -W "table json" -- "$cur")) ; return ;;
+      |            *) COMPREPLY=($(compgen -W "diff --format" -- "$cur"))
+      |               COMPREPLY+=($(compgen -f -X '!*.parquet' -- "$cur")) ; return ;;
+      |          esac ;;
+      |      esac ;;
+      |    stats)
+      |      case "$prev" in
+      |        --format) COMPREPLY=($(compgen -W "table json" -- "$cur")) ; return ;;
+      |        *) COMPREPLY=($(compgen -W "--format" -- "$cur"))
       |           COMPREPLY+=($(compgen -f -X '!*.parquet' -- "$cur")) ; return ;;
       |      esac ;;
       |    write)
@@ -44,21 +65,6 @@ object ShellCompletions {
       |        --limit|-n) return ;;
       |        *) COMPREPLY=($(compgen -W "--compression --limit --dry-run" -- "$cur"))
       |           COMPREPLY+=($(compgen -f -- "$cur")) ; return ;;
-      |      esac ;;
-      |    schema)
-      |      case "${words[2]}" in
-      |        diff)
-      |          case "$prev" in
-      |            --format) COMPREPLY=($(compgen -W "table json" -- "$cur")) ; return ;;
-      |            *) COMPREPLY=($(compgen -W "--format" -- "$cur"))
-      |               COMPREPLY+=($(compgen -f -X '!*.parquet' -- "$cur")) ; return ;;
-      |          esac ;;
-      |        *)
-      |          case "$prev" in
-      |            --format) COMPREPLY=($(compgen -W "table json" -- "$cur")) ; return ;;
-      |            *) COMPREPLY=($(compgen -W "diff --stats --format" -- "$cur"))
-      |               COMPREPLY+=($(compgen -f -X '!*.parquet' -- "$cur")) ; return ;;
-      |          esac ;;
       |      esac ;;
       |    config)
       |      COMPREPLY=($(compgen -W "--validate" -- "$cur")) ; return ;;
@@ -81,12 +87,13 @@ object ShellCompletions {
       |
       |  commands=(
       |    'read:Display parquet file content'
-      |    'info:Show file metadata and schema information'
+      |    'info:File metadata (size, dates, writer version, compression ratio)'
       |    'write:Create parquet file from input data'
       |    'validate:Verify parquet file integrity'
       |    'convert:Convert between parquet and other formats'
       |    'merge:Combine multiple parquet files into one'
-      |    'schema:Inspect schema or compare schemas'
+      |    'schema:Column structure (names, types, nullability, compression)'
+      |    'stats:Column statistics (min, max, null count)'
       |    'config:Show or validate configuration'
       |    'completions:Generate shell completion scripts'
       |  )
@@ -120,8 +127,23 @@ object ShellCompletions {
       |        info)
       |          _arguments \
       |            '--format[Output format]:format:(table json)' \
-      |            '-s[Show schema only]' \
-      |            '-m[Show metadata only]' \
+      |            ':parquet file:_files -g "*.parquet"' ;;
+      |        schema)
+      |          case ${words[3]} in
+      |            diff)
+      |              _arguments \
+      |                '--format[Output format]:format:(table json)' \
+      |                ':file1:_files -g "*.parquet"' \
+      |                ':file2:_files -g "*.parquet"' ;;
+      |            *)
+      |              _arguments \
+      |                '--format[Output format]:format:(table json)' \
+      |                '1:subcommand or file:(diff)' \
+      |                ':parquet file:_files -g "*.parquet"' ;;
+      |          esac ;;
+      |        stats)
+      |          _arguments \
+      |            '--format[Output format]:format:(table json)' \
       |            ':parquet file:_files -g "*.parquet"' ;;
       |        write)
       |          _arguments \
@@ -141,20 +163,6 @@ object ShellCompletions {
       |            '--dry-run[Preview only]' \
       |            ':input file:_files' \
       |            ':output file:_files' ;;
-      |        schema)
-      |          case ${words[3]} in
-      |            diff)
-      |              _arguments \
-      |                '--format[Output format]:format:(table json)' \
-      |                ':file1:_files -g "*.parquet"' \
-      |                ':file2:_files -g "*.parquet"' ;;
-      |            *)
-      |              _arguments \
-      |                '--stats[Include column statistics]' \
-      |                '--format[Output format]:format:(table json)' \
-      |                '1:subcommand or file:(diff)' \
-      |                ':parquet file:_files -g "*.parquet"' ;;
-      |          esac ;;
       |        config)
       |          _arguments \
       |            '--validate[Validate configuration]' ;;
@@ -176,7 +184,8 @@ object ShellCompletions {
       |complete -c parqueteer -n '__fish_use_subcommand' -f -a validate    -d 'Verify parquet file integrity'
       |complete -c parqueteer -n '__fish_use_subcommand' -f -a convert     -d 'Convert between parquet and other formats'
       |complete -c parqueteer -n '__fish_use_subcommand' -f -a merge       -d 'Combine multiple parquet files into one'
-      |complete -c parqueteer -n '__fish_use_subcommand' -f -a schema      -d 'Inspect schema or compare schemas'
+      |complete -c parqueteer -n '__fish_use_subcommand' -f -a schema      -d 'Column structure (names, types, nullability, compression)'
+      |complete -c parqueteer -n '__fish_use_subcommand' -f -a stats       -d 'Column statistics (min, max, null count)'
       |complete -c parqueteer -n '__fish_use_subcommand' -f -a config      -d 'Show or validate configuration'
       |complete -c parqueteer -n '__fish_use_subcommand' -f -a completions -d 'Generate shell completion scripts'
       |
@@ -195,9 +204,7 @@ object ShellCompletions {
       |complete -c parqueteer -n '__fish_seen_subcommand_from read' -l stream   -f -d 'Stream mode'
       |
       |# info
-      |complete -c parqueteer -n '__fish_seen_subcommand_from info' -l format   -f -a 'table json' -d 'Output format'
-      |complete -c parqueteer -n '__fish_seen_subcommand_from info' -l schema   -s s -f -d 'Show schema only'
-      |complete -c parqueteer -n '__fish_seen_subcommand_from info' -l metadata -s m -f -d 'Show metadata only'
+      |complete -c parqueteer -n '__fish_seen_subcommand_from info' -l format -f -a 'table json' -d 'Output format'
       |
       |# write
       |complete -c parqueteer -n '__fish_seen_subcommand_from write' -l input-format   -f -a 'json csv' -d 'Input file format'
@@ -211,10 +218,12 @@ object ShellCompletions {
       |complete -c parqueteer -n '__fish_seen_subcommand_from convert' -l dry-run     -f -d 'Preview only'
       |
       |# schema (inspect single file)
-      |complete -c parqueteer -n '__fish_seen_subcommand_from schema; and not __fish_seen_subcommand_from diff' -l stats  -f -d 'Include column statistics'
       |complete -c parqueteer -n '__fish_seen_subcommand_from schema' -l format -f -a 'table json' -d 'Output format'
       |# schema diff subcommand
       |complete -c parqueteer -n '__fish_seen_subcommand_from schema; and not __fish_seen_subcommand_from diff' -f -a diff -d 'Compare schemas of two parquet files'
+      |
+      |# stats
+      |complete -c parqueteer -n '__fish_seen_subcommand_from stats' -l format -f -a 'table json' -d 'Output format'
       |
       |# config
       |complete -c parqueteer -n '__fish_seen_subcommand_from config' -l validate -f -d 'Validate configuration'

@@ -63,6 +63,7 @@ object CliApp {
       "convert",
       "merge",
       "schema",
+      "stats",
       "config",
       "completions"
     )
@@ -136,15 +137,8 @@ object CliApp {
           globalOptions
         )
 
-      case InfoCommand(filePath, format, showSchema, showMetadata) =>
-        executeInfo(
-          service,
-          filePath,
-          format,
-          showSchema,
-          showMetadata,
-          globalOptions
-        )
+      case InfoCommand(filePath, format) =>
+        executeInfo(service, filePath, format, globalOptions)
 
       case WriteCommand(
             outputPath,
@@ -186,6 +180,9 @@ object CliApp {
 
       case cmd: SchemaDiffCommand =>
         executeSchemaDiff(service, cmd, globalOptions)
+
+      case StatsCommand(filePath, format) =>
+        executeStats(service, filePath, format, globalOptions)
 
       case MergeCommand(inputPaths, outputPath, compression, schemaMode) =>
         executeMerge(
@@ -269,25 +266,14 @@ object CliApp {
       service: ParquetService,
       filePath: String,
       format: OutputFormat,
-      showSchema: Boolean,
-      showMetadata: Boolean,
       globalOptions: GlobalOptions
   ): Int = {
-    val showAll = !showSchema && !showMetadata
     service.getFileInfo(filePath) match {
       case Success(file) =>
         if (!globalOptions.quiet) {
           format match {
-            case OutputFormat.JSON =>
-              println(formatInfoJson(file, showAll, showSchema, showMetadata))
-            case _ =>
-              if (showAll || showMetadata) {
-                println(service.formatMetadata(file))
-                println()
-              }
-              if (showAll || showSchema) {
-                println(service.formatSchema(file))
-              }
+            case OutputFormat.JSON => println(formatInfoJson(file))
+            case _                 => println(service.formatMetadata(file))
           }
         }
         0
@@ -298,16 +284,10 @@ object CliApp {
     }
   }
 
-  private def formatInfoJson(
-      file: ParquetFile,
-      showAll: Boolean,
-      showSchema: Boolean,
-      showMetadata: Boolean
-  ): String = {
-    val fields = scala.collection.mutable.ListBuffer.empty[(String, Json)]
-    if (showAll || showMetadata) {
-      val metaJson = file.metadata.fold(Json.Null) { m =>
-        Json.obj(
+  private def formatInfoJson(file: ParquetFile): String =
+    file.metadata.fold(Json.obj().spaces2) { m =>
+      Json
+        .obj(
           "fileSize" -> Json.fromLong(m.fileSize),
           "createdAt" -> m.createdAt.fold(Json.Null)(t =>
             Json.fromString(t.toString)
@@ -321,28 +301,8 @@ object CliApp {
           "version" -> Json.fromString(m.version),
           "createdBy" -> m.createdBy.fold(Json.Null)(Json.fromString)
         )
-      }
-      fields += ("metadata" -> metaJson)
+        .spaces2
     }
-    if (showAll || showSchema) {
-      val schemaJson = file.schema.fold(Json.Null) { s =>
-        Json.obj(
-          "totalRowCount" -> Json.fromLong(s.totalRowCount),
-          "rowGroupCount" -> Json.fromLong(s.rowGroupCount),
-          "columns" -> Json.fromValues(s.columns.map { c =>
-            Json.obj(
-              "name" -> Json.fromString(c.name),
-              "dataType" -> Json.fromString(c.dataType),
-              "optional" -> Json.fromBoolean(c.isOptional),
-              "compressionType" -> Json.fromString(c.compressionType)
-            )
-          })
-        )
-      }
-      fields += ("schema" -> schemaJson)
-    }
-    Json.obj(fields.toSeq*).spaces2
-  }
 
   private def executeWrite(
       service: ParquetService,
@@ -537,49 +497,32 @@ object CliApp {
         1
       case Success(file) =>
         if (!globalOptions.quiet) {
-          val statsOpt: Option[FileStats] =
-            if (cmd.showStats)
-              service.getStats(cmd.filePath).toOption
-            else None
           cmd.format match {
-            case OutputFormat.JSON =>
-              println(formatSchemaInfoJson(file, statsOpt))
-            case _ =>
-              println(service.formatSchema(file))
-              statsOpt.foreach { stats =>
-                println()
-                println(formatStatsTable(stats))
-              }
+            case OutputFormat.JSON => println(formatSchemaJson(file))
+            case _                 => println(service.formatSchema(file))
           }
         }
         0
     }
   }
 
-  private def formatSchemaInfoJson(
-      file: ParquetFile,
-      statsOpt: Option[FileStats]
-  ): String = {
-    val schemaJson = file.schema.fold(Json.Null) { s =>
-      Json.obj(
-        "totalRowCount" -> Json.fromLong(s.totalRowCount),
-        "rowGroupCount" -> Json.fromLong(s.rowGroupCount),
-        "columns" -> Json.fromValues(s.columns.map { c =>
-          Json.obj(
-            "name" -> Json.fromString(c.name),
-            "dataType" -> Json.fromString(c.dataType),
-            "optional" -> Json.fromBoolean(c.isOptional),
-            "compressionType" -> Json.fromString(c.compressionType)
-          )
-        })
-      )
+  private def formatSchemaJson(file: ParquetFile): String =
+    file.schema.fold(Json.obj().spaces2) { s =>
+      Json
+        .obj(
+          "totalRowCount" -> Json.fromLong(s.totalRowCount),
+          "rowGroupCount" -> Json.fromLong(s.rowGroupCount),
+          "columns" -> Json.fromValues(s.columns.map { c =>
+            Json.obj(
+              "name" -> Json.fromString(c.name),
+              "dataType" -> Json.fromString(c.dataType),
+              "optional" -> Json.fromBoolean(c.isOptional),
+              "compressionType" -> Json.fromString(c.compressionType)
+            )
+          })
+        )
+        .spaces2
     }
-    val fields = scala.collection.mutable.ListBuffer("schema" -> schemaJson)
-    statsOpt.foreach { stats =>
-      fields += "stats" -> formatStatsJson(stats)
-    }
-    Json.obj(fields.toSeq*).spaces2
-  }
 
   private def formatStatsTable(stats: FileStats): String = {
     val sb = new StringBuilder
@@ -615,6 +558,28 @@ object CliApp {
         )
       })
     )
+
+  private def executeStats(
+      service: ParquetService,
+      filePath: String,
+      format: OutputFormat,
+      globalOptions: GlobalOptions
+  ): Int = {
+    service.getStats(filePath) match {
+      case scala.util.Success(stats) =>
+        if (!globalOptions.quiet) {
+          format match {
+            case OutputFormat.JSON => println(formatStatsJson(stats).spaces2)
+            case _                 => println(formatStatsTable(stats))
+          }
+        }
+        0
+      case scala.util.Failure(error) =>
+        System.err.println(s"Failed to get stats: ${error.getMessage}")
+        if (globalOptions.verbose) error.printStackTrace()
+        1
+    }
+  }
 
   private def executeCompletions(
       shell: String,

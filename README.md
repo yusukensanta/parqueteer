@@ -29,7 +29,7 @@ Parqueteer is a **Parquet lifecycle tool for pipelines** — the gap between bas
 - Schema operations: `schema`, `schema diff`, `validate`, `info` — designed to wire into CI/CD and data quality gates
 - Cloud-native Parquet I/O: read, write, merge across local, S3, GCS, and Azure
 - Format conversion: JSON/CSV ↔ Parquet with compression control
-- Operational inspection: `schema --stats`, column-level metadata — quick answers without a query engine
+- Operational inspection: `stats`, column-level metadata — quick answers without a query engine
 
 **Out of scope:**
 - **SQL analytics, joins, aggregations** — use [DuckDB](https://duckdb.org/) for ad-hoc queries
@@ -121,12 +121,21 @@ parqueteer convert data.parquet data.csv
 # Show column names, types, nullability, compression
 parqueteer schema data.parquet
 
-# Include column statistics (min, max, null count) — like DuckDB's DESCRIBE
-parqueteer schema data.parquet --stats
-
 # JSON output (for scripting)
 parqueteer schema data.parquet --format json
-parqueteer schema data.parquet --stats --format json
+```
+
+### Column Statistics
+
+```bash
+# Show per-column null count, min, max (reads from file footer — no data scan)
+parqueteer stats data.parquet
+
+# JSON output (for scripting)
+parqueteer stats data.parquet --format json
+
+# From cloud storage
+parqueteer stats s3://bucket/data.parquet
 ```
 
 ### Compare Schemas
@@ -338,14 +347,14 @@ export AZURE_STORAGE_CONNECTION_STRING="..."
 | Command | Description |
 |---------|-------------|
 | `read` | Display Parquet file content with optional filtering and format selection |
-| `info` | Show file metadata (file size, version, row/group counts) |
+| `info` | Show file metadata (file size, dates, writer version, compression ratio) |
+| `schema FILE` | Column structure — names, types, nullability, compression |
+| `stats FILE` | Column statistics — null count, min, max (from file footer) |
+| `schema diff FILE1 FILE2` | Compare schemas of two Parquet files |
 | `write` | Create a Parquet file from JSON or CSV input |
 | `convert` | Convert between Parquet, JSON, and CSV formats |
 | `validate` | Verify Parquet file integrity |
 | `merge` | Combine multiple Parquet files into one |
-| `schema FILE` | Inspect schema — column names, types, nullability, compression |
-| `schema FILE --stats` | Schema + column statistics (min, max, null count) |
-| `schema diff FILE1 FILE2` | Compare schemas of two Parquet files |
 | `config` | Show effective configuration |
 | `config --validate` | Validate config file syntax |
 | `completions` | Generate shell completion scripts for bash, zsh, or fish |

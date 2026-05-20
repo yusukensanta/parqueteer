@@ -8,17 +8,22 @@ object HelpFormatter {
        |USAGE:
        |  parqueteer [OPTIONS] <COMMAND>
        |
-       |COMMANDS:
-       |  read            Display parquet file content
-       |  info            Show file metadata and schema information
-       |  write           Create parquet file from input data
-       |  validate        Verify parquet file integrity
-       |  convert         Convert between parquet and other formats
-       |  merge           Combine multiple parquet files into one
-       |  schema          Inspect schema or compare schemas
-       |  schema diff     Compare schemas of two parquet files
-       |  config          Show or validate configuration
-       |  completions     Generate shell completion scripts
+       |INSPECTION COMMANDS:
+       |  info             File metadata (size, dates, writer version, compression ratio)
+       |  schema           Column structure (names, types, nullability, compression)
+       |  schema diff      Compare column structures of two parquet files
+       |  stats            Column statistics (min, max, null count) from row group metadata
+       |
+       |DATA COMMANDS:
+       |  read             Display parquet file content
+       |  write            Create parquet file from input data
+       |  convert          Convert between parquet and other formats
+       |  merge            Combine multiple parquet files into one
+       |  validate         Verify parquet file integrity
+       |
+       |OTHER:
+       |  config           Show or validate configuration
+       |  completions      Generate shell completion scripts
        |
        |GLOBAL OPTIONS:
        |  -h, --help         Show this help message
@@ -34,10 +39,10 @@ object HelpFormatter {
        |
        |EXAMPLES:
        |  parqueteer read data.parquet
+       |  parqueteer info data.parquet
        |  parqueteer schema data.parquet
-       |  parqueteer schema data.parquet --stats
+       |  parqueteer stats data.parquet
        |  parqueteer schema diff old.parquet new.parquet
-       |  parqueteer convert data.csv data.parquet
        |""".stripMargin
   }
 
@@ -79,19 +84,22 @@ object HelpFormatter {
        |USAGE:
        |  parqueteer info [OPTIONS] <FILE>
        |
+       |DESCRIPTION:
+       |  Shows file-level metadata: file size, modification time, Parquet writer
+       |  version, and overall compression ratio. For column structure use 'schema'.
+       |  For column statistics use 'stats'.
+       |
        |ARGUMENTS:
-       |  <FILE>    Path to parquet file
+       |  <FILE>    Path to parquet file (local, s3://, gs://, abfss://)
        |
        |OPTIONS:
        |      --format <FORMAT>     Output format: table, json (default: table)
-       |  -s, --schema             Show schema information only
-       |  -m, --metadata           Show metadata information only
-       |  -h, --help               Show this help message
+       |  -h, --help                Show this help message
        |
        |EXAMPLES:
        |  parqueteer info data.parquet
-       |  parqueteer info data.parquet --schema
        |  parqueteer info data.parquet --format json
+       |  parqueteer info s3://bucket/data.parquet
        |""".stripMargin
   }
 
@@ -186,13 +194,17 @@ object HelpFormatter {
        |  parqueteer schema [OPTIONS] <FILE>
        |  parqueteer schema diff [OPTIONS] <FILE1> <FILE2>
        |
+       |DESCRIPTION:
+       |  Shows column structure: names, types, nullability, compression, row count,
+       |  and row group count. Read from the Parquet footer — no data scan needed.
+       |  For file-level metadata use 'info'. For column statistics use 'stats'.
+       |
        |ARGUMENTS:
-       |  <FILE>    Path to parquet file (inspect mode)
-       |  <FILE1>   First parquet file path (diff mode)
-       |  <FILE2>   Second parquet file path (diff mode)
+       |  <FILE>    Path to parquet file
+       |  <FILE1>   First parquet file (diff mode)
+       |  <FILE2>   Second parquet file (diff mode)
        |
        |OPTIONS:
-       |      --stats               Include column statistics (min, max, null count)
        |      --format <FORMAT>     Output format: table, json (default: table)
        |  -h, --help                Show this help message
        |
@@ -204,10 +216,34 @@ object HelpFormatter {
        |
        |EXAMPLES:
        |  parqueteer schema data.parquet
-       |  parqueteer schema data.parquet --stats
        |  parqueteer schema data.parquet --format json
        |  parqueteer schema diff old.parquet new.parquet
        |  parqueteer schema diff old.parquet new.parquet --format json
+       |""".stripMargin
+  }
+
+  def statsHelp(): String = {
+    """
+       |USAGE:
+       |  parqueteer stats [OPTIONS] <FILE>
+       |
+       |DESCRIPTION:
+       |  Shows per-column statistics stored in the Parquet row group metadata:
+       |  null count, min value, and max value. Read from the file footer — no
+       |  data scan needed. For column structure use 'schema'. For file metadata
+       |  use 'info'.
+       |
+       |ARGUMENTS:
+       |  <FILE>    Path to parquet file (local, s3://, gs://, abfss://)
+       |
+       |OPTIONS:
+       |      --format <FORMAT>     Output format: table, json (default: table)
+       |  -h, --help                Show this help message
+       |
+       |EXAMPLES:
+       |  parqueteer stats data.parquet
+       |  parqueteer stats data.parquet --format json
+       |  parqueteer stats s3://bucket/data.parquet
        |""".stripMargin
   }
 
@@ -243,6 +279,7 @@ object HelpFormatter {
       case "convert"  => Some(convertHelp())
       case "merge"    => Some(mergeHelp())
       case "schema"   => Some(schemaHelp())
+      case "stats"    => Some(statsHelp())
       case "config"   => Some(configHelp())
       case _          => None
     }

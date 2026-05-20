@@ -135,7 +135,9 @@ object ArgumentParser {
             )
         ),
       cmd("info")
-        .text("Show file metadata and schema information")
+        .text(
+          "Show file metadata (size, dates, writer version, compression ratio)"
+        )
         .children(
           arg[String]("<file>")
             .required()
@@ -145,19 +147,11 @@ object ArgumentParser {
             .action((x, c) =>
               updateCmd[InfoCommand](c, _.copy(format = parseOutputFormat(x)))
             )
-            .text("Output format: table, json"),
-          opt[Unit]("schema")
-            .abbr("s")
-            .action((_, c) =>
-              updateCmd[InfoCommand](c, _.copy(showSchema = true))
+            .validate(x =>
+              if (List("table", "json").contains(x.toLowerCase)) success
+              else failure(s"Invalid format: $x. Use table or json")
             )
-            .text("Show schema information (default: show all)"),
-          opt[Unit]("metadata")
-            .abbr("m")
-            .action((_, c) =>
-              updateCmd[InfoCommand](c, _.copy(showMetadata = true))
-            )
-            .text("Show metadata information (default: show all)")
+            .text("Output format: table, json (default: table)")
         ),
       cmd("write")
         .text("Create parquet file from input data")
@@ -259,18 +253,13 @@ object ArgumentParser {
             )
         ),
       cmd("schema")
-        .text("Show schema information or compare two parquet files")
+        .text("Show column structure (names, types, nullability, compression)")
         .action((_, c) => c.copy(command = Some(SchemaCommand(""))))
         .children(
           arg[String]("<file>")
             .optional()
             .action((x, c) => updateCmd[SchemaCommand](c, _.copy(filePath = x)))
             .text("Path to parquet file"),
-          opt[Unit]("stats")
-            .action((_, c) =>
-              updateCmd[SchemaCommand](c, _.copy(showStats = true))
-            )
-            .text("Include column statistics (min, max, null count)"),
           opt[String]("format")
             .action((x, c) =>
               updateCmd[SchemaCommand](c, _.copy(format = parseOutputFormat(x)))
@@ -359,6 +348,25 @@ object ArgumentParser {
               else failure(s"Unknown schema-mode: $x. Use strict or union")
             )
             .text("Schema compatibility mode: strict (default) or union")
+        ),
+      cmd("stats")
+        .text(
+          "Show column statistics (min, max, null count) from row group metadata"
+        )
+        .children(
+          arg[String]("<file>")
+            .required()
+            .action((x, c) => c.copy(command = Some(StatsCommand(x))))
+            .text("Path to parquet file"),
+          opt[String]("format")
+            .action((x, c) =>
+              updateCmd[StatsCommand](c, _.copy(format = parseOutputFormat(x)))
+            )
+            .validate(x =>
+              if (List("table", "json").contains(x.toLowerCase)) success
+              else failure(s"Invalid format: $x. Use table or json")
+            )
+            .text("Output format: table, json (default: table)")
         ),
       cmd("completions")
         .text("Generate shell completion scripts")

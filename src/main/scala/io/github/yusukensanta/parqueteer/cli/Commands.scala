@@ -20,9 +20,7 @@ case class ReadCommand(
 
 case class InfoCommand(
     filePath: String,
-    format: OutputFormat = OutputFormat.Table,
-    showSchema: Boolean = false,
-    showMetadata: Boolean = false
+    format: OutputFormat = OutputFormat.Table
 ) extends Command
 
 case class WriteCommand(
@@ -51,7 +49,6 @@ case class ConfigCommand(validate: Boolean = false) extends Command
 
 case class SchemaCommand(
     filePath: String,
-    showStats: Boolean = false,
     format: OutputFormat = OutputFormat.Table
 ) extends Command
 
@@ -66,6 +63,11 @@ case class MergeCommand(
     outputPath: String = "",
     compression: CompressionType = CompressionType.Snappy,
     schemaMode: SchemaMode = SchemaMode.Strict
+) extends Command
+
+case class StatsCommand(
+    filePath: String,
+    format: OutputFormat = OutputFormat.Table
 ) extends Command
 
 case class CompletionsCommand(shell: String) extends Command
