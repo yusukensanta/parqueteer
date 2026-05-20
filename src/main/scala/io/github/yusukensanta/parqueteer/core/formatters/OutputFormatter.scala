@@ -18,12 +18,13 @@ trait OutputFormatter {
 object OutputFormatter {
   import io.github.yusukensanta.parqueteer.core.models.OutputFormat
 
-  def apply(format: OutputFormat): OutputFormatter = format match {
-    case OutputFormat.Table    => new TableFormatter()
-    case OutputFormat.JSON     => new JSONFormatter()
-    case OutputFormat.CSV      => new CSVFormatter()
-    case OutputFormat.Pretty   => new PrettyFormatter()
-    case OutputFormat.Markdown => new MarkdownFormatter()
-    case OutputFormat.NDJSON   => new NDJSONFormatter()
-  }
+  def apply(format: OutputFormat, useColors: Boolean = true): OutputFormatter =
+    format match {
+      case OutputFormat.Table    => new TableFormatter()
+      case OutputFormat.JSON     => new JSONFormatter()
+      case OutputFormat.CSV      => new CSVFormatter()
+      case OutputFormat.Pretty   => new PrettyFormatter(useColors)
+      case OutputFormat.Markdown => new MarkdownFormatter()
+      case OutputFormat.NDJSON   => new NDJSONFormatter()
+    }
 }
