@@ -300,7 +300,7 @@ object CliApp {
       globalOptions: GlobalOptions
   ): Int = {
     service.getFileInfo(filePath) match {
-      case Success(file) =>
+      case Right(file) =>
         if (!globalOptions.quiet) {
           format match {
             case OutputFormat.JSON => println(formatInfoJson(file))
@@ -314,9 +314,12 @@ object CliApp {
           }
         }
         0
-      case Failure(error) =>
-        System.err.println(s"Failed to get file info: ${error.getMessage}")
-        if (globalOptions.verbose) error.printStackTrace()
+      case Left(error) =>
+        System.err.println(s"Failed to get file info: ${error.userMessage}")
+        if (globalOptions.verbose) error match {
+          case ParqueteerError.IOError(cause) => cause.printStackTrace()
+          case _                              => ()
+        }
         1
     }
   }
@@ -372,13 +375,16 @@ object CliApp {
           0
         } else {
           service.writeFile(outputPath, inputData, writeConfig) match {
-            case Success(_) =>
+            case Right(_) =>
               if (showStatus(globalOptions))
                 println(s"Successfully wrote data to $outputPath")
               0
-            case Failure(error) =>
-              System.err.println(s"Failed to write file: ${error.getMessage}")
-              if (globalOptions.verbose) error.printStackTrace()
+            case Left(error) =>
+              System.err.println(s"Failed to write file: ${error.userMessage}")
+              if (globalOptions.verbose) error match {
+                case ParqueteerError.IOError(cause) => cause.printStackTrace()
+                case _                              => ()
+              }
               1
           }
         }
@@ -391,7 +397,7 @@ object CliApp {
       globalOptions: GlobalOptions
   ): Int = {
     service.validateFile(filePath) match {
-      case Success(result) =>
+      case Right(result) =>
         if (result.isValid) {
           if (!globalOptions.quiet) println(s"✓ File $filePath is valid")
           0
@@ -400,9 +406,12 @@ object CliApp {
           result.issues.foreach(issue => println(s"  - $issue"))
           1
         }
-      case Failure(error) =>
-        System.err.println(s"Failed to validate file: ${error.getMessage}")
-        if (globalOptions.verbose) error.printStackTrace()
+      case Left(error) =>
+        System.err.println(s"Failed to validate file: ${error.userMessage}")
+        if (globalOptions.verbose) error match {
+          case ParqueteerError.IOError(cause) => cause.printStackTrace()
+          case _                              => ()
+        }
         1
     }
   }
@@ -428,11 +437,14 @@ object CliApp {
           .getOrElse("unknown")
       if (inputExt == "parquet") {
         service.getFileInfo(inputPath) match {
-          case Failure(error) =>
-            System.err.println(s"Failed to read input: ${error.getMessage}")
-            if (globalOptions.verbose) error.printStackTrace()
+          case Left(error) =>
+            System.err.println(s"Failed to read input: ${error.userMessage}")
+            if (globalOptions.verbose) error match {
+              case ParqueteerError.IOError(cause) => cause.printStackTrace()
+              case _                              => ()
+            }
             1
-          case Success(file) =>
+          case Right(file) =>
             println(s"Dry run: would convert $inputPath → $outputPath")
             println(s"  Input:       $inputPath")
             file.metadata.foreach(m =>
@@ -528,11 +540,14 @@ object CliApp {
       return 2
     }
     service.getFileInfo(cmd.filePath) match {
-      case Failure(error) =>
-        System.err.println(s"Failed to read schema: ${error.getMessage}")
-        if (globalOptions.verbose) error.printStackTrace()
+      case Left(error) =>
+        System.err.println(s"Failed to read schema: ${error.userMessage}")
+        if (globalOptions.verbose) error match {
+          case ParqueteerError.IOError(cause) => cause.printStackTrace()
+          case _                              => ()
+        }
         1
-      case Success(file) =>
+      case Right(file) =>
         if (!globalOptions.quiet) {
           cmd.format match {
             case OutputFormat.JSON => println(formatSchemaJson(file))
@@ -609,7 +624,7 @@ object CliApp {
       globalOptions: GlobalOptions
   ): Int = {
     service.getStats(filePath) match {
-      case scala.util.Success(stats) =>
+      case Right(stats) =>
         if (!globalOptions.quiet) {
           format match {
             case OutputFormat.JSON => println(formatStatsJson(stats).spaces2)
@@ -617,9 +632,12 @@ object CliApp {
           }
         }
         0
-      case scala.util.Failure(error) =>
-        System.err.println(s"Failed to get stats: ${error.getMessage}")
-        if (globalOptions.verbose) error.printStackTrace()
+      case Left(error) =>
+        System.err.println(s"Failed to get stats: ${error.userMessage}")
+        if (globalOptions.verbose) error match {
+          case ParqueteerError.IOError(cause) => cause.printStackTrace()
+          case _                              => ()
+        }
         1
     }
   }

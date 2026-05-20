@@ -105,24 +105,17 @@ class ParquetService(
     } yield count
   }
 
-  def getFileInfo(path: String): Try[ParquetFile] = {
+  def getFileInfo(path: String): Either[ParqueteerError, ParquetFile] =
     for {
       location <- StorageLocationParser
         .parse(path)
-        .fold(
-          error => Failure(new IllegalArgumentException(error)),
-          Success.apply
-        )
+        .left.map(msg => ParqueteerError.InvalidFormat(path, msg))
       file = ParquetFile(location)
       schema <- repository.readSchema(file)
+        .toEither.left.map(ParqueteerError.IOError.apply)
       metadata <- repository.readMetadata(file)
-    } yield {
-      file.copy(
-        schema = Some(schema),
-        metadata = Some(metadata)
-      )
-    }
-  }
+        .toEither.left.map(ParqueteerError.IOError.apply)
+    } yield file.copy(schema = Some(schema), metadata = Some(metadata))
 
   def mergeFiles(
       inputPaths: List[String],
@@ -228,18 +221,15 @@ class ParquetService(
     } yield count
   }
 
-  def getStats(path: String): Try[FileStats] = {
+  def getStats(path: String): Either[ParqueteerError, FileStats] =
     for {
       location <- StorageLocationParser
         .parse(path)
-        .fold(
-          error => Failure(new IllegalArgumentException(error)),
-          Success.apply
-        )
+        .left.map(msg => ParqueteerError.InvalidFormat(path, msg))
       file = ParquetFile(location)
       stats <- repository.readStats(file)
+        .toEither.left.map(ParqueteerError.IOError.apply)
     } yield stats
-  }
 
   private def readFileAsTry(path: String): Try[ParquetFile] =
     readFile(path).fold(
@@ -251,17 +241,14 @@ class ParquetService(
       path: String,
       data: List[Map[String, Any]],
       writeConfig: WriteConfig = WriteConfig()
-  ): Try[Unit] = {
+  ): Either[ParqueteerError, Unit] =
     for {
       location <- StorageLocationParser
         .parse(path)
-        .fold(
-          error => Failure(new IllegalArgumentException(error)),
-          Success.apply
-        )
+        .left.map(msg => ParqueteerError.InvalidFormat(path, msg))
       _ <- repository.writeContent(location, data, None, writeConfig)
+        .toEither.left.map(ParqueteerError.IOError.apply)
     } yield ()
-  }
 
   def readDataFile(
       path: String,
@@ -292,28 +279,20 @@ class ParquetService(
     }
   }
 
-  def validateFile(path: String): Try[ValidationResult] = {
+  def validateFile(path: String): Either[ParqueteerError, ValidationResult] =
     for {
       location <- StorageLocationParser
         .parse(path)
-        .fold(
-          error => Failure(new IllegalArgumentException(error)),
-          Success.apply
-        )
+        .left.map(msg => ParqueteerError.InvalidFormat(path, msg))
       file = ParquetFile(location)
       issues <- repository.validateFile(file)
-    } yield {
-      ValidationResult(
-        isValid = issues.isEmpty,
-        issues = issues
-      )
-    }
-  }
+        .toEither.left.map(ParqueteerError.IOError.apply)
+    } yield ValidationResult(isValid = issues.isEmpty, issues = issues)
 
   def diffSchemas(path1: String, path2: String): Try[SchemaDiff] = {
     for {
-      f1 <- getFileInfo(path1)
-      f2 <- getFileInfo(path2)
+      f1 <- getFileInfo(path1).fold(e => Failure(new RuntimeException(e.userMessage)), Success.apply)
+      f2 <- getFileInfo(path2).fold(e => Failure(new RuntimeException(e.userMessage)), Success.apply)
     } yield {
       val cols1 = f1.schema.map(_.columns).getOrElse(List.empty)
       val cols2 = f2.schema.map(_.columns).getOrElse(List.empty)
@@ -366,6 +345,7 @@ class ParquetService(
           inputFile <- readFileAsTry(inputPath)
           data = inputFile.content.map(_.rows).getOrElse(List.empty)
           _ <- writeFile(outputPath, data, conversionConfig.writeConfig)
+            .fold(e => Failure(new RuntimeException(e.userMessage)), Success.apply)
         } yield ()
 
       // Parquet → JSON
@@ -395,6 +375,7 @@ class ParquetService(
         readDataFile(inputPath, inputExt)
           .flatMap(data =>
             writeFile(outputPath, data, conversionConfig.writeConfig)
+              .fold(e => Failure(new RuntimeException(e.userMessage)), Success.apply)
           )
 
       case _ =>

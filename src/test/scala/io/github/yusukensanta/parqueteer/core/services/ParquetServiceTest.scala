@@ -17,7 +17,8 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
       metadataResult: Try[FileMetadata] = Success(defaultMetadata),
       validateResult: Try[List[String]] = Success(List.empty),
       writeResult: Try[Unit] = Success(()),
-      streamResult: Try[Unit] = Success(())
+      streamResult: Try[Unit] = Success(()),
+      statsResult: Try[FileStats] = Success(defaultStats)
   ) extends ParquetRepository {
     override def readContent(
         file: ParquetFile,
@@ -53,6 +54,7 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
         feed { _ => count += 1 }
         count
       }
+    override def readStats(file: ParquetFile): Try[FileStats] = statsResult
   }
 
   // ── Shared fixtures ──────────────────────────────────────────────────────
@@ -74,6 +76,11 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     compressionRatio = None,
     version = "2.0",
     createdBy = Some("test")
+  )
+  private val defaultStats = FileStats(
+    columns = List(ColumnStats("id", "INT64", 0L, Some("1"), Some("100"))),
+    totalRows = 1L,
+    rowGroupCount = 1L
   )
 
   // ── readFile ─────────────────────────────────────────────────────────────
@@ -102,27 +109,27 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
   }
 
   // ── getFileInfo ───────────────────────────────────────────────────────────
-  "ParquetService.getFileInfo" should "return Success with schema and metadata but no content" in {
+  "ParquetService.getFileInfo" should "return Right with schema and metadata but no content" in {
     val service = new ParquetService(new FakeParquetRepository())
     val result = service.getFileInfo("/tmp/test.parquet")
 
-    result.isSuccess shouldBe true
-    result.get.content shouldBe empty
-    result.get.schema shouldBe defined
-    result.get.metadata shouldBe defined
+    result.isRight shouldBe true
+    result.toOption.get.content shouldBe empty
+    result.toOption.get.schema shouldBe defined
+    result.toOption.get.metadata shouldBe defined
   }
 
   // ── validateFile ──────────────────────────────────────────────────────────
-  "ParquetService.validateFile" should "return valid result when no issues found" in {
+  "ParquetService.validateFile" should "return Right(valid) when no issues found" in {
     val service = new ParquetService(new FakeParquetRepository())
     val result = service.validateFile("/tmp/test.parquet")
 
-    result.isSuccess shouldBe true
-    result.get.isValid shouldBe true
-    result.get.issues shouldBe empty
+    result.isRight shouldBe true
+    result.toOption.get.isValid shouldBe true
+    result.toOption.get.issues shouldBe empty
   }
 
-  it should "return invalid result when issues exist" in {
+  it should "return Right(invalid) when issues exist" in {
     val service = new ParquetService(
       new FakeParquetRepository(validateResult =
         Success(List("corrupted row group"))
@@ -130,9 +137,9 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     )
     val result = service.validateFile("/tmp/test.parquet")
 
-    result.isSuccess shouldBe true
-    result.get.isValid shouldBe false
-    result.get.issues should contain("corrupted row group")
+    result.isRight shouldBe true
+    result.toOption.get.isValid shouldBe false
+    result.toOption.get.issues should contain("corrupted row group")
   }
 
   // ── convertFile ───────────────────────────────────────────────────────────
@@ -188,48 +195,48 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     result.left.toOption.get.userMessage should include("metadata missing")
   }
 
-  "ParquetService.getFileInfo" should "propagate Failure when readSchema fails" in {
+  "ParquetService.getFileInfo" should "propagate Left when readSchema fails" in {
     val service = new ParquetService(
       new FakeParquetRepository(schemaResult =
         Failure(new RuntimeException("no schema"))
       )
     )
     val result = service.getFileInfo("/tmp/test.parquet")
-    result.isFailure shouldBe true
-    result.failed.get.getMessage should include("no schema")
+    result.isLeft shouldBe true
+    result.left.toOption.get.userMessage should include("no schema")
   }
 
-  it should "propagate Failure when readMetadata fails" in {
+  it should "propagate Left when readMetadata fails" in {
     val service = new ParquetService(
       new FakeParquetRepository(metadataResult =
         Failure(new RuntimeException("no metadata"))
       )
     )
     val result = service.getFileInfo("/tmp/test.parquet")
-    result.isFailure shouldBe true
-    result.failed.get.getMessage should include("no metadata")
+    result.isLeft shouldBe true
+    result.left.toOption.get.userMessage should include("no metadata")
   }
 
-  "ParquetService.validateFile" should "propagate Failure when repository validateFile fails" in {
+  "ParquetService.validateFile" should "propagate Left when repository validateFile fails" in {
     val service = new ParquetService(
       new FakeParquetRepository(validateResult =
         Failure(new RuntimeException("cannot open file"))
       )
     )
     val result = service.validateFile("/tmp/test.parquet")
-    result.isFailure shouldBe true
-    result.failed.get.getMessage should include("cannot open file")
+    result.isLeft shouldBe true
+    result.left.toOption.get.userMessage should include("cannot open file")
   }
 
-  "ParquetService.writeFile" should "propagate Failure when writeContent fails" in {
+  "ParquetService.writeFile" should "propagate Left when writeContent fails" in {
     val service = new ParquetService(
       new FakeParquetRepository(writeResult =
         Failure(new RuntimeException("write denied"))
       )
     )
     val result = service.writeFile("/tmp/out.parquet", List(Map("id" -> 1L)))
-    result.isFailure shouldBe true
-    result.failed.get.getMessage should include("write denied")
+    result.isLeft shouldBe true
+    result.left.toOption.get.userMessage should include("write denied")
   }
 
   // ── CSV/JSON → Parquet conversion ─────────────────────────────────────────
