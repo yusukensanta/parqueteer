@@ -15,14 +15,15 @@ import com.github.mjakubowski84.parquet4s.{
   FloatValue,
   DoubleValue,
   BinaryValue,
-  DateTimeValue
+  DateTimeValue,
+  DecimalValue
 }
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path => HadoopPath}
 import org.apache.parquet.hadoop.ParquetFileReader
 import org.apache.parquet.hadoop.util.HadoopInputFile
 import org.apache.parquet.hadoop.metadata.CompressionCodecName
-import org.apache.parquet.schema.MessageType
+import org.apache.parquet.schema.{MessageType, OriginalType}
 import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
 import org.apache.parquet.column.page.PageReadStore
 import org.apache.parquet.io.ColumnIOFactory
@@ -176,17 +177,36 @@ class ParquetRepository {
       if (group.getFieldRepetitionCount(i) == 0) None
       else {
         val name = schema.getType(i).getName
-        val value: Any =
-          schema.getType(i).asPrimitiveType().getPrimitiveTypeName match {
-            case PrimitiveTypeName.INT32   => group.getInteger(i, 0)
-            case PrimitiveTypeName.INT64   => group.getLong(i, 0)
-            case PrimitiveTypeName.FLOAT   => group.getFloat(i, 0)
-            case PrimitiveTypeName.DOUBLE  => group.getDouble(i, 0)
-            case PrimitiveTypeName.BOOLEAN => group.getBoolean(i, 0)
-            case PrimitiveTypeName.BINARY =>
-              group.getBinary(i, 0).toStringUsingUTF8
-            case _ => group.getValueToString(i, 0)
-          }
+        val fieldType = schema.getType(i).asPrimitiveType()
+        val originalType = fieldType.getOriginalType
+        val value: Any = fieldType.getPrimitiveTypeName match {
+          case PrimitiveTypeName.INT32
+              if originalType == OriginalType.DECIMAL =>
+            val scale = fieldType.getDecimalMetadata.getScale
+            scala.math.BigDecimal(
+              new java.math.BigDecimal(
+                java.math.BigInteger.valueOf(group.getInteger(i, 0).toLong),
+                scale
+              )
+            )
+          case PrimitiveTypeName.INT64
+              if originalType == OriginalType.DECIMAL =>
+            val scale = fieldType.getDecimalMetadata.getScale
+            scala.math.BigDecimal(
+              new java.math.BigDecimal(
+                java.math.BigInteger.valueOf(group.getLong(i, 0)),
+                scale
+              )
+            )
+          case PrimitiveTypeName.INT32   => group.getInteger(i, 0)
+          case PrimitiveTypeName.INT64   => group.getLong(i, 0)
+          case PrimitiveTypeName.FLOAT   => group.getFloat(i, 0)
+          case PrimitiveTypeName.DOUBLE  => group.getDouble(i, 0)
+          case PrimitiveTypeName.BOOLEAN => group.getBoolean(i, 0)
+          case PrimitiveTypeName.BINARY =>
+            group.getBinary(i, 0).toStringUsingUTF8
+          case _ => group.getValueToString(i, 0)
+        }
         Some(name -> value)
       }
     }.toMap
@@ -745,7 +765,9 @@ class ParquetRepository {
     case DoubleValue(d)      => d
     case BinaryValue(binary) => binary.toStringUsingUTF8
     case DateTimeValue(l, _) => l
-    case _                   => value.toString
+    case DecimalValue(bigInt, fmt) =>
+      scala.math.BigDecimal(new java.math.BigDecimal(bigInt, fmt.scale))
+    case _ => value.toString
   }
 
   /** Create parquet4s Filter from filter expression

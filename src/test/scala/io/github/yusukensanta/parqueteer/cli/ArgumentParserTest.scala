@@ -5,6 +5,7 @@ import io.github.yusukensanta.parqueteer.core.models.{
   CompressionType,
   SchemaMode
 }
+
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import scopt.OParser
@@ -15,7 +16,7 @@ class ArgumentParserTest extends AnyFlatSpec with Matchers {
     val args = Array(
       "read",
       "s3://bucket/file.parquet",
-      "--max-rows",
+      "--limit",
       "100",
       "--format",
       "json"
@@ -33,8 +34,8 @@ class ArgumentParserTest extends AnyFlatSpec with Matchers {
     readCmd.format shouldBe OutputFormat.JSON
   }
 
-  it should "parse info command with --schema flag" in {
-    val args = Array("info", "/local/file.parquet", "--schema")
+  it should "parse info command correctly" in {
+    val args = Array("info", "/local/file.parquet")
     val result =
       OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
 
@@ -44,30 +45,25 @@ class ArgumentParserTest extends AnyFlatSpec with Matchers {
 
     val infoCmd = result.get.command.get.asInstanceOf[InfoCommand]
     infoCmd.filePath shouldBe "/local/file.parquet"
-    infoCmd.showSchema shouldBe true
-    infoCmd.showMetadata shouldBe false
+    infoCmd.format shouldBe OutputFormat.Table
   }
 
-  it should "parse info command with --metadata flag" in {
-    val args = Array("info", "/local/file.parquet", "--metadata")
+  it should "parse info command with --format json" in {
+    val args = Array("info", "/local/file.parquet", "--format", "json")
     val result =
       OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
 
     result shouldBe defined
-    val infoCmd = result.get.command.get.asInstanceOf[InfoCommand]
-    infoCmd.showSchema shouldBe false
-    infoCmd.showMetadata shouldBe true
+    result.get.command.get
+      .asInstanceOf[InfoCommand]
+      .format shouldBe OutputFormat.JSON
   }
 
-  it should "parse info command with no flags (show all)" in {
-    val args = Array("info", "/local/file.parquet")
+  it should "reject --schema flag on info (removed)" in {
+    val args = Array("info", "/local/file.parquet", "--schema")
     val result =
       OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
-
-    result shouldBe defined
-    val infoCmd = result.get.command.get.asInstanceOf[InfoCommand]
-    infoCmd.showSchema shouldBe false
-    infoCmd.showMetadata shouldBe false
+    result shouldBe None
   }
 
   it should "parse write command correctly" in {
@@ -207,30 +203,26 @@ class ArgumentParserTest extends AnyFlatSpec with Matchers {
     result shouldBe None
   }
 
-  "ArgumentParser config show" should "parse config show subcommand" in {
-    val args = Array("config", "show")
+  "ArgumentParser config" should "parse config command (default: show)" in {
+    val args = Array("config")
     val result =
       OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
 
     result shouldBe defined
     result.get.command shouldBe defined
-    result.get.command.get shouldBe a[ConfigCommand]
-    result.get.command.get
-      .asInstanceOf[ConfigCommand]
-      .sub shouldBe ConfigSubcommand.Show
+    val cmd = result.get.command.get.asInstanceOf[ConfigCommand]
+    cmd.validate shouldBe false
   }
 
-  "ArgumentParser config validate" should "parse config validate subcommand" in {
-    val args = Array("config", "validate")
+  it should "parse config --validate flag" in {
+    val args = Array("config", "--validate")
     val result =
       OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
 
     result shouldBe defined
     result.get.command shouldBe defined
-    result.get.command.get shouldBe a[ConfigCommand]
-    result.get.command.get
-      .asInstanceOf[ConfigCommand]
-      .sub shouldBe ConfigSubcommand.Validate
+    val cmd = result.get.command.get.asInstanceOf[ConfigCommand]
+    cmd.validate shouldBe true
   }
 
   "ArgumentParser merge" should "parse merge command with required output" in {
@@ -291,28 +283,54 @@ class ArgumentParserTest extends AnyFlatSpec with Matchers {
     result shouldBe None
   }
 
-  "ArgumentParser stats" should "parse stats command with default format" in {
-    val args = Array("stats", "/tmp/test.parquet")
+  "ArgumentParser schema" should "parse schema command with default format" in {
+    val args = Array("schema", "/tmp/test.parquet")
     val result =
       OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
 
     result shouldBe defined
     result.get.command shouldBe defined
-    result.get.command.get shouldBe a[StatsCommand]
+    result.get.command.get shouldBe a[SchemaCommand]
 
-    val statsCmd = result.get.command.get.asInstanceOf[StatsCommand]
-    statsCmd.filePath shouldBe "/tmp/test.parquet"
-    statsCmd.format shouldBe OutputFormat.Table
+    val cmd = result.get.command.get.asInstanceOf[SchemaCommand]
+    cmd.filePath shouldBe "/tmp/test.parquet"
+    cmd.format shouldBe OutputFormat.Table
   }
 
-  it should "parse stats command with json format" in {
-    val args = Array("stats", "/tmp/test.parquet", "--format", "json")
+  it should "parse schema --format json" in {
+    val args = Array("schema", "/tmp/test.parquet", "--format", "json")
     val result =
       OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
 
     result shouldBe defined
     result.get.command.get
-      .asInstanceOf[StatsCommand]
+      .asInstanceOf[SchemaCommand]
+      .format shouldBe OutputFormat.JSON
+  }
+
+  it should "parse schema diff subcommand" in {
+    val args = Array("schema", "diff", "a.parquet", "b.parquet")
+    val result =
+      OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
+
+    result shouldBe defined
+    result.get.command.get shouldBe a[SchemaDiffCommand]
+
+    val cmd = result.get.command.get.asInstanceOf[SchemaDiffCommand]
+    cmd.file1 shouldBe "a.parquet"
+    cmd.file2 shouldBe "b.parquet"
+    cmd.format shouldBe OutputFormat.Table
+  }
+
+  it should "parse schema diff with --format json" in {
+    val args =
+      Array("schema", "diff", "a.parquet", "b.parquet", "--format", "json")
+    val result =
+      OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
+
+    result shouldBe defined
+    result.get.command.get
+      .asInstanceOf[SchemaDiffCommand]
       .format shouldBe OutputFormat.JSON
   }
 }

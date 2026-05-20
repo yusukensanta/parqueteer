@@ -83,7 +83,7 @@ object ArgumentParser {
               )
             )
             .text("Path to parquet file (local, s3://, gs://, abfss://)"),
-          opt[Long]("max-rows")
+          opt[Long]("limit")
             .abbr("n")
             .action((x, c) =>
               updateCmd[ReadCommand](c, _.copy(maxRows = Some(x)))
@@ -135,7 +135,9 @@ object ArgumentParser {
             )
         ),
       cmd("info")
-        .text("Show file metadata and schema information")
+        .text(
+          "Show file metadata (size, dates, writer version, compression ratio)"
+        )
         .children(
           arg[String]("<file>")
             .required()
@@ -145,19 +147,11 @@ object ArgumentParser {
             .action((x, c) =>
               updateCmd[InfoCommand](c, _.copy(format = parseOutputFormat(x)))
             )
-            .text("Output format: table, json"),
-          opt[Unit]("schema")
-            .abbr("s")
-            .action((_, c) =>
-              updateCmd[InfoCommand](c, _.copy(showSchema = true))
+            .validate(x =>
+              if (List("table", "json").contains(x.toLowerCase)) success
+              else failure(s"Invalid format: $x. Use table or json")
             )
-            .text("Show schema information (default: show all)"),
-          opt[Unit]("metadata")
-            .abbr("m")
-            .action((_, c) =>
-              updateCmd[InfoCommand](c, _.copy(showMetadata = true))
-            )
-            .text("Show metadata information (default: show all)")
+            .text("Output format: table, json (default: table)")
         ),
       cmd("write")
         .text("Create parquet file from input data")
@@ -244,7 +238,7 @@ object ArgumentParser {
               )
             )
             .text("Compression type for output"),
-          opt[Long]("max-rows")
+          opt[Long]("limit")
             .abbr("n")
             .action((x, c) =>
               updateCmd[ConvertCommand](c, _.copy(maxRows = Some(x)))
@@ -259,27 +253,41 @@ object ArgumentParser {
             )
         ),
       cmd("schema")
-        .text("Schema inspection commands")
+        .text("Show column structure (names, types, nullability, compression)")
+        .action((_, c) => c.copy(command = Some(SchemaCommand(""))))
         .children(
+          arg[String]("<file>")
+            .optional()
+            .action((x, c) => updateCmd[SchemaCommand](c, _.copy(filePath = x)))
+            .text("Path to parquet file"),
+          opt[String]("format")
+            .action((x, c) =>
+              updateCmd[SchemaCommand](c, _.copy(format = parseOutputFormat(x)))
+            )
+            .validate(x =>
+              if (List("table", "json").contains(x.toLowerCase)) success
+              else failure(s"Invalid format: $x. Use table or json")
+            )
+            .text("Output format: table, json (default: table)"),
           cmd("diff")
             .text("Compare schemas of two parquet files")
-            .action((_, c) =>
-              c.copy(command =
-                Some(SchemaCommand(SchemaDiffSubcommand("", "")))
-              )
-            )
+            .action((_, c) => c.copy(command = Some(SchemaDiffCommand("", ""))))
             .children(
               arg[String]("<file1>")
                 .required()
-                .action((x, c) => updateSchemaDiffCommand(c, _.copy(file1 = x)))
+                .action((x, c) =>
+                  updateCmd[SchemaDiffCommand](c, _.copy(file1 = x))
+                )
                 .text("First parquet file path"),
               arg[String]("<file2>")
                 .required()
-                .action((x, c) => updateSchemaDiffCommand(c, _.copy(file2 = x)))
+                .action((x, c) =>
+                  updateCmd[SchemaDiffCommand](c, _.copy(file2 = x))
+                )
                 .text("Second parquet file path"),
               opt[String]("format")
                 .action((x, c) =>
-                  updateSchemaDiffCommand(
+                  updateCmd[SchemaDiffCommand](
                     c,
                     _.copy(format = parseOutputFormat(x))
                   )
@@ -342,7 +350,9 @@ object ArgumentParser {
             .text("Schema compatibility mode: strict (default) or union")
         ),
       cmd("stats")
-        .text("Show column statistics (min, max, null count)")
+        .text(
+          "Show column statistics (min, max, null count) from row group metadata"
+        )
         .children(
           arg[String]("<file>")
             .required()
@@ -353,11 +363,8 @@ object ArgumentParser {
               updateCmd[StatsCommand](c, _.copy(format = parseOutputFormat(x)))
             )
             .validate(x =>
-              if (
-                List("table", "json", "csv", "pretty", "markdown", "ndjson")
-                  .contains(x.toLowerCase)
-              ) success
-              else failure(s"Unknown format: $x")
+              if (List("table", "json").contains(x.toLowerCase)) success
+              else failure(s"Invalid format: $x. Use table or json")
             )
             .text("Output format: table, json (default: table)")
         ),
@@ -375,17 +382,13 @@ object ArgumentParser {
         ),
       cmd("config")
         .text("Show or validate configuration")
+        .action((_, c) => c.copy(command = Some(ConfigCommand())))
         .children(
-          cmd("show")
-            .text("Display resolved configuration with source annotations")
+          opt[Unit]("validate")
             .action((_, c) =>
-              c.copy(command = Some(ConfigCommand(ConfigSubcommand.Show)))
-            ),
-          cmd("validate")
-            .text("Validate the configuration file")
-            .action((_, c) =>
-              c.copy(command = Some(ConfigCommand(ConfigSubcommand.Validate)))
+              updateCmd[ConfigCommand](c, _.copy(validate = true))
             )
+            .text("Validate the configuration file instead of displaying it")
         )
     )
   }
@@ -397,16 +400,6 @@ object ArgumentParser {
     config.command match {
       case Some(cmd: C) => config.copy(command = Some(update(cmd)))
       case _            => config
-    }
-
-  private def updateSchemaDiffCommand(
-      config: Config,
-      update: SchemaDiffSubcommand => SchemaDiffSubcommand
-  ): Config =
-    config.command match {
-      case Some(SchemaCommand(sub)) =>
-        config.copy(command = Some(SchemaCommand(update(sub))))
-      case _ => config
     }
 
   private def parseOutputFormat(format: String): OutputFormat = {
