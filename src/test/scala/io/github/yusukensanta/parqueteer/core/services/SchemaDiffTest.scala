@@ -52,12 +52,12 @@ class SchemaDiffTest extends AnyFlatSpec with Matchers {
     val repo = new TwoSchemaRepository(s, s, metadata)
     val service = new ParquetService(repo)
     val result = service.diffSchemas("/file1.parquet", "/file2.parquet")
-    result.isSuccess shouldBe true
-    result.get.identical shouldBe true
-    result.get.added shouldBe empty
-    result.get.removed shouldBe empty
-    result.get.changed shouldBe empty
-    result.get.unchanged should contain allOf ("id", "name")
+    result.isRight shouldBe true
+    result.toOption.get.identical shouldBe true
+    result.toOption.get.added shouldBe empty
+    result.toOption.get.removed shouldBe empty
+    result.toOption.get.changed shouldBe empty
+    result.toOption.get.unchanged should contain allOf ("id", "name")
   }
 
   it should "detect added columns" in {
@@ -65,10 +65,10 @@ class SchemaDiffTest extends AnyFlatSpec with Matchers {
     val s2 = schema(col("id", "INT64"), col("email", "BINARY"))
     val service = new ParquetService(new TwoSchemaRepository(s1, s2, metadata))
     val result = service.diffSchemas("/file1.parquet", "/file2.parquet")
-    result.isSuccess shouldBe true
-    result.get.added.map(_.name) should contain("email")
-    result.get.removed shouldBe empty
-    result.get.identical shouldBe false
+    result.isRight shouldBe true
+    result.toOption.get.added.map(_.name) should contain("email")
+    result.toOption.get.removed shouldBe empty
+    result.toOption.get.identical shouldBe false
   }
 
   it should "detect removed columns" in {
@@ -76,9 +76,9 @@ class SchemaDiffTest extends AnyFlatSpec with Matchers {
     val s2 = schema(col("id", "INT64"))
     val service = new ParquetService(new TwoSchemaRepository(s1, s2, metadata))
     val result = service.diffSchemas("/file1.parquet", "/file2.parquet")
-    result.isSuccess shouldBe true
-    result.get.removed.map(_.name) should contain("legacy")
-    result.get.added shouldBe empty
+    result.isRight shouldBe true
+    result.toOption.get.removed.map(_.name) should contain("legacy")
+    result.toOption.get.added shouldBe empty
   }
 
   it should "detect type changes" in {
@@ -86,11 +86,11 @@ class SchemaDiffTest extends AnyFlatSpec with Matchers {
     val s2 = schema(col("id", "INT64"))
     val service = new ParquetService(new TwoSchemaRepository(s1, s2, metadata))
     val result = service.diffSchemas("/file1.parquet", "/file2.parquet")
-    result.isSuccess shouldBe true
-    result.get.changed should have length 1
-    result.get.changed.head.name shouldBe "id"
-    result.get.changed.head.fromType shouldBe "INT32"
-    result.get.changed.head.toType shouldBe "INT64"
+    result.isRight shouldBe true
+    result.toOption.get.changed should have length 1
+    result.toOption.get.changed.head.name shouldBe "id"
+    result.toOption.get.changed.head.fromType shouldBe "INT32"
+    result.toOption.get.changed.head.toType shouldBe "INT64"
   }
 
   it should "detect optionality changes" in {
@@ -98,10 +98,10 @@ class SchemaDiffTest extends AnyFlatSpec with Matchers {
     val s2 = schema(col("name", "BINARY", optional = true))
     val service = new ParquetService(new TwoSchemaRepository(s1, s2, metadata))
     val result = service.diffSchemas("/file1.parquet", "/file2.parquet")
-    result.isSuccess shouldBe true
-    result.get.changed should have length 1
-    result.get.changed.head.fromOptional shouldBe false
-    result.get.changed.head.toOptional shouldBe true
+    result.isRight shouldBe true
+    result.toOption.get.changed should have length 1
+    result.toOption.get.changed.head.fromOptional shouldBe false
+    result.toOption.get.changed.head.toOptional shouldBe true
   }
 
   it should "handle all change types simultaneously" in {
@@ -114,17 +114,17 @@ class SchemaDiffTest extends AnyFlatSpec with Matchers {
     )
     val service = new ParquetService(new TwoSchemaRepository(s1, s2, metadata))
     val result = service.diffSchemas("/file1.parquet", "/file2.parquet")
-    result.isSuccess shouldBe true
-    result.get.unchanged should contain("id")
-    result.get.removed.map(_.name) should contain("old")
-    result.get.added.map(_.name) should contain("new_col")
-    result.get.changed.map(_.name) should contain("name")
+    result.isRight shouldBe true
+    result.toOption.get.unchanged should contain("id")
+    result.toOption.get.removed.map(_.name) should contain("old")
+    result.toOption.get.added.map(_.name) should contain("new_col")
+    result.toOption.get.changed.map(_.name) should contain("name")
   }
 
-  it should "return Failure for invalid file path" in {
+  it should "return Left for invalid file path" in {
     val s = schema(col("id", "INT64"))
     val service = new ParquetService(new TwoSchemaRepository(s, s, metadata))
     val result = service.diffSchemas("ftp://bad", "/file2.parquet")
-    result.isFailure shouldBe true
+    result.isLeft shouldBe true
   }
 }

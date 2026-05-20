@@ -664,11 +664,14 @@ object CliApp {
       globalOptions: GlobalOptions
   ): Int = {
     service.diffSchemas(cmd.file1, cmd.file2) match {
-      case Failure(error) =>
-        System.err.println(s"Failed to diff schemas: ${error.getMessage}")
-        if (globalOptions.verbose) error.printStackTrace()
+      case Left(error) =>
+        System.err.println(s"Failed to diff schemas: ${error.userMessage}")
+        if (globalOptions.verbose) error match {
+          case ParqueteerError.IOError(cause) => cause.printStackTrace()
+          case _                              => ()
+        }
         1
-      case Success(diff) =>
+      case Right(diff) =>
         if (!globalOptions.quiet)
           cmd.format match {
             case OutputFormat.JSON => println(formatSchemaDiffJson(diff))

@@ -227,9 +227,6 @@ class ParquetService(
         .toEither.left.map(ParqueteerError.IOError.apply)
     } yield stats
 
-  private def getFileInfoAsTry(path: String): Try[ParquetFile] =
-    getFileInfo(path).fold(e => Failure(new RuntimeException(e.userMessage)), Success.apply)
-
   private def readFileAsTry(path: String): Try[ParquetFile] =
     readFile(path).fold(
       err => Failure(new RuntimeException(err.userMessage)),
@@ -288,10 +285,10 @@ class ParquetService(
         .toEither.left.map(ParqueteerError.IOError.apply)
     } yield ValidationResult(isValid = issues.isEmpty, issues = issues)
 
-  def diffSchemas(path1: String, path2: String): Try[SchemaDiff] = {
+  def diffSchemas(path1: String, path2: String): Either[ParqueteerError, SchemaDiff] = {
     for {
-      f1 <- getFileInfoAsTry(path1)
-      f2 <- getFileInfoAsTry(path2)
+      f1 <- getFileInfo(path1)
+      f2 <- getFileInfo(path2)
     } yield {
       val cols1 = f1.schema.map(_.columns).getOrElse(List.empty)
       val cols2 = f2.schema.map(_.columns).getOrElse(List.empty)
