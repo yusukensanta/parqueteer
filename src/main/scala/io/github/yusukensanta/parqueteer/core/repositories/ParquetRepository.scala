@@ -41,7 +41,7 @@ class ParquetRepository {
     setupHadoopConfiguration(file.location).flatMap { hadoopConfig =>
       Try {
         val hadoopPath = new HadoopPath(file.location.path)
-        val totalRows = getRowCount(hadoopPath, hadoopConfig)
+        val (totalRows, fileSchema) = getFileMetadata(hadoopPath, hadoopConfig)
 
         if (config.parallelism > 1 && config.filter.isEmpty) {
           val rows = readParallel(hadoopPath, hadoopConfig, config)
@@ -55,8 +55,18 @@ class ParquetRepository {
           ) { reader =>
             val rows = config.maxRows match {
               case Some(limit) =>
-                reader.take(limit.toInt).map(convertRecordToMap).toList
-              case None => reader.map(convertRecordToMap).toList
+                reader
+                  .take(limit.toInt)
+                  .map(r =>
+                    postProcessTemporalFields(convertRecordToMap(r), fileSchema)
+                  )
+                  .toList
+              case None =>
+                reader
+                  .map(r =>
+                    postProcessTemporalFields(convertRecordToMap(r), fileSchema)
+                  )
+                  .toList
             }
             val isPartial =
               config.maxRows.exists(limit => rows.size.toLong >= limit)
@@ -79,6 +89,7 @@ class ParquetRepository {
       Try {
         val path4s = Parquet4sPath(file.location.path)
         val hadoopPath = new HadoopPath(file.location.path)
+        val (_, fileSchema) = getFileMetadata(hadoopPath, hadoopConfig)
         Using.resource(
           openParquetReader(path4s, hadoopPath, hadoopConfig, config)
         ) { source =>
@@ -88,7 +99,9 @@ class ParquetRepository {
           }
           var count = 0L
           iter.foreach { record =>
-            process(convertRecordToMap(record))
+            process(
+              postProcessTemporalFields(convertRecordToMap(record), fileSchema)
+            )
             count += 1
           }
           count
@@ -198,6 +211,18 @@ class ParquetRepository {
                 scale
               )
             )
+          case PrimitiveTypeName.INT32 if originalType == OriginalType.DATE =>
+            java.time.LocalDate
+              .ofEpochDay(group.getInteger(i, 0).toLong)
+              .toString
+          case PrimitiveTypeName.INT64
+              if originalType == OriginalType.TIMESTAMP_MILLIS =>
+            java.time.Instant.ofEpochMilli(group.getLong(i, 0)).toString
+          case PrimitiveTypeName.INT64
+              if originalType == OriginalType.TIMESTAMP_MICROS =>
+            java.time.Instant
+              .ofEpochSecond(0L, group.getLong(i, 0) * 1000L)
+              .toString
           case PrimitiveTypeName.INT32   => group.getInteger(i, 0)
           case PrimitiveTypeName.INT64   => group.getLong(i, 0)
           case PrimitiveTypeName.FLOAT   => group.getFloat(i, 0)
@@ -470,6 +495,25 @@ class ParquetRepository {
               .primitive(PrimitiveType.PrimitiveTypeName.BOOLEAN, repetition)
               .named(col.name)
           )
+        case "DATE" =>
+          builder.addField(
+            Types
+              .primitive(PrimitiveType.PrimitiveTypeName.INT32, repetition)
+              .as(org.apache.parquet.schema.LogicalTypeAnnotation.dateType())
+              .named(col.name)
+          )
+        case "TIMESTAMP" | "TIMESTAMP_MILLIS" =>
+          builder.addField(
+            Types
+              .primitive(PrimitiveType.PrimitiveTypeName.INT64, repetition)
+              .as(
+                org.apache.parquet.schema.LogicalTypeAnnotation.timestampType(
+                  true,
+                  org.apache.parquet.schema.LogicalTypeAnnotation.TimeUnit.MILLIS
+                )
+              )
+              .named(col.name)
+          )
         case "BINARY" | "STRING" =>
           builder.addField(
             Types
@@ -551,6 +595,31 @@ class ParquetRepository {
               )
               .named(key)
           )
+        case Some(_: java.time.LocalDate) =>
+          builder.addField(
+            Types
+              .primitive(
+                PrimitiveType.PrimitiveTypeName.INT32,
+                Repetition.OPTIONAL
+              )
+              .as(org.apache.parquet.schema.LogicalTypeAnnotation.dateType())
+              .named(key)
+          )
+        case Some(_: java.time.Instant) =>
+          builder.addField(
+            Types
+              .primitive(
+                PrimitiveType.PrimitiveTypeName.INT64,
+                Repetition.OPTIONAL
+              )
+              .as(
+                org.apache.parquet.schema.LogicalTypeAnnotation.timestampType(
+                  true,
+                  org.apache.parquet.schema.LogicalTypeAnnotation.TimeUnit.MILLIS
+                )
+              )
+              .named(key)
+          )
         case Some(_: String) =>
           builder.addField(
             Types
@@ -605,7 +674,10 @@ class ParquetRepository {
           case f: Float   => group.add(fieldIndex, f)
           case b: Boolean => group.add(fieldIndex, b)
           case s: String  => group.add(fieldIndex, s)
-          case other      => group.add(fieldIndex, other.toString)
+          case date: java.time.LocalDate =>
+            group.add(fieldIndex, date.toEpochDay.toInt)
+          case ts: java.time.Instant => group.add(fieldIndex, ts.toEpochMilli)
+          case other                 => group.add(fieldIndex, other.toString)
         }
       }
     }
@@ -745,11 +817,39 @@ class ParquetRepository {
     }
   }
 
-  private def getRowCount(path: HadoopPath, conf: Configuration): Long = {
-    // Use ParquetFileReader.open with InputFile
+  private def getFileMetadata(
+      path: HadoopPath,
+      conf: Configuration
+  ): (Long, MessageType) = {
     val inputFile = HadoopInputFile.fromPath(path, conf)
     Using.resource(ParquetFileReader.open(inputFile)) { reader =>
-      reader.getFooter.getBlocks.asScala.map(_.getRowCount).sum
+      val rowCount = reader.getFooter.getBlocks.asScala.map(_.getRowCount).sum
+      val schema = reader.getFooter.getFileMetaData.getSchema
+      (rowCount, schema)
+    }
+  }
+
+  private def postProcessTemporalFields(
+      row: Map[String, Any],
+      schema: MessageType
+  ): Map[String, Any] = {
+    schema.getFields.asScala.foldLeft(row) { (acc, field) =>
+      if (!field.isPrimitive) acc
+      else {
+        val pt = field.asPrimitiveType()
+        val originalType = pt.getOriginalType
+        (pt.getPrimitiveTypeName, originalType) match {
+          case (PrimitiveTypeName.INT32, OriginalType.DATE) =>
+            acc.get(field.getName) match {
+              case Some(i: Int) =>
+                acc + (field.getName -> java.time.LocalDate
+                  .ofEpochDay(i.toLong)
+                  .toString)
+              case _ => acc
+            }
+          case _ => acc
+        }
+      }
     }
   }
 
@@ -764,7 +864,7 @@ class ParquetRepository {
     case FloatValue(f)       => f
     case DoubleValue(d)      => d
     case BinaryValue(binary) => binary.toStringUsingUTF8
-    case DateTimeValue(l, _) => l
+    case DateTimeValue(l, _) => java.time.Instant.ofEpochMilli(l).toString
     case DecimalValue(bigInt, fmt) =>
       scala.math.BigDecimal(new java.math.BigDecimal(bigInt, fmt.scale))
     case _ => value.toString

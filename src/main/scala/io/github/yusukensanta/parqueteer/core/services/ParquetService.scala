@@ -463,7 +463,9 @@ class ParquetService(
                 .toMap
                 .view
                 .mapValues {
-                  case j if j.isString => j.asString.get
+                  case j if j.isString =>
+                    io.github.yusukensanta.parqueteer.core.util.TypeInferrer
+                      .inferJsonString(j.asString.get)
                   case j if j.isNumber =>
                     val n = j.asNumber.get
                     n.toLong.fold[Any](n.toDouble)(identity)
@@ -492,7 +494,13 @@ class ParquetService(
         throw new IllegalArgumentException(
           s"Row ${idx + 2} has ${values.length} fields, expected ${headers.length}"
         )
-      headers.zip(values).toMap.asInstanceOf[Map[String, Any]]
+      headers
+        .zip(values)
+        .map { case (h, v) =>
+          h -> io.github.yusukensanta.parqueteer.core.util.TypeInferrer
+            .inferCsvValue(v)
+        }
+        .toMap
     }
   }
 
