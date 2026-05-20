@@ -1,5 +1,8 @@
 <p align="center">
-  <img src="assets/logo/parqueteer-wordmark.svg" alt="parqueteer" height="72" />
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/logo/parqueteer-wordmark-dark.svg" />
+    <img src="assets/logo/parqueteer-wordmark.svg" alt="parqueteer" height="72" />
+  </picture>
 </p>
 
 <p align="center"><strong>A modern CLI toolkit for Apache Parquet files with cloud storage support</strong></p>
