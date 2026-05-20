@@ -62,8 +62,9 @@ object CliApp {
       "validate",
       "convert",
       "merge",
-      "stats",
       "schema",
+      "stats",
+      "config",
       "completions"
     )
     val commandBeforeHelp = args
@@ -136,15 +137,8 @@ object CliApp {
           globalOptions
         )
 
-      case InfoCommand(filePath, format, showSchema, showMetadata) =>
-        executeInfo(
-          service,
-          filePath,
-          format,
-          showSchema,
-          showMetadata,
-          globalOptions
-        )
+      case InfoCommand(filePath, format) =>
+        executeInfo(service, filePath, format, globalOptions)
 
       case WriteCommand(
             outputPath,
@@ -178,11 +172,17 @@ object CliApp {
           globalOptions
         )
 
-      case ConfigCommand(sub) =>
-        executeConfig(sub, globalOptions)
+      case cmd: ConfigCommand =>
+        executeConfig(cmd, globalOptions)
 
-      case SchemaCommand(sub) =>
-        executeSchemaDiff(service, sub, globalOptions)
+      case cmd: SchemaCommand =>
+        executeSchemaInfo(service, cmd, globalOptions)
+
+      case cmd: SchemaDiffCommand =>
+        executeSchemaDiff(service, cmd, globalOptions)
+
+      case StatsCommand(filePath, format) =>
+        executeStats(service, filePath, format, globalOptions)
 
       case MergeCommand(inputPaths, outputPath, compression, schemaMode) =>
         executeMerge(
@@ -193,9 +193,6 @@ object CliApp {
           schemaMode,
           globalOptions
         )
-
-      case StatsCommand(filePath, format) =>
-        executeStats(service, filePath, format, globalOptions)
 
       case CompletionsCommand(shell) =>
         executeCompletions(shell, globalOptions)
@@ -269,25 +266,14 @@ object CliApp {
       service: ParquetService,
       filePath: String,
       format: OutputFormat,
-      showSchema: Boolean,
-      showMetadata: Boolean,
       globalOptions: GlobalOptions
   ): Int = {
-    val showAll = !showSchema && !showMetadata
     service.getFileInfo(filePath) match {
       case Success(file) =>
         if (!globalOptions.quiet) {
           format match {
-            case OutputFormat.JSON =>
-              println(formatInfoJson(file, showAll, showSchema, showMetadata))
-            case _ =>
-              if (showAll || showMetadata) {
-                println(service.formatMetadata(file))
-                println()
-              }
-              if (showAll || showSchema) {
-                println(service.formatSchema(file))
-              }
+            case OutputFormat.JSON => println(formatInfoJson(file))
+            case _                 => println(service.formatMetadata(file))
           }
         }
         0
@@ -298,16 +284,10 @@ object CliApp {
     }
   }
 
-  private def formatInfoJson(
-      file: ParquetFile,
-      showAll: Boolean,
-      showSchema: Boolean,
-      showMetadata: Boolean
-  ): String = {
-    val fields = scala.collection.mutable.ListBuffer.empty[(String, Json)]
-    if (showAll || showMetadata) {
-      val metaJson = file.metadata.fold(Json.Null) { m =>
-        Json.obj(
+  private def formatInfoJson(file: ParquetFile): String =
+    file.metadata.fold(Json.obj().spaces2) { m =>
+      Json
+        .obj(
           "fileSize" -> Json.fromLong(m.fileSize),
           "createdAt" -> m.createdAt.fold(Json.Null)(t =>
             Json.fromString(t.toString)
@@ -321,28 +301,8 @@ object CliApp {
           "version" -> Json.fromString(m.version),
           "createdBy" -> m.createdBy.fold(Json.Null)(Json.fromString)
         )
-      }
-      fields += ("metadata" -> metaJson)
+        .spaces2
     }
-    if (showAll || showSchema) {
-      val schemaJson = file.schema.fold(Json.Null) { s =>
-        Json.obj(
-          "totalRowCount" -> Json.fromLong(s.totalRowCount),
-          "rowGroupCount" -> Json.fromLong(s.rowGroupCount),
-          "columns" -> Json.fromValues(s.columns.map { c =>
-            Json.obj(
-              "name" -> Json.fromString(c.name),
-              "dataType" -> Json.fromString(c.dataType),
-              "optional" -> Json.fromBoolean(c.isOptional),
-              "compressionType" -> Json.fromString(c.compressionType)
-            )
-          })
-        )
-      }
-      fields += ("schema" -> schemaJson)
-    }
-    Json.obj(fields.toSeq*).spaces2
-  }
 
   private def executeWrite(
       service: ParquetService,
@@ -519,32 +479,55 @@ object CliApp {
     }
   }
 
-  private def executeStats(
+  private def executeSchemaInfo(
       service: ParquetService,
-      filePath: String,
-      format: OutputFormat,
+      cmd: SchemaCommand,
       globalOptions: GlobalOptions
   ): Int = {
-    service.getStats(filePath) match {
-      case scala.util.Success(stats) =>
+    if (cmd.filePath.isEmpty) {
+      System.err.println(
+        "Error: schema requires a file path, or use 'schema diff FILE1 FILE2'"
+      )
+      return 2
+    }
+    service.getFileInfo(cmd.filePath) match {
+      case Failure(error) =>
+        System.err.println(s"Failed to read schema: ${error.getMessage}")
+        if (globalOptions.verbose) error.printStackTrace()
+        1
+      case Success(file) =>
         if (!globalOptions.quiet) {
-          format match {
-            case OutputFormat.JSON => println(formatStatsJson(stats))
-            case _                 => println(formatStatsTable(stats))
+          cmd.format match {
+            case OutputFormat.JSON => println(formatSchemaJson(file))
+            case _                 => println(service.formatSchema(file))
           }
         }
         0
-      case scala.util.Failure(error) =>
-        System.err.println(s"Failed to get stats: ${error.getMessage}")
-        if (globalOptions.verbose) error.printStackTrace()
-        1
     }
   }
+
+  private def formatSchemaJson(file: ParquetFile): String =
+    file.schema.fold(Json.obj().spaces2) { s =>
+      Json
+        .obj(
+          "totalRowCount" -> Json.fromLong(s.totalRowCount),
+          "rowGroupCount" -> Json.fromLong(s.rowGroupCount),
+          "columns" -> Json.fromValues(s.columns.map { c =>
+            Json.obj(
+              "name" -> Json.fromString(c.name),
+              "dataType" -> Json.fromString(c.dataType),
+              "optional" -> Json.fromBoolean(c.isOptional),
+              "compressionType" -> Json.fromString(c.compressionType)
+            )
+          })
+        )
+        .spaces2
+    }
 
   private def formatStatsTable(stats: FileStats): String = {
     val sb = new StringBuilder
     sb.append(
-      s"Rows: ${stats.totalRows}  Row groups: ${stats.rowGroupCount}\n\n"
+      s"Stats: ${stats.totalRows} rows, ${stats.rowGroupCount} row groups\n\n"
     )
     val header =
       f"${"Column"}%-30s ${"Type"}%-15s ${"Nulls"}%10s ${"Min"}%-20s ${"Max"}%-20s"
@@ -561,23 +544,41 @@ object CliApp {
     sb.toString.stripTrailing()
   }
 
-  private def formatStatsJson(stats: FileStats): String = {
-    import io.circe.Json
-    Json
-      .obj(
-        "totalRows" -> Json.fromLong(stats.totalRows),
-        "rowGroupCount" -> Json.fromLong(stats.rowGroupCount),
-        "columns" -> Json.fromValues(stats.columns.map { col =>
-          Json.obj(
-            "name" -> Json.fromString(col.name),
-            "dataType" -> Json.fromString(col.dataType),
-            "nullCount" -> Json.fromLong(col.nullCount),
-            "minValue" -> col.minValue.fold(Json.Null)(Json.fromString),
-            "maxValue" -> col.maxValue.fold(Json.Null)(Json.fromString)
-          )
-        })
-      )
-      .spaces2
+  private def formatStatsJson(stats: FileStats): Json =
+    Json.obj(
+      "totalRows" -> Json.fromLong(stats.totalRows),
+      "rowGroupCount" -> Json.fromLong(stats.rowGroupCount),
+      "columns" -> Json.fromValues(stats.columns.map { col =>
+        Json.obj(
+          "name" -> Json.fromString(col.name),
+          "dataType" -> Json.fromString(col.dataType),
+          "nullCount" -> Json.fromLong(col.nullCount),
+          "minValue" -> col.minValue.fold(Json.Null)(Json.fromString),
+          "maxValue" -> col.maxValue.fold(Json.Null)(Json.fromString)
+        )
+      })
+    )
+
+  private def executeStats(
+      service: ParquetService,
+      filePath: String,
+      format: OutputFormat,
+      globalOptions: GlobalOptions
+  ): Int = {
+    service.getStats(filePath) match {
+      case scala.util.Success(stats) =>
+        if (!globalOptions.quiet) {
+          format match {
+            case OutputFormat.JSON => println(formatStatsJson(stats).spaces2)
+            case _                 => println(formatStatsTable(stats))
+          }
+        }
+        0
+      case scala.util.Failure(error) =>
+        System.err.println(s"Failed to get stats: ${error.getMessage}")
+        if (globalOptions.verbose) error.printStackTrace()
+        1
+    }
   }
 
   private def executeCompletions(
@@ -598,19 +599,19 @@ object CliApp {
 
   private def executeSchemaDiff(
       service: ParquetService,
-      sub: SchemaDiffSubcommand,
+      cmd: SchemaDiffCommand,
       globalOptions: GlobalOptions
   ): Int = {
-    service.diffSchemas(sub.file1, sub.file2) match {
+    service.diffSchemas(cmd.file1, cmd.file2) match {
       case Failure(error) =>
         System.err.println(s"Failed to diff schemas: ${error.getMessage}")
         if (globalOptions.verbose) error.printStackTrace()
         1
       case Success(diff) =>
         if (!globalOptions.quiet)
-          sub.format match {
+          cmd.format match {
             case OutputFormat.JSON => println(formatSchemaDiffJson(diff))
-            case _ => println(formatSchemaDiffTable(sub.file1, sub.file2, diff))
+            case _ => println(formatSchemaDiffTable(cmd.file1, cmd.file2, diff))
           }
         if (diff.identical) 0 else 1
     }
@@ -682,74 +683,71 @@ object CliApp {
   }
 
   private def executeConfig(
-      sub: ConfigSubcommand,
+      cmd: ConfigCommand,
       globalOptions: GlobalOptions
   ): Int = {
     val configManager = new ConfigurationManager()
     val configPath = globalOptions.configPath
-    sub match {
-      case ConfigSubcommand.Show =>
-        if (!globalOptions.quiet) {
-          val resolvedPath = configManager.resolvedConfigPath(configPath)
-          val fileExists = better.files.File(resolvedPath).exists
-          println(s"Config file: $resolvedPath [${
-              if (fileExists) "exists" else "not found"
-            }]")
-          println()
+    if (cmd.validate) {
+      configManager.validate(configPath) match {
+        case scala.util.Success(Nil) =>
+          if (!globalOptions.quiet) println(s"✓ Configuration is valid")
+          0
+        case scala.util.Success(issues) =>
+          issues.foreach(i => println(s"  $i"))
+          0
+        case scala.util.Failure(ex) =>
+          System.err.println(s"Config error: ${ex.getMessage}")
+          1
+      }
+    } else {
+      if (!globalOptions.quiet) {
+        val resolvedPath = configManager.resolvedConfigPath(configPath)
+        val fileExists = better.files.File(resolvedPath).exists
+        println(s"Config file: $resolvedPath [${
+            if (fileExists) "exists" else "not found"
+          }]")
+        println()
 
-          val envVars = EnvConfig.allSet
-          if (envVars.isEmpty) {
-            println("Environment variables: (none set)")
-          } else {
-            println("Environment variables:")
-            EnvConfig.SupportedVars.foreach { key =>
-              envVars.get(key) match {
-                case Some(v) => println(s"  $key=$v")
-                case None    => ()
-              }
+        val envVars = EnvConfig.allSet
+        if (envVars.isEmpty) {
+          println("Environment variables: (none set)")
+        } else {
+          println("Environment variables:")
+          EnvConfig.SupportedVars.foreach { key =>
+            envVars.get(key) match {
+              case Some(v) => println(s"  $key=$v")
+              case None    => ()
             }
           }
-          println()
-
-          println("Resolved settings:")
-          val fmt = EnvConfig.parsedDefaultFormat
-            .map(_.toString.toLowerCase + " [env]")
-            .getOrElse("table [default]")
-          println(s"  format:   $fmt")
-          val color = {
-            val cm = globalOptions.colorMode
-            val src =
-              if (sys.env.get("NO_COLOR").exists(_.nonEmpty)) "[env: NO_COLOR]"
-              else if (sys.env.contains("PARQUETEER_COLOR")) "[env]"
-              else "[default]"
-            s"${cm.toString.toLowerCase} $src"
-          }
-          println(s"  color:    $color")
-          val verboseFlag =
-            if (globalOptions.verbose) "true [cli/env]" else "false [default]"
-          println(s"  verbose:  $verboseFlag")
-          val quiet =
-            if (globalOptions.quiet) "true [cli]" else "false [default]"
-          println(s"  quiet:    $quiet")
-          EnvConfig.parsedMaxRows.foreach { n =>
-            println(s"  max-rows: $n [env]")
-          }
         }
-        0
+        println()
 
-      case ConfigSubcommand.Validate =>
-        configManager.validate(configPath) match {
-          case scala.util.Success(Nil) =>
-            if (!globalOptions.quiet)
-              println(s"✓ Configuration is valid")
-            0
-          case scala.util.Success(issues) =>
-            issues.foreach(i => println(s"  $i"))
-            0
-          case scala.util.Failure(ex) =>
-            System.err.println(s"Config error: ${ex.getMessage}")
-            1
+        println("Resolved settings:")
+        val fmt = EnvConfig.parsedDefaultFormat
+          .map(_.toString.toLowerCase + " [env]")
+          .getOrElse("table [default]")
+        println(s"  format:   $fmt")
+        val color = {
+          val cm = globalOptions.colorMode
+          val src =
+            if (sys.env.get("NO_COLOR").exists(_.nonEmpty)) "[env: NO_COLOR]"
+            else if (sys.env.contains("PARQUETEER_COLOR")) "[env]"
+            else "[default]"
+          s"${cm.toString.toLowerCase} $src"
         }
+        println(s"  color:    $color")
+        val verboseFlag =
+          if (globalOptions.verbose) "true [cli/env]" else "false [default]"
+        println(s"  verbose:  $verboseFlag")
+        val quiet =
+          if (globalOptions.quiet) "true [cli]" else "false [default]"
+        println(s"  quiet:    $quiet")
+        EnvConfig.parsedMaxRows.foreach { n =>
+          println(s"  limit: $n [env: PARQUETEER_MAX_ROWS]")
+        }
+      }
+      0
     }
   }
 

@@ -123,13 +123,13 @@ class TableFormatter extends OutputFormatter {
       rows: List[Map[String, Any]]
   ): List[Int] = {
     columns.map { colName =>
-      val headerWidth = colName.length
+      val headerWidth = displayWidth(colName)
 
       val valueWidth = rows
         .map { row =>
           row
             .get(colName)
-            .map(formatValue(_).length)
+            .map(v => displayWidth(formatValue(v)))
             .getOrElse(0)
         }
         .maxOption
@@ -183,21 +183,62 @@ class TableFormatter extends OutputFormatter {
   }
 
   private[formatters] def formatValue(value: Any): String = value match {
-    case null       => "null"
-    case d: Double  => f"$d%.2f" // 2 decimal places for doubles
-    case f: Float   => f"$f%.2f"
-    case b: Boolean => if (b) "true" else "false"
-    case s: String  => s
-    case other      => other.toString
+    case null           => "null"
+    case d: Double      => f"$d%.2f"
+    case f: Float       => f"$f%.2f"
+    case b: Boolean     => if (b) "true" else "false"
+    case bd: BigDecimal => bd.underlying.toPlainString
+    case s: String      => s
+    case other          => other.toString
   }
 
   private def truncate(str: String, maxWidth: Int): String = {
-    if (str.length <= maxWidth) str
-    else str.take(maxWidth - 3) + "..."
+    if (displayWidth(str) <= maxWidth) str
+    else {
+      val sb = new java.lang.StringBuilder
+      var w = 0
+      var i = 0
+      while (i < str.length) {
+        val cp = str.codePointAt(i)
+        val cpw = if (isWideCodePoint(cp)) 2 else 1
+        if (w + cpw + 3 > maxWidth) { sb.append("..."); return sb.toString }
+        sb.appendCodePoint(cp)
+        w += cpw
+        i += Character.charCount(cp)
+      }
+      sb.toString
+    }
   }
 
-  private def padRight(str: String, width: Int): String = {
-    str + (" " * (width - str.length))
+  private def padRight(str: String, width: Int): String =
+    str + " " * (width - displayWidth(str))
+
+  private[formatters] def displayWidth(s: String): Int = {
+    var w = 0
+    var i = 0
+    while (i < s.length) {
+      val cp = s.codePointAt(i)
+      w += (if (isWideCodePoint(cp)) 2 else 1)
+      i += Character.charCount(cp)
+    }
+    w
+  }
+
+  private def isWideCodePoint(cp: Int): Boolean = {
+    import Character.UnicodeBlock
+    val b = UnicodeBlock.of(cp)
+    b == UnicodeBlock.CJK_UNIFIED_IDEOGRAPHS ||
+    b == UnicodeBlock.CJK_UNIFIED_IDEOGRAPHS_EXTENSION_A ||
+    b == UnicodeBlock.CJK_UNIFIED_IDEOGRAPHS_EXTENSION_B ||
+    b == UnicodeBlock.CJK_COMPATIBILITY_IDEOGRAPHS ||
+    b == UnicodeBlock.HIRAGANA ||
+    b == UnicodeBlock.KATAKANA ||
+    b == UnicodeBlock.KATAKANA_PHONETIC_EXTENSIONS ||
+    b == UnicodeBlock.HANGUL_SYLLABLES ||
+    b == UnicodeBlock.HANGUL_JAMO ||
+    b == UnicodeBlock.HANGUL_COMPATIBILITY_JAMO ||
+    (cp >= 0xff01 && cp <= 0xff60) || // fullwidth ASCII & punctuation
+    (cp >= 0xffe0 && cp <= 0xffe6) // fullwidth symbols
   }
 
   private[formatters] def drawSummary(content: FileContent): String = {

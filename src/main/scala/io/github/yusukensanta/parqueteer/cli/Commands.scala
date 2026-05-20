@@ -20,9 +20,7 @@ case class ReadCommand(
 
 case class InfoCommand(
     filePath: String,
-    format: OutputFormat = OutputFormat.Table,
-    showSchema: Boolean = false,
-    showMetadata: Boolean = false
+    format: OutputFormat = OutputFormat.Table
 ) extends Command
 
 case class WriteCommand(
@@ -47,18 +45,18 @@ case class ConvertCommand(
     dryRun: Boolean = false
 ) extends Command
 
-enum ConfigSubcommand:
-  case Show, Validate
+case class ConfigCommand(validate: Boolean = false) extends Command
 
-case class ConfigCommand(sub: ConfigSubcommand) extends Command
+case class SchemaCommand(
+    filePath: String,
+    format: OutputFormat = OutputFormat.Table
+) extends Command
 
-case class SchemaDiffSubcommand(
+case class SchemaDiffCommand(
     file1: String,
     file2: String,
     format: OutputFormat = OutputFormat.Table
-)
-
-case class SchemaCommand(sub: SchemaDiffSubcommand) extends Command
+) extends Command
 
 case class MergeCommand(
     inputPaths: List[String] = List.empty,
