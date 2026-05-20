@@ -1,6 +1,8 @@
-# parqueteer 🦜
+<p align="center">
+  <img src="assets/logo/parqueteer-wordmark.svg" alt="parqueteer" height="72" />
+</p>
 
-**A modern CLI toolkit for Apache Parquet files with cloud storage support**
+<p align="center"><strong>A modern CLI toolkit for Apache Parquet files with cloud storage support</strong></p>
 
 [![CI](https://github.com/yusukensanta/parqueteer/actions/workflows/ci.yml/badge.svg)](https://github.com/yusukensanta/parqueteer/actions/workflows/ci.yml)
 [![Latest Release](https://img.shields.io/github/v/release/yusukensanta/parqueteer)](https://github.com/yusukensanta/parqueteer/releases/latest)
