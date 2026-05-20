@@ -73,10 +73,14 @@ jobs:
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
         run: |
           VERSION=${GITHUB_REF#refs/tags/v}
+          TARBALL_URL="https://github.com/yusukensanta/parqueteer/archive/refs/tags/v${VERSION}.tar.gz"
+          SHA256=$(curl -sL "${TARBALL_URL}" | sha256sum | cut -d' ' -f1)
 
           git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/yusukensanta/homebrew-parqueteer.git" /tmp/homebrew-tap
           cd /tmp/homebrew-tap
 
+          sed -i "s|url \".*\"|url \"${TARBALL_URL}\"|" Formula/parqueteer.rb
+          sed -i "s/sha256 \".*\"/sha256 \"${SHA256}\"/" Formula/parqueteer.rb
           sed -i "s/version \".*\"/version \"${VERSION}\"/" Formula/parqueteer.rb
 
           git config user.name "github-actions[bot]"

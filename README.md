@@ -5,7 +5,7 @@
   </picture>
 </p>
 
-<p align="center"><strong>A modern CLI toolkit for Apache Parquet files with cloud storage support</strong></p>
+<p align="center"><strong>Read, write, and inspect Parquet files on local storage, S3, GCS, and Azure — no Spark required.</strong></p>
 
 [![CI](https://github.com/yusukensanta/parqueteer/actions/workflows/ci.yml/badge.svg)](https://github.com/yusukensanta/parqueteer/actions/workflows/ci.yml)
 [![Latest Release](https://img.shields.io/github/v/release/yusukensanta/parqueteer)](https://github.com/yusukensanta/parqueteer/releases/latest)
