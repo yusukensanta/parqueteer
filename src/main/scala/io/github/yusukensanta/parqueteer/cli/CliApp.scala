@@ -30,6 +30,11 @@ object CliApp {
   private val logger = LoggerFactory.getLogger(getClass)
 
   def main(args: Array[String]): Unit = {
+    if (shouldShowVersion(args)) {
+      showVersion()
+      System.exit(0)
+    }
+
     // Intercept help requests for custom hierarchical help
     if (shouldShowHelp(args)) {
       showHelp(args)
@@ -46,6 +51,18 @@ object CliApp {
       case None =>
         System.exit(2)
     }
+  }
+
+  private def shouldShowVersion(args: Array[String]): Boolean =
+    args.contains("--version") || args.contains("-V")
+
+  private def showVersion(): Unit = {
+    import io.github.yusukensanta.parqueteer.BuildInfo
+    val javaVersion = System.getProperty("java.version")
+    val javaVendor = System.getProperty("java.vendor", "")
+    val vendorSuffix = if (javaVendor.nonEmpty) s" ($javaVendor)" else ""
+    println(s"parqueteer ${BuildInfo.version}")
+    println(s"Scala ${BuildInfo.scalaVersion} · Java $javaVersion$vendorSuffix")
   }
 
   /** Check if help should be displayed */
