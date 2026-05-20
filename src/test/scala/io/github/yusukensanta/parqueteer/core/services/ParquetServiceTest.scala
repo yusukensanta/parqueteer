@@ -458,6 +458,30 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     rows.head("score") shouldBe 9.5
   }
 
+  it should "infer date string in JSON as LocalDate" in {
+    val service = new ParquetService(new FakeParquetRepository())
+    val rows =
+      service.parseJsonContent("""[{"name": "Alice", "dob": "1990-06-15"}]""")
+    rows.head("dob") shouldBe java.time.LocalDate.of(1990, 6, 15)
+  }
+
+  it should "infer timestamp string in JSON as Instant" in {
+    val service = new ParquetService(new FakeParquetRepository())
+    val rows =
+      service.parseJsonContent(
+        """[{"event": "login", "ts": "2024-01-01T08:00:00Z"}]"""
+      )
+    rows.head("ts") shouldBe a[java.time.Instant]
+  }
+
+  it should "keep JSON boolean strings as plain strings (JSON booleans are already typed)" in {
+    val service = new ParquetService(new FakeParquetRepository())
+    val rows =
+      service.parseJsonContent("""[{"note": "true", "active": true}]""")
+    rows.head("note") shouldBe "true"
+    rows.head("active") shouldBe true
+  }
+
   it should "throw for non-array JSON" in {
     val service = new ParquetService(new FakeParquetRepository())
     an[IllegalArgumentException] should be thrownBy {
@@ -465,16 +489,48 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     }
   }
 
-  "ParquetService.parseCsvContent" should "parse CSV string" in {
+  "ParquetService.parseCsvContent" should "parse CSV string with type inference" in {
     val service = new ParquetService(new FakeParquetRepository())
     val rows = service.parseCsvContent("a,b\n1,2\n3,4\n")
     rows should have length 2
-    rows.head("a") shouldBe "1"
+    rows.head("a") shouldBe 1L
+    rows.head("b") shouldBe 2L
   }
 
   it should "return empty list for empty input" in {
     val service = new ParquetService(new FakeParquetRepository())
     service.parseCsvContent("") shouldBe empty
+  }
+
+  it should "infer date strings as LocalDate" in {
+    val service = new ParquetService(new FakeParquetRepository())
+    val rows =
+      service.parseCsvContent("name,dob\nAlice,1990-06-15\nBob,2001-12-01\n")
+    rows.head("dob") shouldBe java.time.LocalDate.of(1990, 6, 15)
+    rows(1)("dob") shouldBe java.time.LocalDate.of(2001, 12, 1)
+  }
+
+  it should "infer timestamp strings as Instant" in {
+    val service = new ParquetService(new FakeParquetRepository())
+    val rows =
+      service.parseCsvContent(
+        "event,ts\nlogin,2024-01-01T08:00:00Z\nlogout,2024-01-01T09:30:00Z\n"
+      )
+    rows.head("ts") shouldBe a[java.time.Instant]
+  }
+
+  it should "infer boolean strings as Boolean" in {
+    val service = new ParquetService(new FakeParquetRepository())
+    val rows = service.parseCsvContent("name,active\nAlice,true\nBob,false\n")
+    rows.head("active") shouldBe true
+    rows(1)("active") shouldBe false
+  }
+
+  it should "preserve leading-zero strings as String" in {
+    val service = new ParquetService(new FakeParquetRepository())
+    val rows = service.parseCsvContent("code\n007\n042\n")
+    rows.head("code") shouldBe "007"
+    rows(1)("code") shouldBe "042"
   }
 
   it should "parse CSV with quoted fields containing newlines" in {

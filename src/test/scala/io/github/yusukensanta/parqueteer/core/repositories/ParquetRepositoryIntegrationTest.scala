@@ -422,6 +422,43 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
     rows.last.get("note") shouldBe Some("also present")
   }
 
+  it should "write and read back DATE (LocalDate) values as ISO date strings" taggedAs IntegrationTest in {
+    val data = List(
+      Map[String, Any](
+        "id" -> 1L,
+        "dob" -> java.time.LocalDate.of(1990, 6, 15)
+      ),
+      Map[String, Any]("id" -> 2L, "dob" -> java.time.LocalDate.of(2001, 12, 1))
+    )
+    val loc = LocalPath(tempFile().getAbsolutePath)
+    repo.writeContent(loc, data, None).isSuccess shouldBe true
+
+    val result = repo.readContent(ParquetFile(loc), ReadConfig())
+    result.isSuccess shouldBe true
+    val rows = result.get.rows
+    rows should have length 2
+    rows.head("dob") shouldBe "1990-06-15"
+    rows(1)("dob") shouldBe "2001-12-01"
+  }
+
+  it should "write and read back TIMESTAMP (Instant) values as ISO timestamp strings" taggedAs IntegrationTest in {
+    val ts1 = java.time.Instant.parse("2024-01-01T08:00:00Z")
+    val ts2 = java.time.Instant.parse("2024-06-15T23:59:59Z")
+    val data = List(
+      Map[String, Any]("event" -> "login", "ts" -> ts1),
+      Map[String, Any]("event" -> "logout", "ts" -> ts2)
+    )
+    val loc = LocalPath(tempFile().getAbsolutePath)
+    repo.writeContent(loc, data, None).isSuccess shouldBe true
+
+    val result = repo.readContent(ParquetFile(loc), ReadConfig())
+    result.isSuccess shouldBe true
+    val rows = result.get.rows
+    rows should have length 2
+    rows.head("ts") shouldBe ts1.toString
+    rows(1)("ts") shouldBe ts2.toString
+  }
+
   it should "omit null fields in parallel (low-level) read path" taggedAs IntegrationTest in {
     val manyRows = (1 to 10).map { i =>
       if (i == 5) Map[String, Any]("id" -> i.toLong, "note" -> null)

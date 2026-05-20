@@ -14,9 +14,11 @@ object JsonEncoder {
     case f: Float =>
       if (f.isNaN || f.isInfinity) Json.Null
       else Json.fromFloatOrNull(f)
-    case b: Boolean     => Json.fromBoolean(b)
-    case bd: BigDecimal => Json.fromBigDecimal(bd)
-    case bi: BigInt     => Json.fromBigInt(bi)
+    case b: Boolean             => Json.fromBoolean(b)
+    case bd: BigDecimal         => Json.fromBigDecimal(bd)
+    case bi: BigInt             => Json.fromBigInt(bi)
+    case d: java.time.LocalDate => Json.fromString(d.toString)
+    case i: java.time.Instant   => Json.fromString(i.toString)
     case bytes: Array[Byte] =>
       Json.fromString(java.util.Base64.getEncoder.encodeToString(bytes))
     case list: List[_] => Json.arr(list.map(encodeAny)*)
