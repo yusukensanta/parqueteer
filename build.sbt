@@ -61,7 +61,7 @@ Test / fork := true
 lazy val root = (project in file("."))
   .enablePlugins(JavaAppPackaging, BuildInfoPlugin)
   .settings(
-    buildInfoKeys := Seq[BuildInfoKey](version),
+    buildInfoKeys := Seq[BuildInfoKey](version, scalaVersion),
     buildInfoPackage := "io.github.yusukensanta.parqueteer",
     assembly / mainClass := Some(
       "io.github.yusukensanta.parqueteer.cli.CliApp"
