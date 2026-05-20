@@ -141,6 +141,59 @@ class TableFormatterTest extends AnyFlatSpec with Matchers {
     result should include("2024-01-01")
   }
 
+  "TableFormatter.formatValue" should "format Double NaN as NaN" in {
+    formatter.formatValue(Double.NaN) shouldBe "NaN"
+  }
+
+  it should "format Double positive infinity as Infinity" in {
+    formatter.formatValue(Double.PositiveInfinity) shouldBe "Infinity"
+  }
+
+  it should "format Double negative infinity as -Infinity" in {
+    formatter.formatValue(Double.NegativeInfinity) shouldBe "-Infinity"
+  }
+
+  it should "format Float NaN as NaN" in {
+    formatter.formatValue(Float.NaN) shouldBe "NaN"
+  }
+
+  it should "format Float positive infinity as Infinity" in {
+    formatter.formatValue(Float.PositiveInfinity) shouldBe "Infinity"
+  }
+
+  it should "format Int (INT32) value as string" in {
+    formatter.formatValue(42) shouldBe "42"
+    formatter.formatValue(-1) shouldBe "-1"
+  }
+
+  it should "format Float (FLOAT) value with 2 decimal places" in {
+    formatter.formatValue(1.5f) shouldBe "1.50"
+    formatter.formatValue(-3.0f) shouldBe "-3.00"
+  }
+
+  it should "format BigDecimal without scientific notation" in {
+    formatter.formatValue(
+      BigDecimal("1234567890.123")
+    ) shouldBe "1234567890.123"
+    formatter.formatValue(BigDecimal("0.0000001")) shouldBe "0.0000001"
+  }
+
+  it should "render Boolean, Int, and Float columns in table output" in {
+    val content = FileContent(
+      rows = List(
+        Map("active" -> true, "count" -> 7, "ratio" -> 0.5f),
+        Map("active" -> false, "count" -> 0, "ratio" -> 1.0f)
+      ),
+      totalRows = 2L,
+      isPartial = false
+    )
+    val result = formatter.formatContent(content, None)
+    result should include("true")
+    result should include("false")
+    result should include("7")
+    result should include("0.50")
+  }
+
   "TableFormatter.formatBytes" should "format bytes" in {
     formatter.formatBytes(512L) shouldBe "512.00 B"
   }

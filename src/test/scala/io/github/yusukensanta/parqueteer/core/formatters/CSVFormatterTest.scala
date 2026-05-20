@@ -84,6 +84,61 @@ class CSVFormatterTest extends AnyFlatSpec with Matchers {
     lines(1) shouldBe ""
   }
 
+  it should "render Double NaN as NaN string" in {
+    val content = FileContent(
+      rows = List(Map("val" -> Double.NaN)),
+      totalRows = 1L,
+      isPartial = false
+    )
+    val lines = formatter.formatContent(content, None).strip().split("\n")
+    lines(1) shouldBe "NaN"
+  }
+
+  it should "render Double Infinity as Infinity string" in {
+    val content = FileContent(
+      rows = List(Map("val" -> Double.PositiveInfinity)),
+      totalRows = 1L,
+      isPartial = false
+    )
+    val lines = formatter.formatContent(content, None).strip().split("\n")
+    lines(1) shouldBe "Infinity"
+  }
+
+  it should "render BigDecimal without scientific notation" in {
+    val content = FileContent(
+      rows = List(Map("amount" -> BigDecimal("0.0000001"))),
+      totalRows = 1L,
+      isPartial = false
+    )
+    val result = formatter.formatContent(content, None)
+    result should include("0.0000001")
+    result should not include "E"
+  }
+
+  it should "render Float values as plain decimal string" in {
+    val content = FileContent(
+      rows = List(Map("ratio" -> 1.5f)),
+      totalRows = 1L,
+      isPartial = false
+    )
+    val lines = formatter.formatContent(content, None).strip().split("\n")
+    lines(1) shouldBe "1.5"
+  }
+
+  it should "render Boolean values as true/false" in {
+    val content = FileContent(
+      rows = List(
+        Map("active" -> true),
+        Map("active" -> false)
+      ),
+      totalRows = 2L,
+      isPartial = false
+    )
+    val result = formatter.formatContent(content, None)
+    result should include("true")
+    result should include("false")
+  }
+
   "CSVFormatter.formatSchema" should "include header with Column Name and Data Type" in {
     val result = formatter.formatSchema(sampleSchema)
     result should include("Column Name")

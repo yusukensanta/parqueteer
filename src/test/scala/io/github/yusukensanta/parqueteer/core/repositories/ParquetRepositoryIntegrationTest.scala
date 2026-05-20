@@ -351,6 +351,93 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
     result.isFailure shouldBe true
   }
 
+  it should "write and read back INT32 (Int) values preserving type" taggedAs IntegrationTest in {
+    val data = List(
+      Map[String, Any]("id" -> 1, "count" -> 100),
+      Map[String, Any]("id" -> 2, "count" -> -50),
+      Map[String, Any]("id" -> 3, "count" -> Int.MaxValue)
+    )
+    val loc = LocalPath(tempFile().getAbsolutePath)
+    repo.writeContent(loc, data, None).isSuccess shouldBe true
+
+    val result = repo.readContent(ParquetFile(loc), ReadConfig())
+    result.isSuccess shouldBe true
+    val rows = result.get.rows
+    rows should have length 3
+    rows.head("id") shouldBe 1
+    rows.head("count") shouldBe 100
+    rows.last("count") shouldBe Int.MaxValue
+  }
+
+  it should "write and read back FLOAT (Float) values" taggedAs IntegrationTest in {
+    val data = List(
+      Map[String, Any]("x" -> 1.5f, "y" -> -2.5f),
+      Map[String, Any]("x" -> 0.0f, "y" -> 100.0f)
+    )
+    val loc = LocalPath(tempFile().getAbsolutePath)
+    repo.writeContent(loc, data, None).isSuccess shouldBe true
+
+    val result = repo.readContent(ParquetFile(loc), ReadConfig())
+    result.isSuccess shouldBe true
+    val rows = result.get.rows
+    rows should have length 2
+    rows.head("x").asInstanceOf[Float] shouldBe 1.5f +- 0.001f
+    rows.head("y").asInstanceOf[Float] shouldBe -2.5f +- 0.001f
+  }
+
+  it should "write and read back BOOLEAN values" taggedAs IntegrationTest in {
+    val data = List(
+      Map[String, Any]("name" -> "Alice", "active" -> true),
+      Map[String, Any]("name" -> "Bob", "active" -> false),
+      Map[String, Any]("name" -> "Charlie", "active" -> true)
+    )
+    val loc = LocalPath(tempFile().getAbsolutePath)
+    repo.writeContent(loc, data, None).isSuccess shouldBe true
+
+    val result = repo.readContent(ParquetFile(loc), ReadConfig())
+    result.isSuccess shouldBe true
+    val rows = result.get.rows
+    rows should have length 3
+    rows.head("active") shouldBe true
+    rows(1)("active") shouldBe false
+    rows.last("active") shouldBe true
+  }
+
+  it should "read null field as null value (key present, value null) via sequential path" taggedAs IntegrationTest in {
+    val data = List(
+      Map[String, Any]("id" -> 1L, "note" -> "present"),
+      Map[String, Any]("id" -> 2L, "note" -> null),
+      Map[String, Any]("id" -> 3L, "note" -> "also present")
+    )
+    val loc = LocalPath(tempFile().getAbsolutePath)
+    repo.writeContent(loc, data, None).isSuccess shouldBe true
+
+    val result = repo.readContent(ParquetFile(loc), ReadConfig())
+    result.isSuccess shouldBe true
+    val rows = result.get.rows
+    rows should have length 3
+    rows.head.get("note") shouldBe Some("present")
+    rows(1).keys should contain("note")
+    Option(rows(1)("note")) shouldBe None
+    rows.last.get("note") shouldBe Some("also present")
+  }
+
+  it should "omit null fields in parallel (low-level) read path" taggedAs IntegrationTest in {
+    val manyRows = (1 to 10).map { i =>
+      if (i == 5) Map[String, Any]("id" -> i.toLong, "note" -> null)
+      else Map[String, Any]("id" -> i.toLong, "note" -> s"row$i")
+    }.toList
+    val loc = LocalPath(tempFile().getAbsolutePath)
+    repo
+      .writeContent(loc, manyRows, None, WriteConfig(rowGroupSize = 1L))
+      .isSuccess shouldBe true
+
+    val result = repo.readContent(ParquetFile(loc), ReadConfig(parallelism = 4))
+    result.isSuccess shouldBe true
+    val nullRow = result.get.rows.find(_("id") == 5L).get
+    nullRow.keys should not contain "note"
+  }
+
   // ── Stats ───────────────────────────────────────────────────────────────
 
   "ParquetRepository.readStats" should "return stats for all columns" taggedAs IntegrationTest in {

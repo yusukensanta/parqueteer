@@ -58,6 +58,52 @@ class MarkdownFormatterTest extends AnyFlatSpec with Matchers {
     result should include("a\\|b")
   }
 
+  it should "render Double NaN as NaN" in {
+    val result =
+      formatter.formatContent(
+        FileContent(List(Map("v" -> Double.NaN)), 1L),
+        None
+      )
+    result should include("NaN")
+  }
+
+  it should "render Double Infinity as Infinity" in {
+    val result = formatter.formatContent(
+      FileContent(List(Map("v" -> Double.PositiveInfinity)), 1L),
+      None
+    )
+    result should include("Infinity")
+  }
+
+  it should "render BigDecimal without scientific notation" in {
+    val result = formatter.formatContent(
+      FileContent(List(Map("amount" -> BigDecimal("0.0000001"))), 1L),
+      None
+    )
+    result should include("0.0000001")
+    result should not include "E"
+  }
+
+  it should "render Boolean values as true/false" in {
+    val result = formatter.formatContent(
+      FileContent(
+        List(Map("flag" -> true), Map("flag" -> false)),
+        2L
+      ),
+      None
+    )
+    result should include("true")
+    result should include("false")
+  }
+
+  it should "render Int (INT32) values" in {
+    val result = formatter.formatContent(
+      FileContent(List(Map("count" -> 42)), 1L),
+      None
+    )
+    result should include("42")
+  }
+
   "MarkdownFormatter.formatSchema" should "produce a markdown header and table" in {
     val schema = ParquetSchema(
       columns =

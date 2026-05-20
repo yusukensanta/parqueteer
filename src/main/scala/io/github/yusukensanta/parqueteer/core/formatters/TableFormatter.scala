@@ -183,13 +183,15 @@ class TableFormatter extends OutputFormatter {
   }
 
   private[formatters] def formatValue(value: Any): String = value match {
-    case null           => "null"
-    case d: Double      => f"$d%.2f"
-    case f: Float       => f"$f%.2f"
-    case b: Boolean     => if (b) "true" else "false"
-    case bd: BigDecimal => bd.underlying.toPlainString
-    case s: String      => s
-    case other          => other.toString
+    case null                                 => "null"
+    case d: Double if d.isNaN || d.isInfinite => d.toString
+    case d: Double                            => f"$d%.2f"
+    case f: Float if f.isNaN || f.isInfinite  => f.toString
+    case f: Float                             => f"$f%.2f"
+    case b: Boolean                           => if (b) "true" else "false"
+    case bd: BigDecimal                       => bd.underlying.toPlainString
+    case s: String                            => s
+    case other                                => other.toString
   }
 
   private def truncate(str: String, maxWidth: Int): String = {
