@@ -108,12 +108,19 @@ class ParquetService(
     for {
       location <- StorageLocationParser
         .parse(path)
-        .left.map(msg => ParqueteerError.InvalidFormat(path, msg))
+        .left
+        .map(msg => ParqueteerError.InvalidFormat(path, msg))
       file = ParquetFile(location)
-      schema <- repository.readSchema(file)
-        .toEither.left.map(ParqueteerError.IOError.apply)
-      metadata <- repository.readMetadata(file)
-        .toEither.left.map(ParqueteerError.IOError.apply)
+      schema <- repository
+        .readSchema(file)
+        .toEither
+        .left
+        .map(ParqueteerError.IOError.apply)
+      metadata <- repository
+        .readMetadata(file)
+        .toEither
+        .left
+        .map(ParqueteerError.IOError.apply)
     } yield file.copy(schema = Some(schema), metadata = Some(metadata))
 
   def mergeFiles(
@@ -123,8 +130,13 @@ class ParquetService(
       schemaMode: SchemaMode,
       onProgress: (Int, Int, String) => Unit = (_, _, _) => ()
   ): Either[ParqueteerError, Long] =
-    mergeFilesInternal(inputPaths, outputPath, writeConfig, schemaMode, onProgress)
-      .toEither.left.map(ParqueteerError.IOError.apply)
+    mergeFilesInternal(
+      inputPaths,
+      outputPath,
+      writeConfig,
+      schemaMode,
+      onProgress
+    ).toEither.left.map(ParqueteerError.IOError.apply)
 
   private def mergeFilesInternal(
       inputPaths: List[String],
@@ -234,10 +246,14 @@ class ParquetService(
     for {
       location <- StorageLocationParser
         .parse(path)
-        .left.map(msg => ParqueteerError.InvalidFormat(path, msg))
+        .left
+        .map(msg => ParqueteerError.InvalidFormat(path, msg))
       file = ParquetFile(location)
-      stats <- repository.readStats(file)
-        .toEither.left.map(ParqueteerError.IOError.apply)
+      stats <- repository
+        .readStats(file)
+        .toEither
+        .left
+        .map(ParqueteerError.IOError.apply)
     } yield stats
 
   private def readFileAsTry(path: String): Try[ParquetFile] =
@@ -254,9 +270,13 @@ class ParquetService(
     for {
       location <- StorageLocationParser
         .parse(path)
-        .left.map(msg => ParqueteerError.InvalidFormat(path, msg))
-      _ <- repository.writeContent(location, data, None, writeConfig)
-        .toEither.left.map(ParqueteerError.IOError.apply)
+        .left
+        .map(msg => ParqueteerError.InvalidFormat(path, msg))
+      _ <- repository
+        .writeContent(location, data, None, writeConfig)
+        .toEither
+        .left
+        .map(ParqueteerError.IOError.apply)
     } yield ()
 
   def readDataFile(
@@ -264,11 +284,15 @@ class ParquetService(
       inputFormat: String,
       stdin: java.io.InputStream = System.in
   ): Either[ParqueteerError, List[Map[String, Any]]] =
-    if (path == "-") readFromStdin(inputFormat, stdin).toEither.left.map(ParqueteerError.IOError.apply)
+    if (path == "-")
+      readFromStdin(inputFormat, stdin).toEither.left
+        .map(ParqueteerError.IOError.apply)
     else
       inputFormat.toLowerCase match {
-        case "json" => readJsonFile(path).toEither.left.map(ParqueteerError.IOError.apply)
-        case "csv"  => readCsvFile(path).toEither.left.map(ParqueteerError.IOError.apply)
+        case "json" =>
+          readJsonFile(path).toEither.left.map(ParqueteerError.IOError.apply)
+        case "csv" =>
+          readCsvFile(path).toEither.left.map(ParqueteerError.IOError.apply)
         case fmt =>
           Left(
             ParqueteerError.IOError(
@@ -294,13 +318,20 @@ class ParquetService(
     for {
       location <- StorageLocationParser
         .parse(path)
-        .left.map(msg => ParqueteerError.InvalidFormat(path, msg))
+        .left
+        .map(msg => ParqueteerError.InvalidFormat(path, msg))
       file = ParquetFile(location)
-      issues <- repository.validateFile(file)
-        .toEither.left.map(ParqueteerError.IOError.apply)
+      issues <- repository
+        .validateFile(file)
+        .toEither
+        .left
+        .map(ParqueteerError.IOError.apply)
     } yield ValidationResult(isValid = issues.isEmpty, issues = issues)
 
-  def diffSchemas(path1: String, path2: String): Either[ParqueteerError, SchemaDiff] = {
+  def diffSchemas(
+      path1: String,
+      path2: String
+  ): Either[ParqueteerError, SchemaDiff] = {
     for {
       f1 <- getFileInfo(path1)
       f2 <- getFileInfo(path2)
@@ -346,10 +377,11 @@ class ParquetService(
       outputPath: String,
       conversionConfig: ConversionConfig = ConversionConfig()
   ): Either[ParqueteerError, Unit] =
-    convertFileInternal(inputPath, outputPath, conversionConfig).toEither.left.map {
-      case e: ParqueteerCarrierException => e.error
-      case e                             => ParqueteerError.IOError(e)
-    }
+    convertFileInternal(inputPath, outputPath, conversionConfig).toEither.left
+      .map {
+        case e: ParqueteerCarrierException => e.error
+        case e                             => ParqueteerError.IOError(e)
+      }
 
   private def convertFileInternal(
       inputPath: String,
@@ -366,7 +398,10 @@ class ParquetService(
           inputFile <- readFileAsTry(inputPath)
           data = inputFile.content.map(_.rows).getOrElse(List.empty)
           _ <- writeFile(outputPath, data, conversionConfig.writeConfig)
-            .fold(e => Failure(new RuntimeException(e.userMessage)), Success.apply)
+            .fold(
+              e => Failure(new RuntimeException(e.userMessage)),
+              Success.apply
+            )
         } yield ()
 
       // Parquet → JSON
@@ -398,7 +433,10 @@ class ParquetService(
             err => Failure(new ParqueteerCarrierException(err)),
             data =>
               writeFile(outputPath, data, conversionConfig.writeConfig)
-                .fold(e => Failure(new ParqueteerCarrierException(e)), Success.apply)
+                .fold(
+                  e => Failure(new ParqueteerCarrierException(e)),
+                  Success.apply
+                )
           )
 
       case _ =>

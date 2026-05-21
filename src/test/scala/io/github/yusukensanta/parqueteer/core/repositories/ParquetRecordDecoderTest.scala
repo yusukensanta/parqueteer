@@ -45,15 +45,21 @@ class ParquetRecordDecoderTest extends AnyFlatSpec with Matchers {
   }
 
   it should "decode LongValue" in {
-    ParquetRecordDecoder.decodeValue(LongValue(123456789012345L)) shouldBe 123456789012345L
+    ParquetRecordDecoder.decodeValue(
+      LongValue(123456789012345L)
+    ) shouldBe 123456789012345L
   }
 
   it should "decode FloatValue" in {
-    ParquetRecordDecoder.decodeValue(FloatValue(3.14f)).asInstanceOf[Float] shouldBe 3.14f +- 0.001f
+    ParquetRecordDecoder
+      .decodeValue(FloatValue(3.14f))
+      .asInstanceOf[Float] shouldBe 3.14f +- 0.001f
   }
 
   it should "decode DoubleValue" in {
-    ParquetRecordDecoder.decodeValue(DoubleValue(2.718281828)).asInstanceOf[Double] shouldBe 2.718281828 +- 1e-9
+    ParquetRecordDecoder
+      .decodeValue(DoubleValue(2.718281828))
+      .asInstanceOf[Double] shouldBe 2.718281828 +- 1e-9
   }
 
   it should "decode BinaryValue as UTF-8 string" in {
@@ -68,19 +74,24 @@ class ParquetRecordDecoderTest extends AnyFlatSpec with Matchers {
 
   it should "decode DateTimeValue as ISO-8601 instant string" in {
     val epochMillis = 0L // 1970-01-01T00:00:00Z
-    val result = ParquetRecordDecoder.decodeValue(DateTimeValue(epochMillis, TimestampFormat.Int64Millis))
+    val result = ParquetRecordDecoder.decodeValue(
+      DateTimeValue(epochMillis, TimestampFormat.Int64Millis)
+    )
     result shouldBe "1970-01-01T00:00:00Z"
   }
 
   it should "decode DateTimeValue for a known timestamp" in {
     val ts = java.time.Instant.parse("2024-06-01T12:00:00Z")
-    val result = ParquetRecordDecoder.decodeValue(DateTimeValue(ts.toEpochMilli, TimestampFormat.Int64Millis))
+    val result = ParquetRecordDecoder.decodeValue(
+      DateTimeValue(ts.toEpochMilli, TimestampFormat.Int64Millis)
+    )
     result shouldBe ts.toString
   }
 
   it should "decode DecimalValue as BigDecimal (long format)" in {
     // DecimalFormat.longFormat(scale, precision, rescaleOnRead)
-    val fmt = com.github.mjakubowski84.parquet4s.DecimalFormat.longFormat(2, 10, false)
+    val fmt =
+      com.github.mjakubowski84.parquet4s.DecimalFormat.longFormat(2, 10, false)
     val bigInt = new java.math.BigInteger("12345")
     val result = ParquetRecordDecoder.decodeValue(DecimalValue(bigInt, fmt))
     // scale=2 → 12345 becomes 123.45
@@ -88,7 +99,8 @@ class ParquetRecordDecoderTest extends AnyFlatSpec with Matchers {
   }
 
   it should "decode DecimalValue with zero amount" in {
-    val fmt = com.github.mjakubowski84.parquet4s.DecimalFormat.longFormat(2, 10, false)
+    val fmt =
+      com.github.mjakubowski84.parquet4s.DecimalFormat.longFormat(2, 10, false)
     val bigInt = java.math.BigInteger.ZERO
     val result = ParquetRecordDecoder.decodeValue(DecimalValue(bigInt, fmt))
     result shouldBe scala.math.BigDecimal(new java.math.BigDecimal(bigInt, 2))
@@ -185,7 +197,8 @@ class ParquetRecordDecoderTest extends AnyFlatSpec with Matchers {
     val schema = MessageTypeParser.parseMessageType(
       "message root { required int64 big_num; }"
     )
-    val group = new SimpleGroupFactory(schema).newGroup().append("big_num", 9876543210L)
+    val group =
+      new SimpleGroupFactory(schema).newGroup().append("big_num", 9876543210L)
     val result = ParquetRecordDecoder.decodeGroup(group, schema)
     result("big_num") shouldBe 9876543210L
   }
@@ -203,7 +216,8 @@ class ParquetRecordDecoderTest extends AnyFlatSpec with Matchers {
     val schema = MessageTypeParser.parseMessageType(
       "message root { required binary name (UTF8); }"
     )
-    val group = new SimpleGroupFactory(schema).newGroup()
+    val group = new SimpleGroupFactory(schema)
+      .newGroup()
       .append("name", org.apache.parquet.io.api.Binary.fromString("Alice"))
     val result = ParquetRecordDecoder.decodeGroup(group, schema)
     result("name") shouldBe "Alice"
@@ -224,7 +238,8 @@ class ParquetRecordDecoderTest extends AnyFlatSpec with Matchers {
       "message root { required int32 birth (DATE); }"
     )
     val epochDay = java.time.LocalDate.of(1990, 6, 15).toEpochDay.toInt
-    val group = new SimpleGroupFactory(schema).newGroup().append("birth", epochDay)
+    val group =
+      new SimpleGroupFactory(schema).newGroup().append("birth", epochDay)
     val result = ParquetRecordDecoder.decodeGroup(group, schema)
     result("birth") shouldBe "1990-06-15"
   }

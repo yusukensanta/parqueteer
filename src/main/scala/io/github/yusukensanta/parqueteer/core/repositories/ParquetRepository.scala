@@ -45,13 +45,19 @@ class ParquetRepository {
                 reader
                   .take(limit.toInt)
                   .map(r =>
-                    ParquetRecordDecoder.postProcessTemporalFields(ParquetRecordDecoder.convertRecordToMap(r), fileSchema)
+                    ParquetRecordDecoder.postProcessTemporalFields(
+                      ParquetRecordDecoder.convertRecordToMap(r),
+                      fileSchema
+                    )
                   )
                   .toList
               case None =>
                 reader
                   .map(r =>
-                    ParquetRecordDecoder.postProcessTemporalFields(ParquetRecordDecoder.convertRecordToMap(r), fileSchema)
+                    ParquetRecordDecoder.postProcessTemporalFields(
+                      ParquetRecordDecoder.convertRecordToMap(r),
+                      fileSchema
+                    )
                   )
                   .toList
             }
@@ -87,7 +93,10 @@ class ParquetRepository {
           var count = 0L
           iter.foreach { record =>
             process(
-              ParquetRecordDecoder.postProcessTemporalFields(ParquetRecordDecoder.convertRecordToMap(record), fileSchema)
+              ParquetRecordDecoder.postProcessTemporalFields(
+                ParquetRecordDecoder.convertRecordToMap(record),
+                fileSchema
+              )
             )
             count += 1
           }
@@ -112,8 +121,9 @@ class ParquetRepository {
       }
 
     val requestedSchema = config.columns match {
-      case Some(cols) if cols.nonEmpty => ParquetSchemaBuilder.projectSchema(fileSchema, cols)
-      case _                           => fileSchema
+      case Some(cols) if cols.nonEmpty =>
+        ParquetSchemaBuilder.projectSchema(fileSchema, cols)
+      case _ => fileSchema
     }
 
     val threadCount = math.min(config.parallelism, math.max(1, blocks.size))
@@ -138,7 +148,12 @@ class ParquetRepository {
           ) { reader =>
             val pageStore = reader.readNextRowGroup()
             if (pageStore == null) List.empty[Map[String, Any]]
-            else ParquetRecordDecoder.decodePageStore(pageStore, fileSchema, requestedSchema)
+            else
+              ParquetRecordDecoder.decodePageStore(
+                pageStore,
+                fileSchema,
+                requestedSchema
+              )
           }
         }
       }
@@ -168,7 +183,11 @@ class ParquetRepository {
     }
     config.columns match {
       case Some(cols) if cols.nonEmpty =>
-        val schema = ParquetSchemaBuilder.buildProjectedSchema(hadoopPath, hadoopConfig, cols)
+        val schema = ParquetSchemaBuilder.buildProjectedSchema(
+          hadoopPath,
+          hadoopConfig,
+          cols
+        )
         ParquetReader
           .projectedGeneric(schema)
           .options(ParquetReader.Options(hadoopConf = hadoopConfig))
@@ -288,7 +307,9 @@ class ParquetRepository {
           .builder(new HadoopPath(location.path))
           .withType(parquetSchema)
           .withConf(hadoopConfig)
-          .withCompressionCodec(ParquetWriteOps.convertCompressionType(config.compressionType))
+          .withCompressionCodec(
+            ParquetWriteOps.convertCompressionType(config.compressionType)
+          )
           .withRowGroupSize(config.rowGroupSize)
           .withPageSize(config.pageSize.toInt)
           .withDictionaryEncoding(config.enableDictionary)
@@ -325,7 +346,9 @@ class ParquetRepository {
           .builder(new HadoopPath(location.path))
           .withType(parquetSchema)
           .withConf(hadoopConfig)
-          .withCompressionCodec(ParquetWriteOps.convertCompressionType(config.compressionType))
+          .withCompressionCodec(
+            ParquetWriteOps.convertCompressionType(config.compressionType)
+          )
           .withRowGroupSize(config.rowGroupSize)
           .withPageSize(config.pageSize.toInt)
           .withDictionaryEncoding(config.enableDictionary)

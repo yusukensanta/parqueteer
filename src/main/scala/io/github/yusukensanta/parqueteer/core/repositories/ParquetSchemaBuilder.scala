@@ -107,7 +107,9 @@ private[repositories] object ParquetSchemaBuilder {
           )
         case "BINARY" =>
           builder.addField(
-            Types.primitive(PrimitiveType.PrimitiveTypeName.BINARY, repetition).named(col.name)
+            Types
+              .primitive(PrimitiveType.PrimitiveTypeName.BINARY, repetition)
+              .named(col.name)
           )
         case _ =>
           builder.addField(

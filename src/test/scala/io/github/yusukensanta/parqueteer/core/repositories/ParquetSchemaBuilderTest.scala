@@ -28,7 +28,8 @@ class ParquetSchemaBuilderTest extends AnyFlatSpec with Matchers {
         |  required double score;
         |}""".stripMargin
     )
-    val result = ParquetSchemaBuilder.projectSchema(fileSchema, List("id", "score"))
+    val result =
+      ParquetSchemaBuilder.projectSchema(fileSchema, List("id", "score"))
     result.getFieldCount shouldBe 2
     result.getFields.get(0).getName shouldBe "id"
     result.getFields.get(1).getName shouldBe "score"
@@ -43,7 +44,10 @@ class ParquetSchemaBuilderTest extends AnyFlatSpec with Matchers {
     )
     val result = ParquetSchemaBuilder.projectSchema(fileSchema, List("age"))
     result.getFieldCount shouldBe 1
-    fieldByName(result, "age").getPrimitiveTypeName shouldBe PrimitiveTypeName.INT32
+    fieldByName(
+      result,
+      "age"
+    ).getPrimitiveTypeName shouldBe PrimitiveTypeName.INT32
   }
 
   it should "project a single column from a wide schema" in {
@@ -57,7 +61,10 @@ class ParquetSchemaBuilderTest extends AnyFlatSpec with Matchers {
     )
     val result = ParquetSchemaBuilder.projectSchema(fileSchema, List("name"))
     result.getFieldCount shouldBe 1
-    fieldByName(result, "name").getPrimitiveTypeName shouldBe PrimitiveTypeName.BINARY
+    fieldByName(
+      result,
+      "name"
+    ).getPrimitiveTypeName shouldBe PrimitiveTypeName.BINARY
   }
 
   it should "throw IllegalArgumentException when none of the requested columns exist" in {
@@ -80,9 +87,13 @@ class ParquetSchemaBuilderTest extends AnyFlatSpec with Matchers {
         |  required binary name (UTF8);
         |}""".stripMargin
     )
-    val result = ParquetSchemaBuilder.projectSchema(fileSchema, List("id", "nonexistent"))
+    val result =
+      ParquetSchemaBuilder.projectSchema(fileSchema, List("id", "nonexistent"))
     result.getFieldCount shouldBe 1
-    fieldByName(result, "id").getPrimitiveTypeName shouldBe PrimitiveTypeName.INT64
+    fieldByName(
+      result,
+      "id"
+    ).getPrimitiveTypeName shouldBe PrimitiveTypeName.INT64
   }
 
   it should "name the resulting message type 'root'" in {
@@ -113,78 +124,115 @@ class ParquetSchemaBuilderTest extends AnyFlatSpec with Matchers {
     ParquetSchema(columns = cols.toList, rowGroupCount = 1L, totalRowCount = 0L)
 
   "ParquetSchemaBuilder.buildMessageType" should "build an INT32 field for INT32 data type" in {
-    val mt = ParquetSchemaBuilder.buildMessageType(schema(columnInfo("age", "INT32")))
+    val mt =
+      ParquetSchemaBuilder.buildMessageType(schema(columnInfo("age", "INT32")))
     fieldByName(mt, "age").getPrimitiveTypeName shouldBe PrimitiveTypeName.INT32
   }
 
   it should "build an INT32 field for INT data type alias" in {
-    val mt = ParquetSchemaBuilder.buildMessageType(schema(columnInfo("age", "INT")))
+    val mt =
+      ParquetSchemaBuilder.buildMessageType(schema(columnInfo("age", "INT")))
     fieldByName(mt, "age").getPrimitiveTypeName shouldBe PrimitiveTypeName.INT32
   }
 
   it should "build an INT64 field for INT64 data type" in {
-    val mt = ParquetSchemaBuilder.buildMessageType(schema(columnInfo("big", "INT64")))
+    val mt =
+      ParquetSchemaBuilder.buildMessageType(schema(columnInfo("big", "INT64")))
     fieldByName(mt, "big").getPrimitiveTypeName shouldBe PrimitiveTypeName.INT64
   }
 
   it should "build an INT64 field for LONG data type alias" in {
-    val mt = ParquetSchemaBuilder.buildMessageType(schema(columnInfo("big", "LONG")))
+    val mt =
+      ParquetSchemaBuilder.buildMessageType(schema(columnInfo("big", "LONG")))
     fieldByName(mt, "big").getPrimitiveTypeName shouldBe PrimitiveTypeName.INT64
   }
 
   it should "build a DOUBLE field" in {
-    val mt = ParquetSchemaBuilder.buildMessageType(schema(columnInfo("score", "DOUBLE")))
-    fieldByName(mt, "score").getPrimitiveTypeName shouldBe PrimitiveTypeName.DOUBLE
+    val mt = ParquetSchemaBuilder.buildMessageType(
+      schema(columnInfo("score", "DOUBLE"))
+    )
+    fieldByName(
+      mt,
+      "score"
+    ).getPrimitiveTypeName shouldBe PrimitiveTypeName.DOUBLE
   }
 
   it should "build a FLOAT field" in {
-    val mt = ParquetSchemaBuilder.buildMessageType(schema(columnInfo("ratio", "FLOAT")))
-    fieldByName(mt, "ratio").getPrimitiveTypeName shouldBe PrimitiveTypeName.FLOAT
+    val mt = ParquetSchemaBuilder.buildMessageType(
+      schema(columnInfo("ratio", "FLOAT"))
+    )
+    fieldByName(
+      mt,
+      "ratio"
+    ).getPrimitiveTypeName shouldBe PrimitiveTypeName.FLOAT
   }
 
   it should "build a BOOLEAN field" in {
-    val mt = ParquetSchemaBuilder.buildMessageType(schema(columnInfo("active", "BOOLEAN")))
-    fieldByName(mt, "active").getPrimitiveTypeName shouldBe PrimitiveTypeName.BOOLEAN
+    val mt = ParquetSchemaBuilder.buildMessageType(
+      schema(columnInfo("active", "BOOLEAN"))
+    )
+    fieldByName(
+      mt,
+      "active"
+    ).getPrimitiveTypeName shouldBe PrimitiveTypeName.BOOLEAN
   }
 
   it should "build a DATE field as INT32 with date logical type annotation" in {
-    val mt = ParquetSchemaBuilder.buildMessageType(schema(columnInfo("dob", "DATE")))
+    val mt =
+      ParquetSchemaBuilder.buildMessageType(schema(columnInfo("dob", "DATE")))
     val field = fieldByName(mt, "dob")
     field.getPrimitiveTypeName shouldBe PrimitiveTypeName.INT32
     field.getLogicalTypeAnnotation shouldBe LogicalTypeAnnotation.dateType()
   }
 
   it should "build a TIMESTAMP field as INT64 with timestamp logical type" in {
-    val mt = ParquetSchemaBuilder.buildMessageType(schema(columnInfo("created_at", "TIMESTAMP")))
+    val mt = ParquetSchemaBuilder.buildMessageType(
+      schema(columnInfo("created_at", "TIMESTAMP"))
+    )
     val field = fieldByName(mt, "created_at")
     field.getPrimitiveTypeName shouldBe PrimitiveTypeName.INT64
-    field.getLogicalTypeAnnotation shouldBe a[LogicalTypeAnnotation.TimestampLogicalTypeAnnotation]
+    field.getLogicalTypeAnnotation shouldBe a[
+      LogicalTypeAnnotation.TimestampLogicalTypeAnnotation
+    ]
   }
 
   it should "build a TIMESTAMP_MILLIS field as INT64 with timestamp logical type" in {
-    val mt = ParquetSchemaBuilder.buildMessageType(schema(columnInfo("ts", "TIMESTAMP_MILLIS")))
+    val mt = ParquetSchemaBuilder.buildMessageType(
+      schema(columnInfo("ts", "TIMESTAMP_MILLIS"))
+    )
     val field = fieldByName(mt, "ts")
     field.getPrimitiveTypeName shouldBe PrimitiveTypeName.INT64
-    field.getLogicalTypeAnnotation shouldBe a[LogicalTypeAnnotation.TimestampLogicalTypeAnnotation]
+    field.getLogicalTypeAnnotation shouldBe a[
+      LogicalTypeAnnotation.TimestampLogicalTypeAnnotation
+    ]
   }
 
   it should "build a BINARY field with string logical type for STRING data type" in {
-    val mt = ParquetSchemaBuilder.buildMessageType(schema(columnInfo("name", "STRING")))
+    val mt = ParquetSchemaBuilder.buildMessageType(
+      schema(columnInfo("name", "STRING"))
+    )
     val field = fieldByName(mt, "name")
     field.getPrimitiveTypeName shouldBe PrimitiveTypeName.BINARY
     field.getLogicalTypeAnnotation shouldBe LogicalTypeAnnotation.stringType()
   }
 
   it should "build a BINARY field with no logical type annotation for BINARY data type" in {
-    val mt = ParquetSchemaBuilder.buildMessageType(schema(columnInfo("data", "BINARY")))
+    val mt = ParquetSchemaBuilder.buildMessageType(
+      schema(columnInfo("data", "BINARY"))
+    )
     val field = fieldByName(mt, "data")
     field.getPrimitiveTypeName shouldBe PrimitiveTypeName.BINARY
     field.getLogicalTypeAnnotation shouldBe null
   }
 
   it should "fall back to BINARY for unknown data type" in {
-    val mt = ParquetSchemaBuilder.buildMessageType(schema(columnInfo("weird", "WEIRDTYPE")))
-    fieldByName(mt, "weird").getPrimitiveTypeName shouldBe PrimitiveTypeName.BINARY
+    val mt = ParquetSchemaBuilder.buildMessageType(
+      schema(columnInfo("weird", "WEIRDTYPE"))
+    )
+    fieldByName(
+      mt,
+      "weird"
+    ).getPrimitiveTypeName shouldBe PrimitiveTypeName.BINARY
   }
 
   it should "respect REQUIRED repetition when isOptional is false" in {
@@ -210,12 +258,19 @@ class ParquetSchemaBuilderTest extends AnyFlatSpec with Matchers {
     val mt = ParquetSchemaBuilder.buildMessageType(ps)
     mt.getFieldCount shouldBe 3
     fieldByName(mt, "id").getPrimitiveTypeName shouldBe PrimitiveTypeName.INT64
-    fieldByName(mt, "name").getPrimitiveTypeName shouldBe PrimitiveTypeName.BINARY
-    fieldByName(mt, "score").getPrimitiveTypeName shouldBe PrimitiveTypeName.DOUBLE
+    fieldByName(
+      mt,
+      "name"
+    ).getPrimitiveTypeName shouldBe PrimitiveTypeName.BINARY
+    fieldByName(
+      mt,
+      "score"
+    ).getPrimitiveTypeName shouldBe PrimitiveTypeName.DOUBLE
   }
 
   it should "name the resulting message type 'root'" in {
-    val mt = ParquetSchemaBuilder.buildMessageType(schema(columnInfo("x", "INT32")))
+    val mt =
+      ParquetSchemaBuilder.buildMessageType(schema(columnInfo("x", "INT32")))
     mt.getName shouldBe "root"
   }
 
@@ -230,7 +285,10 @@ class ParquetSchemaBuilderTest extends AnyFlatSpec with Matchers {
   it should "infer INT32 from Int values" in {
     val data = List(Map[String, Any]("count" -> 42))
     val mt = ParquetSchemaBuilder.inferSchemaFromData(data)
-    fieldByName(mt, "count").getPrimitiveTypeName shouldBe PrimitiveTypeName.INT32
+    fieldByName(
+      mt,
+      "count"
+    ).getPrimitiveTypeName shouldBe PrimitiveTypeName.INT32
   }
 
   it should "infer INT64 from Long values" in {
@@ -242,23 +300,33 @@ class ParquetSchemaBuilderTest extends AnyFlatSpec with Matchers {
   it should "infer DOUBLE from Double values" in {
     val data = List(Map[String, Any]("score" -> 9.5))
     val mt = ParquetSchemaBuilder.inferSchemaFromData(data)
-    fieldByName(mt, "score").getPrimitiveTypeName shouldBe PrimitiveTypeName.DOUBLE
+    fieldByName(
+      mt,
+      "score"
+    ).getPrimitiveTypeName shouldBe PrimitiveTypeName.DOUBLE
   }
 
   it should "infer FLOAT from Float values" in {
     val data = List(Map[String, Any]("ratio" -> 0.5f))
     val mt = ParquetSchemaBuilder.inferSchemaFromData(data)
-    fieldByName(mt, "ratio").getPrimitiveTypeName shouldBe PrimitiveTypeName.FLOAT
+    fieldByName(
+      mt,
+      "ratio"
+    ).getPrimitiveTypeName shouldBe PrimitiveTypeName.FLOAT
   }
 
   it should "infer BOOLEAN from Boolean values" in {
     val data = List(Map[String, Any]("active" -> true))
     val mt = ParquetSchemaBuilder.inferSchemaFromData(data)
-    fieldByName(mt, "active").getPrimitiveTypeName shouldBe PrimitiveTypeName.BOOLEAN
+    fieldByName(
+      mt,
+      "active"
+    ).getPrimitiveTypeName shouldBe PrimitiveTypeName.BOOLEAN
   }
 
   it should "infer DATE (INT32) from LocalDate values" in {
-    val data = List(Map[String, Any]("dob" -> java.time.LocalDate.of(1990, 1, 1)))
+    val data =
+      List(Map[String, Any]("dob" -> java.time.LocalDate.of(1990, 1, 1)))
     val mt = ParquetSchemaBuilder.inferSchemaFromData(data)
     val field = fieldByName(mt, "dob")
     field.getPrimitiveTypeName shouldBe PrimitiveTypeName.INT32
@@ -270,7 +338,9 @@ class ParquetSchemaBuilderTest extends AnyFlatSpec with Matchers {
     val mt = ParquetSchemaBuilder.inferSchemaFromData(data)
     val field = fieldByName(mt, "created_at")
     field.getPrimitiveTypeName shouldBe PrimitiveTypeName.INT64
-    field.getLogicalTypeAnnotation shouldBe a[LogicalTypeAnnotation.TimestampLogicalTypeAnnotation]
+    field.getLogicalTypeAnnotation shouldBe a[
+      LogicalTypeAnnotation.TimestampLogicalTypeAnnotation
+    ]
   }
 
   it should "infer BINARY with string annotation from String values" in {
@@ -320,7 +390,9 @@ class ParquetSchemaBuilderTest extends AnyFlatSpec with Matchers {
     val schema = ParquetSchemaBuilder.inferSchemaFromData(data)
     schema.getFieldCount shouldBe 2
     val blobField = schema.getFields.asScala.find(_.getName == "blob").get
-    blobField.asPrimitiveType().getPrimitiveTypeName shouldBe PrimitiveTypeName.BINARY
+    blobField
+      .asPrimitiveType()
+      .getPrimitiveTypeName shouldBe PrimitiveTypeName.BINARY
   }
 
   it should "name the resulting message type 'root'" in {

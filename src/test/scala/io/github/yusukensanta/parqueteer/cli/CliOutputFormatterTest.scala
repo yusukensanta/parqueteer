@@ -1,6 +1,9 @@
 package io.github.yusukensanta.parqueteer.cli
 
-import io.github.yusukensanta.parqueteer.core.services.{SchemaDiff, ColumnChange}
+import io.github.yusukensanta.parqueteer.core.services.{
+  SchemaDiff,
+  ColumnChange
+}
 import io.github.yusukensanta.parqueteer.core.models.{
   ColumnInfo,
   ColumnStats,
@@ -48,7 +51,11 @@ class CliOutputFormatterTest extends AnyFlatSpec with Matchers {
       totalRowCount: Long = 100L,
       rowGroupCount: Long = 1L
   ): ParquetSchema =
-    ParquetSchema(columns = columns, rowGroupCount = rowGroupCount, totalRowCount = totalRowCount)
+    ParquetSchema(
+      columns = columns,
+      rowGroupCount = rowGroupCount,
+      totalRowCount = totalRowCount
+    )
 
   private def makeMetadata(
       fileSize: Long = 1024L,
@@ -72,7 +79,11 @@ class CliOutputFormatterTest extends AnyFlatSpec with Matchers {
       totalRows: Long = 50L,
       rowGroupCount: Long = 2L
   ): FileStats =
-    FileStats(columns = columns, totalRows = totalRows, rowGroupCount = rowGroupCount)
+    FileStats(
+      columns = columns,
+      totalRows = totalRows,
+      rowGroupCount = rowGroupCount
+    )
 
   private def makeColumnStats(
       name: String,
@@ -81,7 +92,13 @@ class CliOutputFormatterTest extends AnyFlatSpec with Matchers {
       minValue: Option[String] = None,
       maxValue: Option[String] = None
   ): ColumnStats =
-    ColumnStats(name = name, dataType = dataType, nullCount = nullCount, minValue = minValue, maxValue = maxValue)
+    ColumnStats(
+      name = name,
+      dataType = dataType,
+      nullCount = nullCount,
+      minValue = minValue,
+      maxValue = maxValue
+    )
 
   // ─── formatBytesForDisplay ──────────────────────────────────────────────────
 
@@ -98,11 +115,15 @@ class CliOutputFormatterTest extends AnyFlatSpec with Matchers {
   }
 
   it should "format gigabytes" in {
-    CliOutputFormatter.formatBytesForDisplay(1024L * 1024L * 1024L) shouldBe "1.0 GB"
+    CliOutputFormatter.formatBytesForDisplay(
+      1024L * 1024L * 1024L
+    ) shouldBe "1.0 GB"
   }
 
   it should "format terabytes" in {
-    CliOutputFormatter.formatBytesForDisplay(1024L * 1024L * 1024L * 1024L) shouldBe "1.0 TB"
+    CliOutputFormatter.formatBytesForDisplay(
+      1024L * 1024L * 1024L * 1024L
+    ) shouldBe "1.0 TB"
   }
 
   it should "cap at TB even for very large values" in {
@@ -176,7 +197,12 @@ class CliOutputFormatterTest extends AnyFlatSpec with Matchers {
   }
 
   it should "include totalRowCount, rowGroupCount, and columns array" in {
-    val col = makeColumnInfo("id", "INT64", isOptional = false, compressionType = "SNAPPY")
+    val col = makeColumnInfo(
+      "id",
+      "INT64",
+      isOptional = false,
+      compressionType = "SNAPPY"
+    )
     val schema = makeSchema(List(col), totalRowCount = 200L, rowGroupCount = 3L)
     val file = makeParquetFile(schema = Some(schema))
     val result = CliOutputFormatter.formatSchemaJson(file)
@@ -215,7 +241,13 @@ class CliOutputFormatterTest extends AnyFlatSpec with Matchers {
   }
 
   it should "include column data in the table" in {
-    val col = makeColumnStats("age", "INT32", nullCount = 2L, minValue = Some("18"), maxValue = Some("65"))
+    val col = makeColumnStats(
+      "age",
+      "INT32",
+      nullCount = 2L,
+      minValue = Some("18"),
+      maxValue = Some("65")
+    )
     val stats = makeStats(List(col))
     val result = CliOutputFormatter.formatStatsTable(stats)
     result should include("age")
@@ -249,7 +281,13 @@ class CliOutputFormatterTest extends AnyFlatSpec with Matchers {
   // ─── formatStatsJson ────────────────────────────────────────────────────────
 
   "CliOutputFormatter.formatStatsJson" should "return a valid Json object" in {
-    val col = makeColumnStats("score", "DOUBLE", nullCount = 0L, minValue = Some("0.0"), maxValue = Some("100.0"))
+    val col = makeColumnStats(
+      "score",
+      "DOUBLE",
+      nullCount = 0L,
+      minValue = Some("0.0"),
+      maxValue = Some("100.0")
+    )
     val stats = makeStats(List(col), totalRows = 99L, rowGroupCount = 2L)
     val json = CliOutputFormatter.formatStatsJson(stats).asObject.get
 
@@ -283,8 +321,14 @@ class CliOutputFormatterTest extends AnyFlatSpec with Matchers {
   // ─── formatSchemaDiffTable ──────────────────────────────────────────────────
 
   "CliOutputFormatter.formatSchemaDiffTable" should "report identical schemas" in {
-    val diff = SchemaDiff(added = Nil, removed = Nil, changed = Nil, unchanged = List("id"))
-    val result = CliOutputFormatter.formatSchemaDiffTable("a.parquet", "b.parquet", diff)
+    val diff = SchemaDiff(
+      added = Nil,
+      removed = Nil,
+      changed = Nil,
+      unchanged = List("id")
+    )
+    val result =
+      CliOutputFormatter.formatSchemaDiffTable("a.parquet", "b.parquet", diff)
     result should include("a.parquet")
     result should include("b.parquet")
     result should include("identical")
@@ -293,7 +337,12 @@ class CliOutputFormatterTest extends AnyFlatSpec with Matchers {
 
   it should "list added columns with +" in {
     val added = makeColumnInfo("new_col", "INT32", isOptional = true)
-    val diff = SchemaDiff(added = List(added), removed = Nil, changed = Nil, unchanged = Nil)
+    val diff = SchemaDiff(
+      added = List(added),
+      removed = Nil,
+      changed = Nil,
+      unchanged = Nil
+    )
     val result = CliOutputFormatter.formatSchemaDiffTable("f1", "f2", diff)
     result should include("+ new_col")
     result should include("optional")
@@ -301,31 +350,69 @@ class CliOutputFormatterTest extends AnyFlatSpec with Matchers {
 
   it should "list removed columns with -" in {
     val removed = makeColumnInfo("old_col", "INT64", isOptional = false)
-    val diff = SchemaDiff(added = Nil, removed = List(removed), changed = Nil, unchanged = Nil)
+    val diff = SchemaDiff(
+      added = Nil,
+      removed = List(removed),
+      changed = Nil,
+      unchanged = Nil
+    )
     val result = CliOutputFormatter.formatSchemaDiffTable("f1", "f2", diff)
     result should include("- old_col")
     result should include("required")
   }
 
   it should "list changed columns with ~ for type changes only" in {
-    val change = ColumnChange("col", fromType = "INT32", toType = "INT64", fromOptional = false, toOptional = false)
-    val diff = SchemaDiff(added = Nil, removed = Nil, changed = List(change), unchanged = Nil)
+    val change = ColumnChange(
+      "col",
+      fromType = "INT32",
+      toType = "INT64",
+      fromOptional = false,
+      toOptional = false
+    )
+    val diff = SchemaDiff(
+      added = Nil,
+      removed = Nil,
+      changed = List(change),
+      unchanged = Nil
+    )
     val result = CliOutputFormatter.formatSchemaDiffTable("f1", "f2", diff)
     result should include("~ col")
     result should include("INT32 → INT64")
   }
 
   it should "list changed columns with ~ for optionality changes only" in {
-    val change = ColumnChange("col", fromType = "INT32", toType = "INT32", fromOptional = false, toOptional = true)
-    val diff = SchemaDiff(added = Nil, removed = Nil, changed = List(change), unchanged = Nil)
+    val change = ColumnChange(
+      "col",
+      fromType = "INT32",
+      toType = "INT32",
+      fromOptional = false,
+      toOptional = true
+    )
+    val diff = SchemaDiff(
+      added = Nil,
+      removed = Nil,
+      changed = List(change),
+      unchanged = Nil
+    )
     val result = CliOutputFormatter.formatSchemaDiffTable("f1", "f2", diff)
     result should include("~ col")
     result should include("required → optional")
   }
 
   it should "list changed columns with both type and optionality changes" in {
-    val change = ColumnChange("col", fromType = "INT32", toType = "INT64", fromOptional = false, toOptional = true)
-    val diff = SchemaDiff(added = Nil, removed = Nil, changed = List(change), unchanged = Nil)
+    val change = ColumnChange(
+      "col",
+      fromType = "INT32",
+      toType = "INT64",
+      fromOptional = false,
+      toOptional = true
+    )
+    val diff = SchemaDiff(
+      added = Nil,
+      removed = Nil,
+      changed = List(change),
+      unchanged = Nil
+    )
     val result = CliOutputFormatter.formatSchemaDiffTable("f1", "f2", diff)
     result should include("~ col")
     result should include("INT32 required → INT64 optional")
@@ -333,13 +420,23 @@ class CliOutputFormatterTest extends AnyFlatSpec with Matchers {
 
   it should "list unchanged columns with = when there are also differences" in {
     val removed = makeColumnInfo("old_col", "INT64", isOptional = false)
-    val diff = SchemaDiff(added = Nil, removed = List(removed), changed = Nil, unchanged = List("id", "name"))
+    val diff = SchemaDiff(
+      added = Nil,
+      removed = List(removed),
+      changed = Nil,
+      unchanged = List("id", "name")
+    )
     val result = CliOutputFormatter.formatSchemaDiffTable("f1", "f2", diff)
     result should include("= id, name")
   }
 
   it should "not end with trailing whitespace" in {
-    val diff = SchemaDiff(added = Nil, removed = Nil, changed = Nil, unchanged = List("id"))
+    val diff = SchemaDiff(
+      added = Nil,
+      removed = Nil,
+      changed = Nil,
+      unchanged = List("id")
+    )
     val result = CliOutputFormatter.formatSchemaDiffTable("f1", "f2", diff)
     result should not endWith " "
   }
@@ -347,7 +444,12 @@ class CliOutputFormatterTest extends AnyFlatSpec with Matchers {
   // ─── formatSchemaDiffJson ───────────────────────────────────────────────────
 
   "CliOutputFormatter.formatSchemaDiffJson" should "return valid JSON for identical schemas" in {
-    val diff = SchemaDiff(added = Nil, removed = Nil, changed = Nil, unchanged = List("id"))
+    val diff = SchemaDiff(
+      added = Nil,
+      removed = Nil,
+      changed = Nil,
+      unchanged = List("id")
+    )
     val result = CliOutputFormatter.formatSchemaDiffJson(diff)
     val json = parse(result).toOption.get.asObject.get
 
@@ -360,7 +462,12 @@ class CliOutputFormatterTest extends AnyFlatSpec with Matchers {
 
   it should "serialize added columns" in {
     val added = makeColumnInfo("new_col", "INT32", isOptional = true)
-    val diff = SchemaDiff(added = List(added), removed = Nil, changed = Nil, unchanged = Nil)
+    val diff = SchemaDiff(
+      added = List(added),
+      removed = Nil,
+      changed = Nil,
+      unchanged = Nil
+    )
     val result = CliOutputFormatter.formatSchemaDiffJson(diff)
     val json = parse(result).toOption.get.asObject.get
 
@@ -375,7 +482,12 @@ class CliOutputFormatterTest extends AnyFlatSpec with Matchers {
 
   it should "serialize removed columns" in {
     val removed = makeColumnInfo("old_col", "BINARY", isOptional = false)
-    val diff = SchemaDiff(added = Nil, removed = List(removed), changed = Nil, unchanged = Nil)
+    val diff = SchemaDiff(
+      added = Nil,
+      removed = List(removed),
+      changed = Nil,
+      unchanged = Nil
+    )
     val result = CliOutputFormatter.formatSchemaDiffJson(diff)
     val arr = parse(result).toOption.get.asObject.get("removed").get.asArray.get
     arr.length shouldBe 1
@@ -383,8 +495,19 @@ class CliOutputFormatterTest extends AnyFlatSpec with Matchers {
   }
 
   it should "serialize changed columns with from/to type and optional fields" in {
-    val change = ColumnChange("col", fromType = "INT32", toType = "INT64", fromOptional = false, toOptional = true)
-    val diff = SchemaDiff(added = Nil, removed = Nil, changed = List(change), unchanged = Nil)
+    val change = ColumnChange(
+      "col",
+      fromType = "INT32",
+      toType = "INT64",
+      fromOptional = false,
+      toOptional = true
+    )
+    val diff = SchemaDiff(
+      added = Nil,
+      removed = Nil,
+      changed = List(change),
+      unchanged = Nil
+    )
     val result = CliOutputFormatter.formatSchemaDiffJson(diff)
     val arr = parse(result).toOption.get.asObject.get("changed").get.asArray.get
     arr.length shouldBe 1
@@ -397,7 +520,8 @@ class CliOutputFormatterTest extends AnyFlatSpec with Matchers {
   }
 
   it should "produce parseable JSON string" in {
-    val diff = SchemaDiff(added = Nil, removed = Nil, changed = Nil, unchanged = Nil)
+    val diff =
+      SchemaDiff(added = Nil, removed = Nil, changed = Nil, unchanged = Nil)
     val result = CliOutputFormatter.formatSchemaDiffJson(diff)
     parse(result).isRight shouldBe true
   }

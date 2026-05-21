@@ -12,31 +12,45 @@ class ParquetWriteOpsTest extends AnyFlatSpec with Matchers {
   // ── convertCompressionType ───────────────────────────────────────────────
 
   "ParquetWriteOps.convertCompressionType" should "convert Uncompressed to UNCOMPRESSED" in {
-    ParquetWriteOps.convertCompressionType(CompressionType.Uncompressed) shouldBe CompressionCodecName.UNCOMPRESSED
+    ParquetWriteOps.convertCompressionType(
+      CompressionType.Uncompressed
+    ) shouldBe CompressionCodecName.UNCOMPRESSED
   }
 
   it should "convert Snappy to SNAPPY" in {
-    ParquetWriteOps.convertCompressionType(CompressionType.Snappy) shouldBe CompressionCodecName.SNAPPY
+    ParquetWriteOps.convertCompressionType(
+      CompressionType.Snappy
+    ) shouldBe CompressionCodecName.SNAPPY
   }
 
   it should "convert Gzip to GZIP" in {
-    ParquetWriteOps.convertCompressionType(CompressionType.Gzip) shouldBe CompressionCodecName.GZIP
+    ParquetWriteOps.convertCompressionType(
+      CompressionType.Gzip
+    ) shouldBe CompressionCodecName.GZIP
   }
 
   it should "convert Lzo to LZO" in {
-    ParquetWriteOps.convertCompressionType(CompressionType.Lzo) shouldBe CompressionCodecName.LZO
+    ParquetWriteOps.convertCompressionType(
+      CompressionType.Lzo
+    ) shouldBe CompressionCodecName.LZO
   }
 
   it should "convert Brotli to BROTLI" in {
-    ParquetWriteOps.convertCompressionType(CompressionType.Brotli) shouldBe CompressionCodecName.BROTLI
+    ParquetWriteOps.convertCompressionType(
+      CompressionType.Brotli
+    ) shouldBe CompressionCodecName.BROTLI
   }
 
   it should "convert Lz4 to LZ4" in {
-    ParquetWriteOps.convertCompressionType(CompressionType.Lz4) shouldBe CompressionCodecName.LZ4
+    ParquetWriteOps.convertCompressionType(
+      CompressionType.Lz4
+    ) shouldBe CompressionCodecName.LZ4
   }
 
   it should "convert Zstd to ZSTD" in {
-    ParquetWriteOps.convertCompressionType(CompressionType.Zstd) shouldBe CompressionCodecName.ZSTD
+    ParquetWriteOps.convertCompressionType(
+      CompressionType.Zstd
+    ) shouldBe CompressionCodecName.ZSTD
   }
 
   it should "cover all CompressionType enum cases" in {
@@ -98,7 +112,9 @@ class ParquetWriteOpsTest extends AnyFlatSpec with Matchers {
     val group = new SimpleGroupFactory(mt).newGroup()
     val v = 123456789L
     ParquetWriteOps.writeRowToGroup(group, Map("measurement" -> v), mt)
-    group.getFloat("measurement", 0) shouldBe v.toFloat +- math.abs(v.toFloat * 1e-5f)
+    group.getFloat("measurement", 0) shouldBe v.toFloat +- math.abs(
+      v.toFloat * 1e-5f
+    )
   }
 
   it should "write a Double field" in {
@@ -161,10 +177,15 @@ class ParquetWriteOpsTest extends AnyFlatSpec with Matchers {
   }
 
   it should "throw InvalidRecordException when a row key is absent from the schema" in {
-    val mt = MessageTypeParser.parseMessageType("message root { required int32 age; }")
+    val mt =
+      MessageTypeParser.parseMessageType("message root { required int32 age; }")
     val group = new SimpleGroupFactory(mt).newGroup()
     an[org.apache.parquet.io.InvalidRecordException] should be thrownBy {
-      ParquetWriteOps.writeRowToGroup(group, Map("age" -> 30, "unknown" -> "x"), mt)
+      ParquetWriteOps.writeRowToGroup(
+        group,
+        Map("age" -> 30, "unknown" -> "x"),
+        mt
+      )
     }
   }
 
@@ -173,7 +194,11 @@ class ParquetWriteOpsTest extends AnyFlatSpec with Matchers {
       "message root { required int32 age; required binary name (STRING); }"
     )
     val group = new SimpleGroupFactory(mt).newGroup()
-    ParquetWriteOps.writeRowToGroup(group, Map("age" -> 30, "name" -> "Carol"), mt)
+    ParquetWriteOps.writeRowToGroup(
+      group,
+      Map("age" -> 30, "name" -> "Carol"),
+      mt
+    )
     group.getInteger("age", 0) shouldBe 30
     group.getBinary("name", 0).toStringUsingUTF8 shouldBe "Carol"
   }

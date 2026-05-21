@@ -191,7 +191,9 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
 
   it should "return Left when write fails during parquet-to-parquet conversion" in {
     val service = new ParquetService(
-      new FakeParquetRepository(writeResult = Failure(new RuntimeException("write denied")))
+      new FakeParquetRepository(writeResult =
+        Failure(new RuntimeException("write denied"))
+      )
     )
     val result = service.convertFile("/in.parquet", "/tmp/out.parquet")
     result.isLeft shouldBe true
@@ -409,7 +411,9 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     val service = new ParquetService(new FakeParquetRepository())
     val result = service.readDataFile("/any/file.tsv", "tsv")
     result.isLeft shouldBe true
-    result.left.toOption.get.userMessage should include("Unsupported input format")
+    result.left.toOption.get.userMessage should include(
+      "Unsupported input format"
+    )
   }
 
   // ── stdin / pipe support (#42) ────────────────────────────────────────────
@@ -442,7 +446,9 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     val service = new ParquetService(new FakeParquetRepository())
     val result = service.readDataFile("-", "tsv", stdin)
     result.isLeft shouldBe true
-    result.left.toOption.get.userMessage should include("Unsupported input format")
+    result.left.toOption.get.userMessage should include(
+      "Unsupported input format"
+    )
   }
 
   "ParquetService.readFile" should "return Left for stdin path (-)" in {

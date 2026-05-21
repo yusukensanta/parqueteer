@@ -263,8 +263,9 @@ object CliApp {
             import io.github.yusukensanta.parqueteer.core.formatters.OutputFormatter
             val formatter = OutputFormatter(format, useColors)
             val output = file.content match {
-              case Some(content) => formatter.formatContent(content, file.schema)
-              case None          => "No content available"
+              case Some(content) =>
+                formatter.formatContent(content, file.schema)
+              case None => "No content available"
             }
             println(output)
           }
@@ -298,12 +299,14 @@ object CliApp {
       case Right(file) =>
         if (!globalOptions.quiet) {
           format match {
-            case OutputFormat.JSON => println(CliOutputFormatter.formatInfoJson(file))
+            case OutputFormat.JSON =>
+              println(CliOutputFormatter.formatInfoJson(file))
             case _ =>
               import io.github.yusukensanta.parqueteer.core.formatters.TableFormatter
               val output = file.metadata match {
-                case Some(metadata) => new TableFormatter().formatMetadata(metadata)
-                case None           => "No metadata information available"
+                case Some(metadata) =>
+                  new TableFormatter().formatMetadata(metadata)
+                case None => "No metadata information available"
               }
               println(output)
           }
@@ -426,7 +429,9 @@ object CliApp {
             println(s"Dry run: would convert $inputPath → $outputPath")
             println(s"  Input:       $inputPath")
             file.metadata.foreach(m =>
-              println(s"  File size:   ${CliOutputFormatter.formatBytesForDisplay(m.fileSize)}")
+              println(
+                s"  File size:   ${CliOutputFormatter.formatBytesForDisplay(m.fileSize)}"
+              )
             )
             file.schema.foreach { s =>
               println(s"  Rows:        ${s.totalRowCount}")
@@ -525,7 +530,8 @@ object CliApp {
       case Right(file) =>
         if (!globalOptions.quiet) {
           cmd.format match {
-            case OutputFormat.JSON => println(CliOutputFormatter.formatSchemaJson(file))
+            case OutputFormat.JSON =>
+              println(CliOutputFormatter.formatSchemaJson(file))
             case _ =>
               import io.github.yusukensanta.parqueteer.core.formatters.TableFormatter
               val output = file.schema match {
@@ -549,8 +555,9 @@ object CliApp {
       case Right(stats) =>
         if (!globalOptions.quiet) {
           format match {
-            case OutputFormat.JSON => println(CliOutputFormatter.formatStatsJson(stats).spaces2)
-            case _                 => println(CliOutputFormatter.formatStatsTable(stats))
+            case OutputFormat.JSON =>
+              println(CliOutputFormatter.formatStatsJson(stats).spaces2)
+            case _ => println(CliOutputFormatter.formatStatsTable(stats))
           }
         }
         0
@@ -596,8 +603,16 @@ object CliApp {
       case Right(diff) =>
         if (!globalOptions.quiet)
           cmd.format match {
-            case OutputFormat.JSON => println(CliOutputFormatter.formatSchemaDiffJson(diff))
-            case _ => println(CliOutputFormatter.formatSchemaDiffTable(cmd.file1, cmd.file2, diff))
+            case OutputFormat.JSON =>
+              println(CliOutputFormatter.formatSchemaDiffJson(diff))
+            case _ =>
+              println(
+                CliOutputFormatter.formatSchemaDiffTable(
+                  cmd.file1,
+                  cmd.file2,
+                  diff
+                )
+              )
           }
         if (diff.identical) 0 else 1
     }
