@@ -136,7 +136,7 @@ class ParquetService(
           (acc, p) => acc.flatMap(locs => parseLocation(p).map(locs :+ _))
         }
       schemas <- inputLocations.foldLeft[Either[ParqueteerError, List[
-        List[(String, String, Boolean)]
+        List[FieldSummary]
       ]]](Right(Nil)) { (acc, loc) =>
         acc.flatMap { list =>
           repository
@@ -169,8 +169,8 @@ class ParquetService(
               (acc, fields) =>
                 acc.flatMap { _ =>
                   val conflicts = fields.collect {
-                    case (name, t, _) if seen.get(name).exists(_ != t) =>
-                      s"'$name' (${seen(name)} vs $t)"
+                    case f if seen.get(f.name).exists(_ != f.dataType) =>
+                      s"'${f.name}' (${seen(f.name)} vs ${f.dataType})"
                   }
                   if (conflicts.nonEmpty)
                     Left(
@@ -181,21 +181,25 @@ class ParquetService(
                       )
                     )
                   else {
-                    fields.foreach { case (name, t, _) =>
-                      seen.getOrElseUpdate(name, t)
-                    }
+                    fields.foreach(f =>
+                      seen.getOrElseUpdate(f.name, f.dataType)
+                    )
                     Right(())
                   }
                 }
             }
-            .map(_ => seen.map { case (name, t) => (name, t, true) }.toList)
+            .map(_ =>
+              seen.map { case (name, t) =>
+                FieldSummary(name, t, isOptional = true)
+              }.toList
+            )
       }
       outputLocation <- parseLocation(outputPath)
       count <- {
-        val allColumnNames = mergedFields.map(_._1).toSet
+        val allColumnNames = mergedFields.map(_.name).toSet
         val explicitSchema = ParquetSchema(
-          columns = mergedFields.map { case (name, dataType, optional) =>
-            ColumnInfo(name, dataType, optional, 1, 0, "SNAPPY")
+          columns = mergedFields.map { f =>
+            ColumnInfo(f.name, f.dataType, f.isOptional, 1, 0, "SNAPPY")
           },
           rowGroupCount = 1L,
           totalRowCount = 0L
