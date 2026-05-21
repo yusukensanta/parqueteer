@@ -88,7 +88,7 @@ private[repositories] object ParquetRecordDecoder {
     val builder = Map.newBuilder[String, Any]
     var i = 0
     while (i < schema.getFieldCount) {
-      if (group.getFieldRepetitionCount(i) > 0) {
+      if (group.getFieldRepetitionCount(i) > 0 && schema.getType(i).isPrimitive) {
         val name = schema.getType(i).getName
         val fieldType = schema.getType(i).asPrimitiveType()
         val originalType = fieldType.getOriginalType
@@ -120,8 +120,9 @@ private[repositories] object ParquetRecordDecoder {
             java.time.Instant.ofEpochMilli(group.getLong(i, 0)).toString
           case PrimitiveTypeName.INT64
               if originalType == OriginalType.TIMESTAMP_MICROS =>
+            val micros = group.getLong(i, 0)
             java.time.Instant
-              .ofEpochSecond(0L, group.getLong(i, 0) * 1000L)
+              .ofEpochSecond(micros / 1_000_000L, (micros % 1_000_000L) * 1_000L)
               .toString
           case PrimitiveTypeName.INT32   => group.getInteger(i, 0)
           case PrimitiveTypeName.INT64   => group.getLong(i, 0)
