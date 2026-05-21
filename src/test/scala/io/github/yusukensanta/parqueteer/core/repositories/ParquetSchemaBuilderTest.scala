@@ -400,4 +400,76 @@ class ParquetSchemaBuilderTest extends AnyFlatSpec with Matchers {
     val mt = ParquetSchemaBuilder.inferSchemaFromData(data)
     mt.getName shouldBe "root"
   }
+
+  // ── multi-row type widening (issue #125) ──────────────────────────────────
+
+  it should "widen Int to Long when both appear in the same column" in {
+    val data = List(
+      Map[String, Any]("x" -> 1),
+      Map[String, Any]("x" -> 2L)
+    )
+    val mt = ParquetSchemaBuilder.inferSchemaFromData(data)
+    fieldByName(mt, "x").getPrimitiveTypeName shouldBe PrimitiveTypeName.INT64
+  }
+
+  it should "widen Long to Double when both appear in the same column" in {
+    val data = List(
+      Map[String, Any]("x" -> 1L),
+      Map[String, Any]("x" -> 2.5)
+    )
+    val mt = ParquetSchemaBuilder.inferSchemaFromData(data)
+    fieldByName(mt, "x").getPrimitiveTypeName shouldBe PrimitiveTypeName.DOUBLE
+  }
+
+  it should "widen Int to Double when both appear in the same column" in {
+    val data = List(
+      Map[String, Any]("x" -> 1),
+      Map[String, Any]("x" -> 2.0)
+    )
+    val mt = ParquetSchemaBuilder.inferSchemaFromData(data)
+    fieldByName(mt, "x").getPrimitiveTypeName shouldBe PrimitiveTypeName.DOUBLE
+  }
+
+  it should "fall back to String (BINARY) when String and Long appear in the same column" in {
+    val data = List(
+      Map[String, Any]("x" -> "twenty"),
+      Map[String, Any]("x" -> 25L)
+    )
+    val mt = ParquetSchemaBuilder.inferSchemaFromData(data)
+    fieldByName(mt, "x").getPrimitiveTypeName shouldBe PrimitiveTypeName.BINARY
+  }
+
+  it should "fall back to String (BINARY) when Boolean and Long appear in the same column" in {
+    val data = List(
+      Map[String, Any]("x" -> true),
+      Map[String, Any]("x" -> 1L)
+    )
+    val mt = ParquetSchemaBuilder.inferSchemaFromData(data)
+    fieldByName(mt, "x").getPrimitiveTypeName shouldBe PrimitiveTypeName.BINARY
+  }
+
+  it should "use widened type even when the first non-null value has a narrower type" in {
+    // row 0 is null, row 1 is String, row 2 is Long — must NOT pick String
+    val data = List(
+      Map[String, Any]("score" -> null),
+      Map[String, Any]("score" -> "twenty"),
+      Map[String, Any]("score" -> 25L)
+    )
+    val mt = ParquetSchemaBuilder.inferSchemaFromData(data)
+    // String + Long → BINARY (String wins as common supertype)
+    fieldByName(
+      mt,
+      "score"
+    ).getPrimitiveTypeName shouldBe PrimitiveTypeName.BINARY
+  }
+
+  it should "use the wider numeric type when first non-null is Int but later rows have Long" in {
+    val data = List(
+      Map[String, Any]("n" -> null),
+      Map[String, Any]("n" -> 1),
+      Map[String, Any]("n" -> 9999999999L)
+    )
+    val mt = ParquetSchemaBuilder.inferSchemaFromData(data)
+    fieldByName(mt, "n").getPrimitiveTypeName shouldBe PrimitiveTypeName.INT64
+  }
 }
