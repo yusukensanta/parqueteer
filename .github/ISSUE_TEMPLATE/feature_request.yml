@@ -1,29 +1,19 @@
 name: Feature Request
-description: Suggest a new feature or enhancement for Parqueteer
+description: Suggest a new feature or enhancement
 labels: ["enhancement"]
 body:
   - type: markdown
     attributes:
       value: |
-        ## Project Scope
-
-        Parqueteer is a **Parquet lifecycle tool for pipelines** — schema diff, validate, cloud I/O, format conversion, and operational inspection.
-
-        **Please check before submitting:**
-        - SQL analytics, joins, aggregations → use [DuckDB](https://duckdb.org/) instead
-        - General data exploration on local files → use [pqrs](https://github.com/manojkarthick/pqrs) or [parquet-cli](https://github.com/apache/parquet-java/tree/master/parquet-cli) instead
-        - Streaming/batch processing → use Spark or Flink instead
-        - Interactive/REPL mode → out of scope; parqueteer is a scriptable CLI
-
-        Feature requests outside this scope will be closed. See the [README](../../README.md#project-scope) for the full scope definition.
+        **Out of scope** (will be closed): SQL analytics/joins, general data exploration, streaming/batch processing, interactive REPL.
+        See the [README scope section](../../README.md#project-scope) before filing.
 
   - type: checkboxes
     id: scope_check
     attributes:
       label: Scope Check
-      description: Confirm this request fits within the project scope
       options:
-        - label: This feature is related to Parquet lifecycle operations (schema, validate, cloud I/O, convert, merge, inspect) — not SQL analytics or general data exploration
+        - label: This is related to Parquet lifecycle operations (schema, I/O, conversion, inspection) — not SQL analytics or general exploration
           required: true
 
   - type: dropdown
@@ -33,7 +23,7 @@ body:
       options:
         - CLI / Commands
         - Output Formats
-        - Filtering / Querying
+        - Filtering
         - Cloud Storage
         - Performance
         - Configuration
@@ -46,8 +36,8 @@ body:
     id: problem
     attributes:
       label: Problem or Motivation
-      description: What problem does this feature solve? What workflow is currently difficult?
-      placeholder: "I frequently need to ... but currently have to ..."
+      description: What workflow is currently awkward or impossible?
+      placeholder: "I need to ... but currently have to ..."
     validations:
       required: true
 
@@ -55,12 +45,21 @@ body:
     id: solution
     attributes:
       label: Proposed Solution
-      description: Describe what you'd like to happen
       placeholder: |
-        Example CLI usage:
         ```
-        parqueteer <new-command> --flag value
+        parqueteer <command> --flag value
         ```
+    validations:
+      required: true
+
+  - type: dropdown
+    id: impact
+    attributes:
+      label: Impact
+      options:
+        - Nice to have
+        - Saves significant time
+        - Blocking my use case
     validations:
       required: true
 
@@ -68,26 +67,5 @@ body:
     id: alternatives
     attributes:
       label: Alternatives Considered
-      description: Any alternative solutions or workarounds you've considered
-    validations:
-      required: false
-
-  - type: dropdown
-    id: impact
-    attributes:
-      label: Impact
-      description: How much would this feature improve your workflow?
-      options:
-        - Nice to have
-        - Would save me significant time
-        - Blocking my use case
-    validations:
-      required: false
-
-  - type: textarea
-    id: context
-    attributes:
-      label: Additional Context
-      description: Any other context, mockups, or references
     validations:
       required: false

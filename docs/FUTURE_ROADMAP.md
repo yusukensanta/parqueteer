@@ -41,7 +41,7 @@ This document is an exploratory / strategic view forward, complementing the exis
 
 ### 2.3 Schema Intelligence
 - Auto schema merge across directory scans (conflict report mode)
-- Schema diff: `parqueteer schema diff file1 file2`
+- ~~Schema diff: `parqueteer schema diff file1 file2`~~ ✓ Done
 - Schema evolution assistant (generate migration plan)
 
 ---
@@ -137,7 +137,7 @@ This document is an exploratory / strategic view forward, complementing the exis
 ---
 ## 8. Tooling & Release Engineering
 ### 8.1 Build & Release
-- Reproducible builds (version lock, sbt-ci-release adoption)
+- ~~Reproducible builds (sbt-ci-release adoption)~~ ✓ Done
 - Automated changelog generation (GitHub Actions + conventional commits)
 - Dependency vulnerability scanning (Snyk or OSS Index)
 
@@ -147,7 +147,8 @@ This document is an exploratory / strategic view forward, complementing the exis
 - Optional native image experiment (GraalVM) for ultra-fast startup
 
 ### 8.3 Binary Distribution
-- Homebrew formula & Scoop manifest
+- ~~Homebrew formula~~ ✓ Done (via `yusukensanta/homebrew-parqueteer`)
+- Scoop manifest (Windows)
 - Docker image (distroless + JRE)
 - Self-updating mechanism ("parqueteer self-update")
 
@@ -198,5 +199,3 @@ Legend: P1 = near-term, P2 = mid-term, P3 = strategic.
 - Before each minor release: select 3–5 P1 items only
 - Track decisions in a DECISIONS.md file (append-only log)
 
----
-*Generated: Draft for internal planning. Edit before committing.*
