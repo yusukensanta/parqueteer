@@ -248,12 +248,7 @@ object CliApp {
           writer.end()
           0
         case Left(error) =>
-          System.err.println(s"Error: ${error.userMessage}")
-          if (globalOptions.verbose) error match {
-            case ParqueteerError.IOError(cause) => cause.printStackTrace()
-            case _                              => ()
-          }
-          error.exitCode
+          reportError("Error", globalOptions)(error)
       }
     } else {
       service.readFile(filePath, readConfig) match {
@@ -276,20 +271,17 @@ object CliApp {
           }
           0
         case Left(error) =>
-          System.err.println(s"Error: ${error.userMessage}")
-          if (
-            filter.isDefined &&
-            error.userMessage.contains("FilterPredicate") &&
-            error.userMessage.contains("BINARY")
-          )
-            System.err.println(
-              "Hint: CSV-imported files store all columns as BINARY (string). Use string comparisons instead: column = \"value\""
+          val filterHint =
+            if (
+              filter.isDefined && error.userMessage.contains(
+                "FilterPredicate"
+              ) && error.userMessage.contains("BINARY")
             )
-          if (globalOptions.verbose) error match {
-            case ParqueteerError.IOError(cause) => cause.printStackTrace()
-            case _                              => ()
-          }
-          error.exitCode
+              Some(
+                "Hint: CSV-imported files store all columns as BINARY (string). Use string comparisons instead: column = \"value\""
+              )
+            else None
+          reportError("Error", globalOptions, filterHint)(error)
       }
     }
   }
@@ -318,12 +310,7 @@ object CliApp {
         }
         0
       case Left(error) =>
-        System.err.println(s"Failed to get file info: ${error.userMessage}")
-        if (globalOptions.verbose) error match {
-          case ParqueteerError.IOError(cause) => cause.printStackTrace()
-          case _                              => ()
-        }
-        error.exitCode
+        reportError("Failed to get file info", globalOptions)(error)
     }
   }
 
@@ -343,12 +330,7 @@ object CliApp {
     )
     service.readDataFile(inputPath, inputFormat) match {
       case Left(error) =>
-        System.err.println(s"Failed to read input file: ${error.userMessage}")
-        if (globalOptions.verbose) error match {
-          case ParqueteerError.IOError(cause) => cause.printStackTrace()
-          case _                              => ()
-        }
-        error.exitCode
+        reportError("Failed to read input file", globalOptions)(error)
       case Right(inputData) =>
         if (dryRun) {
           val columns =
@@ -366,12 +348,7 @@ object CliApp {
                 println(s"Successfully wrote data to $outputPath")
               0
             case Left(error) =>
-              System.err.println(s"Failed to write file: ${error.userMessage}")
-              if (globalOptions.verbose) error match {
-                case ParqueteerError.IOError(cause) => cause.printStackTrace()
-                case _                              => ()
-              }
-              error.exitCode
+              reportError("Failed to write file", globalOptions)(error)
           }
         }
     }
@@ -405,12 +382,7 @@ object CliApp {
           1
         }
       case Left(error) =>
-        System.err.println(s"Failed to validate file: ${error.userMessage}")
-        if (globalOptions.verbose) error match {
-          case ParqueteerError.IOError(cause) => cause.printStackTrace()
-          case _                              => ()
-        }
-        error.exitCode
+        reportError("Failed to validate file", globalOptions)(error)
     }
   }
 
@@ -438,12 +410,7 @@ object CliApp {
       if (inputExt == "parquet") {
         service.getFileInfo(inputPath) match {
           case Left(error) =>
-            System.err.println(s"Failed to read input: ${error.userMessage}")
-            if (globalOptions.verbose) error match {
-              case ParqueteerError.IOError(cause) => cause.printStackTrace()
-              case _                              => ()
-            }
-            1
+            reportError("Failed to read input", globalOptions)(error)
           case Right(file) =>
             println(s"Dry run: would convert $inputPath → $outputPath")
             println(s"  Input:       $inputPath")
@@ -478,12 +445,7 @@ object CliApp {
             println(s"Successfully converted $inputPath to $outputPath")
           0
         case Left(error) =>
-          System.err.println(s"Failed to convert file: ${error.userMessage}")
-          if (globalOptions.verbose) error match {
-            case ParqueteerError.IOError(cause) => cause.printStackTrace()
-            case _                              => ()
-          }
-          error.exitCode
+          reportError("Failed to convert file", globalOptions)(error)
       }
     }
   }
@@ -518,12 +480,7 @@ object CliApp {
             println(s"Merged $total files ($count rows) → $outputPath")
           0
         case Left(error) =>
-          System.err.println(s"Failed to merge: ${error.userMessage}")
-          if (globalOptions.verbose) error match {
-            case ParqueteerError.IOError(cause) => cause.printStackTrace()
-            case _                              => ()
-          }
-          error.exitCode
+          reportError("Failed to merge", globalOptions)(error)
       }
     }
   }
@@ -541,12 +498,7 @@ object CliApp {
     } else
       service.getFileInfo(cmd.filePath) match {
         case Left(error) =>
-          System.err.println(s"Failed to read schema: ${error.userMessage}")
-          if (globalOptions.verbose) error match {
-            case ParqueteerError.IOError(cause) => cause.printStackTrace()
-            case _                              => ()
-          }
-          error.exitCode
+          reportError("Failed to read schema", globalOptions)(error)
         case Right(file) =>
           if (!globalOptions.quiet) {
             cmd.format match {
@@ -582,12 +534,7 @@ object CliApp {
         }
         0
       case Left(error) =>
-        System.err.println(s"Failed to get stats: ${error.userMessage}")
-        if (globalOptions.verbose) error match {
-          case ParqueteerError.IOError(cause) => cause.printStackTrace()
-          case _                              => ()
-        }
-        error.exitCode
+        reportError("Failed to get stats", globalOptions)(error)
     }
   }
 
@@ -617,12 +564,7 @@ object CliApp {
   ): Int = {
     service.diffSchemas(cmd.file1, cmd.file2) match {
       case Left(error) =>
-        System.err.println(s"Failed to diff schemas: ${error.userMessage}")
-        if (globalOptions.verbose) error match {
-          case ParqueteerError.IOError(cause) => cause.printStackTrace()
-          case _                              => ()
-        }
-        error.exitCode
+        reportError("Failed to diff schemas", globalOptions)(error)
       case Right(diff) =>
         if (!globalOptions.quiet)
           cmd.format match {
@@ -708,6 +650,20 @@ object CliApp {
       }
       0
     }
+  }
+
+  private def reportError(
+      prefix: String,
+      opts: GlobalOptions,
+      hint: Option[String] = None
+  )(error: ParqueteerError): Int = {
+    System.err.println(s"$prefix: ${error.userMessage}")
+    hint.foreach(System.err.println)
+    if (opts.verbose) error match {
+      case ParqueteerError.IOError(cause) => cause.printStackTrace()
+      case _                              => ()
+    }
+    error.exitCode
   }
 
   private def isStdoutTTY: Boolean = System.console() != null
