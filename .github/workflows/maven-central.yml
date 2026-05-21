@@ -52,39 +52,3 @@ jobs:
           SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
           SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
 
-      - name: Wait for Maven Central sync
-        run: |
-          VERSION=${GITHUB_REF#refs/tags/v}
-          echo "Waiting for io.github.yusukensanta:parqueteer_3:${VERSION} on Maven Central..."
-          for i in $(seq 1 20); do
-            FOUND=$(curl -s "https://search.maven.org/solrsearch/select?q=g:io.github.yusukensanta+AND+a:parqueteer_3+AND+v:${VERSION}&rows=1&wt=json" \
-              | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['response']['numFound'])" 2>/dev/null || echo 0)
-            if [ "${FOUND}" -gt "0" ]; then
-              echo "Available on Maven Central after $((i * 60))s"
-              exit 0
-            fi
-            [ "$i" -eq "20" ] && { echo "Warning: not found after 20 min, continuing anyway"; exit 0; }
-            echo "Attempt $i/20: not yet indexed, retrying in 60s..."
-            sleep 60
-          done
-
-      - name: Update Homebrew Tap
-        env:
-          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-        run: |
-          VERSION=${GITHUB_REF#refs/tags/v}
-          TARBALL_URL="https://github.com/yusukensanta/parqueteer/archive/refs/tags/v${VERSION}.tar.gz"
-          SHA256=$(curl -sL "${TARBALL_URL}" | sha256sum | cut -d' ' -f1)
-
-          git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/yusukensanta/homebrew-parqueteer.git" /tmp/homebrew-tap
-          cd /tmp/homebrew-tap
-
-          sed -i "s|url \".*\"|url \"${TARBALL_URL}\"|" Formula/parqueteer.rb
-          sed -i "s/sha256 \".*\"/sha256 \"${SHA256}\"/" Formula/parqueteer.rb
-          sed -i "s/version \".*\"/version \"${VERSION}\"/" Formula/parqueteer.rb
-
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add Formula/parqueteer.rb
-          git diff --cached --quiet || git commit -m "chore: update parqueteer to v${VERSION}"
-          git push

@@ -148,5 +148,46 @@ jobs:
             target/universal/checksums.txt
           retention-days: 30
 
-      # Homebrew tap update runs in maven-central.yml after artifact is published
-      # so that `cs launch` in the formula can resolve the artifact immediately.
+      - name: Update Homebrew Tap
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          VERSION: ${{ steps.version.outputs.VERSION }}
+        run: |
+          TGZ_SHA=$(grep "parqueteer-${VERSION}.tgz" target/universal/checksums.txt | cut -d' ' -f1)
+          TGZ_URL="https://github.com/yusukensanta/parqueteer/releases/download/v${VERSION}/parqueteer-${VERSION}.tgz"
+
+          git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/yusukensanta/homebrew-parqueteer.git" /tmp/homebrew-tap
+
+          cat > /tmp/homebrew-tap/Formula/parqueteer.rb << 'FORMULA'
+          class Parqueteer < Formula
+            desc "CLI tool for working with Parquet files - query, inspect, and convert with ease"
+            homepage "https://github.com/yusukensanta/parqueteer"
+            url "PLACEHOLDER_URL"
+            sha256 "PLACEHOLDER_SHA"
+            version "PLACEHOLDER_VERSION"
+            license "Apache-2.0"
+
+            depends_on "openjdk@21"
+
+            def install
+              rm_r Dir["bin/*.bat"]
+              libexec.install Dir["*"]
+              bin.env_script_all_files libexec/"bin", JAVA_HOME: Formula["openjdk@21"].opt_prefix
+            end
+
+            test do
+              assert_match version.to_s, shell_output("#{bin}/parqueteer --version 2>&1")
+            end
+          end
+          FORMULA
+
+          sed -i "s|PLACEHOLDER_URL|${TGZ_URL}|" /tmp/homebrew-tap/Formula/parqueteer.rb
+          sed -i "s|PLACEHOLDER_SHA|${TGZ_SHA}|" /tmp/homebrew-tap/Formula/parqueteer.rb
+          sed -i "s|PLACEHOLDER_VERSION|${VERSION}|" /tmp/homebrew-tap/Formula/parqueteer.rb
+
+          cd /tmp/homebrew-tap
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/parqueteer.rb
+          git diff --cached --quiet || git commit -m "chore: update parqueteer to v${VERSION}"
+          git push
