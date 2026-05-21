@@ -260,6 +260,27 @@ class ParquetRepository {
           val compressionRatio =
             calculateCompressionRatio(footer.getBlocks.asScala.toList)
 
+          // Read Parquet format version from raw Thrift footer
+          val formatVersion: String = Try {
+            Using.resource(inputFile.newStream()) { stream =>
+              val fileLen = inputFile.getLength
+              val tail = new Array[Byte](8)
+              stream.seek(fileLen - 8)
+              stream.readFully(tail)
+              val footerLen = java.nio.ByteBuffer
+                .wrap(tail, 0, 4)
+                .order(java.nio.ByteOrder.LITTLE_ENDIAN)
+                .getInt
+              stream.seek(fileLen - 8 - footerLen)
+              val footerBytes = new Array[Byte](footerLen)
+              stream.readFully(footerBytes)
+              val rawMeta = org.apache.parquet.format.Util.readFileMetaData(
+                new java.io.ByteArrayInputStream(footerBytes)
+              )
+              if (rawMeta.version == 2) "2.0" else "1.0"
+            }
+          }.getOrElse("unknown")
+
           FileMetadata(
             fileSize = fileStatus.getLen,
             createdAt = Some(
@@ -269,7 +290,7 @@ class ParquetRepository {
               java.time.Instant.ofEpochMilli(fileStatus.getModificationTime)
             ),
             compressionRatio = compressionRatio,
-            version = metadata.getCreatedBy,
+            version = formatVersion,
             createdBy = Some(metadata.getCreatedBy)
           )
         }

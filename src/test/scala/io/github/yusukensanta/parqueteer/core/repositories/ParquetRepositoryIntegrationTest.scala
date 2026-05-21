@@ -109,6 +109,18 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
     result.get.createdAt shouldBe defined
   }
 
+  it should "report Parquet format version (1.0 or 2.0), not writer library string" taggedAs IntegrationTest in {
+    val loc = LocalPath(tempFile().getAbsolutePath)
+    repo.writeContent(loc, sampleData, None).isSuccess shouldBe true
+
+    val result = repo.readMetadata(ParquetFile(loc))
+    result.isSuccess shouldBe true
+    val version = result.get.version
+    version should (equal("1.0") or equal("2.0"))
+    version should not include "parquet"
+    version should not include "version"
+  }
+
   // ── Validation ─────────────────────────────────────────────────────────
 
   it should "report no issues for a valid written file" taggedAs IntegrationTest in {

@@ -4,7 +4,7 @@ import io.github.yusukensanta.parqueteer.core.models._
 import io.github.yusukensanta.parqueteer.core.models.StorageLocationParser
 import io.github.yusukensanta.parqueteer.core.repositories.ParquetRepository
 import io.github.yusukensanta.parqueteer.core.filters.FilterParser
-import scala.util.Try
+import scala.util.{Try, Using}
 import io.circe.{Encoder, Json}
 
 object ParquetServiceEncoders {
@@ -277,7 +277,8 @@ class ParquetService(
       inputFormat: String,
       stdin: java.io.InputStream = System.in
   ): Try[List[Map[String, Any]]] = Try {
-    val content = scala.io.Source.fromInputStream(stdin).mkString
+    val content =
+      Using.resource(scala.io.Source.fromInputStream(stdin))(_.mkString)
     inputFormat.toLowerCase match {
       case "json" => parseJsonContent(content)
       case "csv"  => parseCsvContent(content)
