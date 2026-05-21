@@ -28,9 +28,7 @@ class ParquetRepository {
         val hadoopPath = new HadoopPath(file.location.path)
         val (totalRows, fileSchema) = getFileMetadata(hadoopPath, hadoopConfig)
 
-        if (
-          config.parallelism > 1 && config.parsedFilter.isEmpty && config.filter.isEmpty
-        ) {
+        if (config.parallelism > 1 && config.filter.isEmpty) {
           val rows = readParallel(hadoopPath, hadoopConfig, config)
           val isPartial =
             config.maxRows.exists(limit => rows.size.toLong >= limit)
@@ -173,14 +171,12 @@ class ParquetRepository {
       hadoopConfig: Configuration,
       config: ReadConfig
   ): com.github.mjakubowski84.parquet4s.ParquetIterable[RowParquetRecord] = {
-    val filter = config.parsedFilter.getOrElse {
-      config.filter
-        .flatMap { expr =>
-          import io.github.yusukensanta.parqueteer.core.filters.FilterParser
-          FilterParser.parse(expr).toOption
-        }
-        .getOrElse(Filter.noopFilter)
-    }
+    val filter = config.filter
+      .flatMap { expr =>
+        import io.github.yusukensanta.parqueteer.core.filters.FilterParser
+        FilterParser.parse(expr).toOption
+      }
+      .getOrElse(Filter.noopFilter)
     config.columns match {
       case Some(cols) if cols.nonEmpty =>
         val schema = ParquetSchemaBuilder.buildProjectedSchema(

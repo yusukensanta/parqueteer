@@ -56,13 +56,13 @@ class ParquetService(
   ): Either[ParqueteerError, ParquetFile] =
     for {
       _ <- requireNotStdin(path)
-      parsedFilter <- readConfig.filter
-        .map(FilterParser.parse(_).map(Some(_)))
-        .getOrElse(Right(None))
+      _ <- readConfig.filter
+        .map(FilterParser.parse(_).map(_ => ()))
+        .getOrElse(Right(()))
       location <- parseLocation(path)
       file = ParquetFile(location)
       content <- repository
-        .readContent(file, readConfig.copy(parsedFilter = parsedFilter))
+        .readContent(file, readConfig)
         .toEither
         .left
         .map(ParqueteerError.IOError.apply)
@@ -88,13 +88,13 @@ class ParquetService(
   )(process: Map[String, Any] => Unit): Either[ParqueteerError, Long] =
     for {
       _ <- requireNotStdin(path)
-      parsedFilter <- readConfig.filter
-        .map(FilterParser.parse(_).map(Some(_)))
-        .getOrElse(Right(None))
+      _ <- readConfig.filter
+        .map(FilterParser.parse(_).map(_ => ()))
+        .getOrElse(Right(()))
       location <- parseLocation(path)
       file = ParquetFile(location)
       count <- repository
-        .streamContent(file, readConfig.copy(parsedFilter = parsedFilter))(
+        .streamContent(file, readConfig)(
           process
         )
         .toEither
