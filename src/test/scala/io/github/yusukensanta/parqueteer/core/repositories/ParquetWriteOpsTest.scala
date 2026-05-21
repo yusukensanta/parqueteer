@@ -94,10 +94,11 @@ class ParquetWriteOpsTest extends AnyFlatSpec with Matchers {
   }
 
   it should "write a Long to FLOAT column with widening" in {
-    val mt = schema("message root { required float val; }")
+    val mt = schema("message root { required float measurement; }")
     val group = new SimpleGroupFactory(mt).newGroup()
-    ParquetWriteOps.writeRowToGroup(group, Map("val" -> 5L), mt)
-    group.getFloat("val", 0) shouldBe 5.0f +- 0.001f
+    val v = 123456789L
+    ParquetWriteOps.writeRowToGroup(group, Map("measurement" -> v), mt)
+    group.getFloat("measurement", 0) shouldBe v.toFloat +- math.abs(v.toFloat * 1e-5f)
   }
 
   it should "write a Double field" in {
@@ -159,18 +160,22 @@ class ParquetWriteOpsTest extends AnyFlatSpec with Matchers {
     group.getFieldRepetitionCount("age") shouldBe 0
   }
 
-  it should "write only the fields that are present in the schema, ignoring extra row keys" in {
-    val mt = schema(
-      """message root {
-        |  required int32 age;
-        |  required binary name (UTF8);
-        |}""".stripMargin
+  it should "throw InvalidRecordException when a row key is absent from the schema" in {
+    val mt = MessageTypeParser.parseMessageType("message root { required int32 age; }")
+    val group = new SimpleGroupFactory(mt).newGroup()
+    an[org.apache.parquet.io.InvalidRecordException] should be thrownBy {
+      ParquetWriteOps.writeRowToGroup(group, Map("age" -> 30, "unknown" -> "x"), mt)
+    }
+  }
+
+  it should "write multiple known fields in a single group" in {
+    val mt = MessageTypeParser.parseMessageType(
+      "message root { required int32 age; required binary name (STRING); }"
     )
     val group = new SimpleGroupFactory(mt).newGroup()
-    // Only write known fields — writeRowToGroup is called with an exact-match row
     ParquetWriteOps.writeRowToGroup(group, Map("age" -> 30, "name" -> "Carol"), mt)
     group.getInteger("age", 0) shouldBe 30
-    group.getString("name", 0) shouldBe "Carol"
+    group.getBinary("name", 0).toStringUsingUTF8 shouldBe "Carol"
   }
 
   it should "write multiple fields in a single row" in {

@@ -14,6 +14,9 @@ private[repositories] object ParquetWriteOps {
       schema: MessageType
   ): Unit = {
     row.foreach { case (key, value) =>
+      // schema.getFieldIndex throws org.apache.parquet.io.InvalidRecordException for
+      // unknown keys before this guard is reached; the >= 0 check is unreachable but
+      // kept for defensive symmetry with the original implementation.
       val fieldIndex = schema.getFieldIndex(key)
       if (fieldIndex >= 0 && value != null) {
         val fieldTypeName =
