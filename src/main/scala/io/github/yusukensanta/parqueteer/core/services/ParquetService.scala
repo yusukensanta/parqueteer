@@ -4,7 +4,7 @@ import io.github.yusukensanta.parqueteer.core.models._
 import io.github.yusukensanta.parqueteer.core.models.StorageLocationParser
 import io.github.yusukensanta.parqueteer.core.repositories.ParquetRepository
 import io.github.yusukensanta.parqueteer.core.filters.FilterParser
-import scala.util.{Try, Success, Failure}
+import scala.util.Try
 import io.circe.{Encoder, Json}
 
 object ParquetServiceEncoders {
@@ -25,9 +25,6 @@ object ParquetServiceEncoders {
       Json.fromValues(list.map(mapStringAnyEncoder.apply))
     )
 }
-
-private final class ParqueteerCarrierException(val error: ParqueteerError)
-    extends RuntimeException(error.userMessage)
 
 class ParquetService(
     repository: ParquetRepository
@@ -124,114 +121,107 @@ class ParquetService(
       writeConfig: WriteConfig,
       schemaMode: SchemaMode,
       onProgress: (Int, Int, String) => Unit = (_, _, _) => ()
-  ): Either[ParqueteerError, Long] =
-    mergeFilesInternal(
-      inputPaths,
-      outputPath,
-      writeConfig,
-      schemaMode,
-      onProgress
-    ).toEither.left.map(ParqueteerError.IOError.apply)
-
-  private def mergeFilesInternal(
-      inputPaths: List[String],
-      outputPath: String,
-      writeConfig: WriteConfig,
-      schemaMode: SchemaMode,
-      onProgress: (Int, Int, String) => Unit
-  ): Try[Long] = {
-
+  ): Either[ParqueteerError, Long] = {
     if (inputPaths.size < 2)
-      return Failure(
-        new IllegalArgumentException("merge requires at least two input files")
+      return Left(
+        ParqueteerError.InvalidFormat(
+          "merge",
+          "merge requires at least two input files"
+        )
       )
 
     for {
-      inputLocations <- Try {
-        inputPaths.map { p =>
-          StorageLocationParser
-            .parse(p)
-            .fold(
-              err =>
-                throw new IllegalArgumentException(s"Invalid path '$p': $err"),
-              identity
-            )
+      inputLocations <- inputPaths
+        .foldLeft[Either[ParqueteerError, List[StorageLocation]]](Right(Nil)) {
+          (acc, p) => acc.flatMap(locs => parseLocation(p).map(locs :+ _))
         }
-      }
-      schemas <- Try {
-        inputLocations.map { loc =>
+      schemas <- inputLocations.foldLeft[Either[ParqueteerError, List[
+        List[(String, String, Boolean)]
+      ]]](Right(Nil)) { (acc, loc) =>
+        acc.flatMap { list =>
           repository
             .readSchemaFields(ParquetFile(loc))
-            .fold(
-              err =>
-                throw new RuntimeException(
-                  s"Cannot read schema: ${err.getMessage}"
-                ),
-              identity
-            )
+            .toEither
+            .left
+            .map(ParqueteerError.IOError.apply)
+            .map(list :+ _)
         }
       }
-      mergedFields <- Try {
-        schemaMode match {
-          case SchemaMode.Strict =>
-            val first = schemas.head
-            schemas.zipWithIndex.foreach { case (s, i) =>
-              if (s != first)
-                throw new IllegalArgumentException(
-                  s"Schema mismatch at file '${inputPaths(i)}'. Use --schema-mode union to allow schema differences."
+      mergedFields <- schemaMode match {
+        case SchemaMode.Strict =>
+          val first = schemas.head
+          schemas.zipWithIndex
+            .collectFirst {
+              case (s, i) if s != first =>
+                Left(
+                  ParqueteerError.InvalidFormat(
+                    inputPaths(i),
+                    s"Schema mismatch at file '${inputPaths(i)}'. Use --schema-mode union to allow schema differences."
+                  )
                 )
             }
-            first
-          case SchemaMode.Union =>
-            val seen =
-              scala.collection.mutable.LinkedHashMap.empty[String, String]
-            schemas.foreach { fields =>
-              val conflicts = fields.collect {
-                case (name, t, _) if seen.get(name).exists(_ != t) =>
-                  s"'$name' (${seen(name)} vs $t)"
-              }
-              if (conflicts.nonEmpty)
-                throw new IllegalArgumentException(
-                  s"Type conflicts in union merge: ${conflicts.mkString(", ")}. " +
-                    "Cannot union-merge columns with incompatible types."
-                )
-              fields.foreach { case (name, t, _) =>
-                seen.getOrElseUpdate(name, t)
-              }
+            .getOrElse(Right(first))
+        case SchemaMode.Union =>
+          val seen =
+            scala.collection.mutable.LinkedHashMap.empty[String, String]
+          schemas
+            .foldLeft[Either[ParqueteerError, Unit]](Right(())) {
+              (acc, fields) =>
+                acc.flatMap { _ =>
+                  val conflicts = fields.collect {
+                    case (name, t, _) if seen.get(name).exists(_ != t) =>
+                      s"'$name' (${seen(name)} vs $t)"
+                  }
+                  if (conflicts.nonEmpty)
+                    Left(
+                      ParqueteerError.InvalidFormat(
+                        "merge",
+                        s"Type conflicts in union merge: ${conflicts.mkString(", ")}. " +
+                          "Cannot union-merge columns with incompatible types."
+                      )
+                    )
+                  else {
+                    fields.foreach { case (name, t, _) =>
+                      seen.getOrElseUpdate(name, t)
+                    }
+                    Right(())
+                  }
+                }
             }
-            seen.map { case (name, t) => (name, t, true) }.toList
-        }
+            .map(_ => seen.map { case (name, t) => (name, t, true) }.toList)
       }
-      allColumnNames = mergedFields.map(_._1).toSet
       outputLocation <- parseLocation(outputPath)
-        .fold(
-          err => Failure(new IllegalArgumentException(err.userMessage)),
-          Success.apply
+      count <- {
+        val allColumnNames = mergedFields.map(_._1).toSet
+        val explicitSchema = ParquetSchema(
+          columns = mergedFields.map { case (name, dataType, optional) =>
+            ColumnInfo(name, dataType, optional, 1, 0, "SNAPPY")
+          },
+          rowGroupCount = 1L,
+          totalRowCount = 0L
         )
-      explicitSchema = ParquetSchema(
-        columns = mergedFields.map { case (name, dataType, optional) =>
-          ColumnInfo(name, dataType, optional, 1, 0, "SNAPPY")
-        },
-        rowGroupCount = 1L,
-        totalRowCount = 0L
-      )
-      count <- repository.writeContentStream(
-        outputLocation,
-        explicitSchema,
-        writeConfig
-      ) { write =>
-        inputLocations.zipWithIndex.foreach { case (loc, i) =>
-          onProgress(i + 1, inputLocations.size, inputPaths(i))
-          repository
-            .streamContent(ParquetFile(loc), ReadConfig()) { row =>
-              val missing = allColumnNames -- row.keySet
-              val finalRow =
-                if (missing.isEmpty) row
-                else row ++ missing.map(_ -> null)
-              write(finalRow)
-            }
-            .fold(err => throw new RuntimeException(err.getMessage), _ => ())
-        }
+        repository
+          .writeContentStream(outputLocation, explicitSchema, writeConfig) {
+            write =>
+              inputLocations.zipWithIndex.foreach { case (loc, i) =>
+                onProgress(i + 1, inputLocations.size, inputPaths(i))
+                repository
+                  .streamContent(ParquetFile(loc), ReadConfig()) { row =>
+                    val missing = allColumnNames -- row.keySet
+                    val finalRow =
+                      if (missing.isEmpty) row
+                      else row ++ missing.map(_ -> null)
+                    write(finalRow)
+                  }
+                  .fold(
+                    err => throw new RuntimeException(err.getMessage),
+                    _ => ()
+                  )
+              }
+          }
+          .toEither
+          .left
+          .map(ParqueteerError.IOError.apply)
       }
     } yield count
   }
@@ -246,12 +236,6 @@ class ParquetService(
         .left
         .map(ParqueteerError.IOError.apply)
     } yield stats
-
-  private def readFileAsTry(path: String): Try[ParquetFile] =
-    readFile(path).fold(
-      err => Failure(new ParqueteerCarrierException(err)),
-      Success.apply
-    )
 
   def writeFile(
       path: String,
@@ -361,72 +345,49 @@ class ParquetService(
       inputPath: String,
       outputPath: String,
       conversionConfig: ConversionConfig = ConversionConfig()
-  ): Either[ParqueteerError, Unit] =
-    convertFileInternal(inputPath, outputPath, conversionConfig).toEither.left
-      .map {
-        case e: ParqueteerCarrierException => e.error
-        case e                             => ParqueteerError.IOError(e)
-      }
-
-  private def convertFileInternal(
-      inputPath: String,
-      outputPath: String,
-      conversionConfig: ConversionConfig
-  ): Try[Unit] = {
+  ): Either[ParqueteerError, Unit] = {
     val inputExt = getFileExtension(inputPath)
     val outputExt = getFileExtension(outputPath)
-
     (inputExt, outputExt) match {
-      // Parquet → Parquet (cloud/local copy with optional compression change)
       case ("parquet", "parquet") =>
         for {
-          inputFile <- readFileAsTry(inputPath)
+          inputFile <- readFile(inputPath)
           data = inputFile.content.map(_.rows).getOrElse(List.empty)
           _ <- writeFile(outputPath, data, conversionConfig.writeConfig)
-            .fold(
-              e => Failure(new RuntimeException(e.userMessage)),
-              Success.apply
-            )
         } yield ()
 
-      // Parquet → JSON
       case ("parquet", "json") =>
         for {
-          inputFile <- readFileAsTry(inputPath)
+          inputFile <- readFile(inputPath)
           content = inputFile.content.getOrElse(
             FileContent(List.empty, 0, false)
           )
           jsonOutput = formatContentAsJSON(content)
-          _ <- writeTextFile(outputPath, jsonOutput)
+          _ <- writeTextFile(outputPath, jsonOutput).toEither.left
+            .map(ParqueteerError.IOError.apply)
         } yield ()
 
-      // Parquet → CSV
       case ("parquet", "csv") =>
         for {
-          inputFile <- readFileAsTry(inputPath)
+          inputFile <- readFile(inputPath)
           content = inputFile.content.getOrElse(
             FileContent(List.empty, 0, false)
           )
           csvOutput = formatContentAsCSV(content)
-          _ <- writeTextFile(outputPath, csvOutput)
+          _ <- writeTextFile(outputPath, csvOutput).toEither.left
+            .map(ParqueteerError.IOError.apply)
         } yield ()
 
-      // JSON/CSV → Parquet
       case ("json" | "csv", "parquet") =>
-        readDataFile(inputPath, inputExt)
-          .fold(
-            err => Failure(new ParqueteerCarrierException(err)),
-            data =>
-              writeFile(outputPath, data, conversionConfig.writeConfig)
-                .fold(
-                  e => Failure(new ParqueteerCarrierException(e)),
-                  Success.apply
-                )
-          )
+        for {
+          data <- readDataFile(inputPath, inputExt)
+          _ <- writeFile(outputPath, data, conversionConfig.writeConfig)
+        } yield ()
 
       case _ =>
-        Failure(
-          new IllegalArgumentException(
+        Left(
+          ParqueteerError.InvalidFormat(
+            inputPath,
             s"Unsupported conversion: $inputExt → $outputExt. Supported: parquet→parquet, parquet→json, parquet→csv"
           )
         )
