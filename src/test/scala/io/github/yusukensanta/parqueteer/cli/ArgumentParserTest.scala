@@ -373,4 +373,67 @@ class ArgumentParserTest extends AnyFlatSpec with Matchers {
       .asInstanceOf[SchemaDiffCommand]
       .format shouldBe OutputFormat.JSON
   }
+
+  "ArgumentParser error handling" should "reject unknown --format on convert" in {
+    val args = Array("convert", "in.parquet", "out.json", "--format", "xml")
+    val result =
+      OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
+    result shouldBe None
+  }
+
+  it should "reject unknown --compression on convert" in {
+    val args =
+      Array("convert", "in.parquet", "out.parquet", "--compression", "bz2")
+    val result =
+      OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
+    result shouldBe None
+  }
+
+  it should "reject unknown --compression on write" in {
+    val args =
+      Array(
+        "write",
+        "out.parquet",
+        "--input",
+        "in.json",
+        "--compression",
+        "bz2"
+      )
+    val result =
+      OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
+    result shouldBe None
+  }
+
+  it should "reject unknown --schema-mode on merge" in {
+    val args = Array(
+      "merge",
+      "a.parquet",
+      "b.parquet",
+      "--output",
+      "out.parquet",
+      "--schema-mode",
+      "lenient"
+    )
+    val result =
+      OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
+    result shouldBe None
+  }
+
+  it should "accept valid --schema-mode strict" in {
+    val args = Array(
+      "merge",
+      "a.parquet",
+      "b.parquet",
+      "--output",
+      "out.parquet",
+      "--schema-mode",
+      "strict"
+    )
+    val result =
+      OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
+    result shouldBe defined
+    result.get.command.get
+      .asInstanceOf[MergeCommand]
+      .schemaMode shouldBe SchemaMode.Strict
+  }
 }
