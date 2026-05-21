@@ -387,9 +387,9 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     val service = new ParquetService(new FakeParquetRepository())
     val result = service.readDataFile(f.getAbsolutePath, "json")
 
-    result.isSuccess shouldBe true
-    result.get should have length 1
-    result.get.head("name") shouldBe "Alice"
+    result.isRight shouldBe true
+    result.toOption.get should have length 1
+    result.toOption.get.head("name") shouldBe "Alice"
   }
 
   it should "parse CSV file into rows" in {
@@ -401,15 +401,15 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     val service = new ParquetService(new FakeParquetRepository())
     val result = service.readDataFile(f.getAbsolutePath, "csv")
 
-    result.isSuccess shouldBe true
-    result.get.head("name") shouldBe "Alice"
+    result.isRight shouldBe true
+    result.toOption.get.head("name") shouldBe "Alice"
   }
 
-  it should "return Failure for unsupported format" in {
+  it should "return Left for unsupported format" in {
     val service = new ParquetService(new FakeParquetRepository())
     val result = service.readDataFile("/any/file.tsv", "tsv")
-    result.isFailure shouldBe true
-    result.failed.get.getMessage should include("Unsupported input format")
+    result.isLeft shouldBe true
+    result.left.toOption.get.userMessage should include("Unsupported input format")
   }
 
   // ── stdin / pipe support (#42) ────────────────────────────────────────────
@@ -420,9 +420,9 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     val service = new ParquetService(new FakeParquetRepository())
     val result = service.readDataFile("-", "json", stdin)
 
-    result.isSuccess shouldBe true
-    result.get should have length 1
-    result.get.head("name") shouldBe "Alice"
+    result.isRight shouldBe true
+    result.toOption.get should have length 1
+    result.toOption.get.head("name") shouldBe "Alice"
   }
 
   it should "read CSV from stdin when path is -" in {
@@ -432,17 +432,17 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     val service = new ParquetService(new FakeParquetRepository())
     val result = service.readDataFile("-", "csv", stdin)
 
-    result.isSuccess shouldBe true
-    result.get should have length 2
-    result.get.head("name") shouldBe "Alice"
+    result.isRight shouldBe true
+    result.toOption.get should have length 2
+    result.toOption.get.head("name") shouldBe "Alice"
   }
 
-  it should "return Failure for unsupported format from stdin" in {
+  it should "return Left for unsupported format from stdin" in {
     val stdin = new ByteArrayInputStream("data".getBytes("UTF-8"))
     val service = new ParquetService(new FakeParquetRepository())
     val result = service.readDataFile("-", "tsv", stdin)
-    result.isFailure shouldBe true
-    result.failed.get.getMessage should include("Unsupported input format")
+    result.isLeft shouldBe true
+    result.left.toOption.get.userMessage should include("Unsupported input format")
   }
 
   "ParquetService.readFile" should "return Left for stdin path (-)" in {

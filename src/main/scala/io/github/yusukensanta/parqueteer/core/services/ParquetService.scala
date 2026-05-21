@@ -263,15 +263,17 @@ class ParquetService(
       path: String,
       inputFormat: String,
       stdin: java.io.InputStream = System.in
-  ): Try[List[Map[String, Any]]] =
-    if (path == "-") readFromStdin(inputFormat, stdin)
+  ): Either[ParqueteerError, List[Map[String, Any]]] =
+    if (path == "-") readFromStdin(inputFormat, stdin).toEither.left.map(ParqueteerError.IOError.apply)
     else
       inputFormat.toLowerCase match {
-        case "json" => readJsonFile(path)
-        case "csv"  => readCsvFile(path)
+        case "json" => readJsonFile(path).toEither.left.map(ParqueteerError.IOError.apply)
+        case "csv"  => readCsvFile(path).toEither.left.map(ParqueteerError.IOError.apply)
         case fmt =>
-          Failure(
-            new IllegalArgumentException(s"Unsupported input format: $fmt")
+          Left(
+            ParqueteerError.IOError(
+              new IllegalArgumentException(s"Unsupported input format: $fmt")
+            )
           )
       }
 
@@ -392,9 +394,11 @@ class ParquetService(
       // JSON/CSV → Parquet
       case ("json" | "csv", "parquet") =>
         readDataFile(inputPath, inputExt)
-          .flatMap(data =>
-            writeFile(outputPath, data, conversionConfig.writeConfig)
-              .fold(e => Failure(new RuntimeException(e.userMessage)), Success.apply)
+          .fold(
+            err => Failure(new ParqueteerCarrierException(err)),
+            data =>
+              writeFile(outputPath, data, conversionConfig.writeConfig)
+                .fold(e => Failure(new ParqueteerCarrierException(e)), Success.apply)
           )
 
       case _ =>

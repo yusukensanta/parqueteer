@@ -315,7 +315,7 @@ object CliApp {
           case ParqueteerError.IOError(cause) => cause.printStackTrace()
           case _                              => ()
         }
-        1
+        error.exitCode
     }
   }
 
@@ -334,11 +334,14 @@ object CliApp {
       rowGroupSize = rowGroupSize.getOrElse(WriteConfig.DefaultRowGroupSize)
     )
     service.readDataFile(inputPath, inputFormat) match {
-      case Failure(error) =>
-        System.err.println(s"Failed to read input data: ${error.getMessage}")
-        if (globalOptions.verbose) error.printStackTrace()
-        1
-      case Success(inputData) =>
+      case Left(error) =>
+        System.err.println(s"Failed to read input file: ${error.userMessage}")
+        if (globalOptions.verbose) error match {
+          case ParqueteerError.IOError(cause) => cause.printStackTrace()
+          case _                              => ()
+        }
+        error.exitCode
+      case Right(inputData) =>
         if (dryRun) {
           val columns =
             inputData.headOption.map(_.keys.toList.sorted).getOrElse(Nil)
@@ -360,7 +363,7 @@ object CliApp {
                 case ParqueteerError.IOError(cause) => cause.printStackTrace()
                 case _                              => ()
               }
-              1
+              error.exitCode
           }
         }
     }
@@ -387,7 +390,7 @@ object CliApp {
           case ParqueteerError.IOError(cause) => cause.printStackTrace()
           case _                              => ()
         }
-        1
+        error.exitCode
     }
   }
 
@@ -518,7 +521,7 @@ object CliApp {
           case ParqueteerError.IOError(cause) => cause.printStackTrace()
           case _                              => ()
         }
-        1
+        error.exitCode
       case Right(file) =>
         if (!globalOptions.quiet) {
           cmd.format match {
@@ -557,7 +560,7 @@ object CliApp {
           case ParqueteerError.IOError(cause) => cause.printStackTrace()
           case _                              => ()
         }
-        1
+        error.exitCode
     }
   }
 
