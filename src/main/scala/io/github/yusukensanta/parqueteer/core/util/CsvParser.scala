@@ -4,17 +4,19 @@ object CsvParser {
 
   def parse(content: String): List[Map[String, Any]] = {
     val records = parseRfc4180(content)
-    if (records.isEmpty) return List.empty
-    val headers = records.head
-    records.tail.zipWithIndex.map { case (values, idx) =>
-      if (values.length != headers.length)
-        throw new IllegalArgumentException(
-          s"Row ${idx + 2} has ${values.length} fields, expected ${headers.length}"
-        )
-      headers
-        .zip(values)
-        .map { case (h, v) => h -> TypeInferrer.inferCsvValue(v) }
-        .toMap
+    if (records.isEmpty) List.empty
+    else {
+      val headers = records.head
+      records.tail.zipWithIndex.map { case (values, idx) =>
+        if (values.length != headers.length)
+          throw new IllegalArgumentException(
+            s"Row ${idx + 2} has ${values.length} fields, expected ${headers.length}"
+          )
+        headers
+          .zip(values)
+          .map { case (h, v) => h -> TypeInferrer.inferCsvValue(v) }
+          .toMap
+      }
     }
   }
 

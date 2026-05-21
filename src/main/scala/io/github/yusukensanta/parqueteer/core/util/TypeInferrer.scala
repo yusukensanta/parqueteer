@@ -16,19 +16,19 @@ object TypeInferrer {
     */
   def inferCsvValue(raw: String): Any = {
     val s = raw.trim
-    if (s.isEmpty) return null
-    if (s.equalsIgnoreCase("true")) return true
-    if (s.equalsIgnoreCase("false")) return false
-    if (DatePattern.matcher(s).matches())
-      return Try(LocalDate.parse(s)).getOrElse(s)
-    if (TsPattern.matcher(s).matches())
-      return tryTimestamp(s).getOrElse(s)
-    if (DecimalPattern.matcher(s).matches())
-      return Try(s.toDouble).getOrElse(s)
-    if (IntPattern.matcher(s).matches())
+    if (s.isEmpty) null
+    else if (s.equalsIgnoreCase("true")) true
+    else if (s.equalsIgnoreCase("false")) false
+    else if (DatePattern.matcher(s).matches())
+      Try(LocalDate.parse(s)).getOrElse(s)
+    else if (TsPattern.matcher(s).matches())
+      tryTimestamp(s).getOrElse(s)
+    else if (DecimalPattern.matcher(s).matches())
+      Try(s.toDouble).getOrElse(s)
+    else if (IntPattern.matcher(s).matches())
       // Guard: preserve leading zeros ("007" must stay a String, not become 7L)
-      return Try(s.toLong).filter(_.toString == s).getOrElse(s)
-    s
+      Try(s.toLong).filter(_.toString == s).getOrElse(s)
+    else s
   }
 
   /** Infer date/timestamp from a JSON string value. JSON numbers are already
@@ -36,10 +36,10 @@ object TypeInferrer {
     */
   def inferJsonString(s: String): Any = {
     if (DatePattern.matcher(s).matches())
-      return Try(LocalDate.parse(s)).getOrElse(s)
-    if (TsPattern.matcher(s).matches())
-      return tryTimestamp(s).getOrElse(s)
-    s
+      Try(LocalDate.parse(s)).getOrElse(s)
+    else if (TsPattern.matcher(s).matches())
+      tryTimestamp(s).getOrElse(s)
+    else s
   }
 
   private def tryTimestamp(s: String): Try[Instant] =
