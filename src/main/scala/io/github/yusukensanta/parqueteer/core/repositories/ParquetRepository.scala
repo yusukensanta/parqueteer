@@ -6,29 +6,14 @@ import com.github.mjakubowski84.parquet4s.{
   ParquetReader,
   RowParquetRecord,
   Path => Parquet4sPath,
-  Filter,
-  Value,
-  NullValue,
-  BooleanValue,
-  IntValue,
-  LongValue,
-  FloatValue,
-  DoubleValue,
-  BinaryValue,
-  DateTimeValue,
-  DecimalValue
+  Filter
 }
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path => HadoopPath}
 import org.apache.parquet.hadoop.ParquetFileReader
 import org.apache.parquet.hadoop.util.HadoopInputFile
-import org.apache.parquet.hadoop.metadata.CompressionCodecName
-import org.apache.parquet.schema.{MessageType, OriginalType}
+import org.apache.parquet.schema.MessageType
 import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
-import org.apache.parquet.column.page.PageReadStore
-import org.apache.parquet.io.ColumnIOFactory
-import org.apache.parquet.example.data.Group
-import org.apache.parquet.example.data.simple.convert.GroupRecordConverter
 import scala.concurrent.{Future, Await, ExecutionContext}
 import scala.concurrent.duration.Duration
 import java.util.concurrent.Executors
@@ -60,13 +45,19 @@ class ParquetRepository {
                 reader
                   .take(limit.toInt)
                   .map(r =>
-                    postProcessTemporalFields(convertRecordToMap(r), fileSchema)
+                    ParquetRecordDecoder.postProcessTemporalFields(
+                      ParquetRecordDecoder.convertRecordToMap(r),
+                      fileSchema
+                    )
                   )
                   .toList
               case None =>
                 reader
                   .map(r =>
-                    postProcessTemporalFields(convertRecordToMap(r), fileSchema)
+                    ParquetRecordDecoder.postProcessTemporalFields(
+                      ParquetRecordDecoder.convertRecordToMap(r),
+                      fileSchema
+                    )
                   )
                   .toList
             }
@@ -102,7 +93,10 @@ class ParquetRepository {
           var count = 0L
           iter.foreach { record =>
             process(
-              postProcessTemporalFields(convertRecordToMap(record), fileSchema)
+              ParquetRecordDecoder.postProcessTemporalFields(
+                ParquetRecordDecoder.convertRecordToMap(record),
+                fileSchema
+              )
             )
             count += 1
           }
@@ -127,8 +121,9 @@ class ParquetRepository {
       }
 
     val requestedSchema = config.columns match {
-      case Some(cols) if cols.nonEmpty => projectSchema(fileSchema, cols)
-      case _                           => fileSchema
+      case Some(cols) if cols.nonEmpty =>
+        ParquetSchemaBuilder.projectSchema(fileSchema, cols)
+      case _ => fileSchema
     }
 
     val threadCount = math.min(config.parallelism, math.max(1, blocks.size))
@@ -153,7 +148,12 @@ class ParquetRepository {
           ) { reader =>
             val pageStore = reader.readNextRowGroup()
             if (pageStore == null) List.empty[Map[String, Any]]
-            else decodePageStore(pageStore, fileSchema, requestedSchema)
+            else
+              ParquetRecordDecoder.decodePageStore(
+                pageStore,
+                fileSchema,
+                requestedSchema
+              )
           }
         }
       }
@@ -164,107 +164,6 @@ class ParquetRepository {
       }
     } finally {
       executor.shutdown()
-    }
-  }
-
-  private def decodePageStore(
-      pageStore: PageReadStore,
-      fileSchema: MessageType,
-      requestedSchema: MessageType
-  ): List[Map[String, Any]] = {
-    val columnIO =
-      new ColumnIOFactory().getColumnIO(requestedSchema, fileSchema)
-    val converter = new GroupRecordConverter(requestedSchema)
-    val recordReader = columnIO.getRecordReader(pageStore, converter)
-    val rowCount = pageStore.getRowCount
-    (0L until rowCount).map { _ =>
-      val group = recordReader.read()
-      if (group == null) Map.empty[String, Any]
-      else decodeGroup(group, requestedSchema)
-    }.toList
-  }
-
-  private def decodeGroup(
-      group: Group,
-      schema: MessageType
-  ): Map[String, Any] = {
-    val builder = Map.newBuilder[String, Any]
-    var i = 0
-    while (i < schema.getFieldCount) {
-      if (group.getFieldRepetitionCount(i) > 0) {
-        val name = schema.getType(i).getName
-        val fieldType = schema.getType(i).asPrimitiveType()
-        val originalType = fieldType.getOriginalType
-        val value: Any = fieldType.getPrimitiveTypeName match {
-          case PrimitiveTypeName.INT32
-              if originalType == OriginalType.DECIMAL =>
-            val scale = fieldType.getDecimalMetadata.getScale
-            scala.math.BigDecimal(
-              new java.math.BigDecimal(
-                java.math.BigInteger.valueOf(group.getInteger(i, 0).toLong),
-                scale
-              )
-            )
-          case PrimitiveTypeName.INT64
-              if originalType == OriginalType.DECIMAL =>
-            val scale = fieldType.getDecimalMetadata.getScale
-            scala.math.BigDecimal(
-              new java.math.BigDecimal(
-                java.math.BigInteger.valueOf(group.getLong(i, 0)),
-                scale
-              )
-            )
-          case PrimitiveTypeName.INT32 if originalType == OriginalType.DATE =>
-            java.time.LocalDate
-              .ofEpochDay(group.getInteger(i, 0).toLong)
-              .toString
-          case PrimitiveTypeName.INT64
-              if originalType == OriginalType.TIMESTAMP_MILLIS =>
-            java.time.Instant.ofEpochMilli(group.getLong(i, 0)).toString
-          case PrimitiveTypeName.INT64
-              if originalType == OriginalType.TIMESTAMP_MICROS =>
-            java.time.Instant
-              .ofEpochSecond(0L, group.getLong(i, 0) * 1000L)
-              .toString
-          case PrimitiveTypeName.INT32   => group.getInteger(i, 0)
-          case PrimitiveTypeName.INT64   => group.getLong(i, 0)
-          case PrimitiveTypeName.FLOAT   => group.getFloat(i, 0)
-          case PrimitiveTypeName.DOUBLE  => group.getDouble(i, 0)
-          case PrimitiveTypeName.BOOLEAN => group.getBoolean(i, 0)
-          case PrimitiveTypeName.BINARY =>
-            group.getBinary(i, 0).toStringUsingUTF8
-          case _ => group.getValueToString(i, 0)
-        }
-        builder += name -> value
-      }
-      i += 1
-    }
-    builder.result()
-  }
-
-  private def projectSchema(
-      fileSchema: MessageType,
-      columns: List[String]
-  ): MessageType = {
-    val columnSet = columns.toSet
-    val fields = fileSchema.getFields.asScala
-      .filter(f => columnSet.contains(f.getName))
-      .toList
-    if (fields.isEmpty)
-      throw new IllegalArgumentException(
-        s"None of the requested columns exist in the file: ${columns.mkString(", ")}"
-      )
-    new MessageType("root", fields.asJava)
-  }
-
-  private def buildProjectedSchema(
-      path: HadoopPath,
-      conf: Configuration,
-      columns: List[String]
-  ): MessageType = {
-    val inputFile = HadoopInputFile.fromPath(path, conf)
-    Using.resource(ParquetFileReader.open(inputFile)) { reader =>
-      projectSchema(reader.getFooter.getFileMetaData.getSchema, columns)
     }
   }
 
@@ -284,7 +183,11 @@ class ParquetRepository {
     }
     config.columns match {
       case Some(cols) if cols.nonEmpty =>
-        val schema = buildProjectedSchema(hadoopPath, hadoopConfig, cols)
+        val schema = ParquetSchemaBuilder.buildProjectedSchema(
+          hadoopPath,
+          hadoopConfig,
+          cols
+        )
         ParquetReader
           .projectedGeneric(schema)
           .options(ParquetReader.Options(hadoopConf = hadoopConfig))
@@ -395,8 +298,8 @@ class ParquetRepository {
 
         // Build Parquet schema from data structure
         val parquetSchema = schema match {
-          case Some(ps) => buildMessageType(ps)
-          case None     => inferSchemaFromData(data)
+          case Some(ps) => ParquetSchemaBuilder.buildMessageType(ps)
+          case None     => ParquetSchemaBuilder.inferSchemaFromData(data)
         }
 
         // Use ExampleParquetWriter.builder for Group writing
@@ -404,7 +307,9 @@ class ParquetRepository {
           .builder(new HadoopPath(location.path))
           .withType(parquetSchema)
           .withConf(hadoopConfig)
-          .withCompressionCodec(convertCompressionType(config.compressionType))
+          .withCompressionCodec(
+            ParquetWriteOps.convertCompressionType(config.compressionType)
+          )
           .withRowGroupSize(config.rowGroupSize)
           .withPageSize(config.pageSize.toInt)
           .withDictionaryEncoding(config.enableDictionary)
@@ -415,7 +320,7 @@ class ParquetRepository {
           val factory = new SimpleGroupFactory(parquetSchema)
           data.foreach { row =>
             val group = factory.newGroup()
-            writeRowToGroup(group, row, parquetSchema)
+            ParquetWriteOps.writeRowToGroup(group, row, parquetSchema)
             writer.write(group)
           }
         } finally {
@@ -436,12 +341,14 @@ class ParquetRepository {
         import org.apache.parquet.example.data.simple.SimpleGroupFactory
         import org.apache.hadoop.fs.{Path => HadoopPath}
 
-        val parquetSchema = buildMessageType(schema)
+        val parquetSchema = ParquetSchemaBuilder.buildMessageType(schema)
         val writer = ExampleParquetWriter
           .builder(new HadoopPath(location.path))
           .withType(parquetSchema)
           .withConf(hadoopConfig)
-          .withCompressionCodec(convertCompressionType(config.compressionType))
+          .withCompressionCodec(
+            ParquetWriteOps.convertCompressionType(config.compressionType)
+          )
           .withRowGroupSize(config.rowGroupSize)
           .withPageSize(config.pageSize.toInt)
           .withDictionaryEncoding(config.enableDictionary)
@@ -453,7 +360,7 @@ class ParquetRepository {
         try {
           feed { row =>
             val group = factory.newGroup()
-            writeRowToGroup(group, row, parquetSchema)
+            ParquetWriteOps.writeRowToGroup(group, row, parquetSchema)
             writer.write(group)
             count += 1
           }
@@ -461,236 +368,6 @@ class ParquetRepository {
           writer.close()
         }
         count
-      }
-    }
-  }
-
-  private def buildMessageType(schema: ParquetSchema): MessageType = {
-    import org.apache.parquet.schema.{Types, PrimitiveType}
-    import org.apache.parquet.schema.Type.Repetition
-
-    val builder = Types.buildMessage()
-
-    schema.columns.foreach { col =>
-      val repetition =
-        if (col.isOptional) Repetition.OPTIONAL else Repetition.REQUIRED
-
-      // Simplified type mapping - extend as needed
-      col.dataType.toUpperCase match {
-        case "INT32" | "INT" =>
-          builder.addField(
-            Types
-              .primitive(PrimitiveType.PrimitiveTypeName.INT32, repetition)
-              .named(col.name)
-          )
-        case "INT64" | "LONG" =>
-          builder.addField(
-            Types
-              .primitive(PrimitiveType.PrimitiveTypeName.INT64, repetition)
-              .named(col.name)
-          )
-        case "DOUBLE" =>
-          builder.addField(
-            Types
-              .primitive(PrimitiveType.PrimitiveTypeName.DOUBLE, repetition)
-              .named(col.name)
-          )
-        case "FLOAT" =>
-          builder.addField(
-            Types
-              .primitive(PrimitiveType.PrimitiveTypeName.FLOAT, repetition)
-              .named(col.name)
-          )
-        case "BOOLEAN" =>
-          builder.addField(
-            Types
-              .primitive(PrimitiveType.PrimitiveTypeName.BOOLEAN, repetition)
-              .named(col.name)
-          )
-        case "DATE" =>
-          builder.addField(
-            Types
-              .primitive(PrimitiveType.PrimitiveTypeName.INT32, repetition)
-              .as(org.apache.parquet.schema.LogicalTypeAnnotation.dateType())
-              .named(col.name)
-          )
-        case "TIMESTAMP" | "TIMESTAMP_MILLIS" =>
-          builder.addField(
-            Types
-              .primitive(PrimitiveType.PrimitiveTypeName.INT64, repetition)
-              .as(
-                org.apache.parquet.schema.LogicalTypeAnnotation.timestampType(
-                  true,
-                  org.apache.parquet.schema.LogicalTypeAnnotation.TimeUnit.MILLIS
-                )
-              )
-              .named(col.name)
-          )
-        case "BINARY" | "STRING" =>
-          builder.addField(
-            Types
-              .primitive(PrimitiveType.PrimitiveTypeName.BINARY, repetition)
-              .as(org.apache.parquet.schema.LogicalTypeAnnotation.stringType())
-              .named(col.name)
-          )
-        case _ =>
-          builder.addField(
-            Types
-              .primitive(PrimitiveType.PrimitiveTypeName.BINARY, repetition)
-              .named(col.name)
-          )
-      }
-    }
-
-    builder.named("root")
-  }
-
-// Helper to infer schema from data
-  private def inferSchemaFromData(data: List[Map[String, Any]]): MessageType = {
-    import org.apache.parquet.schema.{Types, PrimitiveType}
-    import org.apache.parquet.schema.Type.Repetition
-
-    if (data.isEmpty) {
-      throw new IllegalArgumentException("Cannot infer schema from empty data")
-    }
-
-    val builder = Types.buildMessage()
-    val allKeys = data.flatMap(_.keys).distinct
-
-    allKeys.foreach { key =>
-      val sample = data.collectFirst {
-        case row if row.get(key).exists(_ != null) => row(key)
-      }
-      sample match {
-        case Some(_: Int) =>
-          builder.addField(
-            Types
-              .primitive(
-                PrimitiveType.PrimitiveTypeName.INT32,
-                Repetition.OPTIONAL
-              )
-              .named(key)
-          )
-        case Some(_: Long) =>
-          builder.addField(
-            Types
-              .primitive(
-                PrimitiveType.PrimitiveTypeName.INT64,
-                Repetition.OPTIONAL
-              )
-              .named(key)
-          )
-        case Some(_: Double) =>
-          builder.addField(
-            Types
-              .primitive(
-                PrimitiveType.PrimitiveTypeName.DOUBLE,
-                Repetition.OPTIONAL
-              )
-              .named(key)
-          )
-        case Some(_: Float) =>
-          builder.addField(
-            Types
-              .primitive(
-                PrimitiveType.PrimitiveTypeName.FLOAT,
-                Repetition.OPTIONAL
-              )
-              .named(key)
-          )
-        case Some(_: Boolean) =>
-          builder.addField(
-            Types
-              .primitive(
-                PrimitiveType.PrimitiveTypeName.BOOLEAN,
-                Repetition.OPTIONAL
-              )
-              .named(key)
-          )
-        case Some(_: java.time.LocalDate) =>
-          builder.addField(
-            Types
-              .primitive(
-                PrimitiveType.PrimitiveTypeName.INT32,
-                Repetition.OPTIONAL
-              )
-              .as(org.apache.parquet.schema.LogicalTypeAnnotation.dateType())
-              .named(key)
-          )
-        case Some(_: java.time.Instant) =>
-          builder.addField(
-            Types
-              .primitive(
-                PrimitiveType.PrimitiveTypeName.INT64,
-                Repetition.OPTIONAL
-              )
-              .as(
-                org.apache.parquet.schema.LogicalTypeAnnotation.timestampType(
-                  true,
-                  org.apache.parquet.schema.LogicalTypeAnnotation.TimeUnit.MILLIS
-                )
-              )
-              .named(key)
-          )
-        case Some(_: String) =>
-          builder.addField(
-            Types
-              .primitive(
-                PrimitiveType.PrimitiveTypeName.BINARY,
-                Repetition.OPTIONAL
-              )
-              .as(org.apache.parquet.schema.LogicalTypeAnnotation.stringType())
-              .named(key)
-          )
-        case _ =>
-          builder.addField(
-            Types
-              .primitive(
-                PrimitiveType.PrimitiveTypeName.BINARY,
-                Repetition.OPTIONAL
-              )
-              .named(key)
-          )
-      }
-    }
-
-    builder.named("root")
-  }
-
-// Helper to write row data to Group
-  private def writeRowToGroup(
-      group: Group,
-      row: Map[String, Any],
-      schema: MessageType
-  ): Unit = {
-    row.foreach { case (key, value) =>
-      val fieldIndex = schema.getFieldIndex(key)
-      if (fieldIndex >= 0 && value != null) {
-        val fieldTypeName =
-          schema.getType(fieldIndex).asPrimitiveType().getPrimitiveTypeName
-        value match {
-          case i: Int =>
-            fieldTypeName match {
-              case PrimitiveTypeName.INT64  => group.add(fieldIndex, i.toLong)
-              case PrimitiveTypeName.DOUBLE => group.add(fieldIndex, i.toDouble)
-              case PrimitiveTypeName.FLOAT  => group.add(fieldIndex, i.toFloat)
-              case _                        => group.add(fieldIndex, i)
-            }
-          case l: Long =>
-            fieldTypeName match {
-              case PrimitiveTypeName.DOUBLE => group.add(fieldIndex, l.toDouble)
-              case PrimitiveTypeName.FLOAT  => group.add(fieldIndex, l.toFloat)
-              case _                        => group.add(fieldIndex, l)
-            }
-          case d: Double  => group.add(fieldIndex, d)
-          case f: Float   => group.add(fieldIndex, f)
-          case b: Boolean => group.add(fieldIndex, b)
-          case s: String  => group.add(fieldIndex, s)
-          case date: java.time.LocalDate =>
-            group.add(fieldIndex, date.toEpochDay.toInt)
-          case ts: java.time.Instant => group.add(fieldIndex, ts.toEpochMilli)
-          case other                 => group.add(fieldIndex, other.toString)
-        }
       }
     }
   }
@@ -838,61 +515,6 @@ class ParquetRepository {
       val rowCount = reader.getFooter.getBlocks.asScala.map(_.getRowCount).sum
       val schema = reader.getFooter.getFileMetaData.getSchema
       (rowCount, schema)
-    }
-  }
-
-  private def postProcessTemporalFields(
-      row: Map[String, Any],
-      schema: MessageType
-  ): Map[String, Any] = {
-    schema.getFields.asScala.foldLeft(row) { (acc, field) =>
-      if (!field.isPrimitive) acc
-      else {
-        val pt = field.asPrimitiveType()
-        val originalType = pt.getOriginalType
-        (pt.getPrimitiveTypeName, originalType) match {
-          case (PrimitiveTypeName.INT32, OriginalType.DATE) =>
-            acc.get(field.getName) match {
-              case Some(i: Int) =>
-                acc + (field.getName -> java.time.LocalDate
-                  .ofEpochDay(i.toLong)
-                  .toString)
-              case _ => acc
-            }
-          case _ => acc
-        }
-      }
-    }
-  }
-
-  private def convertRecordToMap(record: RowParquetRecord): Map[String, Any] =
-    record.iterator.map { case (key, value) => key -> decodeValue(value) }.toMap
-
-  private def decodeValue(value: Value): Any = value match {
-    case NullValue           => null
-    case BooleanValue(b)     => b
-    case IntValue(i)         => i
-    case LongValue(l)        => l
-    case FloatValue(f)       => f
-    case DoubleValue(d)      => d
-    case BinaryValue(binary) => binary.toStringUsingUTF8
-    case DateTimeValue(l, _) => java.time.Instant.ofEpochMilli(l).toString
-    case DecimalValue(bigInt, fmt) =>
-      scala.math.BigDecimal(new java.math.BigDecimal(bigInt, fmt.scale))
-    case _ => value.toString
-  }
-
-  private def convertCompressionType(
-      compressionType: CompressionType
-  ): CompressionCodecName = {
-    compressionType match {
-      case CompressionType.Uncompressed => CompressionCodecName.UNCOMPRESSED
-      case CompressionType.Snappy       => CompressionCodecName.SNAPPY
-      case CompressionType.Gzip         => CompressionCodecName.GZIP
-      case CompressionType.Lzo          => CompressionCodecName.LZO
-      case CompressionType.Brotli       => CompressionCodecName.BROTLI
-      case CompressionType.Lz4          => CompressionCodecName.LZ4
-      case CompressionType.Zstd         => CompressionCodecName.ZSTD
     }
   }
 

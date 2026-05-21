@@ -47,8 +47,8 @@ class MergeIntegrationTest extends AnyFlatSpec with Matchers {
 
     val result =
       service.mergeFiles(List(in1, in2), out, WriteConfig(), SchemaMode.Strict)
-    result.isSuccess shouldBe true
-    result.get shouldBe 4L
+    result.isRight shouldBe true
+    result.toOption.get shouldBe 4L
 
     val content =
       repo.readContent(ParquetFile(LocalPath(out)), ReadConfig()).get
@@ -63,8 +63,8 @@ class MergeIntegrationTest extends AnyFlatSpec with Matchers {
 
     val result =
       service.mergeFiles(List(in1, in2), out, WriteConfig(), SchemaMode.Strict)
-    result.isFailure shouldBe true
-    result.failed.get.getMessage should include("Schema mismatch")
+    result.isLeft shouldBe true
+    result.left.toOption.get.userMessage should include("Schema mismatch")
   }
 
   it should "fail with fewer than two input files" taggedAs MergeIntegrationTest in {
@@ -73,14 +73,14 @@ class MergeIntegrationTest extends AnyFlatSpec with Matchers {
 
     val result =
       service.mergeFiles(List(in1), out, WriteConfig(), SchemaMode.Strict)
-    result.isFailure shouldBe true
+    result.isLeft shouldBe true
   }
 
   it should "fail with empty input list" taggedAs MergeIntegrationTest in {
     val out = tempFile().getAbsolutePath
     val result =
       service.mergeFiles(List.empty, out, WriteConfig(), SchemaMode.Strict)
-    result.isFailure shouldBe true
+    result.isLeft shouldBe true
   }
 
   // ── Union mode ──────────────────────────────────────────────────────────
@@ -92,8 +92,8 @@ class MergeIntegrationTest extends AnyFlatSpec with Matchers {
 
     val result =
       service.mergeFiles(List(in1, in2), out, WriteConfig(), SchemaMode.Union)
-    result.isSuccess shouldBe true
-    result.get shouldBe 2L
+    result.isRight shouldBe true
+    result.toOption.get shouldBe 2L
 
     val rows =
       repo.readContent(ParquetFile(LocalPath(out)), ReadConfig()).get.rows
