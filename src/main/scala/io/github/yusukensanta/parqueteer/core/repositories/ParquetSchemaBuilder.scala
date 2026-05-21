@@ -136,11 +136,14 @@ private[repositories] object ParquetSchemaBuilder {
     val allKeys = data.flatMap(_.keys).distinct.sorted
 
     allKeys.foreach { key =>
-      val sample = data.collectFirst {
-        case row if row.get(key).exists(_ != null) => row(key)
-      }
-      sample match {
-        case Some(_: Int) =>
+      val nonNullValues = data.flatMap(_.get(key)).filter(_ != null)
+      val effectiveRank = nonNullValues
+        .map(typeRankForValue)
+        .reduceOption(widenTypeRanks)
+        .getOrElse(7)
+
+      effectiveRank match {
+        case 0 =>
           builder.addField(
             Types
               .primitive(
@@ -149,7 +152,7 @@ private[repositories] object ParquetSchemaBuilder {
               )
               .named(key)
           )
-        case Some(_: Long) =>
+        case 1 =>
           builder.addField(
             Types
               .primitive(
@@ -158,16 +161,7 @@ private[repositories] object ParquetSchemaBuilder {
               )
               .named(key)
           )
-        case Some(_: Double) =>
-          builder.addField(
-            Types
-              .primitive(
-                PrimitiveType.PrimitiveTypeName.DOUBLE,
-                Repetition.OPTIONAL
-              )
-              .named(key)
-          )
-        case Some(_: Float) =>
+        case 2 =>
           builder.addField(
             Types
               .primitive(
@@ -176,7 +170,16 @@ private[repositories] object ParquetSchemaBuilder {
               )
               .named(key)
           )
-        case Some(_: Boolean) =>
+        case 3 =>
+          builder.addField(
+            Types
+              .primitive(
+                PrimitiveType.PrimitiveTypeName.DOUBLE,
+                Repetition.OPTIONAL
+              )
+              .named(key)
+          )
+        case 4 =>
           builder.addField(
             Types
               .primitive(
@@ -185,7 +188,7 @@ private[repositories] object ParquetSchemaBuilder {
               )
               .named(key)
           )
-        case Some(_: java.time.LocalDate) =>
+        case 5 =>
           builder.addField(
             Types
               .primitive(
@@ -195,7 +198,7 @@ private[repositories] object ParquetSchemaBuilder {
               .as(org.apache.parquet.schema.LogicalTypeAnnotation.dateType())
               .named(key)
           )
-        case Some(_: java.time.Instant) =>
+        case 6 =>
           builder.addField(
             Types
               .primitive(
@@ -210,7 +213,7 @@ private[repositories] object ParquetSchemaBuilder {
               )
               .named(key)
           )
-        case Some(_: String) =>
+        case _ =>
           builder.addField(
             Types
               .primitive(
@@ -220,18 +223,29 @@ private[repositories] object ParquetSchemaBuilder {
               .as(org.apache.parquet.schema.LogicalTypeAnnotation.stringType())
               .named(key)
           )
-        case _ =>
-          builder.addField(
-            Types
-              .primitive(
-                PrimitiveType.PrimitiveTypeName.BINARY,
-                Repetition.OPTIONAL
-              )
-              .named(key)
-          )
       }
     }
 
     builder.named("root")
   }
+
+  // Type ranks: 0=Int, 1=Long, 2=Float, 3=Double, 4=Boolean, 5=LocalDate, 6=Instant, 7=String/Binary
+  private val numericRanks: Set[Int] = Set(0, 1, 2, 3)
+
+  private def typeRankForValue(v: Any): Int = v match {
+    case _: Int                 => 0
+    case _: Long                => 1
+    case _: Float               => 2
+    case _: Double              => 3
+    case _: Boolean             => 4
+    case _: java.time.LocalDate => 5
+    case _: java.time.Instant   => 6
+    case _                      => 7
+  }
+
+  // Within the numeric family widen to the max rank; incompatible types fall back to String (7).
+  private def widenTypeRanks(a: Int, b: Int): Int =
+    if (a == b) a
+    else if (numericRanks(a) && numericRanks(b)) math.max(a, b)
+    else 7
 }
