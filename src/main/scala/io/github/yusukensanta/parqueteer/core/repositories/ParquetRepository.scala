@@ -12,10 +12,8 @@ import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path => HadoopPath}
 import org.apache.parquet.hadoop.ParquetFileReader
 import org.apache.parquet.hadoop.util.HadoopInputFile
-import org.apache.parquet.hadoop.metadata.CompressionCodecName
 import org.apache.parquet.schema.MessageType
 import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
-import org.apache.parquet.example.data.Group
 import scala.concurrent.{Future, Await, ExecutionContext}
 import scala.concurrent.duration.Duration
 import java.util.concurrent.Executors
@@ -290,7 +288,7 @@ class ParquetRepository {
           .builder(new HadoopPath(location.path))
           .withType(parquetSchema)
           .withConf(hadoopConfig)
-          .withCompressionCodec(convertCompressionType(config.compressionType))
+          .withCompressionCodec(ParquetWriteOps.convertCompressionType(config.compressionType))
           .withRowGroupSize(config.rowGroupSize)
           .withPageSize(config.pageSize.toInt)
           .withDictionaryEncoding(config.enableDictionary)
@@ -301,7 +299,7 @@ class ParquetRepository {
           val factory = new SimpleGroupFactory(parquetSchema)
           data.foreach { row =>
             val group = factory.newGroup()
-            writeRowToGroup(group, row, parquetSchema)
+            ParquetWriteOps.writeRowToGroup(group, row, parquetSchema)
             writer.write(group)
           }
         } finally {
@@ -327,7 +325,7 @@ class ParquetRepository {
           .builder(new HadoopPath(location.path))
           .withType(parquetSchema)
           .withConf(hadoopConfig)
-          .withCompressionCodec(convertCompressionType(config.compressionType))
+          .withCompressionCodec(ParquetWriteOps.convertCompressionType(config.compressionType))
           .withRowGroupSize(config.rowGroupSize)
           .withPageSize(config.pageSize.toInt)
           .withDictionaryEncoding(config.enableDictionary)
@@ -339,7 +337,7 @@ class ParquetRepository {
         try {
           feed { row =>
             val group = factory.newGroup()
-            writeRowToGroup(group, row, parquetSchema)
+            ParquetWriteOps.writeRowToGroup(group, row, parquetSchema)
             writer.write(group)
             count += 1
           }
@@ -347,44 +345,6 @@ class ParquetRepository {
           writer.close()
         }
         count
-      }
-    }
-  }
-
-// Helper to write row data to Group
-  private def writeRowToGroup(
-      group: Group,
-      row: Map[String, Any],
-      schema: MessageType
-  ): Unit = {
-    row.foreach { case (key, value) =>
-      val fieldIndex = schema.getFieldIndex(key)
-      if (fieldIndex >= 0 && value != null) {
-        val fieldTypeName =
-          schema.getType(fieldIndex).asPrimitiveType().getPrimitiveTypeName
-        value match {
-          case i: Int =>
-            fieldTypeName match {
-              case PrimitiveTypeName.INT64  => group.add(fieldIndex, i.toLong)
-              case PrimitiveTypeName.DOUBLE => group.add(fieldIndex, i.toDouble)
-              case PrimitiveTypeName.FLOAT  => group.add(fieldIndex, i.toFloat)
-              case _                        => group.add(fieldIndex, i)
-            }
-          case l: Long =>
-            fieldTypeName match {
-              case PrimitiveTypeName.DOUBLE => group.add(fieldIndex, l.toDouble)
-              case PrimitiveTypeName.FLOAT  => group.add(fieldIndex, l.toFloat)
-              case _                        => group.add(fieldIndex, l)
-            }
-          case d: Double  => group.add(fieldIndex, d)
-          case f: Float   => group.add(fieldIndex, f)
-          case b: Boolean => group.add(fieldIndex, b)
-          case s: String  => group.add(fieldIndex, s)
-          case date: java.time.LocalDate =>
-            group.add(fieldIndex, date.toEpochDay.toInt)
-          case ts: java.time.Instant => group.add(fieldIndex, ts.toEpochMilli)
-          case other                 => group.add(fieldIndex, other.toString)
-        }
       }
     }
   }
@@ -532,20 +492,6 @@ class ParquetRepository {
       val rowCount = reader.getFooter.getBlocks.asScala.map(_.getRowCount).sum
       val schema = reader.getFooter.getFileMetaData.getSchema
       (rowCount, schema)
-    }
-  }
-
-  private def convertCompressionType(
-      compressionType: CompressionType
-  ): CompressionCodecName = {
-    compressionType match {
-      case CompressionType.Uncompressed => CompressionCodecName.UNCOMPRESSED
-      case CompressionType.Snappy       => CompressionCodecName.SNAPPY
-      case CompressionType.Gzip         => CompressionCodecName.GZIP
-      case CompressionType.Lzo          => CompressionCodecName.LZO
-      case CompressionType.Brotli       => CompressionCodecName.BROTLI
-      case CompressionType.Lz4          => CompressionCodecName.LZ4
-      case CompressionType.Zstd         => CompressionCodecName.ZSTD
     }
   }
 
