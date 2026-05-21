@@ -252,13 +252,6 @@ cd parqueteer-VERSION/
 bin/parqueteer --help
 ```
 
-### Option 3: Standalone JAR (Universal)
-
-```bash
-wget https://github.com/yusukensanta/parqueteer/releases/latest/download/parqueteer.jar
-java -jar parqueteer.jar --help
-```
-
 **Note**: Java 21 (LTS) recommended for clean output. Java 25+ may show harmless JVM deprecation warnings from the Scala runtime.
 
 ### Build from Source
@@ -286,7 +279,7 @@ sbt assembly
 
 **Prerequisites**:
 - Java 21 (or Java 17+)
-- SBT 1.9+ (or use `make install` with [mise](https://mise.jdx.dev) for automatic version management)
+- SBT 1.11+ (or use `make install` with [mise](https://mise.jdx.dev) for automatic version management)
 
 ### Cloud Credentials
 

@@ -183,9 +183,19 @@ The project will build fine with any recent versions.
 
 ```
 parqueteer/
-├── src/
-│   ├── main/scala/         # Application code
-│   └── test/scala/         # Test code
+├── src/main/scala/io/github/yusukensanta/parqueteer/
+│   ├── cli/
+│   │   ├── CliApp.scala              # Entry point, command dispatch
+│   │   └── CliOutputFormatter.scala  # Presentation layer (table/json/csv)
+│   └── core/
+│       ├── services/
+│       │   └── ParquetService.scala  # Business logic, Either-based API
+│       └── repositories/
+│           ├── ParquetRepository.scala    # Parquet I/O orchestration
+│           ├── ParquetRecordDecoder.scala # Row → Map decoding
+│           ├── ParquetSchemaBuilder.scala # Schema construction
+│           └── ParquetWriteOps.scala      # Write/convert operations
+├── src/test/scala/         # Mirror structure of main
 ├── project/                # sbt build configuration
 ├── scripts/                # Utility scripts
 ├── .github/workflows/      # CI/CD pipelines
@@ -200,7 +210,7 @@ parqueteer/
 
 1. Create command class in `src/main/scala/io/github/yusukensanta/parqueteer/cli/`
 2. Add tests in `src/test/scala/io/github/yusukensanta/parqueteer/cli/`
-3. Register in `Main.scala`
+3. Register in `CliApp.scala`
 4. Update documentation
 
 ### Adding Dependencies
@@ -331,11 +341,19 @@ make show-versions
 
 (For maintainers only)
 
-1. Update version in `build.sbt`
-2. Update CHANGELOG.md
-3. Create git tag
-4. Push tag to trigger release workflow
-5. GitHub Actions creates release artifacts
+Version is managed automatically by `sbt-ci-release` from git tags — no manual version bumps needed.
+
+1. Update CHANGELOG.md
+2. Create and push git tag:
+   ```bash
+   git tag v1.2.3
+   git push origin v1.2.3
+   ```
+3. GitHub Actions runs two workflows in parallel:
+   - **release.yml** — builds tgz/zip, creates GitHub Release, updates Homebrew formula
+   - **maven-central.yml** — publishes JAR to Maven Central
+
+See `.claude/adr-homebrew-distribution.md` for distribution methodology decisions.
 
 ## Code of Conduct
 
