@@ -451,6 +451,16 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     )
   }
 
+  it should "close the InputStream after reading from stdin" in {
+    var closed = false
+    val stdin = new ByteArrayInputStream("""[{"id":1}]""".getBytes("UTF-8")) {
+      override def close(): Unit = { closed = true; super.close() }
+    }
+    val service = new ParquetService(new FakeParquetRepository())
+    service.readDataFile("-", "json", stdin)
+    closed shouldBe true
+  }
+
   "ParquetService.readFile" should "return Left for stdin path (-)" in {
     val service = new ParquetService(new FakeParquetRepository())
     val result = service.readFile("-")
