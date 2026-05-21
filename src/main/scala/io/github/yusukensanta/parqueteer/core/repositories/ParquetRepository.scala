@@ -431,7 +431,7 @@ class ParquetRepository {
 
   def readSchemaFields(
       file: ParquetFile
-  ): Try[List[(String, String, Boolean)]] = {
+  ): Try[List[FieldSummary]] = {
     setupHadoopConfiguration(file.location).flatMap { hadoopConfig =>
       Try {
         val path = new HadoopPath(file.location.path)
@@ -445,7 +445,7 @@ class ParquetRepository {
               else field.asGroupType().getName
             val optional =
               field.getRepetition == org.apache.parquet.schema.Type.Repetition.OPTIONAL
-            (field.getName, typeName, optional)
+            FieldSummary(field.getName, typeName, optional)
           }
         }
       }

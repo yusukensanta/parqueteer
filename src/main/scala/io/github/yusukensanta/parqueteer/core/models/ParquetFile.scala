@@ -109,3 +109,5 @@ case class ConversionConfig(
     writeConfig: WriteConfig = WriteConfig(),
     maxRows: Option[Long] = None
 )
+
+case class FieldSummary(name: String, dataType: String, isOptional: Boolean)
