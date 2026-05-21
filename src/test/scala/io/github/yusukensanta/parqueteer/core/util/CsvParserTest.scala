@@ -33,6 +33,60 @@ class CsvParserTest extends AnyFlatSpec with Matchers {
     }
   }
 
+  // ── RFC 4180 compliance: trailing empty field (#126) ─────────────────────
+
+  it should "accept a data row with a trailing comma when header has one fewer column" in {
+    val rows = CsvParser.parse("a,b\n1,2,\n")
+    rows should have size 1
+    rows(0)("a") shouldBe 1L
+    rows(0)("b") shouldBe 2L
+  }
+
+  it should "not strip a trailing comma that is NOT the (header+1)th field" in {
+    // header has 2 cols, row has 4 fields → genuine mismatch, should still throw
+    an[IllegalArgumentException] should be thrownBy {
+      CsvParser.parse("a,b\n1,2,3,\n")
+    }
+  }
+
+  // ── RFC 4180 compliance: all-empty rows (#126) ───────────────────────────
+
+  it should "preserve a row where every field is empty (e.g. ,,,)" in {
+    val records = CsvParser.parseRfc4180("a,b,c\n,,\n")
+    records should have size 2 // header + data row of all-empty fields
+    records(1) shouldBe Array("", "", "")
+  }
+
+  it should "preserve an all-empty row in parse and include it as a row with null values" in {
+    val rows = CsvParser.parse("a,b\n,\n")
+    rows should have size 1
+    rows(0)("a") shouldBe (null: AnyRef)
+    rows(0)("b") shouldBe (null: AnyRef)
+  }
+
+  it should "drop genuinely blank lines (only a newline, no commas)" in {
+    val records = CsvParser.parseRfc4180("a,b\n1,2\n\n3,4\n")
+    records should have size 3 // header + 2 data rows, blank line skipped
+  }
+
+  // ── RFC 4180 compliance: mid-field quote (#126) ──────────────────────────
+
+  it should "treat an unescaped quote mid-field as a literal character" in {
+    val records = CsvParser.parseRfc4180("foo\"bar,baz\n")
+    records should have size 1
+    records(0)(0) shouldBe "foo\"bar"
+    records(0)(1) shouldBe "baz"
+  }
+
+  it should "not enter quote mode when quote appears after field content" in {
+    val records = CsvParser.parseRfc4180("a\",b\n")
+    records should have size 1
+    records(0)(0) shouldBe "a\""
+    records(0)(1) shouldBe "b"
+  }
+
+  // ── pre-existing RFC 4180 features (regression) ──────────────────────────
+
   "CsvParser.parseRfc4180" should "handle quoted fields with commas" in {
     val records = CsvParser.parseRfc4180("\"a,b\",c\n\"x,y\",z\n")
     records should have size 2
@@ -47,6 +101,18 @@ class CsvParserTest extends AnyFlatSpec with Matchers {
 
   it should "handle CRLF line endings" in {
     val records = CsvParser.parseRfc4180("a,b\r\n1,2\r\n")
+    records should have size 2
+    records(1)(0) shouldBe "1"
+  }
+
+  it should "handle a quoted field containing a newline" in {
+    val records = CsvParser.parseRfc4180("a,\"line1\nline2\",b\n")
+    records should have size 1
+    records(0)(1) shouldBe "line1\nline2"
+  }
+
+  it should "handle content without a trailing newline" in {
+    val records = CsvParser.parseRfc4180("a,b\n1,2")
     records should have size 2
     records(1)(0) shouldBe "1"
   }
