@@ -108,6 +108,46 @@ class ArgumentParserTest extends AnyFlatSpec with Matchers {
     convertCmd.dryRun shouldBe true
   }
 
+  it should "parse convert --limit flag" in {
+    val args = Array("convert", "input.parquet", "output.json", "--limit", "50")
+    val result =
+      OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
+
+    result shouldBe defined
+    val convertCmd = result.get.command.get.asInstanceOf[ConvertCommand]
+    convertCmd.maxRows shouldBe Some(50L)
+  }
+
+  it should "parse convert -n shorthand for limit" in {
+    val args = Array("convert", "input.parquet", "output.json", "-n", "10")
+    val result =
+      OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
+
+    result shouldBe defined
+    val convertCmd = result.get.command.get.asInstanceOf[ConvertCommand]
+    convertCmd.maxRows shouldBe Some(10L)
+  }
+
+  it should "parse validate --verbose flag" in {
+    val args = Array("validate", "file.parquet", "--verbose")
+    val result =
+      OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
+
+    result shouldBe defined
+    val validateCmd = result.get.command.get.asInstanceOf[ValidateCommand]
+    validateCmd.verbose shouldBe true
+  }
+
+  it should "default validate verbose to false" in {
+    val args = Array("validate", "file.parquet")
+    val result =
+      OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
+
+    result shouldBe defined
+    val validateCmd = result.get.command.get.asInstanceOf[ValidateCommand]
+    validateCmd.verbose shouldBe false
+  }
+
   it should "parse global options correctly" in {
     val args = Array("read", "file.parquet", "--verbose")
     val result =

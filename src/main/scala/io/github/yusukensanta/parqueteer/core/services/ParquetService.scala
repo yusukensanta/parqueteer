@@ -351,14 +351,20 @@ class ParquetService(
     (inputExt, outputExt) match {
       case ("parquet", "parquet") =>
         for {
-          inputFile <- readFile(inputPath)
+          inputFile <- readFile(
+            inputPath,
+            ReadConfig(maxRows = conversionConfig.maxRows)
+          )
           data = inputFile.content.map(_.rows).getOrElse(List.empty)
           _ <- writeFile(outputPath, data, conversionConfig.writeConfig)
         } yield ()
 
       case ("parquet", "json") =>
         for {
-          inputFile <- readFile(inputPath)
+          inputFile <- readFile(
+            inputPath,
+            ReadConfig(maxRows = conversionConfig.maxRows)
+          )
           content = inputFile.content.getOrElse(
             FileContent(List.empty, 0, false)
           )
@@ -369,7 +375,10 @@ class ParquetService(
 
       case ("parquet", "csv") =>
         for {
-          inputFile <- readFile(inputPath)
+          inputFile <- readFile(
+            inputPath,
+            ReadConfig(maxRows = conversionConfig.maxRows)
+          )
           content = inputFile.content.getOrElse(
             FileContent(List.empty, 0, false)
           )
