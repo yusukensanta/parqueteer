@@ -1,7 +1,6 @@
 package io.github.yusukensanta.parqueteer.core.models
 
 import java.time.Instant
-import com.github.mjakubowski84.parquet4s.Filter
 
 case class ParquetFile(
     location: StorageLocation,
@@ -44,7 +43,6 @@ case class ReadConfig(
     maxRows: Option[Long] = None,
     columns: Option[List[String]] = None,
     filter: Option[String] = None,
-    parsedFilter: Option[Filter] = None,
     outputFormat: OutputFormat = OutputFormat.Table,
     parallelism: Int = 1,
     streamingMode: Boolean = false
