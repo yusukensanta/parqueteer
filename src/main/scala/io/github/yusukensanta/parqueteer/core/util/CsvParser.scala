@@ -8,12 +8,17 @@ object CsvParser {
     else {
       val headers = records.head
       records.tail.zipWithIndex.map { case (values, idx) =>
-        if (values.length != headers.length)
+        // Tolerate a single trailing empty field produced by a trailing comma
+        val normalized =
+          if (values.length == headers.length + 1 && values.last.isEmpty)
+            values.init
+          else values
+        if (normalized.length != headers.length)
           throw new IllegalArgumentException(
-            s"Row ${idx + 2} has ${values.length} fields, expected ${headers.length}"
+            s"Row ${idx + 2} has ${normalized.length} fields, expected ${headers.length}"
           )
         headers
-          .zip(values)
+          .zip(normalized)
           .map { case (h, v) => h -> TypeInferrer.inferCsvValue(v) }
           .toMap
       }
@@ -28,10 +33,22 @@ object CsvParser {
     var i = 0
     val n = content.length
 
+    def finishRow(): Unit = {
+      val row = (fields :+ current.toString).toArray
+      current.clear()
+      fields.clear()
+      // A completely blank line produces exactly one empty field; skip it.
+      if (row.length > 1 || (row.length == 1 && row(0).nonEmpty))
+        records += row
+    }
+
     while (i < n) {
       content(i) match {
-        case '"' if !inQuote =>
+        // RFC 4180: a quote is only meaningful at the start of a field
+        case '"' if !inQuote && current.isEmpty =>
           inQuote = true
+        case '"' if !inQuote =>
+          current.append('"')
         case '"' if inQuote && i + 1 < n && content(i + 1) == '"' =>
           current.append('"'); i += 1
         case '"' if inQuote =>
@@ -40,25 +57,18 @@ object CsvParser {
           fields += current.toString
           current.clear()
         case '\r' if !inQuote =>
-          fields += current.toString
-          current.clear()
-          if (fields.exists(_.nonEmpty)) records += fields.toArray
-          fields.clear()
+          finishRow()
           if (i + 1 < n && content(i + 1) == '\n') i += 1
         case '\n' if !inQuote =>
-          fields += current.toString
-          current.clear()
-          if (fields.exists(_.nonEmpty)) records += fields.toArray
-          fields.clear()
+          finishRow()
         case c =>
           current.append(c)
       }
       i += 1
     }
-    if (current.nonEmpty || fields.nonEmpty) {
-      fields += current.toString
-      if (fields.exists(_.nonEmpty)) records += fields.toArray
-    }
+    // Handle content not terminated by a newline
+    if (current.nonEmpty || fields.nonEmpty)
+      finishRow()
     records.toList
   }
 }
