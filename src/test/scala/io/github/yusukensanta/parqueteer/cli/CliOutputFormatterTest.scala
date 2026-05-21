@@ -1,17 +1,15 @@
 package io.github.yusukensanta.parqueteer.cli
 
-import io.github.yusukensanta.parqueteer.core.services.{
-  SchemaDiff,
-  ColumnChange
-}
 import io.github.yusukensanta.parqueteer.core.models.{
+  ColumnChange,
   ColumnInfo,
   ColumnStats,
   FileMetadata,
   FileStats,
   LocalPath,
   ParquetFile,
-  ParquetSchema
+  ParquetSchema,
+  SchemaDiff
 }
 import io.circe.parser.parse
 import org.scalatest.flatspec.AnyFlatSpec

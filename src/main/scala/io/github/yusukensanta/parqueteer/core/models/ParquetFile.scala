@@ -84,3 +84,27 @@ case class FileStats(
 
 enum SchemaMode:
   case Strict, Union
+
+case class ValidationResult(
+    isValid: Boolean,
+    issues: List[String]
+)
+
+case class ColumnChange(
+    name: String,
+    fromType: String,
+    toType: String,
+    fromOptional: Boolean,
+    toOptional: Boolean
+)
+
+case class SchemaDiff(
+    added: List[ColumnInfo],
+    removed: List[ColumnInfo],
+    changed: List[ColumnChange],
+    unchanged: List[String]
+) {
+  def identical: Boolean = added.isEmpty && removed.isEmpty && changed.isEmpty
+}
+
+case class ConversionConfig(writeConfig: WriteConfig = WriteConfig())

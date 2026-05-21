@@ -1,9 +1,6 @@
 package io.github.yusukensanta.parqueteer.cli
 
-import io.github.yusukensanta.parqueteer.core.services.{
-  ParquetService,
-  ConversionConfig
-}
+import io.github.yusukensanta.parqueteer.core.services.ParquetService
 import io.github.yusukensanta.parqueteer.core.repositories.ParquetRepository
 import io.github.yusukensanta.parqueteer.core.models.{
   ReadConfig,
@@ -11,7 +8,8 @@ import io.github.yusukensanta.parqueteer.core.models.{
   OutputFormat,
   CompressionType,
   ParqueteerError,
-  SchemaMode
+  SchemaMode,
+  ConversionConfig
 }
 import io.github.yusukensanta.parqueteer.config.{
   ConfigurationManager,
