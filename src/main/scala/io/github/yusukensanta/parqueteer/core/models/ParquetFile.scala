@@ -105,4 +105,7 @@ case class SchemaDiff(
   def identical: Boolean = added.isEmpty && removed.isEmpty && changed.isEmpty
 }
 
-case class ConversionConfig(writeConfig: WriteConfig = WriteConfig())
+case class ConversionConfig(
+    writeConfig: WriteConfig = WriteConfig(),
+    maxRows: Option[Long] = None
+)

@@ -169,15 +169,16 @@ object CliApp {
           globalOptions
         )
 
-      case ValidateCommand(filePath, _) =>
-        executeValidate(service, filePath, globalOptions)
+      case ValidateCommand(filePath, verbose) =>
+        executeValidate(service, filePath, verbose, globalOptions)
 
-      case ConvertCommand(inputPath, outputPath, compression, _, dryRun) =>
+      case ConvertCommand(inputPath, outputPath, compression, maxRows, dryRun) =>
         executeConvert(
           service,
           inputPath,
           outputPath,
           compression,
+          maxRows,
           dryRun,
           globalOptions
         )
@@ -373,12 +374,24 @@ object CliApp {
   private def executeValidate(
       service: ParquetService,
       filePath: String,
+      verbose: Boolean,
       globalOptions: GlobalOptions
   ): Int = {
     service.validateFile(filePath) match {
       case Right(result) =>
         if (result.isValid) {
           if (!globalOptions.quiet) println(s"✓ File $filePath is valid")
+          if (verbose) {
+            service.getFileInfo(filePath) match {
+              case Right(file) =>
+                file.schema.foreach { s =>
+                  println(s"  Columns:    ${s.columns.size}")
+                  println(s"  Row groups: ${s.rowGroupCount}")
+                  println(s"  Total rows: ${s.totalRowCount}")
+                }
+              case Left(_) => ()
+            }
+          }
           0
         } else {
           println(s"✗ File $filePath has issues:")
@@ -400,11 +413,13 @@ object CliApp {
       inputPath: String,
       outputPath: String,
       compression: CompressionType,
+      maxRows: Option[Long],
       dryRun: Boolean,
       globalOptions: GlobalOptions
   ): Int = {
     val conversionConfig = ConversionConfig(
-      writeConfig = WriteConfig(compressionType = compression)
+      writeConfig = WriteConfig(compressionType = compression),
+      maxRows = maxRows
     )
 
     if (dryRun) {
