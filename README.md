@@ -20,13 +20,13 @@
 
 ## Features
 
-- 🚀 **Fast & Lightweight** - No Spark required
-- ☁️ **Cloud Native** - S3, GCS, Azure support
-- 📊 **Multiple Formats** - Table, JSON, CSV, Markdown, NDJSON output
-- 🔍 **Advanced Filtering** - SQL-like filter expressions with BETWEEN, IN, IS NULL, nested columns
-- 🛠️ **Data Conversion** - CSV/JSON ↔ Parquet
-- 🔀 **Schema Diff** - Compare schemas of two Parquet files
-- 🐚 **Shell Completions** - bash, zsh, and fish tab-completion
+- 🚀 **No cluster required** - single JVM process, no Spark setup
+- ☁️ **Cloud storage** - S3, GCS, and Azure out of the box
+- 📊 **Multiple output formats** - table, JSON, CSV, Markdown, NDJSON
+- 🔍 **Filtering** - SQL-like expressions with BETWEEN, IN, IS NULL, nested columns
+- 🛠️ **Format conversion** - CSV/JSON ↔ Parquet
+- 🔀 **Schema diff** - compare schemas of two Parquet files
+- 🐚 **Shell completions** - bash, zsh, and fish
 
 ---
 
@@ -338,7 +338,7 @@ export AZURE_STORAGE_CONNECTION_STRING="..."
 - **Java**: 21 (LTS) recommended for optimal experience
   - Java 21: Clean output, no warnings ✅
   - Java 17: Also fully supported
-  - Java 25+: May show JVM deprecation warnings from Scala runtime
+  - Java 25+: may show JVM deprecation warnings from the Scala runtime
 - **Memory**: Minimum 1GB RAM
 - **Disk**: ~1GB for full cloud dependencies
 

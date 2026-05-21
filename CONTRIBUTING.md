@@ -81,7 +81,7 @@ git commit --no-verify
 
 1. **Create a branch**
    ```bash
-   git checkout -b feature/my-awesome-feature
+   git checkout -b feature/my-feature
    ```
 
 2. **Make your changes**
@@ -110,7 +110,7 @@ git commit --no-verify
 
 5. **Push and create Pull Request**
    ```bash
-   git push origin feature/my-awesome-feature
+   git push origin feature/my-feature
    ```
 
 ### Running the Application Locally
@@ -175,7 +175,7 @@ The Makefile automatically detects mise and syncs versions from `.tool-versions`
 
 You can contribute without mise! Just ensure you have:
 - Java 21 (or 17+)
-- sbt 1.9+
+- sbt 1.11+
 
 The project will build fine with any recent versions.
 
@@ -368,4 +368,4 @@ By contributing, you agree that your contributions will be licensed under the Ap
 
 ---
 
-**Questions?** Don't hesitate to ask in issues or discussions. We're here to help! 🎉
+**Questions?** Open an issue or start a discussion.
