@@ -338,8 +338,12 @@ object ArgumentParser {
               updateCmd[MergeCommand](
                 c,
                 _.copy(schemaMode = x.toLowerCase match {
-                  case "union" => SchemaMode.Union
-                  case _       => SchemaMode.Strict
+                  case "union"  => SchemaMode.Union
+                  case "strict" => SchemaMode.Strict
+                  case other =>
+                    throw new IllegalArgumentException(
+                      s"Unknown schema-mode: $other"
+                    )
                 })
               )
             )
@@ -410,7 +414,8 @@ object ArgumentParser {
       case "pretty"   => OutputFormat.Pretty
       case "markdown" => OutputFormat.Markdown
       case "ndjson"   => OutputFormat.NDJSON
-      case _          => OutputFormat.Table
+      case other =>
+        throw new IllegalArgumentException(s"Unknown format: $other")
     }
   }
 
@@ -431,7 +436,8 @@ object ArgumentParser {
       case "brotli"                => CompressionType.Brotli
       case "lz4"                   => CompressionType.Lz4
       case "zstd"                  => CompressionType.Zstd
-      case _                       => CompressionType.Snappy
+      case other =>
+        throw new IllegalArgumentException(s"Unknown compression: $other")
     }
   }
 
