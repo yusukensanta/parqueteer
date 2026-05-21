@@ -477,32 +477,33 @@ object CliApp {
   ): Int = {
     if (inputPaths.size < 2) {
       System.err.println("Error: merge requires at least two input files")
-      return 1
-    }
-    val writeConfig = WriteConfig(compressionType = compression)
-    val total = inputPaths.size
-    val onProgress: (Int, Int, String) => Unit = (i, n, path) =>
-      if (!globalOptions.quiet)
-        System.err.println(s"[$i/$n] Merging: $path")
+      1
+    } else {
+      val writeConfig = WriteConfig(compressionType = compression)
+      val total = inputPaths.size
+      val onProgress: (Int, Int, String) => Unit = (i, n, path) =>
+        if (!globalOptions.quiet)
+          System.err.println(s"[$i/$n] Merging: $path")
 
-    service.mergeFiles(
-      inputPaths,
-      outputPath,
-      writeConfig,
-      schemaMode,
-      onProgress
-    ) match {
-      case Right(count) =>
-        if (showStatus(globalOptions))
-          println(s"Merged $total files ($count rows) → $outputPath")
-        0
-      case Left(error) =>
-        System.err.println(s"Failed to merge: ${error.userMessage}")
-        if (globalOptions.verbose) error match {
-          case ParqueteerError.IOError(cause) => cause.printStackTrace()
-          case _                              => ()
-        }
-        error.exitCode
+      service.mergeFiles(
+        inputPaths,
+        outputPath,
+        writeConfig,
+        schemaMode,
+        onProgress
+      ) match {
+        case Right(count) =>
+          if (showStatus(globalOptions))
+            println(s"Merged $total files ($count rows) → $outputPath")
+          0
+        case Left(error) =>
+          System.err.println(s"Failed to merge: ${error.userMessage}")
+          if (globalOptions.verbose) error match {
+            case ParqueteerError.IOError(cause) => cause.printStackTrace()
+            case _                              => ()
+          }
+          error.exitCode
+      }
     }
   }
 
@@ -515,32 +516,32 @@ object CliApp {
       System.err.println(
         "Error: schema requires a file path, or use 'schema diff FILE1 FILE2'"
       )
-      return 2
-    }
-    service.getFileInfo(cmd.filePath) match {
-      case Left(error) =>
-        System.err.println(s"Failed to read schema: ${error.userMessage}")
-        if (globalOptions.verbose) error match {
-          case ParqueteerError.IOError(cause) => cause.printStackTrace()
-          case _                              => ()
-        }
-        error.exitCode
-      case Right(file) =>
-        if (!globalOptions.quiet) {
-          cmd.format match {
-            case OutputFormat.JSON =>
-              println(CliOutputFormatter.formatSchemaJson(file))
-            case _ =>
-              import io.github.yusukensanta.parqueteer.core.formatters.TableFormatter
-              val output = file.schema match {
-                case Some(schema) => new TableFormatter().formatSchema(schema)
-                case None         => "No schema information available"
-              }
-              println(output)
+      2
+    } else
+      service.getFileInfo(cmd.filePath) match {
+        case Left(error) =>
+          System.err.println(s"Failed to read schema: ${error.userMessage}")
+          if (globalOptions.verbose) error match {
+            case ParqueteerError.IOError(cause) => cause.printStackTrace()
+            case _                              => ()
           }
-        }
-        0
-    }
+          error.exitCode
+        case Right(file) =>
+          if (!globalOptions.quiet) {
+            cmd.format match {
+              case OutputFormat.JSON =>
+                println(CliOutputFormatter.formatSchemaJson(file))
+              case _ =>
+                import io.github.yusukensanta.parqueteer.core.formatters.TableFormatter
+                val output = file.schema match {
+                  case Some(schema) => new TableFormatter().formatSchema(schema)
+                  case None         => "No schema information available"
+                }
+                println(output)
+            }
+          }
+          0
+      }
   }
 
   private def executeStats(
@@ -572,18 +573,21 @@ object CliApp {
   private def executeCompletions(
       shell: String,
       globalOptions: GlobalOptions
-  ): Int = {
-    val script = shell.toLowerCase match {
-      case "bash" => ShellCompletions.bash
-      case "zsh"  => ShellCompletions.zsh
-      case "fish" => ShellCompletions.fish
+  ): Int =
+    shell.toLowerCase match {
+      case "bash" =>
+        if (!globalOptions.quiet) println(ShellCompletions.bash)
+        0
+      case "zsh" =>
+        if (!globalOptions.quiet) println(ShellCompletions.zsh)
+        0
+      case "fish" =>
+        if (!globalOptions.quiet) println(ShellCompletions.fish)
+        0
       case other =>
         System.err.println(s"Unsupported shell: $other")
-        return 1
+        1
     }
-    if (!globalOptions.quiet) println(script)
-    0
-  }
 
   private def executeSchemaDiff(
       service: ParquetService,
