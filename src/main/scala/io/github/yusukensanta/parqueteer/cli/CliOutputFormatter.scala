@@ -148,12 +148,6 @@ private[cli] object CliOutputFormatter {
       .spaces2
   }
 
-  def formatBytesForDisplay(bytes: Long): String = {
-    val units = List("B", "KB", "MB", "GB", "TB")
-    @annotation.tailrec
-    def loop(size: Double, idx: Int): String =
-      if (size < 1024 || idx >= units.length - 1) f"$size%.1f ${units(idx)}"
-      else loop(size / 1024, idx + 1)
-    loop(bytes.toDouble, 0)
-  }
+  def formatBytesForDisplay(bytes: Long): String =
+    io.github.yusukensanta.parqueteer.core.util.ByteFormatter.format(bytes)
 }

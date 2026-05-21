@@ -123,7 +123,7 @@ class TableFormatterTest extends AnyFlatSpec with Matchers {
 
   "TableFormatter.formatMetadata" should "show file size in human-readable form" in {
     val result = formatter.formatMetadata(sampleMetadata)
-    result should include("1.50 KB")
+    result should include("1.5 KB")
   }
 
   it should "show version" in {
@@ -195,22 +195,22 @@ class TableFormatterTest extends AnyFlatSpec with Matchers {
   }
 
   "TableFormatter.formatBytes" should "format bytes" in {
-    formatter.formatBytes(512L) shouldBe "512.00 B"
+    formatter.formatBytes(512L) shouldBe "512.0 B"
   }
 
-  it should "format exactly 1024 bytes as 1.00 KB" in {
-    formatter.formatBytes(1024L) shouldBe "1.00 KB"
+  it should "format exactly 1024 bytes as 1.0 KB" in {
+    formatter.formatBytes(1024L) shouldBe "1.0 KB"
   }
 
   it should "format kilobytes" in {
-    formatter.formatBytes(2048L) shouldBe "2.00 KB"
+    formatter.formatBytes(2048L) shouldBe "2.0 KB"
   }
 
   it should "format megabytes" in {
-    formatter.formatBytes(2 * 1024 * 1024L) shouldBe "2.00 MB"
+    formatter.formatBytes(2 * 1024 * 1024L) shouldBe "2.0 MB"
   }
 
   it should "format gigabytes" in {
-    formatter.formatBytes(3L * 1024 * 1024 * 1024) shouldBe "3.00 GB"
+    formatter.formatBytes(3L * 1024 * 1024 * 1024) shouldBe "3.0 GB"
   }
 }

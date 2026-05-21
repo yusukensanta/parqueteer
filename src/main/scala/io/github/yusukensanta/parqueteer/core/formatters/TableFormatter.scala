@@ -254,13 +254,6 @@ class TableFormatter extends OutputFormatter {
     }
   }
 
-  private[formatters] def formatBytes(bytes: Long): String = {
-    val units = List("B", "KB", "MB", "GB", "TB")
-    @annotation.tailrec
-    def loop(size: Double, unitIndex: Int): String =
-      if (size < 1024 || unitIndex >= units.length - 1)
-        f"$size%.2f ${units(unitIndex)}"
-      else loop(size / 1024, unitIndex + 1)
-    loop(bytes.toDouble, 0)
-  }
+  private[formatters] def formatBytes(bytes: Long): String =
+    io.github.yusukensanta.parqueteer.core.util.ByteFormatter.format(bytes)
 }
