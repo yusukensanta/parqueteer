@@ -32,25 +32,34 @@ private final class ParqueteerCarrierException(val error: ParqueteerError)
 class ParquetService(
     repository: ParquetRepository
 ) {
-  def readFile(
-      path: String,
-      readConfig: ReadConfig = ReadConfig()
-  ): Either[ParqueteerError, ParquetFile] = {
+  private def parseLocation(
+      path: String
+  ): Either[ParqueteerError, StorageLocation] =
+    StorageLocationParser
+      .parse(path)
+      .left
+      .map(msg => ParqueteerError.InvalidFormat(path, msg))
+
+  private def requireNotStdin(path: String): Either[ParqueteerError, Unit] =
     if (path == "-")
-      return Left(
+      Left(
         ParqueteerError.InvalidFormat(
           "-",
           "Parquet files require random-access I/O and cannot be read from stdin"
         )
       )
+    else Right(())
+
+  def readFile(
+      path: String,
+      readConfig: ReadConfig = ReadConfig()
+  ): Either[ParqueteerError, ParquetFile] =
     for {
+      _ <- requireNotStdin(path)
       parsedFilter <- readConfig.filter
         .map(FilterParser.parse(_).map(Some(_)))
         .getOrElse(Right(None))
-      location <- StorageLocationParser
-        .parse(path)
-        .left
-        .map(msg => ParqueteerError.InvalidFormat(path, msg))
+      location <- parseLocation(path)
       file = ParquetFile(location)
       content <- repository
         .readContent(file, readConfig.copy(parsedFilter = parsedFilter))
@@ -72,27 +81,17 @@ class ParquetService(
       schema = Some(schema),
       metadata = Some(metadata)
     )
-  }
 
   def streamRead(
       path: String,
       readConfig: ReadConfig
-  )(process: Map[String, Any] => Unit): Either[ParqueteerError, Long] = {
-    if (path == "-")
-      return Left(
-        ParqueteerError.InvalidFormat(
-          "-",
-          "Parquet files require random-access I/O and cannot be read from stdin"
-        )
-      )
+  )(process: Map[String, Any] => Unit): Either[ParqueteerError, Long] =
     for {
+      _ <- requireNotStdin(path)
       parsedFilter <- readConfig.filter
         .map(FilterParser.parse(_).map(Some(_)))
         .getOrElse(Right(None))
-      location <- StorageLocationParser
-        .parse(path)
-        .left
-        .map(msg => ParqueteerError.InvalidFormat(path, msg))
+      location <- parseLocation(path)
       file = ParquetFile(location)
       count <- repository
         .streamContent(file, readConfig.copy(parsedFilter = parsedFilter))(
@@ -102,14 +101,10 @@ class ParquetService(
         .left
         .map(ParqueteerError.IOError.apply)
     } yield count
-  }
 
   def getFileInfo(path: String): Either[ParqueteerError, ParquetFile] =
     for {
-      location <- StorageLocationParser
-        .parse(path)
-        .left
-        .map(msg => ParqueteerError.InvalidFormat(path, msg))
+      location <- parseLocation(path)
       file = ParquetFile(location)
       schema <- repository
         .readSchema(file)
@@ -208,10 +203,9 @@ class ParquetService(
         }
       }
       allColumnNames = mergedFields.map(_._1).toSet
-      outputLocation <- StorageLocationParser
-        .parse(outputPath)
+      outputLocation <- parseLocation(outputPath)
         .fold(
-          err => Failure(new IllegalArgumentException(err)),
+          err => Failure(new IllegalArgumentException(err.userMessage)),
           Success.apply
         )
       explicitSchema = ParquetSchema(
@@ -244,10 +238,7 @@ class ParquetService(
 
   def getStats(path: String): Either[ParqueteerError, FileStats] =
     for {
-      location <- StorageLocationParser
-        .parse(path)
-        .left
-        .map(msg => ParqueteerError.InvalidFormat(path, msg))
+      location <- parseLocation(path)
       file = ParquetFile(location)
       stats <- repository
         .readStats(file)
@@ -268,10 +259,7 @@ class ParquetService(
       writeConfig: WriteConfig = WriteConfig()
   ): Either[ParqueteerError, Unit] =
     for {
-      location <- StorageLocationParser
-        .parse(path)
-        .left
-        .map(msg => ParqueteerError.InvalidFormat(path, msg))
+      location <- parseLocation(path)
       _ <- repository
         .writeContent(location, data, None, writeConfig)
         .toEither
@@ -316,10 +304,7 @@ class ParquetService(
 
   def validateFile(path: String): Either[ParqueteerError, ValidationResult] =
     for {
-      location <- StorageLocationParser
-        .parse(path)
-        .left
-        .map(msg => ParqueteerError.InvalidFormat(path, msg))
+      location <- parseLocation(path)
       file = ParquetFile(location)
       issues <- repository
         .validateFile(file)
@@ -530,89 +515,7 @@ class ParquetService(
 
   private[services] def parseCsvContent(
       content: String
-  ): List[Map[String, Any]] = {
-    val records = parseRfc4180(content)
-    if (records.isEmpty) return List.empty
-    val headers = records.head
-    records.tail.zipWithIndex.map { case (values, idx) =>
-      if (values.length != headers.length)
-        throw new IllegalArgumentException(
-          s"Row ${idx + 2} has ${values.length} fields, expected ${headers.length}"
-        )
-      headers
-        .zip(values)
-        .map { case (h, v) =>
-          h -> io.github.yusukensanta.parqueteer.core.util.TypeInferrer
-            .inferCsvValue(v)
-        }
-        .toMap
-    }
-  }
-
-  private def parseRfc4180(content: String): List[Array[String]] = {
-    val records = scala.collection.mutable.ListBuffer.empty[Array[String]]
-    val fields = scala.collection.mutable.ArrayBuffer.empty[String]
-    val current = new StringBuilder
-    var inQuote = false
-    var i = 0
-    val n = content.length
-
-    while (i < n) {
-      content(i) match {
-        case '"' if !inQuote =>
-          inQuote = true
-        case '"' if inQuote && i + 1 < n && content(i + 1) == '"' =>
-          current.append('"'); i += 1
-        case '"' if inQuote =>
-          inQuote = false
-        case ',' if !inQuote =>
-          fields += current.toString
-          current.clear()
-        case '\r' if !inQuote =>
-          fields += current.toString
-          current.clear()
-          if (fields.exists(_.nonEmpty)) records += fields.toArray
-          fields.clear()
-          if (i + 1 < n && content(i + 1) == '\n') i += 1
-        case '\n' if !inQuote =>
-          fields += current.toString
-          current.clear()
-          if (fields.exists(_.nonEmpty)) records += fields.toArray
-          fields.clear()
-        case c =>
-          current.append(c)
-      }
-      i += 1
-    }
-    if (current.nonEmpty || fields.nonEmpty) {
-      fields += current.toString
-      if (fields.exists(_.nonEmpty)) records += fields.toArray
-    }
-    records.toList
-  }
+  ): List[Map[String, Any]] =
+    io.github.yusukensanta.parqueteer.core.util.CsvParser.parse(content)
 
 }
-
-case class ValidationResult(
-    isValid: Boolean,
-    issues: List[String]
-)
-
-case class ColumnChange(
-    name: String,
-    fromType: String,
-    toType: String,
-    fromOptional: Boolean,
-    toOptional: Boolean
-)
-
-case class SchemaDiff(
-    added: List[ColumnInfo],
-    removed: List[ColumnInfo],
-    changed: List[ColumnChange],
-    unchanged: List[String]
-) {
-  def identical: Boolean = added.isEmpty && removed.isEmpty && changed.isEmpty
-}
-
-case class ConversionConfig(writeConfig: WriteConfig = WriteConfig())

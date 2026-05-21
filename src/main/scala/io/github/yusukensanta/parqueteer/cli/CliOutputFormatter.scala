@@ -1,10 +1,10 @@
 package io.github.yusukensanta.parqueteer.cli
 
-import io.github.yusukensanta.parqueteer.core.services.SchemaDiff
 import io.github.yusukensanta.parqueteer.core.models.{
   ColumnInfo,
   FileStats,
-  ParquetFile
+  ParquetFile,
+  SchemaDiff
 }
 import io.circe.Json
 
