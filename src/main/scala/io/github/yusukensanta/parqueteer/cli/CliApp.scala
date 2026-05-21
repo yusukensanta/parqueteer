@@ -172,7 +172,13 @@ object CliApp {
       case ValidateCommand(filePath, verbose) =>
         executeValidate(service, filePath, verbose, globalOptions)
 
-      case ConvertCommand(inputPath, outputPath, compression, maxRows, dryRun) =>
+      case ConvertCommand(
+            inputPath,
+            outputPath,
+            compression,
+            maxRows,
+            dryRun
+          ) =>
         executeConvert(
           service,
           inputPath,
