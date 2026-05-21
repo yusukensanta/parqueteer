@@ -98,12 +98,16 @@ private[repositories] object ParquetSchemaBuilder {
               )
               .named(col.name)
           )
-        case "BINARY" | "STRING" =>
+        case "STRING" =>
           builder.addField(
             Types
               .primitive(PrimitiveType.PrimitiveTypeName.BINARY, repetition)
               .as(org.apache.parquet.schema.LogicalTypeAnnotation.stringType())
               .named(col.name)
+          )
+        case "BINARY" =>
+          builder.addField(
+            Types.primitive(PrimitiveType.PrimitiveTypeName.BINARY, repetition).named(col.name)
           )
         case _ =>
           builder.addField(
@@ -127,7 +131,7 @@ private[repositories] object ParquetSchemaBuilder {
     }
 
     val builder = Types.buildMessage()
-    val allKeys = data.flatMap(_.keys).distinct
+    val allKeys = data.flatMap(_.keys).distinct.sorted
 
     allKeys.foreach { key =>
       val sample = data.collectFirst {

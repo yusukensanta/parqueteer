@@ -67,9 +67,10 @@ class ParquetSchemaBuilderTest extends AnyFlatSpec with Matchers {
         |  required binary name (UTF8);
         |}""".stripMargin
     )
-    an[IllegalArgumentException] should be thrownBy {
-      ParquetSchemaBuilder.projectSchema(fileSchema, List("nonexistent", "also_missing"))
+    val ex = intercept[IllegalArgumentException] {
+      ParquetSchemaBuilder.projectSchema(fileSchema, List("nonexistent"))
     }
+    ex.getMessage should include("nonexistent")
   }
 
   it should "ignore unknown column names and project the ones that exist" in {
@@ -174,11 +175,11 @@ class ParquetSchemaBuilderTest extends AnyFlatSpec with Matchers {
     field.getLogicalTypeAnnotation shouldBe LogicalTypeAnnotation.stringType()
   }
 
-  it should "build a BINARY field with string logical type for BINARY data type" in {
+  it should "build a BINARY field with no logical type annotation for BINARY data type" in {
     val mt = ParquetSchemaBuilder.buildMessageType(schema(columnInfo("data", "BINARY")))
     val field = fieldByName(mt, "data")
     field.getPrimitiveTypeName shouldBe PrimitiveTypeName.BINARY
-    field.getLogicalTypeAnnotation shouldBe LogicalTypeAnnotation.stringType()
+    field.getLogicalTypeAnnotation shouldBe null
   }
 
   it should "fall back to BINARY for unknown data type" in {
@@ -312,6 +313,14 @@ class ParquetSchemaBuilderTest extends AnyFlatSpec with Matchers {
     )
     val mt = ParquetSchemaBuilder.inferSchemaFromData(data)
     fieldByName(mt, "x").getPrimitiveTypeName shouldBe PrimitiveTypeName.INT32
+  }
+
+  it should "infer BINARY for columns where all values are null" in {
+    val data = List(Map[String, Any]("id" -> 1L, "blob" -> null))
+    val schema = ParquetSchemaBuilder.inferSchemaFromData(data)
+    schema.getFieldCount shouldBe 2
+    val blobField = schema.getFields.asScala.find(_.getName == "blob").get
+    blobField.asPrimitiveType().getPrimitiveTypeName shouldBe PrimitiveTypeName.BINARY
   }
 
   it should "name the resulting message type 'root'" in {
