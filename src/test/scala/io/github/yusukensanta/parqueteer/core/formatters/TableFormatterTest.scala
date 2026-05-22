@@ -78,10 +78,16 @@ class TableFormatterTest extends AnyFlatSpec with Matchers {
     result should include("showing first 2")
   }
 
-  it should "format doubles to 2 decimal places" in {
-    val result = formatter.formatContent(sampleContent, None)
-    result should include("9.50")
-    result should include("7.20")
+  it should "format doubles with full precision" in {
+    val content = FileContent(
+      rows = List(Map("v" -> 1.234567)),
+      totalRows = 1L,
+      isPartial = false
+    )
+    val result = formatter.formatContent(content, None)
+    result should include("1.234567")
+    formatter.formatValue(1.234567) shouldBe "1.234567"
+    formatter.formatValue(9.5) shouldBe "9.5"
   }
 
   it should "produce exact table structure for single-column single-row input" in {
@@ -166,9 +172,10 @@ class TableFormatterTest extends AnyFlatSpec with Matchers {
     formatter.formatValue(-1) shouldBe "-1"
   }
 
-  it should "format Float (FLOAT) value with 2 decimal places" in {
-    formatter.formatValue(1.5f) shouldBe "1.50"
-    formatter.formatValue(-3.0f) shouldBe "-3.00"
+  it should "format Float (FLOAT) value with full precision" in {
+    formatter.formatValue(1.5f) shouldBe "1.5"
+    formatter.formatValue(-3.0f) shouldBe "-3.0"
+    formatter.formatValue(1.234568f) shouldBe 1.234568f.toString
   }
 
   it should "format BigDecimal without scientific notation" in {
@@ -191,7 +198,7 @@ class TableFormatterTest extends AnyFlatSpec with Matchers {
     result should include("true")
     result should include("false")
     result should include("7")
-    result should include("0.50")
+    result should include("0.5")
   }
 
   "TableFormatter.formatBytes" should "format bytes" in {

@@ -75,6 +75,14 @@ class MarkdownFormatterTest extends AnyFlatSpec with Matchers {
     result should include("Infinity")
   }
 
+  it should "render Double with full precision" in {
+    val result = formatter.formatContent(
+      FileContent(List(Map("v" -> 1.234567)), 1L),
+      None
+    )
+    result should include("1.234567")
+  }
+
   it should "render BigDecimal without scientific notation" in {
     val result = formatter.formatContent(
       FileContent(List(Map("amount" -> BigDecimal("0.0000001"))), 1L),

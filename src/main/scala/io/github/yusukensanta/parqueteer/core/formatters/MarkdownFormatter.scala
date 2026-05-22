@@ -70,13 +70,11 @@ class MarkdownFormatter extends OutputFormatter {
   }
 
   private def formatValue(value: Any): String = value match {
-    case null                                 => ""
-    case d: Double if d.isNaN || d.isInfinite => d.toString
-    case d: Double                            => f"$d%.2f"
-    case f: Float if f.isNaN || f.isInfinite  => f.toString
-    case f: Float                             => f"$f%.2f"
-    case bd: BigDecimal                       => bd.underlying.toPlainString
-    case other                                => other.toString
+    case null           => ""
+    case d: Double      => d.toString
+    case f: Float       => f.toString
+    case bd: BigDecimal => bd.underlying.toPlainString
+    case other          => other.toString
   }
 
   private def escapeCell(s: String): String =
