@@ -555,6 +555,42 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     result.left.toOption.get.userMessage should include("stream error")
   }
 
+  it should "return Left(FilterParseError) for syntactically invalid filter" in {
+    val service = new ParquetService(new FakeParquetRepository())
+    val result = service.streamRead(
+      "/tmp/test.parquet",
+      ReadConfig(filter = Some("age >"))
+    )(_ => ())
+    result.isLeft shouldBe true
+    result.left.toOption.get shouldBe a[ParqueteerError.FilterParseError]
+    result.left.toOption.get.userMessage should include("age >")
+  }
+
+  it should "return Right and invoke callback when filter is valid" in {
+    val service = new ParquetService(new FakeParquetRepository())
+    val collected = scala.collection.mutable.ListBuffer[Map[String, Any]]()
+    val result = service.streamRead(
+      "/tmp/test.parquet",
+      ReadConfig(filter = Some("id = 1"))
+    )(collected += _)
+    result.isRight shouldBe true
+  }
+
+  it should "return Left(IOError) typed correctly for repository failure" in {
+    val service = new ParquetService(
+      new FakeParquetRepository(streamResult =
+        Failure(new java.io.IOException("disk read error"))
+      )
+    )
+    val result = service.streamRead("/tmp/test.parquet", ReadConfig())(_ => ())
+    result.isLeft shouldBe true
+    result.left.toOption.get shouldBe a[ParqueteerError.IOError]
+    result.left.toOption.get
+      .asInstanceOf[ParqueteerError.IOError]
+      .cause
+      .getMessage shouldBe "disk read error"
+  }
+
   // ── mergeFiles error cause ────────────────────────────────────────────────
   "ParquetService.mergeFiles" should "preserve error cause when streamContent fails" in {
     val originalCause =
