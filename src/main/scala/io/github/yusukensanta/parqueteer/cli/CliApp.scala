@@ -20,6 +20,7 @@ import io.github.yusukensanta.parqueteer.config.{
   ConfigurationManager,
   EnvConfig
 }
+import io.github.yusukensanta.parqueteer.core.util.FileExtension
 import scopt.OParser
 import scala.util.{Success, Failure}
 import org.slf4j.LoggerFactory
@@ -387,12 +388,7 @@ object CliApp {
     )
 
     if (dryRun) {
-      val inputExt =
-        inputPath
-          .split("\\.")
-          .lastOption
-          .map(_.toLowerCase)
-          .getOrElse("unknown")
+      val inputExt = FileExtension.of(inputPath)
       if (inputExt == "parquet") {
         service.getFileInfo(inputPath) match {
           case Left(error) =>
@@ -425,16 +421,8 @@ object CliApp {
         0
       }
     } else {
-      val outputExt = outputPath
-        .split("\\.")
-        .lastOption
-        .map(_.toLowerCase)
-        .getOrElse("unknown")
-      val inputExt = inputPath
-        .split("\\.")
-        .lastOption
-        .map(_.toLowerCase)
-        .getOrElse("unknown")
+      val outputExt = FileExtension.of(outputPath)
+      val inputExt = FileExtension.of(inputPath)
       (inputExt, outputExt) match {
         case ("parquet", ext @ ("json" | "csv")) =>
           service.readFile(
