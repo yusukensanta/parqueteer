@@ -104,18 +104,9 @@ object CliApp {
         1
       case Some(cmd) =>
         try {
-          val configManager = new ConfigurationManager()
-          configManager.loadConfig(config.globalOptions.configPath) match {
-            case Failure(error) =>
-              System.err.println(
-                s"Failed to load configuration: ${error.getMessage}"
-              )
-              1
-            case Success(_) =>
-              val repository = new ParquetRepository()
-              val service = new ParquetService(repository)
-              executeCommand(cmd, service, config.globalOptions)
-          }
+          val repository = new ParquetRepository()
+          val service = new ParquetService(repository)
+          executeCommand(cmd, service, config.globalOptions)
         } catch {
           case e: Exception =>
             logger.error("Unexpected error", e)
@@ -654,6 +645,10 @@ object CliApp {
         println(s"Config file: $resolvedPath [${
             if (fileExists) "exists" else "not found"
           }]")
+        if (fileExists)
+          println(
+            "  Note: config file is parsed for validation only; settings are not yet applied."
+          )
         println()
 
         val envVars = EnvConfig.allSet
