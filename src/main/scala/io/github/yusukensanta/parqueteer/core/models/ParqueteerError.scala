@@ -1,5 +1,7 @@
 package io.github.yusukensanta.parqueteer.core.models
 
+import scala.util.Try
+
 sealed trait ParqueteerError:
   def userMessage: String
   def exitCode: Int
@@ -39,3 +41,7 @@ object ParqueteerError:
     val exitCode = 1
     val userMessage =
       s"I/O error: ${Option(cause.getMessage).getOrElse(cause.getClass.getSimpleName)}"
+
+  extension [A](t: Try[A])
+    def toParqueteerError: Either[ParqueteerError, A] =
+      t.toEither.left.map(IOError.apply)
