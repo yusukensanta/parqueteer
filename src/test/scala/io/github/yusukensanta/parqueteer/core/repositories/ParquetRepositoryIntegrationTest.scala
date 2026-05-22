@@ -528,4 +528,29 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
     idStats.minValue.get shouldBe "1"
     idStats.maxValue.get shouldBe "3"
   }
+
+  it should "report numerically correct min/max across multiple row groups, not lexicographic" taggedAs IntegrationTest in {
+    // Values 1-200: lexicographic max is "99", numeric max is "200"
+    // Lexicographic min is "1", numeric min is "1" (same here)
+    // Use a tiny rowGroupSize to force the writer to flush multiple row groups
+    val data = (1 to 200).toList.map(i =>
+      Map[String, Any]("id" -> i.toLong, "label" -> s"item_$i")
+    )
+    val loc = LocalPath(tempFile().getAbsolutePath)
+    repo
+      .writeContent(loc, data, None, WriteConfig(rowGroupSize = 1024L))
+      .isSuccess shouldBe true
+
+    val result = repo.readStats(ParquetFile(loc))
+    result.isSuccess shouldBe true
+
+    val stats = result.get
+    // Must have produced multiple row groups for this test to be meaningful
+    stats.rowGroupCount should be > 1L
+
+    val idStats = stats.columns.find(_.name == "id").get
+    idStats.minValue.get shouldBe "1"
+    // Lexicographic ordering would give "99"; numeric ordering gives "200"
+    idStats.maxValue.get shouldBe "200"
+  }
 }
