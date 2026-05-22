@@ -12,10 +12,13 @@ trait CloudCredentialManager {
 
 object CloudCredentialManager {
 
-  def forLocation(location: StorageLocation): Option[CloudCredentialManager] = {
+  def forLocation(
+      location: StorageLocation,
+      profile: Option[String] = None
+  ): Option[CloudCredentialManager] = {
     location match {
       case _: io.github.yusukensanta.parqueteer.core.models.S3Location =>
-        Some(new S3CredentialManager)
+        Some(new S3CredentialManager(profile))
       case _: io.github.yusukensanta.parqueteer.core.models.GCSLocation =>
         Some(new GCSCredentialManager)
       case _: io.github.yusukensanta.parqueteer.core.models.AzureLocation =>

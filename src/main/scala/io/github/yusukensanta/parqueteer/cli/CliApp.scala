@@ -104,7 +104,10 @@ object CliApp {
         1
       case Some(cmd) =>
         try {
-          val repository = new ParquetRepository()
+          val repository = new ParquetRepository(
+            profile = config.globalOptions.profile,
+            region = config.globalOptions.region
+          )
           val service = new ParquetService(repository)
           executeCommand(cmd, service, config.globalOptions)
         } catch {

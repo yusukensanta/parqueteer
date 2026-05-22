@@ -15,7 +15,8 @@ import software.amazon.awssdk.regions.Region
 import software.amazon.awssdk.services.sts.StsClient
 import scala.util.{Try, Success, Failure}
 
-class S3CredentialManager extends CloudCredentialManager {
+class S3CredentialManager(profile: Option[String] = None)
+    extends CloudCredentialManager {
   override def supportsLocation(location: StorageLocation): Boolean = {
     location.isInstanceOf[S3Location]
   }
@@ -104,12 +105,17 @@ class S3CredentialManager extends CloudCredentialManager {
       s3Location: S3Location
   ): Try[(String, String, Option[String])] = {
     val _ = s3Location // suppress unused warning
-    val strategies = List(
-      () => tryEnvironmentVariables(),
-      () => tryDefaultCredentialsProvider(),
-      () => tryInstanceProfile(),
-      () => tryProfile()
-    )
+    val strategies = profile match {
+      case Some(p) =>
+        List(() => tryProfile(Some(p)))
+      case None =>
+        List(
+          () => tryEnvironmentVariables(),
+          () => tryDefaultCredentialsProvider(),
+          () => tryInstanceProfile(),
+          () => tryProfile(None)
+        )
+    }
 
     strategies.foldLeft(
       Failure(new RuntimeException("No credentials found")): Try[
@@ -174,9 +180,13 @@ class S3CredentialManager extends CloudCredentialManager {
     }
   }
 
-  private def tryProfile(): Try[(String, String, Option[String])] = {
+  private def tryProfile(
+      explicitProfile: Option[String]
+  ): Try[(String, String, Option[String])] = {
     Try {
-      val profileName = sys.env.get("AWS_PROFILE").getOrElse("default")
+      val profileName = explicitProfile
+        .orElse(sys.env.get("AWS_PROFILE"))
+        .getOrElse("default")
       val provider = ProfileCredentialsProvider.create(profileName)
       val credentials = provider.resolveCredentials()
       (credentials.accessKeyId(), credentials.secretAccessKey(), None)

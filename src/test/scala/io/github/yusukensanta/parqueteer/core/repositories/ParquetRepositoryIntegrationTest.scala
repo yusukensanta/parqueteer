@@ -121,6 +121,20 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
     version should not include "version"
   }
 
+  // ── Profile/region threading ───────────────────────────────────────────
+
+  it should "accept profile and region params without breaking local file operations" taggedAs IntegrationTest in {
+    val repoWithOpts = new ParquetRepository(
+      profile = Some("custom"),
+      region = Some("us-east-2")
+    )
+    val loc = LocalPath(tempFile().getAbsolutePath)
+    repoWithOpts.writeContent(loc, sampleData, None).isSuccess shouldBe true
+    val result = repoWithOpts.readContent(ParquetFile(loc), ReadConfig())
+    result.isSuccess shouldBe true
+    result.get.rows should have size 3
+  }
+
   // ── Validation ─────────────────────────────────────────────────────────
 
   it should "report no issues for a valid written file" taggedAs IntegrationTest in {

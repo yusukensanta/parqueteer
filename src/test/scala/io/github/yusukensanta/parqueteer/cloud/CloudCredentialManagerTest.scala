@@ -37,6 +37,23 @@ class CloudCredentialManagerTest extends AnyFlatSpec with Matchers {
     manager shouldBe empty
   }
 
+  it should "pass profile to S3CredentialManager when provided" in {
+    val location = S3Location("bucket", "key")
+    val manager =
+      CloudCredentialManager.forLocation(location, profile = Some("my-profile"))
+
+    manager shouldBe defined
+    manager.get shouldBe a[S3CredentialManager]
+  }
+
+  it should "return S3CredentialManager without profile when profile is None" in {
+    val location = S3Location("bucket", "key")
+    val manager = CloudCredentialManager.forLocation(location, profile = None)
+
+    manager shouldBe defined
+    manager.get shouldBe a[S3CredentialManager]
+  }
+
   // ── Hadoop config output (requires AWS_ACCESS_KEY_ID in env) ────────────
 
   "S3CredentialManager.configureHadoop" should "set fs.s3a.impl when credentials are available" in {
