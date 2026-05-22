@@ -518,6 +518,26 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     rows.head("active") shouldBe true
   }
 
+  it should "preserve 1.0 as Double, not coerce to Long" in {
+    val service = new ParquetService(new FakeParquetRepository())
+    val rows = service.parseJsonContent("""[{"x": 1.0}]""")
+    rows.head("x") shouldBe 1.0
+    rows.head("x") shouldBe a[java.lang.Double]
+  }
+
+  it should "preserve 0.0 as Double" in {
+    val service = new ParquetService(new FakeParquetRepository())
+    val rows = service.parseJsonContent("""[{"x": 0.0}]""")
+    rows.head("x") shouldBe a[java.lang.Double]
+  }
+
+  it should "still keep whole numbers without decimal point as Long" in {
+    val service = new ParquetService(new FakeParquetRepository())
+    val rows = service.parseJsonContent("""[{"n": 42}]""")
+    rows.head("n") shouldBe 42L
+    rows.head("n") shouldBe a[java.lang.Long]
+  }
+
   it should "throw for non-array JSON" in {
     val service = new ParquetService(new FakeParquetRepository())
     an[IllegalArgumentException] should be thrownBy {

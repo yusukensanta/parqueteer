@@ -426,7 +426,13 @@ class ParquetService(
                       .inferJsonString(j.asString.get)
                   case j if j.isNumber =>
                     val n = j.asNumber.get
-                    n.toLong.fold[Any](n.toDouble)(identity)
+                    val raw = j.noSpaces
+                    if (
+                      raw.contains('.') || raw
+                        .contains('e') || raw.contains('E')
+                    )
+                      n.toDouble
+                    else n.toLong.fold[Any](n.toDouble)(identity)
                   case j if j.isBoolean => j.asBoolean.get
                   case j if j.isNull    => null
                   case j                => j.toString
