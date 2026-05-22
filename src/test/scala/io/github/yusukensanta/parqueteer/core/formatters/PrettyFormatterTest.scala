@@ -15,13 +15,13 @@ class PrettyFormatterTest extends AnyFlatSpec with Matchers {
   "PrettyFormatter" should "emit ANSI codes when useColors = true" in {
     val result =
       new PrettyFormatter(useColors = true).formatContent(content, None)
-    result should include("[")
+    result should include("[")
   }
 
   it should "emit no ANSI codes when useColors = false" in {
     val result =
       new PrettyFormatter(useColors = false).formatContent(content, None)
-    result should not include "["
+    result should not include "["
   }
 
   it should "fall back to plain table when useColors = false" in {
@@ -40,8 +40,7 @@ class PrettyFormatterTest extends AnyFlatSpec with Matchers {
   it should "not over-pad CJK values (uses displayWidth, not .length)" in {
     val c = FileContent(List(Map("lang" -> "日本語")), 1L, isPartial = false)
     val result = new PrettyFormatter(useColors = true).formatContent(c, None)
-    val stripped = result.replaceAll("\\[[^m]*m", "")
-    // displayWidth("日本語") = 6 == column width → zero padding → │ immediately follows value
+    val stripped = result.replaceAll("\\[[^m]*m", "")
     stripped should include("│日本語│")
   }
 }
