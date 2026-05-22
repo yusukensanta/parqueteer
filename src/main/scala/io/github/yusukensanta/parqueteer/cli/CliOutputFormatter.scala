@@ -68,20 +68,22 @@ private[cli] object CliOutputFormatter {
     sb.toString.stripTrailing()
   }
 
-  def formatStatsJson(stats: FileStats): Json =
-    Json.obj(
-      "totalRows" -> Json.fromLong(stats.totalRows),
-      "rowGroupCount" -> Json.fromLong(stats.rowGroupCount),
-      "columns" -> Json.fromValues(stats.columns.map { col =>
-        Json.obj(
-          "name" -> Json.fromString(col.name),
-          "dataType" -> Json.fromString(col.dataType),
-          "nullCount" -> Json.fromLong(col.nullCount),
-          "minValue" -> col.minValue.fold(Json.Null)(Json.fromString),
-          "maxValue" -> col.maxValue.fold(Json.Null)(Json.fromString)
-        )
-      })
-    )
+  def formatStatsJson(stats: FileStats): String =
+    Json
+      .obj(
+        "totalRows" -> Json.fromLong(stats.totalRows),
+        "rowGroupCount" -> Json.fromLong(stats.rowGroupCount),
+        "columns" -> Json.fromValues(stats.columns.map { col =>
+          Json.obj(
+            "name" -> Json.fromString(col.name),
+            "dataType" -> Json.fromString(col.dataType),
+            "nullCount" -> Json.fromLong(col.nullCount),
+            "minValue" -> col.minValue.fold(Json.Null)(Json.fromString),
+            "maxValue" -> col.maxValue.fold(Json.Null)(Json.fromString)
+          )
+        })
+      )
+      .spaces2
 
   def formatSchemaDiffTable(
       file1: String,

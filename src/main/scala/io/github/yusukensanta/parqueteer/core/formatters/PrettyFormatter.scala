@@ -48,7 +48,7 @@ class PrettyFormatter(useColors: Boolean = sys.env.get("NO_COLOR").isEmpty)
     sb.append("\n")
 
     rows.foreach { row =>
-      sb.append(drawColoredDataRow(row, columns, columnWidths, schema))
+      sb.append(drawColoredDataRow(row, columns, columnWidths))
       sb.append("\n")
     }
 
@@ -180,10 +180,8 @@ class PrettyFormatter(useColors: Boolean = sys.env.get("NO_COLOR").isEmpty)
   private def drawColoredDataRow(
       row: Map[String, Any],
       columns: List[String],
-      widths: List[Int],
-      schema: Option[ParquetSchema]
+      widths: List[Int]
   ): String = {
-    val _ = schema // Reserved for future type-aware formatting
     val values = columns.map { col =>
       row
         .get(col)

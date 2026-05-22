@@ -15,7 +15,7 @@ class GCSCredentialManager extends CloudCredentialManager {
       location: StorageLocation
   ): Try[Configuration] = {
     location match {
-      case gcsLocation: GCSLocation =>
+      case _: GCSLocation =>
         Try {
           val conf = new Configuration()
 
@@ -30,7 +30,7 @@ class GCSCredentialManager extends CloudCredentialManager {
           )
 
           // Authentication configuration
-          resolveCredentials(gcsLocation) match {
+          resolveCredentials() match {
             case Success(credentialsPath) =>
               conf.set("google.cloud.auth.service.account.enable", "true")
               conf.set(
@@ -71,10 +71,7 @@ class GCSCredentialManager extends CloudCredentialManager {
     }
   }
 
-  private def resolveCredentials(
-      gcsLocation: GCSLocation
-  ): Try[String] = {
-    val _ = gcsLocation // suppress unused warning
+  private def resolveCredentials(): Try[String] = {
     val strategies = List(
       () => tryServiceAccountFile(),
       () => tryEnvironmentVariable(),
