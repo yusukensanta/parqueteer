@@ -172,12 +172,14 @@ parqueteer validate data.parquet --verbose
 ### Configuration
 
 ```bash
-# Show effective configuration (all sources: CLI, env vars, config file, defaults)
+# Show effective configuration (CLI flags and environment variables)
 parqueteer config
 
 # Validate config file syntax
 parqueteer config --validate
 ```
+
+> **Note:** The config file (`~/.parqueteer/config.yaml`) is parsed and validated but settings are not yet applied at runtime. Use environment variables below to control defaults.
 
 ### Shell Completions
 
@@ -223,11 +225,11 @@ export PARQUETEER_VERBOSE=true
 # Default row limit for read (same as --limit)
 export PARQUETEER_MAX_ROWS=1000
 
-# Path to config file (default: ~/.config/parqueteer/config.yaml)
+# Path to config file (default: ~/.parqueteer/config.yaml)
 export PARQUETEER_CONFIG=/path/to/config.yaml
 ```
 
-**Precedence**: CLI flags > environment variables > config file > defaults
+**Precedence**: CLI flags > environment variables > defaults
 
 ---
 

@@ -97,13 +97,14 @@ class ConfigurationManager {
 
   def loadConfig(configPath: Option[String] = None): Try[AppConfig] = {
     val configFile = configPath.map(File(_)).getOrElse(defaultConfigPath)
+    if (!configFile.exists) Success(AppConfig())
+    else parseConfigFile(configFile)
+  }
 
-    if (!configFile.exists) {
-      createDefaultConfig(configFile)
-      Success(AppConfig())
-    } else {
-      parseConfigFile(configFile)
-    }
+  def initDefaultConfig(configPath: Option[String] = None): Try[Unit] = {
+    val configFile = configPath.map(File(_)).getOrElse(defaultConfigPath)
+    if (configFile.exists) Success(())
+    else createDefaultConfig(configFile)
   }
 
   private def parseConfigFile(configFile: File): Try[AppConfig] = {
