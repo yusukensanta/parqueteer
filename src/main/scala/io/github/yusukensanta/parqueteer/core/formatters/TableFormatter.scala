@@ -7,8 +7,9 @@ import io.github.yusukensanta.parqueteer.core.models.{
 }
 
 class TableFormatter extends OutputFormatter {
-  private val MaxColumnWidth = 50 // prevents extremely wide columns
-  private val MinColumnWidth = 5 // ensure readability
+  private val MaxColumnWidth = 50
+  private val MinColumnWidth = 5
+  private val MaxTableRows = 10_000
 
   override def formatContent(
       content: FileContent,
@@ -16,6 +17,12 @@ class TableFormatter extends OutputFormatter {
   ): String = {
     if (content.rows.isEmpty) {
       return "No data to display"
+    }
+
+    if (content.rows.size > MaxTableRows) {
+      return s"Error: ${content.rows.size} rows is too large to render as a table " +
+        s"(limit: $MaxTableRows). Use --limit N to cap output, or " +
+        "--output-format json for large datasets."
     }
 
     val rows = content.rows

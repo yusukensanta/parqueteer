@@ -220,4 +220,28 @@ class TableFormatterTest extends AnyFlatSpec with Matchers {
   it should "format gigabytes" in {
     formatter.formatBytes(3L * 1024 * 1024 * 1024) shouldBe "3.0 GB"
   }
+
+  // ── OOM guard ─────────────────────────────────────────────────────────────
+
+  "TableFormatter.formatContent" should "return an error message when row count exceeds 10000" in {
+    val bigContent = FileContent(
+      rows = List.fill(10_001)(Map("id" -> 1L)),
+      totalRows = 10_001L,
+      isPartial = false
+    )
+    val result = formatter.formatContent(bigContent, None)
+    result should startWith("Error:")
+    result should include("--limit")
+  }
+
+  it should "render normally when row count is exactly 10000" in {
+    val edgeContent = FileContent(
+      rows = List.fill(10_000)(Map("id" -> 1L)),
+      totalRows = 10_000L,
+      isPartial = false
+    )
+    val result = formatter.formatContent(edgeContent, None)
+    result should not startWith "Error:"
+    result should include("┌")
+  }
 }
