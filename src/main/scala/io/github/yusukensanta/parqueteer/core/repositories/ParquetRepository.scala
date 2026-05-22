@@ -276,51 +276,51 @@ class ParquetRepository(
         val path = new HadoopPath(file.location.path)
         val fs = FileSystem.get(path.toUri, hadoopConfig)
         val fileStatus = fs.getFileStatus(path)
-
-        // Use ParquetFileReader.open with InputFile
         val inputFile = HadoopInputFile.fromPath(path, hadoopConfig)
-        Using.resource(ParquetFileReader.open(inputFile)) { reader =>
-          val footer = reader.getFooter
-          val metadata = footer.getFileMetaData
 
-          // Calculate compression ratio from row groups
-          val compressionRatio =
-            calculateCompressionRatio(footer.getBlocks.asScala.toList)
+        // One stream open: read raw footer bytes, parse twice from memory.
+        val (formatVersion, compressionRatio, createdBy) =
+          Using.resource(inputFile.newStream()) { stream =>
+            val fileLen = inputFile.getLength
+            val tail = new Array[Byte](8)
+            stream.seek(fileLen - 8)
+            stream.readFully(tail)
+            val footerLen = java.nio.ByteBuffer
+              .wrap(tail, 0, 4)
+              .order(java.nio.ByteOrder.LITTLE_ENDIAN)
+              .getInt
+            stream.seek(fileLen - 8 - footerLen)
+            val footerBytes = new Array[Byte](footerLen)
+            stream.readFully(footerBytes)
 
-          // Read Parquet format version from raw Thrift footer
-          val formatVersion: String = Try {
-            Using.resource(inputFile.newStream()) { stream =>
-              val fileLen = inputFile.getLength
-              val tail = new Array[Byte](8)
-              stream.seek(fileLen - 8)
-              stream.readFully(tail)
-              val footerLen = java.nio.ByteBuffer
-                .wrap(tail, 0, 4)
-                .order(java.nio.ByteOrder.LITTLE_ENDIAN)
-                .getInt
-              stream.seek(fileLen - 8 - footerLen)
-              val footerBytes = new Array[Byte](footerLen)
-              stream.readFully(footerBytes)
-              val rawMeta = org.apache.parquet.format.Util.readFileMetaData(
-                new java.io.ByteArrayInputStream(footerBytes)
-              )
-              if (rawMeta.version == 2) "2.0" else "1.0"
-            }
-          }.getOrElse("unknown")
+            val rawMeta = org.apache.parquet.format.Util.readFileMetaData(
+              new java.io.ByteArrayInputStream(footerBytes)
+            )
+            val version = if (rawMeta.version == 2) "2.0" else "1.0"
+            val createdByStr = Option(rawMeta.created_by).getOrElse("")
 
-          FileMetadata(
-            fileSize = fileStatus.getLen,
-            createdAt = Some(
-              java.time.Instant.ofEpochMilli(fileStatus.getModificationTime)
-            ),
-            modifiedAt = Some(
-              java.time.Instant.ofEpochMilli(fileStatus.getModificationTime)
-            ),
-            compressionRatio = compressionRatio,
-            version = formatVersion,
-            createdBy = Some(metadata.getCreatedBy)
-          )
-        }
+            val converter =
+              new org.apache.parquet.format.converter.ParquetMetadataConverter()
+            val parquetMeta = converter.readParquetMetadata(
+              new java.io.ByteArrayInputStream(footerBytes),
+              org.apache.parquet.format.converter.ParquetMetadataConverter.NO_FILTER
+            )
+            val ratio = calculateCompressionRatio(
+              parquetMeta.getBlocks.asScala.toList
+            )
+            (version, ratio, createdByStr)
+          }
+
+        FileMetadata(
+          fileSize = fileStatus.getLen,
+          createdAt = None,
+          modifiedAt = Some(
+            java.time.Instant.ofEpochMilli(fileStatus.getModificationTime)
+          ),
+          compressionRatio = compressionRatio,
+          version = formatVersion,
+          createdBy = Some(createdBy)
+        )
       }
     }
   }
