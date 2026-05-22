@@ -36,4 +36,12 @@ class PrettyFormatterTest extends AnyFlatSpec with Matchers {
     val result = new PrettyFormatter(useColors = false).formatContent(c, None)
     result should include("1.234567")
   }
+
+  it should "not over-pad CJK values (uses displayWidth, not .length)" in {
+    val c = FileContent(List(Map("lang" -> "日本語")), 1L, isPartial = false)
+    val result = new PrettyFormatter(useColors = true).formatContent(c, None)
+    val stripped = result.replaceAll("\\[[^m]*m", "")
+    // displayWidth("日本語") = 6 == column width → zero padding → │ immediately follows value
+    stripped should include("│日本語│")
+  }
 }
