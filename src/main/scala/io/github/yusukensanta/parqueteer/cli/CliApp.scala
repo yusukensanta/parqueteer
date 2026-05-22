@@ -256,8 +256,7 @@ object CliApp {
             val useColors = globalOptions.colorMode match {
               case ColorMode.Never  => false
               case ColorMode.Always => true
-              case ColorMode.Auto =>
-                sys.env.get("NO_COLOR").isEmpty && System.console() != null
+              case ColorMode.Auto   => System.console() != null
             }
             import io.github.yusukensanta.parqueteer.core.formatters.OutputFormatter
             val formatter = OutputFormatter(format, useColors)

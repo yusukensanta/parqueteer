@@ -229,7 +229,11 @@ object ArgumentParser {
         .children(
           arg[String]("<input>")
             .required()
-            .action((x, c) => c.copy(command = Some(ConvertCommand(x, ""))))
+            .action((x, c) =>
+              c.copy(command =
+                Some(ConvertCommand(x, "", maxRows = EnvConfig.parsedMaxRows))
+              )
+            )
             .text("Input file path"),
           arg[String]("<output>")
             .required()
