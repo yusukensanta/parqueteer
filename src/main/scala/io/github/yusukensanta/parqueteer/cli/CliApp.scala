@@ -212,6 +212,11 @@ object CliApp {
       streaming: Boolean,
       globalOptions: GlobalOptions
   ): Int = {
+    if (parallelism > 1 && filter.nonEmpty && !globalOptions.quiet)
+      System.err.println(
+        "Warning: --filter is not supported in parallel mode; falling back to sequential read."
+      )
+
     val readConfig = ReadConfig(
       maxRows = maxRows,
       columns = columns,
