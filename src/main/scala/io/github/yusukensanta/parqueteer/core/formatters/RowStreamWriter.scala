@@ -80,13 +80,7 @@ object RowStreamWriter {
     private var widths: List[Int] = Nil
     private var flushed = false
 
-    private def fmtVal(v: Any): String = v match {
-      case null       => "null"
-      case d: Double  => f"$d%.2f"
-      case f: Float   => f"$f%.2f"
-      case b: Boolean => if (b) "true" else "false"
-      case other      => other.toString
-    }
+    private def fmtVal(v: Any): String = tf.formatValue(v)
 
     private def flushSample(): Unit = {
       columns = sample.flatMap(_.keys).distinct.sorted.toList
