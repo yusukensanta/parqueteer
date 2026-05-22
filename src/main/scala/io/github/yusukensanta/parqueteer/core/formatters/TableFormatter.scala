@@ -122,22 +122,16 @@ class TableFormatter extends OutputFormatter {
       columns: List[String],
       rows: List[Map[String, Any]]
   ): List[Int] = {
-    columns.map { colName =>
-      val headerWidth = displayWidth(colName)
-
-      val valueWidth = rows
-        .map { row =>
-          row
-            .get(colName)
-            .map(v => displayWidth(formatValue(v)))
-            .getOrElse(0)
-        }
-        .maxOption
-        .getOrElse(0)
-
-      val width = math.max(headerWidth, valueWidth)
-      math.max(MinColumnWidth, math.min(MaxColumnWidth, width))
+    val widths = columns.map(c => displayWidth(c)).toArray
+    rows.foreach { row =>
+      columns.zipWithIndex.foreach { case (col, i) =>
+        val w = row.get(col).map(v => displayWidth(formatValue(v))).getOrElse(0)
+        if (w > widths(i)) widths(i) = w
+      }
     }
+    widths
+      .map(w => math.max(MinColumnWidth, math.min(MaxColumnWidth, w)))
+      .toList
   }
 
   private[formatters] def drawTopBorder(widths: List[Int]): String = {
