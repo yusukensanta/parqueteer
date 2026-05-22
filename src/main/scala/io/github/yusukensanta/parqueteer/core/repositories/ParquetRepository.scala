@@ -467,7 +467,7 @@ class ParquetRepository(
             val typeName =
               if (field.isPrimitive)
                 field.asPrimitiveType().getPrimitiveTypeName.name()
-              else field.asGroupType().getName
+              else groupTypeCanonical(field.asGroupType())
             val optional =
               field.getRepetition == org.apache.parquet.schema.Type.Repetition.OPTIONAL
             FieldSummary(field.getName, typeName, optional)
@@ -637,5 +637,19 @@ class ParquetRepository(
     } else {
       None
     }
+  }
+
+  private def groupTypeCanonical(
+      gt: org.apache.parquet.schema.GroupType
+  ): String = {
+    val fields = gt.getFields.asScala
+      .map { f =>
+        val t =
+          if (f.isPrimitive) f.asPrimitiveType().getPrimitiveTypeName.name()
+          else groupTypeCanonical(f.asGroupType())
+        s"${f.getName}:$t"
+      }
+      .mkString(",")
+    s"STRUCT<$fields>"
   }
 }

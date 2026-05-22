@@ -7,6 +7,9 @@ import org.scalatest.Tag
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import java.nio.file.Files
+import org.apache.parquet.schema.{MessageType, Types}
+import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
+import org.apache.parquet.schema.Type.Repetition
 
 object MergeIntegrationTest extends Tag("IntegrationTest")
 
@@ -27,6 +30,19 @@ class MergeIntegrationTest extends AnyFlatSpec with Matchers {
     repo
       .writeContent(LocalPath(f.getAbsolutePath), data, None)
       .fold(e => throw e, _ => f.getAbsolutePath)
+  }
+
+  private def writeTempWithSchema(schema: MessageType): String = {
+    import org.apache.parquet.hadoop.example.ExampleParquetWriter
+    val f = tempFile()
+    val conf = new org.apache.hadoop.conf.Configuration()
+    val writer = ExampleParquetWriter
+      .builder(new org.apache.hadoop.fs.Path(f.getAbsolutePath))
+      .withType(schema)
+      .withConf(conf)
+      .build()
+    writer.close()
+    f.getAbsolutePath
   }
 
   private val data1 = List(
@@ -65,6 +81,82 @@ class MergeIntegrationTest extends AnyFlatSpec with Matchers {
       service.mergeFiles(List(in1, in2), out, WriteConfig(), SchemaMode.Strict)
     result.isLeft shouldBe true
     result.left.toOption.get.userMessage should include("Schema mismatch")
+  }
+
+  it should "fail strict merge when nested struct schemas differ" taggedAs MergeIntegrationTest in {
+    val schemaWithStreet = Types
+      .buildMessage()
+      .addField(
+        Types
+          .optionalGroup()
+          .addField(
+            Types
+              .primitive(PrimitiveTypeName.BINARY, Repetition.OPTIONAL)
+              .named("street")
+          )
+          .named("address")
+      )
+      .named("msg")
+    val schemaWithZip = Types
+      .buildMessage()
+      .addField(
+        Types
+          .optionalGroup()
+          .addField(
+            Types
+              .primitive(PrimitiveTypeName.INT32, Repetition.OPTIONAL)
+              .named("zip")
+          )
+          .named("address")
+      )
+      .named("msg")
+
+    val in1 = writeTempWithSchema(schemaWithStreet)
+    val in2 = writeTempWithSchema(schemaWithZip)
+    val out = tempFile().getAbsolutePath
+
+    val result =
+      service.mergeFiles(List(in1, in2), out, WriteConfig(), SchemaMode.Strict)
+    result.isLeft shouldBe true
+    result.left.toOption.get.userMessage should include("Schema mismatch")
+  }
+
+  it should "detect type conflict in union merge when nested struct schemas differ" taggedAs MergeIntegrationTest in {
+    val schemaWithStreet = Types
+      .buildMessage()
+      .addField(
+        Types
+          .optionalGroup()
+          .addField(
+            Types
+              .primitive(PrimitiveTypeName.BINARY, Repetition.OPTIONAL)
+              .named("street")
+          )
+          .named("address")
+      )
+      .named("msg")
+    val schemaWithZip = Types
+      .buildMessage()
+      .addField(
+        Types
+          .optionalGroup()
+          .addField(
+            Types
+              .primitive(PrimitiveTypeName.INT32, Repetition.OPTIONAL)
+              .named("zip")
+          )
+          .named("address")
+      )
+      .named("msg")
+
+    val in1 = writeTempWithSchema(schemaWithStreet)
+    val in2 = writeTempWithSchema(schemaWithZip)
+    val out = tempFile().getAbsolutePath
+
+    val result =
+      service.mergeFiles(List(in1, in2), out, WriteConfig(), SchemaMode.Union)
+    result.isLeft shouldBe true
+    result.left.toOption.get.userMessage should include("Type conflicts")
   }
 
   it should "fail with fewer than two input files" taggedAs MergeIntegrationTest in {
