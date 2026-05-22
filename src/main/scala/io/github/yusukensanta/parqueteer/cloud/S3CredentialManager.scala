@@ -29,7 +29,7 @@ class S3CredentialManager(profile: Option[String] = None)
             "org.apache.hadoop.fs.s3a.S3A"
           )
 
-          val credentials = resolveCredentials(s3Location)
+          val credentials = resolveCredentials()
 
           credentials match {
             case Success((accessKey, secretKey, sessionToken)) =>
@@ -75,10 +75,7 @@ class S3CredentialManager(profile: Option[String] = None)
     }
   }
 
-  private def resolveCredentials(
-      s3Location: S3Location
-  ): Try[(String, String, Option[String])] = {
-    val _ = s3Location // suppress unused warning
+  private def resolveCredentials(): Try[(String, String, Option[String])] = {
     val strategies = profile match {
       case Some(p) =>
         List(() => tryProfile(Some(p)))

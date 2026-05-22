@@ -287,7 +287,8 @@ class CliOutputFormatterTest extends AnyFlatSpec with Matchers {
       maxValue = Some("100.0")
     )
     val stats = makeStats(List(col), totalRows = 99L, rowGroupCount = 2L)
-    val json = CliOutputFormatter.formatStatsJson(stats).asObject.get
+    val json =
+      parse(CliOutputFormatter.formatStatsJson(stats)).toOption.get.asObject.get
 
     json("totalRows").get.asNumber.get.toLong.get shouldBe 99L
     json("rowGroupCount").get.asNumber.get.toLong.get shouldBe 2L
@@ -304,16 +305,16 @@ class CliOutputFormatterTest extends AnyFlatSpec with Matchers {
   it should "render null for missing min/max values" in {
     val col = makeColumnStats("x", minValue = None, maxValue = None)
     val stats = makeStats(List(col))
-    val json = CliOutputFormatter.formatStatsJson(stats).asObject.get
+    val json =
+      parse(CliOutputFormatter.formatStatsJson(stats)).toOption.get.asObject.get
     val c0 = json("columns").get.asArray.get(0).asObject.get
     c0("minValue").get.isNull shouldBe true
     c0("maxValue").get.isNull shouldBe true
   }
 
-  it should "return valid JSON string via .spaces2" in {
+  it should "return valid JSON string" in {
     val stats = makeStats(Nil)
-    val jsonStr = CliOutputFormatter.formatStatsJson(stats).spaces2
-    parse(jsonStr).isRight shouldBe true
+    parse(CliOutputFormatter.formatStatsJson(stats)).isRight shouldBe true
   }
 
   // ─── formatSchemaDiffTable ──────────────────────────────────────────────────

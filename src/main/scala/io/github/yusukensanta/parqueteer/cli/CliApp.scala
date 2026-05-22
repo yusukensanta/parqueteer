@@ -568,7 +568,7 @@ object CliApp {
         if (!globalOptions.quiet) {
           format match {
             case OutputFormat.JSON =>
-              println(CliOutputFormatter.formatStatsJson(stats).spaces2)
+              println(CliOutputFormatter.formatStatsJson(stats))
             case _ => println(CliOutputFormatter.formatStatsTable(stats))
           }
         }

@@ -34,7 +34,7 @@ class TableFormatter extends OutputFormatter {
     sb.append("\n")
 
     rows.foreach { row =>
-      sb.append(drawDataRow(row, columns, columnWidths, schema))
+      sb.append(drawDataRow(row, columns, columnWidths))
       sb.append("\n")
     }
 
@@ -158,10 +158,8 @@ class TableFormatter extends OutputFormatter {
   private def drawDataRow(
       row: Map[String, Any],
       columns: List[String],
-      widths: List[Int],
-      schema: Option[ParquetSchema]
+      widths: List[Int]
   ): String = {
-    val _ = schema // Reserved for future type-aware formatting
     val values = columns.map { col =>
       row
         .get(col)
