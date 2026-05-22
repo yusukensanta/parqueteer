@@ -193,13 +193,18 @@ object ArgumentParser {
               "Compression type: none, snappy, gzip, lzo, brotli, lz4, zstd"
             ),
           opt[String]("row-group-size")
+            .validate(x =>
+              scala.util
+                .Try(parseSize(x))
+                .fold(e => failure(e.getMessage), _ => success)
+            )
             .action((x, c) =>
               updateCmd[WriteCommand](
                 c,
                 _.copy(rowGroupSize = Some(parseSize(x)))
               )
             )
-            .text("Row group size (e.g., 128MB)"),
+            .text("Row group size (e.g., 128MB, 1.5GB)"),
           opt[Unit]("dry-run")
             .action((_, c) => updateCmd[WriteCommand](c, _.copy(dryRun = true)))
             .text(

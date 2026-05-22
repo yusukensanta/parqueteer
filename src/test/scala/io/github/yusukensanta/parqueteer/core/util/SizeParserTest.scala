@@ -43,4 +43,19 @@ class SizeParserTest extends AnyFlatSpec with Matchers {
       "99999999999999999999GB"
     )
   }
+
+  it should "throw for overflowing product even when the number alone fits in Long" in {
+    // 9999999999GB = 9999999999 * 1073741824 which overflows Long
+    an[IllegalArgumentException] should be thrownBy SizeParser.parse(
+      "9999999999GB"
+    )
+  }
+
+  it should "accept fractional megabytes" in {
+    SizeParser.parse("128.5MB") shouldBe (128.5 * 1024 * 1024).toLong
+  }
+
+  it should "accept fractional gigabytes" in {
+    SizeParser.parse("1.5GB") shouldBe (1.5 * 1024 * 1024 * 1024).toLong
+  }
 }
