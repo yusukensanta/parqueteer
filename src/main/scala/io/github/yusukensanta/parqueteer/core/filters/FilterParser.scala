@@ -1,288 +1,444 @@
 package io.github.yusukensanta.parqueteer.core.filters
 
-import com.github.mjakubowski84.parquet4s.{Filter, Col, ValueCodecConfiguration}
+import com.github.mjakubowski84.parquet4s.{Col, Filter, ValueCodecConfiguration}
 import io.github.yusukensanta.parqueteer.core.models.ParqueteerError
 import org.apache.parquet.filter2.predicate.{FilterApi, FilterPredicate}
 import org.apache.parquet.io.api.Binary
 import org.apache.parquet.schema.MessageType
 import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
-import scala.util.{Try, Success => TrySuccess, Failure => TryFailure}
-import scala.util.parsing.combinator._
 import scala.jdk.CollectionConverters._
+import scala.util.Try
 
-/** Parser for filter expressions.
-  *
-  * Supported Syntax:
-  *   - Comparisons: col = v, col > v, col >= v, col < v, col <= v, col != v
-  *   - BETWEEN: col BETWEEN low AND high
-  *   - IN: col IN (v1, v2, ...)
-  *   - NULL checks: col IS NULL, col IS NOT NULL
-  *   - Logical: expr AND expr, expr OR expr, NOT expr
-  *   - Parentheses: (expr)
-  *   - Nested columns: parent.child.field
-  *   - Values: strings (quoted), numbers, booleans
-  */
-class FilterParser(schema: Option[MessageType] = None)
-    extends JavaTokenParsers {
+type FilterValue = Long | Double | String | Boolean
+private type NumericValue = Long | Double
 
-  def parseFilter(input: String): Try[Filter] = {
-    Try(parseAll(expression, input)).flatMap {
-      case Success(filter, _) => TrySuccess(filter.asInstanceOf[Filter])
-      case NoSuccess(msg, _) =>
-        TryFailure(
-          new IllegalArgumentException(s"Filter parse error: $msg")
-        )
-      case _ => TryFailure(new IllegalArgumentException("Unknown parse error"))
+object FilterParser {
+
+  def parse(
+      filterExpr: String
+  ): Either[ParqueteerError.FilterParseError, Filter] =
+    new FilterParserImpl(None).parse(filterExpr) match {
+      case Right(f)  => Right(f)
+      case Left(msg) => Left(ParqueteerError.FilterParseError(filterExpr, msg))
     }
-  }
 
-  // ==================== Grammar Rules ====================
-
-  private def expression: Parser[Filter] = orExpression
-
-  private def orExpression: Parser[Filter] = {
-    andExpression ~ rep("OR" ~> andExpression) ^^ { case first ~ rest =>
-      rest.foldLeft(first)(_ || _)
+  def parseWithSchema(
+      filterExpr: String,
+      schema: MessageType
+  ): Either[ParqueteerError.FilterParseError, Filter] =
+    new FilterParserImpl(Some(schema)).parse(filterExpr) match {
+      case Right(f)  => Right(f)
+      case Left(msg) => Left(ParqueteerError.FilterParseError(filterExpr, msg))
     }
-  }
+}
 
-  private def andExpression: Parser[Filter] = {
-    notExpression ~ rep("AND" ~> notExpression) ^^ { case first ~ rest =>
-      rest.foldLeft(first)(_ && _)
+private class FilterParserImpl(schema: Option[MessageType]) {
+
+  // ── Tokens ────────────────────────────────────────────────────────────────
+
+  private enum Token:
+    case Kw(name: String)
+    case Id(name: String)
+    case Str(value: String)
+    case Lng(value: scala.Long)
+    case Dbl(value: scala.Double)
+    case Op(sym: String)
+    case LParen, RParen, Comma, Dot, Eof
+
+  private val keywords =
+    Set("AND", "OR", "NOT", "BETWEEN", "IN", "IS", "NULL", "TRUE", "FALSE")
+
+  private def tokenize(input: String): Either[String, List[Token]] = Try {
+    val buf = scala.collection.mutable.ListBuffer.empty[Token]
+    var i = 0
+    val n = input.length
+
+    def skipWS(): Unit = while (i < n && input(i).isWhitespace) i += 1
+
+    skipWS()
+    while (i < n) {
+      input(i) match {
+        case '(' => buf += Token.LParen; i += 1
+        case ')' => buf += Token.RParen; i += 1
+        case ',' => buf += Token.Comma; i += 1
+        case '.' => buf += Token.Dot; i += 1
+        case '"' =>
+          i += 1
+          val sb = new StringBuilder
+          while (i < n && input(i) != '"') {
+            if (input(i) == '\\' && i + 1 < n) {
+              sb.append(input(i + 1)); i += 2
+            } else { sb.append(input(i)); i += 1 }
+          }
+          if (i < n) i += 1
+          buf += Token.Str(sb.toString)
+        case '!' if i + 1 < n && input(i + 1) == '=' =>
+          buf += Token.Op("!="); i += 2
+        case '>' if i + 1 < n && input(i + 1) == '=' =>
+          buf += Token.Op(">="); i += 2
+        case '<' if i + 1 < n && input(i + 1) == '=' =>
+          buf += Token.Op("<="); i += 2
+        case '>' => buf += Token.Op(">"); i += 1
+        case '<' => buf += Token.Op("<"); i += 1
+        case '=' => buf += Token.Op("="); i += 1
+        case c if c.isLetter || c == '_' =>
+          val start = i
+          while (i < n && (input(i).isLetterOrDigit || input(i) == '_')) i += 1
+          val word = input.substring(start, i)
+          if (keywords.contains(word.toUpperCase))
+            buf += Token.Kw(word.toUpperCase)
+          else buf += Token.Id(word)
+        case c
+            if c.isDigit || (c == '-' && i + 1 < n && input(i + 1).isDigit) =>
+          val start = i
+          if (c == '-') i += 1
+          while (i < n && input(i).isDigit) i += 1
+          if (i < n && input(i) == '.' && i + 1 < n && input(i + 1).isDigit) {
+            i += 1
+            while (i < n && input(i).isDigit) i += 1
+            if (i < n && (input(i) == 'e' || input(i) == 'E')) {
+              i += 1
+              if (i < n && (input(i) == '+' || input(i) == '-')) i += 1
+              while (i < n && input(i).isDigit) i += 1
+            }
+            buf += Token.Dbl(input.substring(start, i).toDouble)
+          } else {
+            buf += Token.Lng(input.substring(start, i).toLong)
+          }
+        case _ => i += 1
+      }
+      skipWS()
     }
-  }
+    buf += Token.Eof
+    buf.toList
+  }.toEither.left.map(_.getMessage)
 
-  private def notExpression: Parser[Filter] = {
-    ("NOT" ~> primaryExpression ^^ (!_)) | primaryExpression
-  }
+  // ── Parser state ──────────────────────────────────────────────────────────
 
-  private def primaryExpression: Parser[Filter] = {
-    betweenExpr | inExpr | isNullExpr | comparison | ("(" ~> expression <~ ")")
-  }
+  private var tokens: List[Token] = Nil
+  private var pos: Int = 0
 
-  /** BETWEEN low AND high → col >= low && col <= high */
-  private def betweenExpr: Parser[Filter] = {
-    columnName ~ ("BETWEEN" ~> numericValue) ~ ("AND" ~> numericValue) ^^ {
-      case col ~ low ~ high => buildBetween(col, low, high)
+  private def peek: Token = if (pos < tokens.length) tokens(pos) else Token.Eof
+  private def advance(): Token = { val t = peek; pos += 1; t }
+
+  // ── Entry point ───────────────────────────────────────────────────────────
+
+  def parse(input: String): Either[String, Filter] =
+    if (input.trim.isEmpty) Left("Filter parse error: empty input")
+    else
+      tokenize(input) match {
+        case Left(err) => Left(s"Filter parse error: $err")
+        case Right(toks) =>
+          tokens = toks; pos = 0
+          parseExpression().flatMap { f =>
+            if (peek == Token.Eof) Right(f)
+            else Left(s"Filter parse error: unexpected token after expression")
+          }
+      }
+
+  // ── Grammar ───────────────────────────────────────────────────────────────
+
+  private def parseExpression(): Either[String, Filter] = parseOr()
+
+  private def parseOr(): Either[String, Filter] = {
+    var result = parseAnd()
+    while (peek == Token.Kw("OR") && result.isRight) {
+      advance()
+      result = for { l <- result; r <- parseAnd() } yield l || r
     }
+    result
   }
 
-  /** IN (v1, v2, ...) — values must be homogeneous (all strings or all numbers)
-    */
-  private def inExpr: Parser[Filter] = {
-    columnName ~ ("IN" ~> "(" ~> rep1sep(value, ",") <~ ")") ^^ {
-      case col ~ vals => buildIn(col, vals)
+  private def parseAnd(): Either[String, Filter] = {
+    var result = parseNot()
+    while (peek == Token.Kw("AND") && result.isRight) {
+      advance()
+      result = for { l <- result; r <- parseNot() } yield l && r
     }
+    result
   }
 
-  /** IS NULL / IS NOT NULL — uses Binary column predicate (correct for
-    * String/optional fields)
-    */
-  private def isNullExpr: Parser[Filter] = {
-    columnName ~ ("IS" ~> ("NOT" ~> "NULL" ^^^ false | "NULL" ^^^ true)) ^^ {
-      case col ~ isNull => buildIsNull(col, isNull)
+  private def parseNot(): Either[String, Filter] =
+    if (peek == Token.Kw("NOT")) { advance(); parsePrimary().map(!_) }
+    else parsePrimary()
+
+  private def parsePrimary(): Either[String, Filter] =
+    peek match {
+      case Token.LParen =>
+        advance()
+        parseExpression().flatMap { f =>
+          if (peek == Token.RParen) { advance(); Right(f) }
+          else Left("Filter parse error: missing closing ')'")
+        }
+      case Token.Id(_) => parseAtom()
+      case other       => Left(s"Filter parse error: unexpected token '$other'")
     }
-  }
 
-  private def comparison: Parser[Filter] = {
-    columnName ~ operator ~ value ^^ { case col ~ op ~ v =>
-      buildComparison(col, op, v)
+  private def parseAtom(): Either[String, Filter] =
+    parseColumnName().flatMap { col =>
+      peek match {
+        case Token.Kw("BETWEEN") => parseBetween(col)
+        case Token.Kw("IN")      => parseIn(col)
+        case Token.Kw("IS")      => parseIsNull(col)
+        case Token.Op(op) =>
+          advance()
+          parseValue().flatMap(v => buildComparison(col, op, v))
+        case other =>
+          Left(
+            s"Filter parse error: expected operator after column '$col', got '$other'"
+          )
+      }
     }
-  }
 
-  /** Allow dotted paths: user.address.city */
-  private def columnName: Parser[String] = {
-    ident ~ rep("." ~> ident) ^^ { case head ~ tail =>
-      (head :: tail).mkString(".")
+  private def parseColumnName(): Either[String, String] =
+    peek match {
+      case Token.Id(name) =>
+        advance()
+        var parts = List(name)
+        while (peek == Token.Dot) {
+          advance()
+          peek match {
+            case Token.Id(n) => advance(); parts = parts :+ n
+            case other =>
+              return Left(
+                s"Filter parse error: expected identifier after '.', got '$other'"
+              )
+          }
+        }
+        Right(parts.mkString("."))
+      case other =>
+        Left(s"Filter parse error: expected column name, got '$other'")
     }
+
+  private def parseValue(): Either[String, FilterValue] =
+    peek match {
+      case Token.Str(s)      => advance(); Right(s)
+      case Token.Kw("TRUE")  => advance(); Right(true)
+      case Token.Kw("FALSE") => advance(); Right(false)
+      case Token.Lng(l)      => advance(); Right(l)
+      case Token.Dbl(d)      => advance(); Right(d)
+      case other => Left(s"Filter parse error: expected value, got '$other'")
+    }
+
+  private def parseNumericValue(): Either[String, NumericValue] =
+    peek match {
+      case Token.Lng(l) => advance(); Right(l)
+      case Token.Dbl(d) => advance(); Right(d)
+      case other =>
+        Left(s"Filter parse error: expected numeric value, got '$other'")
+    }
+
+  private def parseBetween(col: String): Either[String, Filter] = {
+    advance() // consume BETWEEN
+    for {
+      low <- parseNumericValue()
+      _ <-
+        if (peek == Token.Kw("AND")) Right(advance())
+        else Left(s"Filter parse error: expected AND in BETWEEN, got '$peek'")
+      high <- parseNumericValue()
+      f <- buildBetween(col, low, high)
+    } yield f
   }
 
-  private def operator: Parser[String] = "=" | ">=" | ">" | "<=" | "<" | "!="
-
-  private val decimalFloatRx = """(-?\d+\.\d*|-?\d*\.\d+)([eE][+-]?\d+)?""".r
-
-  private def decimalFloat: Parser[Double] = decimalFloatRx ^^ { _.toDouble }
-
-  private def value: Parser[Any] = {
-    stringLiteral ^^ { s => s.substring(1, s.length - 1) } |
-      "true" ^^^ true |
-      "false" ^^^ false |
-      decimalFloat |
-      wholeNumber ^^ { _.toLong }
+  private def parseIn(col: String): Either[String, Filter] = {
+    advance() // consume IN
+    if (peek != Token.LParen)
+      return Left(
+        s"Filter parse error: expected '(' after IN, got '$peek'"
+      )
+    advance()
+    val vals = scala.collection.mutable.ListBuffer.empty[FilterValue]
+    parseValue() match {
+      case Left(e)  => return Left(e)
+      case Right(v) => vals += v
+    }
+    while (peek == Token.Comma) {
+      advance()
+      parseValue() match {
+        case Left(e)  => return Left(e)
+        case Right(v) => vals += v
+      }
+    }
+    if (peek != Token.RParen)
+      return Left(
+        s"Filter parse error: expected ')' after IN list, got '$peek'"
+      )
+    advance()
+    buildIn(col, vals.toList)
   }
 
-  private def numericValue: Parser[AnyVal] = {
-    decimalFloat | wholeNumber ^^ { _.toLong }
+  private def parseIsNull(col: String): Either[String, Filter] = {
+    advance() // consume IS
+    val isNull = if (peek == Token.Kw("NOT")) { advance(); false }
+    else true
+    if (peek == Token.Kw("NULL")) {
+      advance(); Right(buildIsNullFilter(col, isNull))
+    } else Left(s"Filter parse error: expected NULL after IS, got '$peek'")
   }
 
-  // ==================== Filter Construction ====================
+  // ── Filter construction ───────────────────────────────────────────────────
 
   private def buildComparison(
-      column: String,
-      operator: String,
-      value: Any
-  ): Filter = {
-    val col = Col(column)
-    operator match {
+      col: String,
+      op: String,
+      v: FilterValue
+  ): Either[String, Filter] = {
+    val c = Col(col)
+    op match {
       case "=" =>
-        value match {
-          case s: String  => col === s
-          case l: Long    => col === l
-          case d: Double  => col === d
-          case b: Boolean => col === b
-          case _          => col === value.toString
-        }
+        Right(v match {
+          case s: String  => c === s
+          case l: Long    => c === l
+          case d: Double  => c === d
+          case b: Boolean => c === b
+        })
       case "!=" =>
-        value match {
-          case s: String  => col !== s
-          case l: Long    => col !== l
-          case d: Double  => col !== d
-          case b: Boolean => col !== b
-          case _          => col !== value.toString
-        }
+        Right(v match {
+          case s: String  => c !== s
+          case l: Long    => c !== l
+          case d: Double  => c !== d
+          case b: Boolean => c !== b
+        })
       case ">" =>
-        value match {
-          case l: Long   => col > l
-          case d: Double => col > d
+        v match {
+          case l: Long   => Right(c > l)
+          case d: Double => Right(c > d)
           case _ =>
-            throw new IllegalArgumentException(
-              s"Operator '>' requires a numeric value, got: ${value.getClass.getSimpleName} '$value'"
+            Left(
+              s"Operator '>' requires a numeric value, got: ${v.getClass.getSimpleName} '$v'"
             )
         }
       case ">=" =>
-        value match {
-          case l: Long   => col >= l
-          case d: Double => col >= d
+        v match {
+          case l: Long   => Right(c >= l)
+          case d: Double => Right(c >= d)
           case _ =>
-            throw new IllegalArgumentException(
-              s"Operator '>=' requires a numeric value, got: ${value.getClass.getSimpleName} '$value'"
+            Left(
+              s"Operator '>=' requires a numeric value, got: ${v.getClass.getSimpleName} '$v'"
             )
         }
       case "<" =>
-        value match {
-          case l: Long   => col < l
-          case d: Double => col < d
+        v match {
+          case l: Long   => Right(c < l)
+          case d: Double => Right(c < d)
           case _ =>
-            throw new IllegalArgumentException(
-              s"Operator '<' requires a numeric value, got: ${value.getClass.getSimpleName} '$value'"
+            Left(
+              s"Operator '<' requires a numeric value, got: ${v.getClass.getSimpleName} '$v'"
             )
         }
       case "<=" =>
-        value match {
-          case l: Long   => col <= l
-          case d: Double => col <= d
+        v match {
+          case l: Long   => Right(c <= l)
+          case d: Double => Right(c <= d)
           case _ =>
-            throw new IllegalArgumentException(
-              s"Operator '<=' requires a numeric value, got: ${value.getClass.getSimpleName} '$value'"
+            Left(
+              s"Operator '<=' requires a numeric value, got: ${v.getClass.getSimpleName} '$v'"
             )
         }
-      case _ =>
-        throw new IllegalArgumentException(s"Unknown operator: $operator")
+      case _ => Left(s"Unknown operator: $op")
     }
   }
 
   private def buildBetween(
-      column: String,
-      low: AnyVal,
-      high: AnyVal
-  ): Filter = {
-    val col = Col(column)
-    (low, high) match {
-      case (l: Long, h: Long)     => (col >= l) && (col <= h)
-      case (l: Double, h: Double) => (col >= l) && (col <= h)
-      case (l: Long, h: Double)   => (col >= l.toDouble) && (col <= h)
-      case (l: Double, h: Long)   => (col >= l) && (col <= h.toDouble)
-      case _ =>
-        throw new IllegalArgumentException(
-          s"BETWEEN requires numeric bounds, got: $low AND $high"
-        )
-    }
+      col: String,
+      low: NumericValue,
+      high: NumericValue
+  ): Either[String, Filter] = {
+    val c = Col(col)
+    Right((low, high) match {
+      case (l: Long, h: Long)     => (c >= l) && (c <= h)
+      case (l: Double, h: Double) => (c >= l) && (c <= h)
+      case (l: Long, h: Double)   => (c >= l.toDouble) && (c <= h)
+      case (l: Double, h: Long)   => (c >= l) && (c <= h.toDouble)
+    })
   }
 
-  private def buildIn(column: String, values: List[Any]): Filter = {
-    val col = Col(column)
+  private def buildIn(
+      col: String,
+      values: List[FilterValue]
+  ): Either[String, Filter] = {
+    val c = Col(col)
     val strings = values.collect { case s: String => s }
     val longs = values.collect { case l: Long => l }
     val doubles = values.collect { case d: Double => d }
 
-    if (strings.length == values.length) col.in(strings)
-    else if (longs.length == values.length) col.in(longs)
-    else if (doubles.length == values.length) col.in(doubles)
+    if (strings.length == values.length) Right(c.in(strings))
+    else if (longs.length == values.length) Right(c.in(longs))
+    else if (doubles.length == values.length) Right(c.in(doubles))
     else if (longs.length + doubles.length == values.length) {
-      val asDoubles = values.map {
+      val asDoubles = values.collect {
         case l: Long   => l.toDouble
         case d: Double => d
-        case v => throw new IllegalArgumentException(s"Unexpected IN value: $v")
       }
-      col.in(asDoubles)
+      Right(c.in(asDoubles))
     } else
-      throw new IllegalArgumentException(
+      Left(
         "IN list must contain values of the same type (all strings or all numbers)"
       )
   }
 
-  private def buildIsNull(column: String, isNull: Boolean): Filter =
+  private def buildIsNullFilter(col: String, isNull: Boolean): Filter =
     new Filter {
       def toPredicate(vcc: ValueCodecConfiguration): FilterPredicate = {
-        val physType = schema.flatMap(resolveColumnType(_, column))
+        val physType = schema.flatMap(resolveColumnType(_, col))
         physType.getOrElse(PrimitiveTypeName.BINARY) match {
           case PrimitiveTypeName.INT32 =>
             if (isNull)
               FilterApi.eq(
-                FilterApi.intColumn(column),
+                FilterApi.intColumn(col),
                 null.asInstanceOf[java.lang.Integer]
               )
             else
               FilterApi.notEq(
-                FilterApi.intColumn(column),
+                FilterApi.intColumn(col),
                 null.asInstanceOf[java.lang.Integer]
               )
           case PrimitiveTypeName.INT64 =>
             if (isNull)
               FilterApi.eq(
-                FilterApi.longColumn(column),
+                FilterApi.longColumn(col),
                 null.asInstanceOf[java.lang.Long]
               )
             else
               FilterApi.notEq(
-                FilterApi.longColumn(column),
+                FilterApi.longColumn(col),
                 null.asInstanceOf[java.lang.Long]
               )
           case PrimitiveTypeName.FLOAT =>
             if (isNull)
               FilterApi.eq(
-                FilterApi.floatColumn(column),
+                FilterApi.floatColumn(col),
                 null.asInstanceOf[java.lang.Float]
               )
             else
               FilterApi.notEq(
-                FilterApi.floatColumn(column),
+                FilterApi.floatColumn(col),
                 null.asInstanceOf[java.lang.Float]
               )
           case PrimitiveTypeName.DOUBLE =>
             if (isNull)
               FilterApi.eq(
-                FilterApi.doubleColumn(column),
+                FilterApi.doubleColumn(col),
                 null.asInstanceOf[java.lang.Double]
               )
             else
               FilterApi.notEq(
-                FilterApi.doubleColumn(column),
+                FilterApi.doubleColumn(col),
                 null.asInstanceOf[java.lang.Double]
               )
           case PrimitiveTypeName.BOOLEAN =>
             if (isNull)
               FilterApi.eq(
-                FilterApi.booleanColumn(column),
+                FilterApi.booleanColumn(col),
                 null.asInstanceOf[java.lang.Boolean]
               )
             else
               FilterApi.notEq(
-                FilterApi.booleanColumn(column),
+                FilterApi.booleanColumn(col),
                 null.asInstanceOf[java.lang.Boolean]
               )
           case _ =>
-            val binaryCol = FilterApi.binaryColumn(column)
+            val binaryCol = FilterApi.binaryColumn(col)
             if (isNull) FilterApi.eq(binaryCol, null.asInstanceOf[Binary])
             else FilterApi.notEq(binaryCol, null.asInstanceOf[Binary])
         }
@@ -307,29 +463,4 @@ class FilterParser(schema: Option[MessageType] = None)
           case f if f.isPrimitive => f.asPrimitiveType().getPrimitiveTypeName
         }
     }.getOrElse(None)
-}
-
-object FilterParser {
-  private val parser = new FilterParser()
-
-  def parse(
-      filterExpr: String
-  ): Either[ParqueteerError.FilterParseError, Filter] = {
-    parser.parseFilter(filterExpr) match {
-      case TrySuccess(filter) => Right(filter)
-      case TryFailure(ex) =>
-        Left(ParqueteerError.FilterParseError(filterExpr, ex.getMessage))
-    }
-  }
-
-  def parseWithSchema(
-      filterExpr: String,
-      schema: MessageType
-  ): Either[ParqueteerError.FilterParseError, Filter] = {
-    new FilterParser(Some(schema)).parseFilter(filterExpr) match {
-      case TrySuccess(filter) => Right(filter)
-      case TryFailure(ex) =>
-        Left(ParqueteerError.FilterParseError(filterExpr, ex.getMessage))
-    }
-  }
 }

@@ -127,7 +127,6 @@ lazy val root = (project in file("."))
       val scalatestVersion = "3.2.19"
       val scalamockVersion = "7.3.2"
       val scalatestScalacheckVersion = "3.2.18.0"
-      val parserCombinatorsVersion = "2.4.0"
       val awsSdkVersion = "2.34.0"
       val googleCloudStorageVersion = "2.68.0"
       val azureStorageVersion = "12.30.0"
@@ -138,9 +137,6 @@ lazy val root = (project in file("."))
       Seq(
         "com.github.mjakubowski84" %% "parquet4s-core" % parquet4sVersion,
         "com.github.scopt" %% "scopt" % scoptVersion,
-
-        // Parser combinators for filter expressions
-        "org.scala-lang.modules" %% "scala-parser-combinators" % parserCombinatorsVersion,
 
         // JSON processing
         "io.circe" %% "circe-core" % circeVersion,
