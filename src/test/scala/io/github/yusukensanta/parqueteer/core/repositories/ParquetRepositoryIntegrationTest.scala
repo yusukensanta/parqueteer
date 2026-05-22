@@ -45,11 +45,22 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
     result.get.rows.head.keys should contain allOf ("id", "name", "score")
   }
 
-  // TODO(human): implement Gzip compression roundtrip
-  // Write sampleData with CompressionType.Gzip to a tempFile(), then read it back.
-  // Assert: write succeeds, rows length == 3, at least one name value is correct.
   it should "write and read back data with Gzip compression" taggedAs IntegrationTest in {
-    pending
+    val loc = LocalPath(tempFile().getAbsolutePath)
+    repo
+      .writeContent(
+        loc,
+        sampleData,
+        None,
+        WriteConfig(compressionType = CompressionType.Gzip)
+      )
+      .isSuccess shouldBe true
+
+    val result = repo.readContent(ParquetFile(loc), ReadConfig())
+    result.isSuccess shouldBe true
+    result.get.rows should have length 3
+    result.get.totalRows shouldBe 3L
+    result.get.rows.head.keys should contain allOf ("id", "name", "score")
   }
 
   it should "write and read back data with Uncompressed" taggedAs IntegrationTest in {
