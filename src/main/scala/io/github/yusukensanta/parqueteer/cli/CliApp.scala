@@ -14,6 +14,7 @@ import io.github.yusukensanta.parqueteer.core.models.{
 }
 import io.github.yusukensanta.parqueteer.core.formatters.OutputFormatter
 import io.github.yusukensanta.parqueteer.config.{
+  AppConfig,
   ConfigurationManager,
   EnvConfig
 }
@@ -90,12 +91,17 @@ object CliApp {
         1
       case Some(cmd) =>
         try {
+          val appConfig = new ConfigurationManager()
+            .loadConfig(config.globalOptions.configPath)
+            .getOrElse(AppConfig())
+          val opts = applyAppConfig(config.globalOptions, appConfig)
+          val effectiveCmd = applyAppConfigToCommand(cmd, appConfig)
           val repository = new ParquetRepository(
-            profile = config.globalOptions.profile,
-            region = config.globalOptions.region
+            profile = opts.profile,
+            region = opts.region
           )
           val service = new ParquetService(repository)
-          executeCommand(cmd, service, config.globalOptions)
+          executeCommand(effectiveCmd, service, opts)
         } catch {
           case e: Exception =>
             logger.error("Unexpected error", e)
@@ -104,6 +110,33 @@ object CliApp {
             1
         }
     }
+
+  private def applyAppConfig(
+      opts: GlobalOptions,
+      appConfig: AppConfig
+  ): GlobalOptions = {
+    val s3 = appConfig.cloud.s3
+    opts.copy(
+      profile = opts.profile.orElse(s3.profile),
+      region = opts.region.orElse(
+        if (s3.defaultRegion != "us-east-1") Some(s3.defaultRegion) else None
+      )
+    )
+  }
+
+  private def applyAppConfigToCommand(
+      cmd: Command,
+      appConfig: AppConfig
+  ): Command = {
+    val outCfg = appConfig.output
+    cmd match {
+      case r: ReadCommand =>
+        r.copy(maxRows = r.maxRows.orElse(Some(outCfg.maxRows)))
+      case c: ConvertCommand =>
+        c.copy(maxRows = c.maxRows.orElse(Some(outCfg.maxRows)))
+      case other => other
+    }
+  }
 
   private def executeCommand(
       command: Command,
