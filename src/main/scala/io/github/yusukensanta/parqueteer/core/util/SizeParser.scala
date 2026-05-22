@@ -7,17 +7,20 @@ object SizeParser {
     "MB" -> 1024L * 1024L,
     "GB" -> 1024L * 1024L * 1024L
   )
-  private val pattern = """(\d+)\s*(B|KB|MB|GB)""".r
+  private val pattern = """(\d+(?:\.\d+)?)\s*(B|KB|MB|GB)""".r
 
   def parse(sizeStr: String): Long =
     sizeStr.toUpperCase match {
       case pattern(size, unit) =>
-        scala.util
-          .Try(size.toLong)
-          .getOrElse(
-            throw new IllegalArgumentException(s"Invalid size format: $sizeStr")
-          ) * units(unit)
+        val bytes = BigDecimal(size) * units(unit)
+        if (bytes > Long.MaxValue || bytes < 0)
+          throw new IllegalArgumentException(
+            s"Size too large (exceeds Long.MaxValue): $sizeStr"
+          )
+        bytes.toLong
       case _ =>
-        throw new IllegalArgumentException(s"Invalid size format: $sizeStr")
+        throw new IllegalArgumentException(
+          s"Invalid size format: $sizeStr. Expected format: <number><unit> (e.g., 128MB, 1.5GB)"
+        )
     }
 }
