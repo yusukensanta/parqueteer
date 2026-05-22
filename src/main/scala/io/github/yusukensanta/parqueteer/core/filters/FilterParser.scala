@@ -4,8 +4,11 @@ import com.github.mjakubowski84.parquet4s.{Filter, Col, ValueCodecConfiguration}
 import io.github.yusukensanta.parqueteer.core.models.ParqueteerError
 import org.apache.parquet.filter2.predicate.{FilterApi, FilterPredicate}
 import org.apache.parquet.io.api.Binary
+import org.apache.parquet.schema.MessageType
+import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
 import scala.util.{Try, Success => TrySuccess, Failure => TryFailure}
 import scala.util.parsing.combinator._
+import scala.jdk.CollectionConverters._
 
 /** Parser for filter expressions.
   *
@@ -19,7 +22,8 @@ import scala.util.parsing.combinator._
   *   - Nested columns: parent.child.field
   *   - Values: strings (quoted), numbers, booleans
   */
-class FilterParser extends JavaTokenParsers {
+class FilterParser(schema: Option[MessageType] = None)
+    extends JavaTokenParsers {
 
   def parseFilter(input: String): Try[Filter] = {
     Try(parseAll(expression, input)).flatMap {
@@ -217,17 +221,92 @@ class FilterParser extends JavaTokenParsers {
       )
   }
 
-  /** IS NULL / IS NOT NULL using Apache Parquet's binary column null predicate.
-    * Works correctly for String/Binary (optional) columns.
-    */
   private def buildIsNull(column: String, isNull: Boolean): Filter =
     new Filter {
       def toPredicate(vcc: ValueCodecConfiguration): FilterPredicate = {
-        val binaryCol = FilterApi.binaryColumn(column)
-        if (isNull) FilterApi.eq(binaryCol, null.asInstanceOf[Binary])
-        else FilterApi.notEq(binaryCol, null.asInstanceOf[Binary])
+        val physType = schema.flatMap(resolveColumnType(_, column))
+        physType.getOrElse(PrimitiveTypeName.BINARY) match {
+          case PrimitiveTypeName.INT32 =>
+            if (isNull)
+              FilterApi.eq(
+                FilterApi.intColumn(column),
+                null.asInstanceOf[java.lang.Integer]
+              )
+            else
+              FilterApi.notEq(
+                FilterApi.intColumn(column),
+                null.asInstanceOf[java.lang.Integer]
+              )
+          case PrimitiveTypeName.INT64 =>
+            if (isNull)
+              FilterApi.eq(
+                FilterApi.longColumn(column),
+                null.asInstanceOf[java.lang.Long]
+              )
+            else
+              FilterApi.notEq(
+                FilterApi.longColumn(column),
+                null.asInstanceOf[java.lang.Long]
+              )
+          case PrimitiveTypeName.FLOAT =>
+            if (isNull)
+              FilterApi.eq(
+                FilterApi.floatColumn(column),
+                null.asInstanceOf[java.lang.Float]
+              )
+            else
+              FilterApi.notEq(
+                FilterApi.floatColumn(column),
+                null.asInstanceOf[java.lang.Float]
+              )
+          case PrimitiveTypeName.DOUBLE =>
+            if (isNull)
+              FilterApi.eq(
+                FilterApi.doubleColumn(column),
+                null.asInstanceOf[java.lang.Double]
+              )
+            else
+              FilterApi.notEq(
+                FilterApi.doubleColumn(column),
+                null.asInstanceOf[java.lang.Double]
+              )
+          case PrimitiveTypeName.BOOLEAN =>
+            if (isNull)
+              FilterApi.eq(
+                FilterApi.booleanColumn(column),
+                null.asInstanceOf[java.lang.Boolean]
+              )
+            else
+              FilterApi.notEq(
+                FilterApi.booleanColumn(column),
+                null.asInstanceOf[java.lang.Boolean]
+              )
+          case _ =>
+            val binaryCol = FilterApi.binaryColumn(column)
+            if (isNull) FilterApi.eq(binaryCol, null.asInstanceOf[Binary])
+            else FilterApi.notEq(binaryCol, null.asInstanceOf[Binary])
+        }
       }
     }
+
+  private def resolveColumnType(
+      messageType: MessageType,
+      column: String
+  ): Option[PrimitiveTypeName] =
+    Try {
+      val parts = column.split("\\.").toList
+      parts
+        .foldLeft[Option[org.apache.parquet.schema.Type]](None) {
+          (groupOpt, part) =>
+            val group = groupOpt
+              .map(_.asGroupType())
+              .getOrElse(messageType.asGroupType())
+            group.getFields.asScala.find(_.getName == part)
+        }
+        .collect {
+          case f if f.isPrimitive => f.asPrimitiveType().getPrimitiveTypeName
+        }
+    }.getOrElse(None)
 }
 
 object FilterParser {
@@ -237,6 +316,17 @@ object FilterParser {
       filterExpr: String
   ): Either[ParqueteerError.FilterParseError, Filter] = {
     parser.parseFilter(filterExpr) match {
+      case TrySuccess(filter) => Right(filter)
+      case TryFailure(ex) =>
+        Left(ParqueteerError.FilterParseError(filterExpr, ex.getMessage))
+    }
+  }
+
+  def parseWithSchema(
+      filterExpr: String,
+      schema: MessageType
+  ): Either[ParqueteerError.FilterParseError, Filter] = {
+    new FilterParser(Some(schema)).parseFilter(filterExpr) match {
       case TrySuccess(filter) => Right(filter)
       case TryFailure(ex) =>
         Left(ParqueteerError.FilterParseError(filterExpr, ex.getMessage))

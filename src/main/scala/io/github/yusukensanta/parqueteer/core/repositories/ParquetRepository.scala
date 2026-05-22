@@ -45,7 +45,13 @@ class ParquetRepository(
         } else {
           val path4s = Parquet4sPath(file.location.path)
           Using.resource(
-            openParquetReader(path4s, hadoopPath, hadoopConfig, config)
+            openParquetReader(
+              path4s,
+              hadoopPath,
+              hadoopConfig,
+              config,
+              Some(fileSchema)
+            )
           ) { reader =>
             val rows = config.maxRows match {
               case Some(limit) =>
@@ -91,7 +97,13 @@ class ParquetRepository(
         val hadoopPath = new HadoopPath(file.location.path)
         val (_, fileSchema) = getFileMetadata(hadoopPath, hadoopConfig)
         Using.resource(
-          openParquetReader(path4s, hadoopPath, hadoopConfig, config)
+          openParquetReader(
+            path4s,
+            hadoopPath,
+            hadoopConfig,
+            config,
+            Some(fileSchema)
+          )
         ) { source =>
           val iter = config.maxRows match {
             case Some(limit) => source.iterator.take(limit.toInt)
@@ -178,12 +190,16 @@ class ParquetRepository(
       path4s: Parquet4sPath,
       hadoopPath: HadoopPath,
       hadoopConfig: Configuration,
-      config: ReadConfig
+      config: ReadConfig,
+      fileSchema: Option[org.apache.parquet.schema.MessageType]
   ): com.github.mjakubowski84.parquet4s.ParquetIterable[RowParquetRecord] = {
     val filter = config.filter
       .flatMap { expr =>
         import io.github.yusukensanta.parqueteer.core.filters.FilterParser
-        FilterParser.parse(expr).toOption
+        fileSchema
+          .map(s => FilterParser.parseWithSchema(expr, s))
+          .getOrElse(FilterParser.parse(expr))
+          .toOption
       }
       .getOrElse(Filter.noopFilter)
     config.columns match {
