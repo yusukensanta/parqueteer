@@ -54,6 +54,10 @@ object StorageLocationParser {
       case azurePattern(container, account, path) =>
         // Regex captures (container, account, path), constructor expects (account, container, path)
         Right(AzureLocation(account, container, path))
+      case typo if typo.matches("[a-zA-Z][a-zA-Z0-9+.\\-]*:/[^/].*") =>
+        Left(
+          s"Malformed URL '$typo'. Did you mean '${typo.replaceFirst(":/", "://")}'?"
+        )
       case localPath if !localPath.contains("://") =>
         Right(LocalPath(localPath))
       case unsupported =>
