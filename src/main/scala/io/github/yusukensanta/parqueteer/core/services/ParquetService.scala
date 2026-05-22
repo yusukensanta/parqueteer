@@ -348,6 +348,20 @@ class ParquetService(
     parseCsvContent(File(path).contentAsString)
   }
 
+  private def coerceJsonValue(j: io.circe.Json): Any =
+    if (j.isString)
+      io.github.yusukensanta.parqueteer.core.util.TypeInferrer
+        .inferJsonString(j.asString.get)
+    else if (j.isNumber) {
+      val n = j.asNumber.get
+      val raw = j.noSpaces
+      if (raw.contains('.') || raw.contains('e') || raw.contains('E'))
+        n.toDouble
+      else n.toLong.fold[Any](n.toDouble)(identity)
+    } else if (j.isBoolean) j.asBoolean.get
+    else if (j.isNull) null
+    else j.toString
+
   private[services] def parseJsonContent(
       content: String
   ): List[Map[String, Any]] = {
@@ -369,23 +383,7 @@ class ParquetService(
                 )
                 .toMap
                 .view
-                .mapValues {
-                  case j if j.isString =>
-                    io.github.yusukensanta.parqueteer.core.util.TypeInferrer
-                      .inferJsonString(j.asString.get)
-                  case j if j.isNumber =>
-                    val n = j.asNumber.get
-                    val raw = j.noSpaces
-                    if (
-                      raw.contains('.') || raw
-                        .contains('e') || raw.contains('E')
-                    )
-                      n.toDouble
-                    else n.toLong.fold[Any](n.toDouble)(identity)
-                  case j if j.isBoolean => j.asBoolean.get
-                  case j if j.isNull    => null
-                  case j                => j.toString
-                }
+                .mapValues(coerceJsonValue)
                 .toMap
             }
           case None =>
@@ -418,22 +416,7 @@ class ParquetService(
               )
               .toMap
               .view
-              .mapValues {
-                case j if j.isString =>
-                  io.github.yusukensanta.parqueteer.core.util.TypeInferrer
-                    .inferJsonString(j.asString.get)
-                case j if j.isNumber =>
-                  val n = j.asNumber.get
-                  val raw = j.noSpaces
-                  if (
-                    raw.contains('.') || raw.contains('e') || raw.contains('E')
-                  )
-                    n.toDouble
-                  else n.toLong.fold[Any](n.toDouble)(identity)
-                case j if j.isBoolean => j.asBoolean.get
-                case j if j.isNull    => null
-                case j                => j.toString
-              }
+              .mapValues(coerceJsonValue)
               .toMap
         }
       }
