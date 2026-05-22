@@ -1,10 +1,24 @@
 package io.github.yusukensanta.parqueteer.core.filters
 
 import com.github.mjakubowski84.parquet4s.Filter
+import org.apache.parquet.schema.{MessageType, PrimitiveType, Types}
+import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
+import org.apache.parquet.schema.Type.Repetition
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 class FilterParserTest extends AnyFlatSpec with Matchers {
+
+  private def schema(fields: (String, PrimitiveTypeName)*): MessageType =
+    new MessageType(
+      "test",
+      fields.map { case (name, t) =>
+        Types
+          .primitive(t, Repetition.OPTIONAL)
+          .named(name)
+          .asInstanceOf[org.apache.parquet.schema.Type]
+      }*
+    )
 
   "FilterParser" should "parse simple integer equality" in {
     val result = FilterParser.parse("age = 25")
@@ -201,6 +215,66 @@ class FilterParserTest extends AnyFlatSpec with Matchers {
 
   it should "parse dotted path in BETWEEN" in {
     val result = FilterParser.parse("metrics.score BETWEEN 80 AND 100")
+    result shouldBe a[Right[?, ?]]
+    result.exists(_ ne Filter.noopFilter) shouldBe true
+  }
+
+  // ── Error message quality ──────────────────────────────────────────────────
+  "FilterParser error messages" should "include original expression in userMessage" in {
+    val expr = "age >"
+    val result = FilterParser.parse(expr)
+    result.isLeft shouldBe true
+    result.left.toOption.get.userMessage should include(expr)
+  }
+
+  it should "return Left for completely nonsense input" in {
+    FilterParser.parse("???!!!") shouldBe a[Left[?, ?]]
+  }
+
+  it should "return Left for dangling AND" in {
+    FilterParser.parse("age > 5 AND") shouldBe a[Left[?, ?]]
+  }
+
+  it should "return Left for value-only input" in {
+    FilterParser.parse("42") shouldBe a[Left[?, ?]]
+  }
+
+  // ── parseWithSchema ────────────────────────────────────────────────────────
+  "FilterParser.parseWithSchema" should "succeed for INT32 column with integer value" in {
+    val s = schema("age" -> PrimitiveTypeName.INT32)
+    val result = FilterParser.parseWithSchema("age > 18", s)
+    result shouldBe a[Right[?, ?]]
+    result.exists(_ ne Filter.noopFilter) shouldBe true
+  }
+
+  it should "succeed for BINARY column with string value" in {
+    val s = schema("name" -> PrimitiveTypeName.BINARY)
+    val result = FilterParser.parseWithSchema("""name = "Alice"""", s)
+    result shouldBe a[Right[?, ?]]
+    result.exists(_ ne Filter.noopFilter) shouldBe true
+  }
+
+  it should "succeed for INT64 column with BETWEEN" in {
+    val s = schema("ts" -> PrimitiveTypeName.INT64)
+    val result = FilterParser.parseWithSchema("ts BETWEEN 1000 AND 9999", s)
+    result shouldBe a[Right[?, ?]]
+    result.exists(_ ne Filter.noopFilter) shouldBe true
+  }
+
+  it should "succeed for BOOLEAN column with equality" in {
+    val s = schema("active" -> PrimitiveTypeName.BOOLEAN)
+    val result = FilterParser.parseWithSchema("active = true", s)
+    result shouldBe a[Right[?, ?]]
+    result.exists(_ ne Filter.noopFilter) shouldBe true
+  }
+
+  it should "succeed for multi-column AND expression" in {
+    val s = schema(
+      "age" -> PrimitiveTypeName.INT32,
+      "active" -> PrimitiveTypeName.BOOLEAN
+    )
+    val result =
+      FilterParser.parseWithSchema("age > 18 AND active = true", s)
     result shouldBe a[Right[?, ?]]
     result.exists(_ ne Filter.noopFilter) shouldBe true
   }
