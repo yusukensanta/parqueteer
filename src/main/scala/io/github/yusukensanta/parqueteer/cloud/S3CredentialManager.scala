@@ -11,16 +11,10 @@ import software.amazon.awssdk.auth.credentials.{
   ProfileCredentialsProvider,
   InstanceProfileCredentialsProvider
 }
-import software.amazon.awssdk.regions.Region
-import software.amazon.awssdk.services.sts.StsClient
 import scala.util.{Try, Success, Failure}
 
 class S3CredentialManager(profile: Option[String] = None)
     extends CloudCredentialManager {
-  override def supportsLocation(location: StorageLocation): Boolean = {
-    location.isInstanceOf[S3Location]
-  }
-
   override def configureHadoop(
       location: StorageLocation
   ): Try[Configuration] = {
@@ -75,26 +69,6 @@ class S3CredentialManager(profile: Option[String] = None)
                 error
               )
           }
-        }
-      case _ =>
-        Failure(new IllegalArgumentException("Expected S3Location"))
-    }
-  }
-
-  override def validateCredentials(location: StorageLocation): Try[Unit] = {
-    location match {
-      case s3Location: S3Location =>
-        Try {
-          val region = Region.of(s3Location.region.getOrElse("us-east-1"))
-          val stsClient = StsClient
-            .builder()
-            .region(region)
-            .credentialsProvider(DefaultCredentialsProvider.create())
-            .build()
-          val identity = stsClient.getCallerIdentity()
-          System.err.println(
-            s"S3 credentials validated for account: ${identity.account()}"
-          )
         }
       case _ =>
         Failure(new IllegalArgumentException("Expected S3Location"))

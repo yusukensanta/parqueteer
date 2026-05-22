@@ -5,15 +5,9 @@ import io.github.yusukensanta.parqueteer.core.models.{
   AzureLocation
 }
 import org.apache.hadoop.conf.Configuration
-import com.azure.storage.blob.BlobServiceClientBuilder
-import com.azure.identity.DefaultAzureCredentialBuilder
 import scala.util.{Try, Failure}
 
 class AzureCredentialManager extends CloudCredentialManager {
-  override def supportsLocation(location: StorageLocation): Boolean = {
-    location.isInstanceOf[AzureLocation]
-  }
-
   override def configureHadoop(
       location: StorageLocation
   ): Try[Configuration] = {
@@ -53,33 +47,6 @@ class AzureCredentialManager extends CloudCredentialManager {
           conf.set("fs.azure.write.request.size", "8388608") // 8MB
 
           conf
-        }
-      case _ =>
-        Failure(new IllegalArgumentException("Expected AzureLocation"))
-    }
-  }
-
-  override def validateCredentials(location: StorageLocation): Try[Unit] = {
-    location match {
-      case azureLocation: AzureLocation =>
-        Try {
-          val credential = new DefaultAzureCredentialBuilder().build()
-          val blobServiceClient = new BlobServiceClientBuilder()
-            .endpoint(s"https://${azureLocation.account}.blob.core.windows.net")
-            .credential(credential)
-            .buildClient()
-
-          try {
-            // Try to get container properties to validate credentials
-            val containerClient =
-              blobServiceClient.getBlobContainerClient(azureLocation.container)
-            val _ = containerClient.getProperties()
-            println(
-              s"Azure credentials validated for container: ${azureLocation.container}"
-            )
-          } finally {
-            // BlobServiceClient doesn't need explicit closing
-          }
         }
       case _ =>
         Failure(new IllegalArgumentException("Expected AzureLocation"))

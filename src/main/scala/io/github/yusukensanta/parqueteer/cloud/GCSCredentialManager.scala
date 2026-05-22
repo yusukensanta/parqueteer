@@ -5,17 +5,12 @@ import io.github.yusukensanta.parqueteer.core.models.{
   GCSLocation
 }
 import org.apache.hadoop.conf.Configuration
-import com.google.auth.oauth2.{GoogleCredentials, ServiceAccountCredentials}
-import com.google.cloud.storage.StorageOptions
+import com.google.auth.oauth2.ServiceAccountCredentials
 import scala.util.{Try, Success, Failure, Using}
 import java.io.FileInputStream
 import java.nio.file.{Files, Paths}
 
 class GCSCredentialManager extends CloudCredentialManager {
-  override def supportsLocation(location: StorageLocation): Boolean = {
-    location.isInstanceOf[GCSLocation]
-  }
-
   override def configureHadoop(
       location: StorageLocation
   ): Try[Configuration] = {
@@ -70,39 +65,6 @@ class GCSCredentialManager extends CloudCredentialManager {
           conf.set("fs.gs.batch.threads", "15")
 
           conf
-        }
-      case _ =>
-        Failure(new IllegalArgumentException("Expected GCSLocation"))
-    }
-  }
-
-  override def validateCredentials(location: StorageLocation): Try[Unit] = {
-    location match {
-      case gcsLocation: GCSLocation =>
-        Try {
-          val credentials = GoogleCredentials.getApplicationDefault()
-          val storage = StorageOptions
-            .newBuilder()
-            .setCredentials(credentials)
-            .build()
-            .getService
-
-          try {
-            // Try to get bucket metadata to validate credentials
-            val bucket = storage.get(gcsLocation.bucket)
-            if (bucket != null) {
-              System.err.println(
-                s"GCS credentials validated for bucket: ${gcsLocation.bucket}"
-              )
-            } else {
-              throw new RuntimeException(
-                s"Bucket ${gcsLocation.bucket} not found or not accessible"
-              )
-            }
-          } finally {
-            // Storage client doesn't need explicit closing in newer versions
-            // but we keep the try-finally for consistency
-          }
         }
       case _ =>
         Failure(new IllegalArgumentException("Expected GCSLocation"))
