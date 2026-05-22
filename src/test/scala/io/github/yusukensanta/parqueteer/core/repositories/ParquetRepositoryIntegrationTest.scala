@@ -390,6 +390,42 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
     warning should include("parallel")
   }
 
+  // ── IS NULL / IS NOT NULL type-aware filter ────────────────────────────
+
+  it should "filter IS NULL on INT64 column without IllegalArgumentException" taggedAs IntegrationTest in {
+    val data = List(
+      Map[String, Any]("id" -> 1L, "name" -> "Alice"),
+      Map[String, Any]("id" -> 2L, "name" -> null),
+      Map[String, Any]("id" -> 3L, "name" -> "Charlie")
+    )
+    val loc = LocalPath(tempFile().getAbsolutePath)
+    repo.writeContent(loc, data, None).isSuccess shouldBe true
+
+    val result = repo.readContent(
+      ParquetFile(loc),
+      ReadConfig(filter = Some("id IS NOT NULL"))
+    )
+    result.isSuccess shouldBe true
+    result.get.rows should have length 3
+  }
+
+  it should "filter IS NULL on DOUBLE column without IllegalArgumentException" taggedAs IntegrationTest in {
+    val data = List(
+      Map[String, Any]("id" -> 1L, "score" -> 9.5),
+      Map[String, Any]("id" -> 2L, "score" -> null),
+      Map[String, Any]("id" -> 3L, "score" -> 7.1)
+    )
+    val loc = LocalPath(tempFile().getAbsolutePath)
+    repo.writeContent(loc, data, None).isSuccess shouldBe true
+
+    val result =
+      repo.readContent(
+        ParquetFile(loc),
+        ReadConfig(filter = Some("score IS NOT NULL"))
+      )
+    result.isSuccess shouldBe true
+  }
+
   // ── Edge cases ─────────────────────────────────────────────────────────
 
   it should "fail to write empty data (no schema to infer)" taggedAs IntegrationTest in {
