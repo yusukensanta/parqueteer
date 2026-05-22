@@ -33,9 +33,9 @@ object CliApp {
       System.exit(0)
     }
 
-    // Intercept help requests for custom hierarchical help
-    if (shouldShowHelp(args)) {
-      showHelp(args)
+    // Show custom top-level help only when no subcommand is present
+    if (shouldShowTopLevelHelp(args)) {
+      println(HelpFormatter.topLevelHelp())
       System.exit(0)
     }
 
@@ -47,7 +47,9 @@ object CliApp {
         val exitCode = run(config)
         System.exit(exitCode)
       case None =>
-        System.exit(2)
+        val exitCode =
+          if (args.contains("--help") || args.contains("-h")) 0 else 2
+        System.exit(exitCode)
     }
   }
 
@@ -63,38 +65,24 @@ object CliApp {
     println(s"Scala ${BuildInfo.scalaVersion} · Java $javaVersion$vendorSuffix")
   }
 
-  /** Check if help should be displayed */
-  private def shouldShowHelp(args: Array[String]): Boolean = {
-    args.contains("--help") || args.contains("-h")
-  }
+  private val knownCommands = Set(
+    "read",
+    "info",
+    "write",
+    "validate",
+    "convert",
+    "merge",
+    "schema",
+    "stats",
+    "config",
+    "completions",
+    "diff"
+  )
 
-  /** Show appropriate help based on command context */
-  private def showHelp(args: Array[String]): Unit = {
-    val commands = Set(
-      "read",
-      "info",
-      "write",
-      "validate",
-      "convert",
-      "merge",
-      "schema",
-      "stats",
-      "config",
-      "completions"
-    )
-    val commandBeforeHelp = args
-      .takeWhile(arg => !arg.startsWith("--help") && !arg.startsWith("-h"))
-      .find(commands.contains)
-
-    commandBeforeHelp match {
-      case Some(command) =>
-        HelpFormatter.commandHelp(command) match {
-          case Some(help) => println(help)
-          case None       => println(HelpFormatter.topLevelHelp())
-        }
-      case None =>
-        println(HelpFormatter.topLevelHelp())
-    }
+  private def shouldShowTopLevelHelp(args: Array[String]): Boolean = {
+    val hasHelp = args.contains("--help") || args.contains("-h")
+    val hasCommand = args.exists(knownCommands.contains)
+    hasHelp && !hasCommand
   }
 
   private def run(config: ArgumentParser.Config): Int =
