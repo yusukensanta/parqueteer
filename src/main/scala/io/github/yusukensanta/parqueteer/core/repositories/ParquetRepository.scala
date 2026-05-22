@@ -528,51 +528,31 @@ class ParquetRepository(
     }
   }
 
+  private def numericMinMax[T: Ordering](
+      withValues: List[org.apache.parquet.column.statistics.Statistics[?]],
+      extract: Any => T
+  ): (Option[String], Option[String]) = {
+    val mins = withValues.flatMap(s => Option(s.genericGetMin()).map(extract))
+    val maxs = withValues.flatMap(s => Option(s.genericGetMax()).map(extract))
+    (mins.minOption.map(_.toString), maxs.maxOption.map(_.toString))
+  }
+
   private def computeTypedMinMax(
       withValues: List[org.apache.parquet.column.statistics.Statistics[?]],
       typeName: PrimitiveTypeName
-  ): (Option[String], Option[String]) = {
+  ): (Option[String], Option[String]) =
     typeName match {
       case PrimitiveTypeName.INT32 =>
-        val mins = withValues.flatMap(s =>
-          Option(s.genericGetMin())
-            .map(_.asInstanceOf[java.lang.Integer].intValue())
-        )
-        val maxs = withValues.flatMap(s =>
-          Option(s.genericGetMax())
-            .map(_.asInstanceOf[java.lang.Integer].intValue())
-        )
-        (mins.minOption.map(_.toString), maxs.maxOption.map(_.toString))
+        numericMinMax(withValues, _.asInstanceOf[java.lang.Integer].intValue())
       case PrimitiveTypeName.INT64 =>
-        val mins = withValues.flatMap(s =>
-          Option(s.genericGetMin())
-            .map(_.asInstanceOf[java.lang.Long].longValue())
-        )
-        val maxs = withValues.flatMap(s =>
-          Option(s.genericGetMax())
-            .map(_.asInstanceOf[java.lang.Long].longValue())
-        )
-        (mins.minOption.map(_.toString), maxs.maxOption.map(_.toString))
+        numericMinMax(withValues, _.asInstanceOf[java.lang.Long].longValue())
       case PrimitiveTypeName.FLOAT =>
-        val mins = withValues.flatMap(s =>
-          Option(s.genericGetMin())
-            .map(_.asInstanceOf[java.lang.Float].floatValue())
-        )
-        val maxs = withValues.flatMap(s =>
-          Option(s.genericGetMax())
-            .map(_.asInstanceOf[java.lang.Float].floatValue())
-        )
-        (mins.minOption.map(_.toString), maxs.maxOption.map(_.toString))
+        numericMinMax(withValues, _.asInstanceOf[java.lang.Float].floatValue())
       case PrimitiveTypeName.DOUBLE =>
-        val mins = withValues.flatMap(s =>
-          Option(s.genericGetMin())
-            .map(_.asInstanceOf[java.lang.Double].doubleValue())
+        numericMinMax(
+          withValues,
+          _.asInstanceOf[java.lang.Double].doubleValue()
         )
-        val maxs = withValues.flatMap(s =>
-          Option(s.genericGetMax())
-            .map(_.asInstanceOf[java.lang.Double].doubleValue())
-        )
-        (mins.minOption.map(_.toString), maxs.maxOption.map(_.toString))
       case _ =>
         val minVal = withValues
           .flatMap(s =>
@@ -586,7 +566,6 @@ class ParquetRepository(
           .maxOption
         (minVal, maxVal)
     }
-  }
 
   private def formatStatVal(value: Any, typeName: PrimitiveTypeName): String =
     typeName match {
