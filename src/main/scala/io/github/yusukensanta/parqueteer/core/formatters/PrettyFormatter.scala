@@ -152,16 +152,16 @@ class PrettyFormatter(useColors: Boolean = sys.env.get("NO_COLOR").isEmpty)
     }
   }
 
-  private def colorizeValue(value: Any): String = value match {
-    case null             => colorize("null", Dim)
-    case _: Int | _: Long => colorize(value.toString, Blue)
-    case d: Double        => colorize(d.toString, Magenta)
-    case f: Float         => colorize(f.toString, Magenta)
-    case true             => colorize("true", Green)
-    case false            => colorize("false", Red)
-    case s: String        => colorize(s, Reset) // Normal color for strings
-    case other            => colorize(other.toString, Reset)
-  }
+  private def colorizeFormatted(formatted: String, original: Any): String =
+    original match {
+      case null             => colorize("null", Dim)
+      case _: Int | _: Long => colorize(formatted, Blue)
+      case _: Double        => colorize(formatted, Magenta)
+      case _: Float         => colorize(formatted, Magenta)
+      case true             => colorize(formatted, Green)
+      case false            => colorize(formatted, Red)
+      case _                => colorize(formatted, Reset)
+    }
 
   private def drawColoredHeaderRow(
       columns: List[String],
@@ -182,22 +182,13 @@ class PrettyFormatter(useColors: Boolean = sys.env.get("NO_COLOR").isEmpty)
       columns: List[String],
       widths: List[Int]
   ): String = {
-    val values = columns.map { col =>
-      row
-        .get(col)
-        .map(v => colorizeValue(v))
-        .getOrElse(colorize("null", Dim))
-    }
-
     val paddedValues =
-      values.zip(widths).zip(columns).map { case ((value, width), col) =>
-        val displayLength =
-          row
-            .get(col)
-            .map(v => tableFormatter.displayWidth(formatValue(v)))
-            .getOrElse(4)
-        val padding = " " * (width - displayLength)
-        value + padding
+      columns.zip(widths).map { case (col, width) =>
+        val raw = row.getOrElse(col, null)
+        val formatted = formatValue(raw)
+        val colored = colorizeFormatted(formatted, raw)
+        val padding = " " * (width - tableFormatter.displayWidth(formatted))
+        colored + padding
       }
 
     colorize("│", Dim) + paddedValues.mkString(colorize("│", Dim)) + colorize(
