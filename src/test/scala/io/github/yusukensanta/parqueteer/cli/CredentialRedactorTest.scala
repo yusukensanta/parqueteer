@@ -66,4 +66,29 @@ class CredentialRedactorTest extends AnyFlatSpec with Matchers {
   it should "handle empty string" in {
     CredentialRedactor.redact("") shouldBe ""
   }
+
+  it should "redact URL-form X-Amz-Signature query parameter" in {
+    val input =
+      "s3://bucket/file?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIAIOSFODNN7EXAMPLE&X-Amz-Signature=5d672d79c15b13162d9279b0855cfba6789a8edb4c82c400e06b5924a6f2b5d"
+    val result = CredentialRedactor.redact(input)
+    result should not include "5d672d79c15b13162d9279b0855cfba6789a8edb4c82c400e06b5924a6f2b5d"
+    result should include("X-Amz-Signature=[REDACTED]")
+  }
+
+  it should "redact Azure SAS token sig= query parameter" in {
+    val input =
+      "abfss://container@account.dfs.core.windows.net/path?sv=2021-06-08&sr=b&sig=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx&se=2023-01-01&sp=r"
+    val result = CredentialRedactor.redact(input)
+    result should not include "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    result should include("sig=[REDACTED]")
+  }
+
+  it should "redact PEM private key block content" in {
+    val input =
+      "Error parsing service account: -----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQ\n-----END PRIVATE KEY-----"
+    val result = CredentialRedactor.redact(input)
+    result should not include "MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQ"
+    result should include("-----BEGIN PRIVATE KEY-----")
+    result should include("[REDACTED]")
+  }
 }
