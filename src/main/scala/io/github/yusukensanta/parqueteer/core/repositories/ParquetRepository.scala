@@ -20,7 +20,10 @@ import java.util.concurrent.Executors
 import scala.util.{Try, Success, Using}
 import scala.jdk.CollectionConverters._
 
-class ParquetRepository {
+class ParquetRepository(
+    profile: Option[String] = None,
+    region: Option[String] = None
+) {
 
   def readContent(file: ParquetFile, config: ReadConfig): Try[FileContent] = {
     setupHadoopConfiguration(file.location).flatMap { hadoopConfig =>
@@ -567,10 +570,13 @@ class ParquetRepository {
   private def setupHadoopConfiguration(
       location: StorageLocation
   ): Try[Configuration] = {
-    CloudCredentialManager.forLocation(location) match {
-      case Some(credManager) => credManager.configureHadoop(location)
-      case None =>
-        Success(new Configuration())
+    val effectiveLocation = (location, region) match {
+      case (s3: S3Location, Some(r)) => s3.copy(region = Some(r))
+      case _                         => location
+    }
+    CloudCredentialManager.forLocation(effectiveLocation, profile) match {
+      case Some(credManager) => credManager.configureHadoop(effectiveLocation)
+      case None              => Success(new Configuration())
     }
   }
 
