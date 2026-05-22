@@ -222,7 +222,14 @@ object ArgumentParser {
             .action((_, c) =>
               updateCmd[ValidateCommand](c, _.copy(verbose = true))
             )
-            .text("Show detailed validation information")
+            .text("Show detailed validation information"),
+          opt[Unit]("deep")
+            .action((_, c) =>
+              updateCmd[ValidateCommand](c, _.copy(deep = true))
+            )
+            .text(
+              "Fully decompress all row groups (default: spot-check first, last, midpoint)"
+            )
         ),
       cmd("convert")
         .text("Convert between parquet and other formats")

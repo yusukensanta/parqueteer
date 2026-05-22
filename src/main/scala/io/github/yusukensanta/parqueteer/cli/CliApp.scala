@@ -187,8 +187,8 @@ object CliApp {
           globalOptions
         )
 
-      case ValidateCommand(filePath, verbose) =>
-        executeValidate(service, filePath, verbose, globalOptions)
+      case ValidateCommand(filePath, verbose, deep) =>
+        executeValidate(service, filePath, verbose, deep, globalOptions)
 
       case ConvertCommand(
             inputPath,
@@ -380,9 +380,10 @@ object CliApp {
       service: ParquetService,
       filePath: String,
       verbose: Boolean,
+      deep: Boolean,
       globalOptions: GlobalOptions
   ): Int = {
-    service.validateFile(filePath) match {
+    service.validateFile(filePath, deep) match {
       case Right(result) =>
         if (result.isValid) {
           if (!globalOptions.quiet) println(s"✓ File $filePath is valid")

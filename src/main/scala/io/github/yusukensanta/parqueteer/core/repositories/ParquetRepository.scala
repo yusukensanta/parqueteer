@@ -411,7 +411,10 @@ class ParquetRepository(
     }
   }
 
-  def validateFile(file: ParquetFile): Try[List[String]] = {
+  def validateFile(
+      file: ParquetFile,
+      deep: Boolean = false
+  ): Try[List[String]] = {
     setupHadoopConfiguration(file.location).flatMap { hadoopConfig =>
       Try {
         val path = new HadoopPath(file.location.path)
@@ -434,19 +437,27 @@ class ParquetRepository(
                   issues += "Schema has no columns"
                 }
 
-                val blocks = footer.getBlocks.asScala
+                val blocks = footer.getBlocks.asScala.toList
                 if (blocks.isEmpty) {
                   issues += "File has no row groups"
                 }
+
+                val indicesToCheck: Set[Int] =
+                  if (deep || blocks.size <= 3) blocks.indices.toSet
+                  else Set(0, blocks.size / 2, blocks.size - 1)
 
                 blocks.zipWithIndex.foreach { case (block, index) =>
                   if (block.getRowCount <= 0) {
                     issues += s"Row group $index has invalid row count: ${block.getRowCount}"
                   }
-                  Try(r.readNextRowGroup()) match {
-                    case scala.util.Failure(ex) =>
-                      issues += s"Row group $index data is corrupt or truncated: ${ex.getMessage}"
-                    case _ =>
+                  if (indicesToCheck.contains(index)) {
+                    Try(r.readNextRowGroup()) match {
+                      case scala.util.Failure(ex) =>
+                        issues += s"Row group $index data is corrupt or truncated: ${ex.getMessage}"
+                      case _ =>
+                    }
+                  } else {
+                    r.skipNextRowGroup()
                   }
                 }
               }

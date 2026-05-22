@@ -29,7 +29,10 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
       schemaResult
     override def readMetadata(file: ParquetFile): Try[FileMetadata] =
       metadataResult
-    override def validateFile(file: ParquetFile): Try[List[String]] =
+    override def validateFile(
+        file: ParquetFile,
+        deep: Boolean = false
+    ): Try[List[String]] =
       validateResult
     override def writeContent(
         location: StorageLocation,
@@ -146,6 +149,21 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     result.isRight shouldBe true
     result.toOption.get.isValid shouldBe false
     result.toOption.get.issues should contain("corrupted row group")
+  }
+
+  it should "pass deep=true through to repository" in {
+    var capturedDeep = false
+    val repo = new FakeParquetRepository() {
+      override def validateFile(
+          file: ParquetFile,
+          deep: Boolean = false
+      ): scala.util.Try[List[String]] = {
+        capturedDeep = deep
+        scala.util.Success(List.empty)
+      }
+    }
+    new ParquetService(repo).validateFile("/tmp/test.parquet", deep = true)
+    capturedDeep shouldBe true
   }
 
   // ── getStats ──────────────────────────────────────────────────────────────
