@@ -169,6 +169,13 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     result.left.toOption.get.userMessage should include("stats unavailable")
   }
 
+  it should "use exception class name when IOError cause has null message" in {
+    val nullMsgEx = new RuntimeException(null.asInstanceOf[String])
+    val err = ParqueteerError.IOError(nullMsgEx)
+    err.userMessage should not include "null"
+    err.userMessage should include("RuntimeException")
+  }
+
   it should "return Left(InvalidFormat) for an unsupported path scheme" in {
     val service = new ParquetService(new FakeParquetRepository())
     val result = service.getStats("ftp://unsupported/path")

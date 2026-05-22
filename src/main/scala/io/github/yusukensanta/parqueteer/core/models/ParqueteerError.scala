@@ -37,4 +37,5 @@ object ParqueteerError:
 
   case class IOError(cause: Throwable) extends ParqueteerError:
     val exitCode = 1
-    val userMessage = s"I/O error: ${cause.getMessage}"
+    val userMessage =
+      s"I/O error: ${Option(cause.getMessage).getOrElse(cause.getClass.getSimpleName)}"
