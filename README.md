@@ -244,9 +244,14 @@ brew install parqueteer
 
 ### Option 2: Distribution Package
 
-Download the latest `.zip` from the [releases page](https://github.com/yusukensanta/parqueteer/releases/latest), then:
+Download the latest `.tgz` (or `.zip`) from the [releases page](https://github.com/yusukensanta/parqueteer/releases/latest), then:
 
 ```bash
+# Using .tgz
+tar xzf parqueteer-VERSION.tgz
+cd parqueteer-VERSION/
+
+# Or using .zip
 unzip parqueteer-VERSION.zip
 cd parqueteer-VERSION/
 
