@@ -608,4 +608,99 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     err shouldBe a[ParqueteerError.IOError]
     err.asInstanceOf[ParqueteerError.IOError].cause shouldBe originalCause
   }
+
+  // ── executeConvert service-layer paths ────────────────────────────────────
+  // (executeConvert in CliApp is private; these tests cover the service methods
+  //  it delegates to, which represent the core conversion logic.)
+
+  "parquet→json conversion (service layer)" should "readFile returns rows for formatting" in {
+    val service = new ParquetService(new FakeParquetRepository())
+    val result = service.readFile("/tmp/test.parquet", ReadConfig())
+    result.isRight shouldBe true
+    result.toOption.get.content.isDefined shouldBe true
+    val rows = result.toOption.get.content.get.rows
+    rows should not be empty
+    rows.head.get("name") shouldBe Some("Alice")
+  }
+
+  it should "output valid JSON via OutputFormatter" in {
+    import io.github.yusukensanta.parqueteer.core.formatters.OutputFormatter
+    val service = new ParquetService(new FakeParquetRepository())
+    val fileResult = service.readFile("/tmp/test.parquet", ReadConfig())
+    fileResult.isRight shouldBe true
+    val content = fileResult.toOption.get.content.get
+    val json =
+      OutputFormatter(OutputFormat.JSON, useColors = false)
+        .formatContent(content, None)
+    json should include("rows")
+    json should include("Alice")
+  }
+
+  it should "output valid NDJSON via OutputFormatter" in {
+    import io.github.yusukensanta.parqueteer.core.formatters.OutputFormatter
+    val service = new ParquetService(new FakeParquetRepository())
+    val content = service
+      .readFile("/tmp/test.parquet", ReadConfig())
+      .toOption
+      .get
+      .content
+      .get
+    val ndjson =
+      OutputFormatter(OutputFormat.NDJSON, useColors = false)
+        .formatContent(content, None)
+    ndjson.trim should not be empty
+    ndjson should include("Alice")
+    ndjson.split("\n").filter(_.nonEmpty).foreach(_ should startWith("{"))
+  }
+
+  it should "output valid CSV via OutputFormatter" in {
+    import io.github.yusukensanta.parqueteer.core.formatters.OutputFormatter
+    val service = new ParquetService(new FakeParquetRepository())
+    val content = service
+      .readFile("/tmp/test.parquet", ReadConfig())
+      .toOption
+      .get
+      .content
+      .get
+    val csv =
+      OutputFormatter(OutputFormat.CSV, useColors = false)
+        .formatContent(content, None)
+    csv should include("name")
+    csv should include("Alice")
+  }
+
+  "parquet→parquet conversion (service layer)" should "writeFile succeeds for data from readFile" in {
+    val service = new ParquetService(new FakeParquetRepository())
+    val rows = service
+      .readFile("/tmp/test.parquet", ReadConfig())
+      .toOption
+      .get
+      .content
+      .get
+      .rows
+    val writeResult =
+      service.writeFile("/tmp/out.parquet", rows, WriteConfig())
+    writeResult.isRight shouldBe true
+  }
+
+  "json→parquet conversion (service layer)" should "readDataFile parses JSON and writeFile accepts it" in {
+    val service = new ParquetService(new FakeParquetRepository())
+    val rows = service
+      .readDataFile(
+        "-",
+        "json",
+        new ByteArrayInputStream("""[{"id":1}]""".getBytes)
+      )
+      .toOption
+      .get
+    rows should have length 1
+    val writeResult = service.writeFile("/tmp/out.parquet", rows, WriteConfig())
+    writeResult.isRight shouldBe true
+  }
+
+  it should "return Left for unsupported input format" in {
+    val service = new ParquetService(new FakeParquetRepository())
+    val result = service.readDataFile("/tmp/file.tsv", "tsv")
+    result.isLeft shouldBe true
+  }
 }
