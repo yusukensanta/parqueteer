@@ -176,17 +176,19 @@ class ParquetWriteOpsTest extends AnyFlatSpec with Matchers {
     group.getFieldRepetitionCount("age") shouldBe 0
   }
 
-  it should "throw InvalidRecordException when a row key is absent from the schema" in {
+  it should "throw IllegalArgumentException with actionable message when a row key is absent from the schema" in {
     val mt =
       MessageTypeParser.parseMessageType("message root { required int32 age; }")
     val group = new SimpleGroupFactory(mt).newGroup()
-    an[org.apache.parquet.io.InvalidRecordException] should be thrownBy {
+    val ex = intercept[IllegalArgumentException] {
       ParquetWriteOps.writeRowToGroup(
         group,
         Map("age" -> 30, "unknown" -> "x"),
         mt
       )
     }
+    ex.getMessage should include("unknown")
+    ex.getMessage should include("schema")
   }
 
   it should "write multiple known fields in a single group" in {

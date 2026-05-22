@@ -72,20 +72,20 @@ class ParquetRecordDecoderTest extends AnyFlatSpec with Matchers {
     ParquetRecordDecoder.decodeValue(BinaryValue(binary)) shouldBe ""
   }
 
-  it should "decode DateTimeValue as ISO-8601 instant string" in {
-    val epochMillis = 0L // 1970-01-01T00:00:00Z
+  it should "decode DateTimeValue as raw Long (postProcessTemporalFields handles unit conversion)" in {
+    val epochMillis = 0L
     val result = ParquetRecordDecoder.decodeValue(
       DateTimeValue(epochMillis, TimestampFormat.Int64Millis)
     )
-    result shouldBe "1970-01-01T00:00:00Z"
+    result shouldBe 0L
   }
 
-  it should "decode DateTimeValue for a known timestamp" in {
+  it should "decode DateTimeValue for a known timestamp as raw Long" in {
     val ts = java.time.Instant.parse("2024-06-01T12:00:00Z")
     val result = ParquetRecordDecoder.decodeValue(
       DateTimeValue(ts.toEpochMilli, TimestampFormat.Int64Millis)
     )
-    result shouldBe ts.toString
+    result shouldBe ts.toEpochMilli
   }
 
   it should "decode DecimalValue as BigDecimal (long format)" in {

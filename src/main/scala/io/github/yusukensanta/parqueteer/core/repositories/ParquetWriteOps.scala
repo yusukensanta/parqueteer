@@ -14,11 +14,15 @@ private[repositories] object ParquetWriteOps {
       schema: MessageType
   ): Unit = {
     row.foreach { case (key, value) =>
-      // schema.getFieldIndex throws org.apache.parquet.io.InvalidRecordException for
-      // unknown keys before this guard is reached; the >= 0 check is unreachable but
-      // kept for defensive symmetry with the original implementation.
-      val fieldIndex = schema.getFieldIndex(key)
-      if (fieldIndex >= 0 && value != null) {
+      if (value != null) {
+        val fieldIndex =
+          try schema.getFieldIndex(key)
+          catch {
+            case _: org.apache.parquet.io.InvalidRecordException =>
+              throw new IllegalArgumentException(
+                s"Column '$key' in input row not found in schema. The schema was inferred from the first batch of rows — all rows must contain a consistent set of columns."
+              )
+          }
         val fieldTypeName =
           schema.getType(fieldIndex).asPrimitiveType().getPrimitiveTypeName
         value match {

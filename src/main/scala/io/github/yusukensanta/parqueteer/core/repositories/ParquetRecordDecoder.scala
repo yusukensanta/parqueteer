@@ -31,7 +31,7 @@ private[repositories] object ParquetRecordDecoder {
     case FloatValue(f)       => f
     case DoubleValue(d)      => d
     case BinaryValue(binary) => binary.toStringUsingUTF8
-    case DateTimeValue(l, _) => java.time.Instant.ofEpochMilli(l).toString
+    case DateTimeValue(l, _) => l
     case DecimalValue(bigInt, fmt) =>
       scala.math.BigDecimal(new java.math.BigDecimal(bigInt, fmt.scale))
     case _ => value.toString
@@ -55,6 +55,22 @@ private[repositories] object ParquetRecordDecoder {
               case Some(i: Int) =>
                 acc + (field.getName -> java.time.LocalDate
                   .ofEpochDay(i.toLong)
+                  .toString)
+              case _ => acc
+            }
+          case (PrimitiveTypeName.INT64, OriginalType.TIMESTAMP_MILLIS) =>
+            acc.get(field.getName) match {
+              case Some(l: Long) =>
+                acc + (field.getName -> java.time.Instant
+                  .ofEpochMilli(l)
+                  .toString)
+              case _ => acc
+            }
+          case (PrimitiveTypeName.INT64, OriginalType.TIMESTAMP_MICROS) =>
+            acc.get(field.getName) match {
+              case Some(l: Long) =>
+                acc + (field.getName -> java.time.Instant
+                  .ofEpochSecond(l / 1_000_000L, (l % 1_000_000L) * 1_000L)
                   .toString)
               case _ => acc
             }

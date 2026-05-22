@@ -18,7 +18,8 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
       validateResult: Try[List[String]] = Success(List.empty),
       writeResult: Try[Unit] = Success(()),
       streamResult: Try[Unit] = Success(()),
-      statsResult: Try[FileStats] = Success(defaultStats)
+      statsResult: Try[FileStats] = Success(defaultStats),
+      schemaFieldsResult: Try[List[FieldSummary]] = Success(defaultSchemaFields)
   ) extends ParquetRepository {
     override def readContent(
         file: ParquetFile,
@@ -55,6 +56,9 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
         count
       }
     override def readStats(file: ParquetFile): Try[FileStats] = statsResult
+    override def readSchemaFields(
+        file: ParquetFile
+    ): Try[List[FieldSummary]] = schemaFieldsResult
   }
 
   // ── Shared fixtures ──────────────────────────────────────────────────────
@@ -82,6 +86,8 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     totalRows = 1L,
     rowGroupCount = 1L
   )
+  private val defaultSchemaFields =
+    List(FieldSummary("id", "INT64", isOptional = false))
 
   // ── readFile ─────────────────────────────────────────────────────────────
   "ParquetService.readFile" should "return Right with populated ParquetFile" in {
@@ -608,5 +614,23 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     val result = service.streamRead("/tmp/test.parquet", ReadConfig())(_ => ())
     result.isLeft shouldBe true
     result.left.toOption.get.userMessage should include("stream error")
+  }
+
+  // ── mergeFiles error cause ────────────────────────────────────────────────
+  "ParquetService.mergeFiles" should "preserve error cause when streamContent fails" in {
+    val originalCause =
+      new java.io.IOException("disk read failed: sector error")
+    val repo = new FakeParquetRepository(streamResult = Failure(originalCause))
+    val service = new ParquetService(repo)
+    val result = service.mergeFiles(
+      List("/tmp/a.parquet", "/tmp/b.parquet"),
+      "/tmp/out.parquet",
+      WriteConfig(),
+      SchemaMode.Strict
+    )
+    result.isLeft shouldBe true
+    val err = result.left.toOption.get
+    err shouldBe a[ParqueteerError.IOError]
+    err.asInstanceOf[ParqueteerError.IOError].cause shouldBe originalCause
   }
 }

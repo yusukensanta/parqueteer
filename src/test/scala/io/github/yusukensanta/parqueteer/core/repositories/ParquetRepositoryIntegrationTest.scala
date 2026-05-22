@@ -624,4 +624,78 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
     // Lexicographic ordering would give "99"; numeric ordering gives "200"
     idStats.maxValue.get shouldBe "200"
   }
+
+  // ── validateFile row-group integrity (#151) ──────────────────────────────
+
+  it should "report issue for a file that cannot be opened as Parquet" taggedAs IntegrationTest in {
+    val f = tempFile()
+    java.nio.file.Files.write(f.toPath, "not a parquet file".getBytes("UTF-8"))
+
+    val result = repo.validateFile(ParquetFile(LocalPath(f.getAbsolutePath)))
+    result.isSuccess shouldBe true
+    result.get should not be empty
+    result.get.head should include("cannot be opened")
+  }
+
+  // ── writeContentStream sparse-column error (#153) ───────────────────────
+
+  it should "give actionable error for column absent from schema in writeContentStream" taggedAs IntegrationTest in {
+    val schema = ParquetSchema(
+      columns = List(
+        ColumnInfo("id", "INT64", isOptional = true, 1, 0, "UNCOMPRESSED")
+      ),
+      rowGroupCount = 0L,
+      totalRowCount = 0L
+    )
+    val loc = LocalPath(tempFile().getAbsolutePath)
+    val result = repo.writeContentStream(loc, schema) { write =>
+      write(Map("id" -> 1L, "unknown_col" -> "surprise"))
+    }
+    result.isFailure shouldBe true
+    result.failed.get.getMessage should include("unknown_col")
+    result.failed.get.getMessage should include("schema")
+  }
+
+  // ── TIMESTAMP_MICROS sequential decode (#154) ────────────────────────────
+
+  it should "decode TIMESTAMP_MICROS as ISO-8601 string in sequential read" taggedAs IntegrationTest in {
+    import org.apache.parquet.hadoop.example.ExampleParquetWriter
+    import org.apache.parquet.schema.{Types => PTypes}
+    import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
+    import org.apache.parquet.schema.Type.Repetition
+    import org.apache.parquet.schema.LogicalTypeAnnotation
+    import org.apache.parquet.example.data.simple.SimpleGroupFactory
+
+    val microsSchema = PTypes
+      .buildMessage()
+      .addField(
+        PTypes
+          .primitive(PrimitiveTypeName.INT64, Repetition.OPTIONAL)
+          .as(
+            LogicalTypeAnnotation
+              .timestampType(true, LogicalTypeAnnotation.TimeUnit.MICROS)
+          )
+          .named("ts")
+      )
+      .named("root")
+
+    val f = tempFile()
+    val conf = new org.apache.hadoop.conf.Configuration()
+    val factory = new SimpleGroupFactory(microsSchema)
+    val writer = ExampleParquetWriter
+      .builder(new org.apache.hadoop.fs.Path(f.getAbsolutePath))
+      .withType(microsSchema)
+      .withConf(conf)
+      .build()
+    // 1716336000000000 microseconds = 2024-05-22T00:00:00Z
+    val group = factory.newGroup()
+    group.add("ts", 1716336000000000L)
+    writer.write(group)
+    writer.close()
+
+    val loc = LocalPath(f.getAbsolutePath)
+    val result = repo.readContent(ParquetFile(loc), ReadConfig())
+    result.isSuccess shouldBe true
+    result.get.rows.head("ts") shouldBe "2024-05-22T00:00:00Z"
+  }
 }

@@ -218,7 +218,7 @@ class ParquetService(
                     write(finalRow)
                   }
                   .fold(
-                    err => throw new RuntimeException(err.getMessage),
+                    err => throw err,
                     _ => ()
                   )
               }

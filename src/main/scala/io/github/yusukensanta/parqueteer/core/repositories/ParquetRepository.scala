@@ -423,33 +423,40 @@ class ParquetRepository(
 
         if (!fs.exists(path)) {
           issues += "File does not exist"
-          issues.toList
         } else {
-
-          // Use ParquetFileReader.open with InputFile
           val inputFile = HadoopInputFile.fromPath(path, hadoopConfig)
-          Using.resource(ParquetFileReader.open(inputFile)) { reader =>
-            val footer = reader.getFooter
+          Try(ParquetFileReader.open(inputFile)) match {
+            case scala.util.Failure(ex) =>
+              issues += s"File cannot be opened as Parquet: ${ex.getMessage}"
+            case scala.util.Success(reader) =>
+              Using.resource(reader) { r =>
+                val footer = r.getFooter
 
-            val schema = footer.getFileMetaData.getSchema
-            if (schema.getColumns.isEmpty) {
-              issues += "Schema has no columns"
-            }
+                val schema = footer.getFileMetaData.getSchema
+                if (schema.getColumns.isEmpty) {
+                  issues += "Schema has no columns"
+                }
 
-            val blocks = footer.getBlocks.asScala
-            if (blocks.isEmpty) {
-              issues += "File has no row groups"
-            }
+                val blocks = footer.getBlocks.asScala
+                if (blocks.isEmpty) {
+                  issues += "File has no row groups"
+                }
 
-            blocks.zipWithIndex.foreach { case (block, index) =>
-              if (block.getRowCount <= 0) {
-                issues += s"Row group $index has invalid row count: ${block.getRowCount}"
+                blocks.zipWithIndex.foreach { case (block, index) =>
+                  if (block.getRowCount <= 0) {
+                    issues += s"Row group $index has invalid row count: ${block.getRowCount}"
+                  }
+                  Try(r.readNextRowGroup()) match {
+                    case scala.util.Failure(ex) =>
+                      issues += s"Row group $index data is corrupt or truncated: ${ex.getMessage}"
+                    case _ =>
+                  }
+                }
               }
-            }
-
-            issues.toList
           }
         }
+
+        issues.toList
       }
     }
   }
