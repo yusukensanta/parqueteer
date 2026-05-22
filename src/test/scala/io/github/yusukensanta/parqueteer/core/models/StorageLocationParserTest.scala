@@ -104,4 +104,42 @@ class StorageLocationParserTest extends AnyFlatSpec with Matchers {
     )
   }
 
+  // ── Round-trip: parse → .path → parse must yield the same location ────────
+
+  "GCSLocation" should "round-trip through .path" in {
+    val original = GCSLocation("my-bucket", "data/file.parquet")
+    StorageLocationParser.parse(original.path) shouldBe Right(original)
+  }
+
+  it should "round-trip with nested path" in {
+    val original = GCSLocation("bucket", "a/b/c/d.parquet")
+    StorageLocationParser.parse(original.path) shouldBe Right(original)
+  }
+
+  it should "round-trip with root-level key" in {
+    val original = GCSLocation("bucket", "file.parquet")
+    StorageLocationParser.parse(original.path) shouldBe Right(original)
+  }
+
+  "AzureLocation" should "round-trip through .path" in {
+    val original =
+      AzureLocation("myaccount", "mycontainer", "data/file.parquet")
+    StorageLocationParser.parse(original.path) shouldBe Right(original)
+  }
+
+  it should "round-trip with nested path" in {
+    val original = AzureLocation("account", "container", "a/b/c/d.parquet")
+    StorageLocationParser.parse(original.path) shouldBe Right(original)
+  }
+
+  it should "round-trip with root-level key" in {
+    val original = AzureLocation("acct", "cont", "file.parquet")
+    StorageLocationParser.parse(original.path) shouldBe Right(original)
+  }
+
+  "S3Location" should "round-trip through .path (s3a output parses back to S3Location)" in {
+    val original = S3Location("my-bucket", "data/file.parquet")
+    StorageLocationParser.parse(original.path) shouldBe Right(original)
+  }
+
 }
