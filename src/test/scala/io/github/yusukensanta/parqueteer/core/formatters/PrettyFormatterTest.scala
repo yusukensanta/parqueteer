@@ -12,6 +12,9 @@ class PrettyFormatterTest extends AnyFlatSpec with Matchers {
     isPartial = false
   )
 
+  private def stripAnsi(s: String): String =
+    s.replaceAll("\\x1B\\[[^m]*m", "")
+
   "PrettyFormatter" should "emit ANSI codes when useColors = true" in {
     val result =
       new PrettyFormatter(useColors = true).formatContent(content, None)
@@ -40,7 +43,7 @@ class PrettyFormatterTest extends AnyFlatSpec with Matchers {
   it should "not over-pad CJK values (uses displayWidth, not .length)" in {
     val c = FileContent(List(Map("lang" -> "日本語")), 1L, isPartial = false)
     val result = new PrettyFormatter(useColors = true).formatContent(c, None)
-    val stripped = result.replaceAll("\\[[^m]*m", "")
+    val stripped = stripAnsi(result)
     stripped should include("│日本語│")
   }
 }
