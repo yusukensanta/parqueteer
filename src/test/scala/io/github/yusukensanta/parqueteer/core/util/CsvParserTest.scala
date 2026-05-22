@@ -4,8 +4,26 @@ import io.github.yusukensanta.parqueteer.core.formatters.CSVFormatter
 import io.github.yusukensanta.parqueteer.core.models.FileContent
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
+import org.scalacheck.Gen
 
-class CsvParserTest extends AnyFlatSpec with Matchers {
+class CsvParserTest
+    extends AnyFlatSpec
+    with Matchers
+    with ScalaCheckPropertyChecks {
+
+  // Generator: alpha-only strings that TypeInferrer won't re-infer as another type
+  private val safeStr: Gen[String] = for {
+    head <- Gen.alphaChar
+    tail <- Gen.listOf(Gen.alphaChar).map(_.mkString)
+    s = head.toString + tail
+    if !s.equalsIgnoreCase("true") && !s.equalsIgnoreCase("false")
+  } yield s
+
+  // Generator: column names safe for CSV headers (no commas, quotes, or newlines)
+  private val colName: Gen[String] = Gen.identifier.filter(s =>
+    s.nonEmpty && !s.equalsIgnoreCase("true") && !s.equalsIgnoreCase("false")
+  )
 
   "CsvParser.parse" should "parse basic CSV into typed rows" in {
     val rows = CsvParser.parse("a,b\n1,2\n3,4\n")
@@ -162,5 +180,30 @@ class CsvParserTest extends AnyFlatSpec with Matchers {
     parsed should have size 2
     parsed(0)("val") shouldBe "a,b"
     parsed(1)("val") shouldBe "c\"d"
+  }
+
+  // ── Property-based: CSVFormatter → CsvParser round-trip ─────────────────
+  // Rows of safe alpha-only strings survive the encode→parse round-trip intact.
+
+  "CSVFormatter → CsvParser round-trip (property)" should "preserve any safe string value" in {
+    forAll(colName, colName, safeStr, safeStr) { (col1, col2, v1, v2) =>
+      whenever(col1 != col2) {
+        val rows = List(Map(col1 -> v1, col2 -> v2))
+        val parsed = roundTrip(rows)
+        parsed should have size 1
+        parsed(0)(col1) shouldBe v1
+        parsed(0)(col2) shouldBe v2
+      }
+    }
+  }
+
+  it should "preserve row count for multi-row input" in {
+    val rowGen = for {
+      c <- colName
+      vs <- Gen.nonEmptyListOf(safeStr)
+    } yield vs.map(v => Map(c -> v))
+    forAll(rowGen) { rows =>
+      roundTrip(rows) should have size rows.size
+    }
   }
 }
