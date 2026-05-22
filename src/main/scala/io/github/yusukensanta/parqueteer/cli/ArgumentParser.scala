@@ -32,7 +32,9 @@ object ArgumentParser {
         .action((_, c) =>
           c.copy(globalOptions = c.globalOptions.copy(verbose = true))
         )
-        .text("Enable verbose output"),
+        .text(
+          "Enable verbose output (caution: may include sensitive metadata from cloud error messages)"
+        ),
       opt[Unit]("quiet")
         .abbr("q")
         .action((_, c) =>

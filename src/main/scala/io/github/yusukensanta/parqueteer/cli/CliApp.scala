@@ -660,8 +660,18 @@ object CliApp {
     System.err.println(s"$prefix: ${error.userMessage}")
     hint.foreach(System.err.println)
     if (opts.verbose) error match {
-      case ParqueteerError.IOError(cause) => cause.printStackTrace()
-      case _                              => ()
+      case ParqueteerError.IOError(cause) =>
+        System.err.println(
+          s"[verbose] ${CredentialRedactor.redact(cause.toString)}"
+        )
+        cause.getStackTrace.foreach(f => System.err.println(s"\tat $f"))
+        Option(cause.getCause).foreach { c =>
+          System.err.println(
+            s"Caused by: ${CredentialRedactor.redact(c.toString)}"
+          )
+          c.getStackTrace.foreach(f => System.err.println(s"\tat $f"))
+        }
+      case _ => ()
     }
     error.exitCode
   }
