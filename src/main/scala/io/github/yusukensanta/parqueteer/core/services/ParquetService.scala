@@ -5,7 +5,6 @@ import io.github.yusukensanta.parqueteer.core.models.ParqueteerError.toParquetee
 import io.github.yusukensanta.parqueteer.core.models.StorageLocationParser
 import io.github.yusukensanta.parqueteer.core.repositories.ParquetRepository
 import io.github.yusukensanta.parqueteer.core.filters.FilterParser
-import io.github.yusukensanta.parqueteer.core.util.FileExtension
 import scala.util.{Try, Using}
 import io.circe.{Encoder, Json}
 
@@ -325,40 +324,6 @@ class ParquetService(
       }
 
       SchemaDiff(added, removed, changed, unchanged)
-    }
-  }
-
-  def convertFile(
-      inputPath: String,
-      outputPath: String,
-      conversionConfig: ConversionConfig = ConversionConfig()
-  ): Either[ParqueteerError, Unit] = {
-    val inputExt = FileExtension.of(inputPath)
-    val outputExt = FileExtension.of(outputPath)
-    (inputExt, outputExt) match {
-      case ("parquet", "parquet") =>
-        for {
-          inputFile <- readFile(
-            inputPath,
-            ReadConfig(maxRows = conversionConfig.maxRows)
-          )
-          data = inputFile.content.map(_.rows).getOrElse(List.empty)
-          _ <- writeFile(outputPath, data, conversionConfig.writeConfig)
-        } yield ()
-
-      case ("json" | "csv", "parquet") =>
-        for {
-          data <- readDataFile(inputPath, inputExt)
-          _ <- writeFile(outputPath, data, conversionConfig.writeConfig)
-        } yield ()
-
-      case _ =>
-        Left(
-          ParqueteerError.InvalidFormat(
-            inputPath,
-            s"Unsupported conversion: $inputExt → $outputExt. Supported: parquet→parquet, json→parquet, csv→parquet"
-          )
-        )
     }
   }
 

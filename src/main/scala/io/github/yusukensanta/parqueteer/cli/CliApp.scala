@@ -423,44 +423,55 @@ object CliApp {
     } else {
       val outputExt = FileExtension.of(outputPath)
       val inputExt = FileExtension.of(inputPath)
-      (inputExt, outputExt) match {
+      val result: Either[ParqueteerError, Unit] = (inputExt, outputExt) match {
         case ("parquet", ext @ ("json" | "csv")) =>
-          service.readFile(
-            inputPath,
-            ReadConfig(maxRows = conversionConfig.maxRows)
-          ) match {
-            case Left(error) =>
-              reportError("Failed to read input", globalOptions)(error)
-            case Right(file) =>
+          service
+            .readFile(inputPath, ReadConfig(maxRows = conversionConfig.maxRows))
+            .flatMap { file =>
               val content =
                 file.content.getOrElse(FileContent(List.empty, 0, false))
               val text = ext match {
                 case "json" => new JSONFormatter().formatContent(content, None)
                 case _      => new CSVFormatter().formatContent(content, None)
               }
-              scala.util.Try {
-                import better.files._
-                File(outputPath).createIfNotExists().write(text)
-              } match {
-                case scala.util.Success(_) =>
-                  if (showStatus(globalOptions))
-                    println(s"Successfully converted $inputPath to $outputPath")
-                  0
-                case scala.util.Failure(ex) =>
-                  reportError("Failed to write output", globalOptions)(
-                    ParqueteerError.IOError(ex)
-                  )
-              }
-          }
+              scala.util
+                .Try {
+                  import better.files._
+                  File(outputPath).createIfNotExists().write(text)
+                }
+                .toEither
+                .left
+                .map(ParqueteerError.IOError.apply)
+                .map(_ => ())
+            }
+        case ("parquet", "parquet") =>
+          service
+            .readFile(inputPath, ReadConfig(maxRows = conversionConfig.maxRows))
+            .flatMap { file =>
+              val data = file.content.map(_.rows).getOrElse(List.empty)
+              service.writeFile(outputPath, data, conversionConfig.writeConfig)
+            }
+        case (ext @ ("json" | "csv"), "parquet") =>
+          service
+            .readDataFile(inputPath, ext)
+            .flatMap(data =>
+              service.writeFile(outputPath, data, conversionConfig.writeConfig)
+            )
         case _ =>
-          service.convertFile(inputPath, outputPath, conversionConfig) match {
-            case Right(_) =>
-              if (showStatus(globalOptions))
-                println(s"Successfully converted $inputPath to $outputPath")
-              0
-            case Left(error) =>
-              reportError("Failed to convert file", globalOptions)(error)
-          }
+          Left(
+            ParqueteerError.InvalidFormat(
+              inputPath,
+              s"Unsupported conversion: $inputExt → $outputExt. Supported: parquet→parquet, parquet→json, parquet→csv, json→parquet, csv→parquet"
+            )
+          )
+      }
+      result match {
+        case Right(_) =>
+          if (showStatus(globalOptions))
+            println(s"Successfully converted $inputPath to $outputPath")
+          0
+        case Left(error) =>
+          reportError("Failed to convert file", globalOptions)(error)
       }
     }
   }
