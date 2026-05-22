@@ -9,10 +9,14 @@ object JsonEncoder {
     case i: Int    => Json.fromInt(i)
     case l: Long   => Json.fromLong(l)
     case d: Double =>
-      if (d.isNaN || d.isInfinity) Json.Null
+      if (d.isNaN) Json.fromString("NaN")
+      else if (d.isPosInfinity) Json.fromString("Infinity")
+      else if (d.isNegInfinity) Json.fromString("-Infinity")
       else Json.fromDoubleOrNull(d)
     case f: Float =>
-      if (f.isNaN || f.isInfinity) Json.Null
+      if (f.isNaN) Json.fromString("NaN")
+      else if (f.isPosInfinity) Json.fromString("Infinity")
+      else if (f.isNegInfinity) Json.fromString("-Infinity")
       else Json.fromFloatOrNull(f)
     case b: Boolean             => Json.fromBoolean(b)
     case bd: BigDecimal         => Json.fromBigDecimal(bd)

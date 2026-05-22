@@ -26,12 +26,20 @@ class JsonEncoderTest extends AnyFlatSpec with Matchers {
     JsonEncoder.encodeAny(3.14) shouldBe Json.fromDoubleOrNull(3.14)
   }
 
-  it should "encode NaN Double as Json.Null" in {
-    JsonEncoder.encodeAny(Double.NaN) shouldBe Json.Null
+  it should "encode NaN Double as string \"NaN\"" in {
+    JsonEncoder.encodeAny(Double.NaN) shouldBe Json.fromString("NaN")
   }
 
-  it should "encode Infinity Double as Json.Null" in {
-    JsonEncoder.encodeAny(Double.PositiveInfinity) shouldBe Json.Null
+  it should "encode positive Infinity Double as string \"Infinity\"" in {
+    JsonEncoder.encodeAny(Double.PositiveInfinity) shouldBe Json.fromString(
+      "Infinity"
+    )
+  }
+
+  it should "encode negative Infinity Double as string \"-Infinity\"" in {
+    JsonEncoder.encodeAny(Double.NegativeInfinity) shouldBe Json.fromString(
+      "-Infinity"
+    )
   }
 
   it should "encode Boolean" in {
@@ -76,12 +84,20 @@ class JsonEncoderTest extends AnyFlatSpec with Matchers {
     JsonEncoder.encodeAny(1.5f: Float) shouldBe Json.fromFloatOrNull(1.5f)
   }
 
-  it should "encode NaN Float as Json.Null" in {
-    JsonEncoder.encodeAny(Float.NaN) shouldBe Json.Null
+  it should "encode NaN Float as string \"NaN\"" in {
+    JsonEncoder.encodeAny(Float.NaN) shouldBe Json.fromString("NaN")
   }
 
-  it should "encode Infinity Float as Json.Null" in {
-    JsonEncoder.encodeAny(Float.PositiveInfinity) shouldBe Json.Null
+  it should "encode positive Infinity Float as string \"Infinity\"" in {
+    JsonEncoder.encodeAny(Float.PositiveInfinity) shouldBe Json.fromString(
+      "Infinity"
+    )
+  }
+
+  it should "encode negative Infinity Float as string \"-Infinity\"" in {
+    JsonEncoder.encodeAny(Float.NegativeInfinity) shouldBe Json.fromString(
+      "-Infinity"
+    )
   }
 
   it should "encode BigDecimal" in {
