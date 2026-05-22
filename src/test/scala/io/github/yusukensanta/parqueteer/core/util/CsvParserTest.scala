@@ -1,5 +1,7 @@
 package io.github.yusukensanta.parqueteer.core.util
 
+import io.github.yusukensanta.parqueteer.core.formatters.CSVFormatter
+import io.github.yusukensanta.parqueteer.core.models.FileContent
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -115,5 +117,50 @@ class CsvParserTest extends AnyFlatSpec with Matchers {
     val records = CsvParser.parseRfc4180("a,b\n1,2")
     records should have size 2
     records(1)(0) shouldBe "1"
+  }
+
+  // ─── CSVFormatter → CsvParser round-trip ────────────────────────────────────
+
+  private def roundTrip(
+      rows: List[Map[String, Any]]
+  ): List[Map[String, Any]] = {
+    val csv = new CSVFormatter().formatContent(
+      FileContent(rows, rows.length.toLong, isPartial = false),
+      None
+    )
+    CsvParser.parse(csv)
+  }
+
+  "CSVFormatter → CsvParser round-trip" should "preserve string values with embedded double-quotes" in {
+    val rows = List(Map("a" -> "say \"hello\"", "b" -> "normal"))
+    val parsed = roundTrip(rows)
+    parsed should have size 1
+    parsed(0)("a") shouldBe "say \"hello\""
+    parsed(0)("b") shouldBe "normal"
+  }
+
+  it should "preserve string values containing commas" in {
+    val rows = List(Map("name" -> "Smith, John", "score" -> "42"))
+    val parsed = roundTrip(rows)
+    parsed(0)("name") shouldBe "Smith, John"
+    parsed(0)("score") shouldBe 42L
+  }
+
+  it should "preserve Unicode characters" in {
+    val rows = List(Map("greeting" -> "こんにちは", "lang" -> "日本語"))
+    val parsed = roundTrip(rows)
+    parsed(0)("greeting") shouldBe "こんにちは"
+    parsed(0)("lang") shouldBe "日本語"
+  }
+
+  it should "preserve multiple rows" in {
+    val rows = List(
+      Map("id" -> 1L, "val" -> "a,b"),
+      Map("id" -> 2L, "val" -> "c\"d")
+    )
+    val parsed = roundTrip(rows)
+    parsed should have size 2
+    parsed(0)("val") shouldBe "a,b"
+    parsed(1)("val") shouldBe "c\"d"
   }
 }
