@@ -110,110 +110,116 @@ class ParquetService(
       writeConfig: WriteConfig,
       schemaMode: SchemaMode,
       onProgress: (Int, Int, String) => Unit = (_, _, _) => ()
-  ): Either[ParqueteerError, Long] = {
+  ): Either[ParqueteerError, Long] =
     if (inputPaths.size < 2)
-      return Left(
+      Left(
         ParqueteerError.InvalidFormat(
           "merge",
           "merge requires at least two input files"
         )
       )
-
-    for {
-      inputLocations <- inputPaths
-        .foldLeft[Either[ParqueteerError, List[StorageLocation]]](Right(Nil)) {
-          (acc, p) => acc.flatMap(locs => parseLocation(p).map(locs :+ _))
+    else
+      for {
+        inputLocations <- inputPaths
+          .foldLeft[Either[ParqueteerError, List[StorageLocation]]](
+            Right(Nil)
+          ) { (acc, p) =>
+            acc.flatMap(locs => parseLocation(p).map(locs :+ _))
+          }
+        schemas <- inputLocations.foldLeft[Either[ParqueteerError, List[
+          List[FieldSummary]
+        ]]](Right(Nil)) { (acc, loc) =>
+          acc.flatMap { list =>
+            repository
+              .readSchemaFields(ParquetFile(loc))
+              .toParqueteerError
+              .map(list :+ _)
+          }
         }
-      schemas <- inputLocations.foldLeft[Either[ParqueteerError, List[
-        List[FieldSummary]
-      ]]](Right(Nil)) { (acc, loc) =>
-        acc.flatMap { list =>
-          repository
-            .readSchemaFields(ParquetFile(loc))
-            .toParqueteerError
-            .map(list :+ _)
-        }
-      }
-      mergedFields <- schemaMode match {
-        case SchemaMode.Strict =>
-          val first = schemas.head
-          schemas.zipWithIndex
-            .collectFirst {
-              case (s, i) if s != first =>
-                Left(
-                  ParqueteerError.InvalidFormat(
-                    inputPaths(i),
-                    s"Schema mismatch at file '${inputPaths(i)}'. Use --schema-mode union to allow schema differences."
+        mergedFields <- schemaMode match {
+          case SchemaMode.Strict =>
+            val first = schemas.head
+            schemas.zipWithIndex
+              .collectFirst {
+                case (s, i) if s != first =>
+                  Left(
+                    ParqueteerError.InvalidFormat(
+                      inputPaths(i),
+                      s"Schema mismatch at file '${inputPaths(i)}'. Use --schema-mode union to allow schema differences."
+                    )
                   )
-                )
-            }
-            .getOrElse(Right(first))
-        case SchemaMode.Union =>
-          val seen =
-            scala.collection.mutable.LinkedHashMap.empty[String, String]
-          schemas
-            .foldLeft[Either[ParqueteerError, Unit]](Right(())) {
-              (acc, fields) =>
-                acc.flatMap { _ =>
-                  val conflicts = fields.collect {
-                    case f if seen.get(f.name).exists(_ != f.dataType) =>
-                      s"'${f.name}' (${seen(f.name)} vs ${f.dataType})"
-                  }
-                  if (conflicts.nonEmpty)
-                    Left(
-                      ParqueteerError.InvalidFormat(
-                        "merge",
-                        s"Type conflicts in union merge: ${conflicts.mkString(", ")}. " +
-                          "Cannot union-merge columns with incompatible types."
+              }
+              .getOrElse(Right(first))
+          case SchemaMode.Union =>
+            val seen =
+              scala.collection.mutable.LinkedHashMap.empty[String, String]
+            schemas
+              .foldLeft[Either[ParqueteerError, Unit]](Right(())) {
+                (acc, fields) =>
+                  acc.flatMap { _ =>
+                    val conflicts = fields.collect {
+                      case f if seen.get(f.name).exists(_ != f.dataType) =>
+                        s"'${f.name}' (${seen(f.name)} vs ${f.dataType})"
+                    }
+                    if (conflicts.nonEmpty)
+                      Left(
+                        ParqueteerError.InvalidFormat(
+                          "merge",
+                          s"Type conflicts in union merge: ${conflicts.mkString(", ")}. " +
+                            "Cannot union-merge columns with incompatible types."
+                        )
                       )
-                    )
-                  else {
-                    fields.foreach(f =>
-                      seen.getOrElseUpdate(f.name, f.dataType)
-                    )
-                    Right(())
+                    else {
+                      fields.foreach(f =>
+                        seen.getOrElseUpdate(f.name, f.dataType)
+                      )
+                      Right(())
+                    }
+                  }
+              }
+              .map(_ =>
+                seen.map { case (name, t) =>
+                  FieldSummary(name, t, isOptional = true)
+                }.toList
+              )
+        }
+        outputLocation <- parseLocation(outputPath)
+        count <- {
+          val allColumnNames = mergedFields.map(_.name).toSet
+          val explicitSchema = ParquetSchema(
+            columns = mergedFields.map { f =>
+              ColumnInfo(f.name, f.dataType, f.isOptional, 1, 0, "SNAPPY")
+            },
+            rowGroupCount = 1L,
+            totalRowCount = 0L
+          )
+          var streamError: Option[Throwable] = None
+          repository
+            .writeContentStream(outputLocation, explicitSchema, writeConfig) {
+              write =>
+                inputLocations.zipWithIndex.foreach { case (loc, i) =>
+                  if (streamError.isEmpty) {
+                    onProgress(i + 1, inputLocations.size, inputPaths(i))
+                    repository
+                      .streamContent(ParquetFile(loc), ReadConfig()) { row =>
+                        val missing = allColumnNames -- row.keySet
+                        val finalRow =
+                          if (missing.isEmpty) row
+                          else row ++ missing.map(_ -> null)
+                        write(finalRow)
+                      }
+                      .fold(err => streamError = Some(err), _ => ())
                   }
                 }
             }
-            .map(_ =>
-              seen.map { case (name, t) =>
-                FieldSummary(name, t, isOptional = true)
-              }.toList
+            .toParqueteerError
+            .flatMap(count =>
+              streamError
+                .map(e => Left(ParqueteerError.IOError(e)))
+                .getOrElse(Right(count))
             )
-      }
-      outputLocation <- parseLocation(outputPath)
-      count <- {
-        val allColumnNames = mergedFields.map(_.name).toSet
-        val explicitSchema = ParquetSchema(
-          columns = mergedFields.map { f =>
-            ColumnInfo(f.name, f.dataType, f.isOptional, 1, 0, "SNAPPY")
-          },
-          rowGroupCount = 1L,
-          totalRowCount = 0L
-        )
-        repository
-          .writeContentStream(outputLocation, explicitSchema, writeConfig) {
-            write =>
-              inputLocations.zipWithIndex.foreach { case (loc, i) =>
-                onProgress(i + 1, inputLocations.size, inputPaths(i))
-                repository
-                  .streamContent(ParquetFile(loc), ReadConfig()) { row =>
-                    val missing = allColumnNames -- row.keySet
-                    val finalRow =
-                      if (missing.isEmpty) row
-                      else row ++ missing.map(_ -> null)
-                    write(finalRow)
-                  }
-                  .fold(
-                    err => throw err,
-                    _ => ()
-                  )
-              }
-          }
-          .toParqueteerError
-      }
-    } yield count
-  }
+        }
+      } yield count
 
   def getStats(path: String): Either[ParqueteerError, FileStats] =
     for {
