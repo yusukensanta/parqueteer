@@ -4,6 +4,7 @@ import io.github.yusukensanta.parqueteer.core.models._
 import io.github.yusukensanta.parqueteer.core.models.StorageLocationParser
 import io.github.yusukensanta.parqueteer.core.repositories.ParquetRepository
 import io.github.yusukensanta.parqueteer.core.filters.FilterParser
+import io.github.yusukensanta.parqueteer.core.util.FileExtension
 import scala.util.{Try, Using}
 import io.circe.{Encoder, Json}
 
@@ -354,8 +355,8 @@ class ParquetService(
       outputPath: String,
       conversionConfig: ConversionConfig = ConversionConfig()
   ): Either[ParqueteerError, Unit] = {
-    val inputExt = getFileExtension(inputPath)
-    val outputExt = getFileExtension(outputPath)
+    val inputExt = FileExtension.of(inputPath)
+    val outputExt = FileExtension.of(outputPath)
     (inputExt, outputExt) match {
       case ("parquet", "parquet") =>
         for {
@@ -380,15 +381,6 @@ class ParquetService(
             s"Unsupported conversion: $inputExt → $outputExt. Supported: parquet→parquet, json→parquet, csv→parquet"
           )
         )
-    }
-  }
-
-  private def getFileExtension(path: String): String = {
-    val fileName = path.split("/").last.split("\\?").head // Remove query params
-    if (fileName.contains(".")) {
-      fileName.split("\\.").last.toLowerCase
-    } else {
-      "unknown"
     }
   }
 
