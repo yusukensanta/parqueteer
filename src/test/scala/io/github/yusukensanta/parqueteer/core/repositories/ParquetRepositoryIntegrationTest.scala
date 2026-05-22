@@ -106,7 +106,8 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
     val result = repo.readMetadata(ParquetFile(loc))
     result.isSuccess shouldBe true
     result.get.fileSize should be > 0L
-    result.get.createdAt shouldBe defined
+    result.get.createdAt shouldBe None
+    result.get.modifiedAt shouldBe defined
   }
 
   it should "report Parquet format version (1.0 or 2.0), not writer library string" taggedAs IntegrationTest in {
