@@ -30,4 +30,10 @@ class PrettyFormatterTest extends AnyFlatSpec with Matchers {
     val table = new TableFormatter().formatContent(content, None)
     pretty shouldBe table
   }
+
+  it should "render Double with full precision" in {
+    val c = FileContent(List(Map("v" -> 1.234567)), 1L, isPartial = false)
+    val result = new PrettyFormatter(useColors = false).formatContent(c, None)
+    result should include("1.234567")
+  }
 }
