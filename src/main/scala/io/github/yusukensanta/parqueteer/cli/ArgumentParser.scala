@@ -59,7 +59,7 @@ object ArgumentParser {
       opt[String]("color")
         .action((x, c) =>
           c.copy(globalOptions =
-            c.globalOptions.copy(colorMode = parseColorMode(x))
+            c.globalOptions.copy(colorMode = ColorMode.fromString(x))
           )
         )
         .validate(x =>
@@ -427,14 +427,6 @@ object ArgumentParser {
       case "ndjson"   => OutputFormat.NDJSON
       case other =>
         throw new IllegalArgumentException(s"Unknown format: $other")
-    }
-  }
-
-  private def parseColorMode(mode: String): ColorMode = {
-    mode.toLowerCase match {
-      case "always" => ColorMode.Always
-      case "never"  => ColorMode.Never
-      case _        => ColorMode.Auto
     }
   }
 
