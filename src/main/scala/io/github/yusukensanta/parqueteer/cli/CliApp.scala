@@ -12,10 +12,7 @@ import io.github.yusukensanta.parqueteer.core.models.{
   ConversionConfig,
   FileContent
 }
-import io.github.yusukensanta.parqueteer.core.formatters.{
-  JSONFormatter,
-  CSVFormatter
-}
+import io.github.yusukensanta.parqueteer.core.formatters.OutputFormatter
 import io.github.yusukensanta.parqueteer.config.{
   ConfigurationManager,
   EnvConfig
@@ -424,16 +421,20 @@ object CliApp {
       val outputExt = FileExtension.of(outputPath)
       val inputExt = FileExtension.of(inputPath)
       val result: Either[ParqueteerError, Unit] = (inputExt, outputExt) match {
-        case ("parquet", ext @ ("json" | "csv")) =>
+        case ("parquet", ext @ ("json" | "ndjson" | "csv")) =>
+          val outFormat = ext match {
+            case "json"   => OutputFormat.JSON
+            case "ndjson" => OutputFormat.NDJSON
+            case _        => OutputFormat.CSV
+          }
           service
             .readFile(inputPath, ReadConfig(maxRows = conversionConfig.maxRows))
             .flatMap { file =>
               val content =
                 file.content.getOrElse(FileContent(List.empty, 0, false))
-              val text = ext match {
-                case "json" => new JSONFormatter().formatContent(content, None)
-                case _      => new CSVFormatter().formatContent(content, None)
-              }
+              val text =
+                OutputFormatter(outFormat, useColors = false)
+                  .formatContent(content, None)
               scala.util
                 .Try {
                   import better.files._
@@ -461,7 +462,7 @@ object CliApp {
           Left(
             ParqueteerError.InvalidFormat(
               inputPath,
-              s"Unsupported conversion: $inputExt → $outputExt. Supported: parquet→parquet, parquet→json, parquet→csv, json→parquet, csv→parquet"
+              s"Unsupported conversion: $inputExt → $outputExt. Supported: parquet→parquet, parquet→json, parquet→ndjson, parquet→csv, json→parquet, csv→parquet"
             )
           )
       }
