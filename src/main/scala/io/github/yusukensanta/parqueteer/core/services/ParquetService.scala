@@ -1,6 +1,7 @@
 package io.github.yusukensanta.parqueteer.core.services
 
 import io.github.yusukensanta.parqueteer.core.models._
+import io.github.yusukensanta.parqueteer.core.models.ParqueteerError.toParqueteerError
 import io.github.yusukensanta.parqueteer.core.models.StorageLocationParser
 import io.github.yusukensanta.parqueteer.core.repositories.ParquetRepository
 import io.github.yusukensanta.parqueteer.core.filters.FilterParser
@@ -60,19 +61,13 @@ class ParquetService(
       file = ParquetFile(location)
       content <- repository
         .readContent(file, readConfig)
-        .toEither
-        .left
-        .map(ParqueteerError.IOError.apply)
+        .toParqueteerError
       schema <- repository
         .readSchema(file)
-        .toEither
-        .left
-        .map(ParqueteerError.IOError.apply)
+        .toParqueteerError
       metadata <- repository
         .readMetadata(file)
-        .toEither
-        .left
-        .map(ParqueteerError.IOError.apply)
+        .toParqueteerError
     } yield file.copy(
       content = Some(content),
       schema = Some(schema),
@@ -94,9 +89,7 @@ class ParquetService(
         .streamContent(file, readConfig)(
           process
         )
-        .toEither
-        .left
-        .map(ParqueteerError.IOError.apply)
+        .toParqueteerError
     } yield count
 
   def getFileInfo(path: String): Either[ParqueteerError, ParquetFile] =
@@ -105,14 +98,10 @@ class ParquetService(
       file = ParquetFile(location)
       schema <- repository
         .readSchema(file)
-        .toEither
-        .left
-        .map(ParqueteerError.IOError.apply)
+        .toParqueteerError
       metadata <- repository
         .readMetadata(file)
-        .toEither
-        .left
-        .map(ParqueteerError.IOError.apply)
+        .toParqueteerError
     } yield file.copy(schema = Some(schema), metadata = Some(metadata))
 
   def mergeFiles(
@@ -141,9 +130,7 @@ class ParquetService(
         acc.flatMap { list =>
           repository
             .readSchemaFields(ParquetFile(loc))
-            .toEither
-            .left
-            .map(ParqueteerError.IOError.apply)
+            .toParqueteerError
             .map(list :+ _)
         }
       }
@@ -223,9 +210,7 @@ class ParquetService(
                   )
               }
           }
-          .toEither
-          .left
-          .map(ParqueteerError.IOError.apply)
+          .toParqueteerError
       }
     } yield count
   }
@@ -236,9 +221,7 @@ class ParquetService(
       file = ParquetFile(location)
       stats <- repository
         .readStats(file)
-        .toEither
-        .left
-        .map(ParqueteerError.IOError.apply)
+        .toParqueteerError
     } yield stats
 
   def writeFile(
@@ -250,9 +233,7 @@ class ParquetService(
       location <- parseLocation(path)
       _ <- repository
         .writeContent(location, data, None, writeConfig)
-        .toEither
-        .left
-        .map(ParqueteerError.IOError.apply)
+        .toParqueteerError
     } yield ()
 
   def readDataFile(
@@ -261,16 +242,15 @@ class ParquetService(
       stdin: java.io.InputStream = System.in
   ): Either[ParqueteerError, List[Map[String, Any]]] =
     if (path == "-")
-      readFromStdin(inputFormat, stdin).toEither.left
-        .map(ParqueteerError.IOError.apply)
+      readFromStdin(inputFormat, stdin).toParqueteerError
     else
       inputFormat.toLowerCase match {
         case "json" =>
-          readJsonFile(path).toEither.left.map(ParqueteerError.IOError.apply)
+          readJsonFile(path).toParqueteerError
         case "ndjson" =>
-          readNdjsonFile(path).toEither.left.map(ParqueteerError.IOError.apply)
+          readNdjsonFile(path).toParqueteerError
         case "csv" =>
-          readCsvFile(path).toEither.left.map(ParqueteerError.IOError.apply)
+          readCsvFile(path).toParqueteerError
         case fmt =>
           Left(
             ParqueteerError.IOError(
@@ -300,9 +280,7 @@ class ParquetService(
       file = ParquetFile(location)
       issues <- repository
         .validateFile(file)
-        .toEither
-        .left
-        .map(ParqueteerError.IOError.apply)
+        .toParqueteerError
     } yield ValidationResult(isValid = issues.isEmpty, issues = issues)
 
   def diffSchemas(
