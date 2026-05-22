@@ -11,8 +11,11 @@ trait OutputFormatter {
   def formatSchema(schema: ParquetSchema): String
   def formatMetadata(metadata: FileMetadata): String
 
-  protected def extractColumns(rows: List[Map[String, Any]]): List[String] =
-    rows.flatMap(_.keys).distinct.sorted
+  protected def extractColumns(rows: List[Map[String, Any]]): List[String] = {
+    val seen = scala.collection.mutable.LinkedHashSet.empty[String]
+    rows.foreach(_.keysIterator.foreach(seen += _))
+    seen.toList.sorted
+  }
 }
 
 object OutputFormatter {
