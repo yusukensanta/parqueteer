@@ -364,34 +364,6 @@ class ParquetService(
           _ <- writeFile(outputPath, data, conversionConfig.writeConfig)
         } yield ()
 
-      case ("parquet", "json") =>
-        for {
-          inputFile <- readFile(
-            inputPath,
-            ReadConfig(maxRows = conversionConfig.maxRows)
-          )
-          content = inputFile.content.getOrElse(
-            FileContent(List.empty, 0, false)
-          )
-          jsonOutput = formatContentAsJSON(content)
-          _ <- writeTextFile(outputPath, jsonOutput).toEither.left
-            .map(ParqueteerError.IOError.apply)
-        } yield ()
-
-      case ("parquet", "csv") =>
-        for {
-          inputFile <- readFile(
-            inputPath,
-            ReadConfig(maxRows = conversionConfig.maxRows)
-          )
-          content = inputFile.content.getOrElse(
-            FileContent(List.empty, 0, false)
-          )
-          csvOutput = formatContentAsCSV(content)
-          _ <- writeTextFile(outputPath, csvOutput).toEither.left
-            .map(ParqueteerError.IOError.apply)
-        } yield ()
-
       case ("json" | "csv", "parquet") =>
         for {
           data <- readDataFile(inputPath, inputExt)
@@ -402,7 +374,7 @@ class ParquetService(
         Left(
           ParqueteerError.InvalidFormat(
             inputPath,
-            s"Unsupported conversion: $inputExt → $outputExt. Supported: parquet→parquet, parquet→json, parquet→csv"
+            s"Unsupported conversion: $inputExt → $outputExt. Supported: parquet→parquet, json→parquet, csv→parquet"
           )
         )
     }
@@ -414,25 +386,6 @@ class ParquetService(
       fileName.split("\\.").last.toLowerCase
     } else {
       "unknown"
-    }
-  }
-
-  private def formatContentAsJSON(content: FileContent): String = {
-    import io.github.yusukensanta.parqueteer.core.formatters.JSONFormatter
-    new JSONFormatter().formatContent(content, None)
-  }
-
-  private def formatContentAsCSV(content: FileContent): String = {
-    import io.github.yusukensanta.parqueteer.core.formatters.CSVFormatter
-    new CSVFormatter().formatContent(content, None)
-  }
-
-  private def writeTextFile(path: String, content: String): Try[Unit] = {
-    Try {
-      import better.files._
-      val file = File(path)
-      file.createIfNotExists()
-      file.write(content)
     }
   }
 

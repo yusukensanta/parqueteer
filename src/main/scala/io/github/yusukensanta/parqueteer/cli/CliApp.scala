@@ -9,7 +9,12 @@ import io.github.yusukensanta.parqueteer.core.models.{
   CompressionType,
   ParqueteerError,
   SchemaMode,
-  ConversionConfig
+  ConversionConfig,
+  FileContent
+}
+import io.github.yusukensanta.parqueteer.core.formatters.{
+  JSONFormatter,
+  CSVFormatter
 }
 import io.github.yusukensanta.parqueteer.config.{
   ConfigurationManager,
@@ -439,13 +444,54 @@ object CliApp {
         0
       }
     } else {
-      service.convertFile(inputPath, outputPath, conversionConfig) match {
-        case Right(_) =>
-          if (showStatus(globalOptions))
-            println(s"Successfully converted $inputPath to $outputPath")
-          0
-        case Left(error) =>
-          reportError("Failed to convert file", globalOptions)(error)
+      val outputExt = outputPath
+        .split("\\.")
+        .lastOption
+        .map(_.toLowerCase)
+        .getOrElse("unknown")
+      val inputExt = inputPath
+        .split("\\.")
+        .lastOption
+        .map(_.toLowerCase)
+        .getOrElse("unknown")
+      (inputExt, outputExt) match {
+        case ("parquet", ext @ ("json" | "csv")) =>
+          service.readFile(
+            inputPath,
+            ReadConfig(maxRows = conversionConfig.maxRows)
+          ) match {
+            case Left(error) =>
+              reportError("Failed to read input", globalOptions)(error)
+            case Right(file) =>
+              val content =
+                file.content.getOrElse(FileContent(List.empty, 0, false))
+              val text = ext match {
+                case "json" => new JSONFormatter().formatContent(content, None)
+                case _      => new CSVFormatter().formatContent(content, None)
+              }
+              scala.util.Try {
+                import better.files._
+                File(outputPath).createIfNotExists().write(text)
+              } match {
+                case scala.util.Success(_) =>
+                  if (showStatus(globalOptions))
+                    println(s"Successfully converted $inputPath to $outputPath")
+                  0
+                case scala.util.Failure(ex) =>
+                  reportError("Failed to write output", globalOptions)(
+                    ParqueteerError.IOError(ex)
+                  )
+              }
+          }
+        case _ =>
+          service.convertFile(inputPath, outputPath, conversionConfig) match {
+            case Right(_) =>
+              if (showStatus(globalOptions))
+                println(s"Successfully converted $inputPath to $outputPath")
+              0
+            case Left(error) =>
+              reportError("Failed to convert file", globalOptions)(error)
+          }
       }
     }
   }

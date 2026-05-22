@@ -177,16 +177,16 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     result.isRight shouldBe true
   }
 
-  it should "succeed for parquet-to-json" in {
+  it should "return Left for parquet-to-json (text rendering handled in CliApp)" in {
     val service = new ParquetService(new FakeParquetRepository())
     val result = service.convertFile("/in.parquet", "/tmp/out_convert.json")
-    result.isRight shouldBe true
+    result.isLeft shouldBe true
   }
 
-  it should "succeed for parquet-to-csv" in {
+  it should "return Left for parquet-to-csv (text rendering handled in CliApp)" in {
     val service = new ParquetService(new FakeParquetRepository())
     val result = service.convertFile("/in.parquet", "/tmp/out_convert.csv")
-    result.isRight shouldBe true
+    result.isLeft shouldBe true
   }
 
   it should "return Left when write fails during parquet-to-parquet conversion" in {
