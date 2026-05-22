@@ -484,30 +484,25 @@ object CliApp {
       schemaMode: SchemaMode,
       globalOptions: GlobalOptions
   ): Int = {
-    if (inputPaths.size < 2) {
-      System.err.println("Error: merge requires at least two input files")
-      1
-    } else {
-      val writeConfig = WriteConfig(compressionType = compression)
-      val total = inputPaths.size
-      val onProgress: (Int, Int, String) => Unit = (i, n, path) =>
-        if (!globalOptions.quiet)
-          System.err.println(s"[$i/$n] Merging: $path")
+    val writeConfig = WriteConfig(compressionType = compression)
+    val total = inputPaths.size
+    val onProgress: (Int, Int, String) => Unit = (i, n, path) =>
+      if (!globalOptions.quiet)
+        System.err.println(s"[$i/$n] Merging: $path")
 
-      service.mergeFiles(
-        inputPaths,
-        outputPath,
-        writeConfig,
-        schemaMode,
-        onProgress
-      ) match {
-        case Right(count) =>
-          if (showStatus(globalOptions))
-            println(s"Merged $total files ($count rows) → $outputPath")
-          0
-        case Left(error) =>
-          reportError("Failed to merge", globalOptions)(error)
-      }
+    service.mergeFiles(
+      inputPaths,
+      outputPath,
+      writeConfig,
+      schemaMode,
+      onProgress
+    ) match {
+      case Right(count) =>
+        if (showStatus(globalOptions))
+          println(s"Merged $total files ($count rows) → $outputPath")
+        0
+      case Left(error) =>
+        reportError("Failed to merge", globalOptions)(error)
     }
   }
 
