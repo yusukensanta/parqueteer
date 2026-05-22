@@ -483,16 +483,7 @@ class ParquetRepository {
 
             val withValues =
               chunkStats.filter(s => !s.isEmpty && s.hasNonNullValue)
-            val minVal = withValues
-              .flatMap(s =>
-                Option(s.genericGetMin()).map(v => formatStatVal(v, typeName))
-              )
-              .minOption
-            val maxVal = withValues
-              .flatMap(s =>
-                Option(s.genericGetMax()).map(v => formatStatVal(v, typeName))
-              )
-              .maxOption
+            val (minVal, maxVal) = computeTypedMinMax(withValues, typeName)
 
             ColumnStats(colPath, dataType, nullCount, minVal, maxVal)
           }
@@ -500,6 +491,66 @@ class ParquetRepository {
           FileStats(columns, totalRows, blocks.size.toLong)
         }
       }
+    }
+  }
+
+  private def computeTypedMinMax(
+      withValues: List[org.apache.parquet.column.statistics.Statistics[?]],
+      typeName: PrimitiveTypeName
+  ): (Option[String], Option[String]) = {
+    typeName match {
+      case PrimitiveTypeName.INT32 =>
+        val mins = withValues.flatMap(s =>
+          Option(s.genericGetMin())
+            .map(_.asInstanceOf[java.lang.Integer].intValue())
+        )
+        val maxs = withValues.flatMap(s =>
+          Option(s.genericGetMax())
+            .map(_.asInstanceOf[java.lang.Integer].intValue())
+        )
+        (mins.minOption.map(_.toString), maxs.maxOption.map(_.toString))
+      case PrimitiveTypeName.INT64 =>
+        val mins = withValues.flatMap(s =>
+          Option(s.genericGetMin())
+            .map(_.asInstanceOf[java.lang.Long].longValue())
+        )
+        val maxs = withValues.flatMap(s =>
+          Option(s.genericGetMax())
+            .map(_.asInstanceOf[java.lang.Long].longValue())
+        )
+        (mins.minOption.map(_.toString), maxs.maxOption.map(_.toString))
+      case PrimitiveTypeName.FLOAT =>
+        val mins = withValues.flatMap(s =>
+          Option(s.genericGetMin())
+            .map(_.asInstanceOf[java.lang.Float].floatValue())
+        )
+        val maxs = withValues.flatMap(s =>
+          Option(s.genericGetMax())
+            .map(_.asInstanceOf[java.lang.Float].floatValue())
+        )
+        (mins.minOption.map(_.toString), maxs.maxOption.map(_.toString))
+      case PrimitiveTypeName.DOUBLE =>
+        val mins = withValues.flatMap(s =>
+          Option(s.genericGetMin())
+            .map(_.asInstanceOf[java.lang.Double].doubleValue())
+        )
+        val maxs = withValues.flatMap(s =>
+          Option(s.genericGetMax())
+            .map(_.asInstanceOf[java.lang.Double].doubleValue())
+        )
+        (mins.minOption.map(_.toString), maxs.maxOption.map(_.toString))
+      case _ =>
+        val minVal = withValues
+          .flatMap(s =>
+            Option(s.genericGetMin()).map(v => formatStatVal(v, typeName))
+          )
+          .minOption
+        val maxVal = withValues
+          .flatMap(s =>
+            Option(s.genericGetMax()).map(v => formatStatVal(v, typeName))
+          )
+          .maxOption
+        (minVal, maxVal)
     }
   }
 
