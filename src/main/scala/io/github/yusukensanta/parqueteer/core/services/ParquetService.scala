@@ -267,6 +267,8 @@ class ParquetService(
       inputFormat.toLowerCase match {
         case "json" =>
           readJsonFile(path).toEither.left.map(ParqueteerError.IOError.apply)
+        case "ndjson" =>
+          readNdjsonFile(path).toEither.left.map(ParqueteerError.IOError.apply)
         case "csv" =>
           readCsvFile(path).toEither.left.map(ParqueteerError.IOError.apply)
         case fmt =>
@@ -284,8 +286,9 @@ class ParquetService(
     val content =
       Using.resource(scala.io.Source.fromInputStream(stdin))(_.mkString)
     inputFormat.toLowerCase match {
-      case "json" => parseJsonContent(content)
-      case "csv"  => parseCsvContent(content)
+      case "json"   => parseJsonContent(content)
+      case "ndjson" => parseNdjsonContent(content)
+      case "csv"    => parseCsvContent(content)
       case fmt =>
         throw new IllegalArgumentException(s"Unsupported input format: $fmt")
     }
@@ -394,6 +397,11 @@ class ParquetService(
     parseJsonContent(File(path).contentAsString)
   }
 
+  private def readNdjsonFile(path: String): Try[List[Map[String, Any]]] = Try {
+    import better.files._
+    parseNdjsonContent(File(path).contentAsString)
+  }
+
   private def readCsvFile(path: String): Try[List[Map[String, Any]]] = Try {
     import better.files._
     parseCsvContent(File(path).contentAsString)
@@ -445,6 +453,50 @@ class ParquetService(
             )
         }
     }
+  }
+
+  private[services] def parseNdjsonContent(
+      content: String
+  ): List[Map[String, Any]] = {
+    import io.circe.parser._
+    content.linesIterator
+      .map(_.trim)
+      .filter(_.nonEmpty)
+      .map { line =>
+        parse(line) match {
+          case Left(error) =>
+            throw new IllegalArgumentException(
+              s"Failed to parse NDJSON line: ${error.getMessage}"
+            )
+          case Right(json) =>
+            json.asObject
+              .getOrElse(
+                throw new IllegalArgumentException(
+                  s"Each NDJSON line must be a JSON object, got: ${json.noSpaces}"
+                )
+              )
+              .toMap
+              .view
+              .mapValues {
+                case j if j.isString =>
+                  io.github.yusukensanta.parqueteer.core.util.TypeInferrer
+                    .inferJsonString(j.asString.get)
+                case j if j.isNumber =>
+                  val n = j.asNumber.get
+                  val raw = j.noSpaces
+                  if (
+                    raw.contains('.') || raw.contains('e') || raw.contains('E')
+                  )
+                    n.toDouble
+                  else n.toLong.fold[Any](n.toDouble)(identity)
+                case j if j.isBoolean => j.asBoolean.get
+                case j if j.isNull    => null
+                case j                => j.toString
+              }
+              .toMap
+        }
+      }
+      .toList
   }
 
   private[services] def parseCsvContent(

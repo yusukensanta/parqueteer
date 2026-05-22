@@ -173,10 +173,10 @@ object ArgumentParser {
               updateCmd[WriteCommand](c, _.copy(inputFormat = x))
             )
             .validate(x =>
-              if (List("json", "csv").contains(x.toLowerCase)) success
+              if (List("json", "ndjson", "csv").contains(x.toLowerCase)) success
               else failure(s"Invalid input format: $x")
             )
-            .text("Input file format: json, csv (default: json)"),
+            .text("Input file format: json, ndjson, csv (default: json)"),
           opt[String]("compression")
             .abbr("c")
             .action((x, c) =>

@@ -552,6 +552,49 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     }
   }
 
+  "ParquetService.parseNdjsonContent" should "parse NDJSON lines into rows" in {
+    val service = new ParquetService(new FakeParquetRepository())
+    val ndjson = """{"id": 1, "name": "Alice"}
+{"id": 2, "name": "Bob"}"""
+    val rows = service.parseNdjsonContent(ndjson)
+    rows should have length 2
+    rows.head("id") shouldBe 1L
+    rows.head("name") shouldBe "Alice"
+    rows(1)("id") shouldBe 2L
+  }
+
+  it should "skip blank lines" in {
+    val service = new ParquetService(new FakeParquetRepository())
+    val ndjson = """{"x": 1}
+
+{"x": 2}
+"""
+    val rows = service.parseNdjsonContent(ndjson)
+    rows should have length 2
+  }
+
+  it should "preserve 1.0 as Double (same logic as parseJsonContent)" in {
+    val service = new ParquetService(new FakeParquetRepository())
+    val rows = service.parseNdjsonContent("""{"v": 1.0}""")
+    rows.head("v") shouldBe a[java.lang.Double]
+  }
+
+  it should "throw for a non-object NDJSON line" in {
+    val service = new ParquetService(new FakeParquetRepository())
+    an[IllegalArgumentException] should be thrownBy {
+      service.parseNdjsonContent("""[1, 2, 3]""")
+    }
+  }
+
+  it should "be reachable via readFromStdin with --input-format ndjson" in {
+    val service = new ParquetService(new FakeParquetRepository())
+    val stdin = new java.io.ByteArrayInputStream(
+      """{"x": 42}""".getBytes("UTF-8")
+    )
+    val rows = service.readFromStdin("ndjson", stdin).get
+    rows.head("x") shouldBe 42L
+  }
+
   "ParquetService.parseCsvContent" should "parse CSV string with type inference" in {
     val service = new ParquetService(new FakeParquetRepository())
     val rows = service.parseCsvContent("a,b\n1,2\n3,4\n")
