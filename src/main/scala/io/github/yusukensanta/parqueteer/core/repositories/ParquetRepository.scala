@@ -24,6 +24,8 @@ class ParquetRepository(
     profile: Option[String] = None,
     region: Option[String] = None
 ) {
+  private val hadoopConfigCache =
+    scala.collection.concurrent.TrieMap.empty[StorageLocation, Configuration]
 
   def readContent(file: ParquetFile, config: ReadConfig): Try[FileContent] = {
     setupHadoopConfiguration(file.location).flatMap { hadoopConfig =>
@@ -598,16 +600,23 @@ class ParquetRepository(
 
   private def setupHadoopConfiguration(
       location: StorageLocation
-  ): Try[Configuration] = {
-    val effectiveLocation = (location, region) match {
-      case (s3: S3Location, Some(r)) => s3.copy(region = Some(r))
-      case _                         => location
+  ): Try[Configuration] =
+    hadoopConfigCache.get(location) match {
+      case Some(cfg) => Success(cfg)
+      case None =>
+        val effectiveLocation = (location, region) match {
+          case (s3: S3Location, Some(r)) => s3.copy(region = Some(r))
+          case _                         => location
+        }
+        val result = CloudCredentialManager
+          .forLocation(effectiveLocation, profile) match {
+          case Some(credManager) =>
+            credManager.configureHadoop(effectiveLocation)
+          case None => Success(new Configuration())
+        }
+        result.foreach(cfg => hadoopConfigCache.put(location, cfg))
+        result
     }
-    CloudCredentialManager.forLocation(effectiveLocation, profile) match {
-      case Some(credManager) => credManager.configureHadoop(effectiveLocation)
-      case None              => Success(new Configuration())
-    }
-  }
 
   private def getFileMetadata(
       path: HadoopPath,
