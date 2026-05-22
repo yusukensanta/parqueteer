@@ -5,12 +5,14 @@ import io.github.yusukensanta.parqueteer.core.models.{
   GCSLocation
 }
 import org.apache.hadoop.conf.Configuration
+import org.slf4j.LoggerFactory
 import com.google.auth.oauth2.ServiceAccountCredentials
 import scala.util.{Try, Success, Failure, Using}
 import java.io.FileInputStream
 import java.nio.file.{Files, Paths}
 
 class GCSCredentialManager extends CloudCredentialManager {
+  private val logger = LoggerFactory.getLogger(getClass)
   override def configureHadoop(
       location: StorageLocation
   ): Try[Configuration] = {
@@ -39,10 +41,10 @@ class GCSCredentialManager extends CloudCredentialManager {
               )
 
             case Failure(error) =>
-              // Try application default credentials
               conf.set("google.cloud.auth.service.account.enable", "false")
-              System.err.println(
-                s"Warning: Using application default credentials: ${error.getMessage}"
+              logger.warn(
+                "Using application default credentials: {}",
+                error.getMessage
               )
           }
 
