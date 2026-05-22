@@ -6,8 +6,6 @@ import scala.util.Try
 
 trait CloudCredentialManager {
   def configureHadoop(location: StorageLocation): Try[Configuration]
-  def validateCredentials(location: StorageLocation): Try[Unit]
-  def supportsLocation(location: StorageLocation): Boolean
 }
 
 object CloudCredentialManager {
