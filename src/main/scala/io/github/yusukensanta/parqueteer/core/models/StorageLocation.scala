@@ -33,7 +33,7 @@ case class AzureLocation(
 }
 
 object StorageLocationParser {
-  private val s3Pattern: Regex = """s3://([^/]+)/(.+)""".r
+  private val s3Pattern: Regex = """s3a?://([^/]+)/(.+)""".r
   private val gcsPattern: Regex = """gs://([^/]+)/(.+)""".r
   private val azurePattern: Regex =
     """abfss://([^@]+)@([^.]+)\.dfs\.core\.windows\.net/(.+)""".r
