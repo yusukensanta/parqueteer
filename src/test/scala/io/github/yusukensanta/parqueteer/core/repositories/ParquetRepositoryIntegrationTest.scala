@@ -370,27 +370,6 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
     result.get.rows.head("name") shouldBe "Alice"
   }
 
-  it should "print a warning to stderr when --parallel and --filter are combined" taggedAs IntegrationTest in {
-    val loc = LocalPath(tempFile().getAbsolutePath)
-    repo.writeContent(loc, sampleData, None).isSuccess shouldBe true
-
-    val errOut = new java.io.ByteArrayOutputStream()
-    val origErr = System.err
-    System.setErr(new java.io.PrintStream(errOut))
-    try {
-      repo.readContent(
-        ParquetFile(loc),
-        ReadConfig(parallelism = 4, filter = Some("""name = "Alice""""))
-      )
-    } finally {
-      System.setErr(origErr)
-    }
-    val warning = errOut.toString
-    warning should include("Warning")
-    warning should include("filter")
-    warning should include("parallel")
-  }
-
   // ── IS NULL / IS NOT NULL type-aware filter ────────────────────────────
 
   it should "filter IS NULL on INT64 column without IllegalArgumentException" taggedAs IntegrationTest in {

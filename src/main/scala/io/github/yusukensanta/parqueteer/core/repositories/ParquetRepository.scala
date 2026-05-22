@@ -34,11 +34,6 @@ class ParquetRepository(
         val (totalRows, fileSchema) = getFileMetadata(hadoopPath, hadoopConfig)
 
         val useParallel = config.parallelism > 1 && config.filter.isEmpty
-        if (config.parallelism > 1 && config.filter.nonEmpty) {
-          System.err.println(
-            "Warning: --filter is not supported in parallel mode; falling back to sequential read."
-          )
-        }
         if (useParallel) {
           val rows = readParallel(hadoopPath, hadoopConfig, config)
           val isPartial =
