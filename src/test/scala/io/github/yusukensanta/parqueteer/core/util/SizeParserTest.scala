@@ -2,8 +2,13 @@ package io.github.yusukensanta.parqueteer.core.util
 
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
+import org.scalacheck.Gen
 
-class SizeParserTest extends AnyFlatSpec with Matchers {
+class SizeParserTest
+    extends AnyFlatSpec
+    with Matchers
+    with ScalaCheckPropertyChecks {
 
   "SizeParser.parse" should "parse bytes" in {
     SizeParser.parse("512B") shouldBe 512L
@@ -57,5 +62,21 @@ class SizeParserTest extends AnyFlatSpec with Matchers {
 
   it should "accept fractional gigabytes" in {
     SizeParser.parse("1.5GB") shouldBe (1.5 * 1024 * 1024 * 1024).toLong
+  }
+
+  // ── Property-based: ByteFormatter.format → SizeParser.parse never throws ─
+  // For any positive Long, the formatted string must be re-parseable.
+
+  "SizeParser.parse (property)" should "never throw for any ByteFormatter output" in {
+    forAll(Gen.posNum[Long]) { n =>
+      val formatted = ByteFormatter.format(n)
+      noException should be thrownBy SizeParser.parse(formatted)
+    }
+  }
+
+  it should "return a non-negative result for any ByteFormatter output" in {
+    forAll(Gen.posNum[Long]) { n =>
+      SizeParser.parse(ByteFormatter.format(n)) should be >= 0L
+    }
   }
 }

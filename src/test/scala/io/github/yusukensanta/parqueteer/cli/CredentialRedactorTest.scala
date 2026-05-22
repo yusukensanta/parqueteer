@@ -2,8 +2,13 @@ package io.github.yusukensanta.parqueteer.cli
 
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
+import org.scalacheck.Gen
 
-class CredentialRedactorTest extends AnyFlatSpec with Matchers {
+class CredentialRedactorTest
+    extends AnyFlatSpec
+    with Matchers
+    with ScalaCheckPropertyChecks {
 
   "CredentialRedactor.redact" should "redact Authorization header value" in {
     val input = "Authorization: Bearer eyJhbGciOiJSUzI1NiJ9.secret"
@@ -65,6 +70,37 @@ class CredentialRedactorTest extends AnyFlatSpec with Matchers {
 
   it should "handle empty string" in {
     CredentialRedactor.redact("") shouldBe ""
+  }
+
+  // ── Property-based ────────────────────────────────────────────────────────
+
+  // Safe strings: lowercase letters + digits only — guaranteed to match no pattern
+  private val safeStr: Gen[String] = Gen
+    .listOf(
+      Gen.frequency(8 -> Gen.alphaLowerChar, 2 -> Gen.numChar)
+    )
+    .map(_.mkString)
+
+  "CredentialRedactor.redact (property)" should "leave credential-free strings unchanged" in {
+    forAll(safeStr) { s =>
+      CredentialRedactor.redact(s) shouldBe s
+    }
+  }
+
+  it should "always redact the secret portion of an Authorization header" in {
+    val secretGen = Gen.listOfN(16, Gen.alphaNumChar).map(_.mkString)
+    forAll(secretGen) { secret =>
+      val input = s"Authorization: Bearer $secret"
+      CredentialRedactor.redact(input) should not include secret
+    }
+  }
+
+  it should "always redact the value of aws_secret_access_key" in {
+    val secretGen = Gen.listOfN(20, Gen.alphaNumChar).map(_.mkString)
+    forAll(secretGen) { secret =>
+      val input = s"aws_secret_access_key = $secret"
+      CredentialRedactor.redact(input) should not include secret
+    }
   }
 
   it should "redact URL-form X-Amz-Signature query parameter" in {

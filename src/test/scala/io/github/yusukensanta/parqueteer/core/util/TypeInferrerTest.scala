@@ -2,9 +2,14 @@ package io.github.yusukensanta.parqueteer.core.util
 
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
+import org.scalacheck.Gen
 import java.time.{Instant, LocalDate}
 
-class TypeInferrerTest extends AnyFlatSpec with Matchers {
+class TypeInferrerTest
+    extends AnyFlatSpec
+    with Matchers
+    with ScalaCheckPropertyChecks {
 
   "TypeInferrer.inferCsvValue" should "infer Boolean true" in {
     TypeInferrer.inferCsvValue("true") shouldBe true
@@ -80,5 +85,29 @@ class TypeInferrerTest extends AnyFlatSpec with Matchers {
   it should "not infer boolean from string in JSON context" in {
     TypeInferrer.inferJsonString("true") shouldBe "true"
     TypeInferrer.inferJsonString("false") shouldBe "false"
+  }
+
+  // ── Property-based: leading-zero invariant ────────────────────────────────
+  // Any digit string starting with '0' and length > 1 must remain a String.
+
+  "TypeInferrer.inferCsvValue (property)" should "never coerce leading-zero strings to Long" in {
+    val leadingZero: Gen[String] = for {
+      rest <- Gen.nonEmptyListOf(Gen.numChar)
+    } yield "0" + rest.mkString // length >= 2, always starts with 0
+    forAll(leadingZero) { s =>
+      TypeInferrer.inferCsvValue(s) shouldBe a[String]
+    }
+  }
+
+  it should "always produce a Long for canonical positive integer strings" in {
+    // Cap at 18 digits: 18 digits starting with 1-9 always fit within Long.MaxValue
+    val canonical: Gen[String] = for {
+      first <- Gen.choose('1', '9')
+      len <- Gen.choose(0, 17)
+      rest <- Gen.listOfN(len, Gen.numChar)
+    } yield first.toString + rest.mkString
+    forAll(canonical) { s =>
+      TypeInferrer.inferCsvValue(s) shouldBe a[java.lang.Long]
+    }
   }
 }
