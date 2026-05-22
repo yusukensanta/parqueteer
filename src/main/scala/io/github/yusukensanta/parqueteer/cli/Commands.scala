@@ -34,7 +34,8 @@ case class WriteCommand(
 
 case class ValidateCommand(
     filePath: String,
-    verbose: Boolean = false
+    verbose: Boolean = false,
+    deep: Boolean = false
 ) extends Command
 
 case class ConvertCommand(

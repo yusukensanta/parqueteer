@@ -23,7 +23,10 @@ class SchemaDiffTest extends AnyFlatSpec with Matchers {
         config: ReadConfig
     ): Try[FileContent] =
       Success(FileContent(List.empty, 0, false))
-    override def validateFile(file: ParquetFile): Try[List[String]] =
+    override def validateFile(
+        file: ParquetFile,
+        deep: Boolean = false
+    ): Try[List[String]] =
       Success(List.empty)
     override def writeContent(
         location: StorageLocation,

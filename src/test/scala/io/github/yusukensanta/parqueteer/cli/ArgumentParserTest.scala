@@ -148,6 +148,26 @@ class ArgumentParserTest extends AnyFlatSpec with Matchers {
     validateCmd.verbose shouldBe false
   }
 
+  it should "parse validate --deep flag" in {
+    val args = Array("validate", "file.parquet", "--deep")
+    val result =
+      OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
+
+    result shouldBe defined
+    val validateCmd = result.get.command.get.asInstanceOf[ValidateCommand]
+    validateCmd.deep shouldBe true
+  }
+
+  it should "default validate deep to false" in {
+    val args = Array("validate", "file.parquet")
+    val result =
+      OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
+
+    result shouldBe defined
+    val validateCmd = result.get.command.get.asInstanceOf[ValidateCommand]
+    validateCmd.deep shouldBe false
+  }
+
   it should "parse global options correctly" in {
     val args = Array("read", "file.parquet", "--verbose")
     val result =

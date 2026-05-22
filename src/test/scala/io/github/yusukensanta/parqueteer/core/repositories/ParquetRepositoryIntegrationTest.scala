@@ -628,6 +628,30 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
     result.get.head should include("cannot be opened")
   }
 
+  it should "spot-check (deep=false default) a multi-row-group file with no issues" taggedAs IntegrationTest in {
+    val loc = LocalPath(tempFile().getAbsolutePath)
+    val rows = (1 to 5).map(i => Map[String, Any]("id" -> i.toLong)).toList
+    repo
+      .writeContent(loc, rows, None, WriteConfig(rowGroupSize = 1L))
+      .isSuccess shouldBe true
+
+    val result = repo.validateFile(ParquetFile(loc))
+    result.isSuccess shouldBe true
+    result.get shouldBe empty
+  }
+
+  it should "deep-validate a multi-row-group file with no issues" taggedAs IntegrationTest in {
+    val loc = LocalPath(tempFile().getAbsolutePath)
+    val rows = (1 to 5).map(i => Map[String, Any]("id" -> i.toLong)).toList
+    repo
+      .writeContent(loc, rows, None, WriteConfig(rowGroupSize = 1L))
+      .isSuccess shouldBe true
+
+    val result = repo.validateFile(ParquetFile(loc), deep = true)
+    result.isSuccess shouldBe true
+    result.get shouldBe empty
+  }
+
   // ── writeContentStream sparse-column error (#153) ───────────────────────
 
   it should "give actionable error for column absent from schema in writeContentStream" taggedAs IntegrationTest in {

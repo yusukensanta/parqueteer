@@ -280,12 +280,15 @@ class ParquetService(
     }
   }
 
-  def validateFile(path: String): Either[ParqueteerError, ValidationResult] =
+  def validateFile(
+      path: String,
+      deep: Boolean = false
+  ): Either[ParqueteerError, ValidationResult] =
     for {
       location <- parseLocation(path)
       file = ParquetFile(location)
       issues <- repository
-        .validateFile(file)
+        .validateFile(file, deep)
         .toParqueteerError
     } yield ValidationResult(isValid = issues.isEmpty, issues = issues)
 
