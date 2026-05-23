@@ -30,7 +30,7 @@ class SchemaDiffTest extends AnyFlatSpec with Matchers {
       Success(List.empty)
     override def writeContent(
         location: StorageLocation,
-        data: List[Map[String, Any]],
+        data: List[Map[String, CellValue]],
         schema: Option[ParquetSchema],
         config: WriteConfig
     ): Try[Unit] = Success(())

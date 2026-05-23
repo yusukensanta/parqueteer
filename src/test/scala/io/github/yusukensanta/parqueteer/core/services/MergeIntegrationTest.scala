@@ -25,7 +25,7 @@ class MergeIntegrationTest extends AnyFlatSpec with Matchers {
     f
   }
 
-  private def writeTemp(data: List[Map[String, Any]]): String = {
+  private def writeTemp(data: List[Map[String, CellValue]]): String = {
     val f = tempFile()
     repo
       .writeContent(LocalPath(f.getAbsolutePath), data, None)
@@ -46,12 +46,12 @@ class MergeIntegrationTest extends AnyFlatSpec with Matchers {
   }
 
   private val data1 = List(
-    Map("id" -> 1L, "name" -> "Alice"),
-    Map("id" -> 2L, "name" -> "Bob")
+    Map("id" -> CellValue.I64(1L), "name" -> CellValue.Str("Alice")),
+    Map("id" -> CellValue.I64(2L), "name" -> CellValue.Str("Bob"))
   )
   private val data2 = List(
-    Map("id" -> 3L, "name" -> "Charlie"),
-    Map("id" -> 4L, "name" -> "Dana")
+    Map("id" -> CellValue.I64(3L), "name" -> CellValue.Str("Charlie")),
+    Map("id" -> CellValue.I64(4L), "name" -> CellValue.Str("Dana"))
   )
 
   // ── Strict mode ─────────────────────────────────────────────────────────
@@ -69,12 +69,21 @@ class MergeIntegrationTest extends AnyFlatSpec with Matchers {
     val content =
       repo.readContent(ParquetFile(LocalPath(out)), ReadConfig()).get
     content.rows should have length 4
-    content.rows.map(_("id")) should contain allOf (1L, 2L, 3L, 4L)
+    content.rows.map(_("id")) should contain allOf (
+      CellValue.I64(1L),
+      CellValue.I64(2L),
+      CellValue.I64(3L),
+      CellValue.I64(4L)
+    )
   }
 
   it should "fail strict merge when schemas differ" taggedAs MergeIntegrationTest in {
-    val in1 = writeTemp(List(Map("id" -> 1L, "name" -> "Alice")))
-    val in2 = writeTemp(List(Map("id" -> 2L, "score" -> 99.0)))
+    val in1 = writeTemp(
+      List(Map("id" -> CellValue.I64(1L), "name" -> CellValue.Str("Alice")))
+    )
+    val in2 = writeTemp(
+      List(Map("id" -> CellValue.I64(2L), "score" -> CellValue.F64(99.0)))
+    )
     val out = tempFile().getAbsolutePath
 
     val result =
@@ -178,8 +187,12 @@ class MergeIntegrationTest extends AnyFlatSpec with Matchers {
   // ── Union mode ──────────────────────────────────────────────────────────
 
   it should "merge files with different schemas in union mode" taggedAs MergeIntegrationTest in {
-    val in1 = writeTemp(List(Map("id" -> 1L, "name" -> "Alice")))
-    val in2 = writeTemp(List(Map("id" -> 2L, "score" -> 99.0)))
+    val in1 = writeTemp(
+      List(Map("id" -> CellValue.I64(1L), "name" -> CellValue.Str("Alice")))
+    )
+    val in2 = writeTemp(
+      List(Map("id" -> CellValue.I64(2L), "score" -> CellValue.F64(99.0)))
+    )
     val out = tempFile().getAbsolutePath
 
     val result =

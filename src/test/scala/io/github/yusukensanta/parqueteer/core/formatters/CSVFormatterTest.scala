@@ -10,8 +10,8 @@ class CSVFormatterTest extends AnyFlatSpec with Matchers {
 
   private val sampleContent = FileContent(
     rows = List(
-      Map("age" -> 30L, "name" -> "Alice"),
-      Map("age" -> 25L, "name" -> "Bob")
+      Map("age" -> CellValue.I64(30L), "name" -> CellValue.Str("Alice")),
+      Map("age" -> CellValue.I64(25L), "name" -> CellValue.Str("Bob"))
     ),
     totalRows = 2L,
     isPartial = false
@@ -53,7 +53,7 @@ class CSVFormatterTest extends AnyFlatSpec with Matchers {
 
   it should "quote fields containing commas" in {
     val withComma = FileContent(
-      rows = List(Map("desc" -> "hello, world")),
+      rows = List(Map("desc" -> CellValue.Str("hello, world"))),
       totalRows = 1L,
       isPartial = false
     )
@@ -63,7 +63,7 @@ class CSVFormatterTest extends AnyFlatSpec with Matchers {
 
   it should "escape internal quotes by doubling them" in {
     val withQuote = FileContent(
-      rows = List(Map("desc" -> """say "hi"""")),
+      rows = List(Map("desc" -> CellValue.Str("""say "hi""""))),
       totalRows = 1L,
       isPartial = false
     )
@@ -73,7 +73,7 @@ class CSVFormatterTest extends AnyFlatSpec with Matchers {
 
   it should "render null as empty field" in {
     val withNull = FileContent(
-      rows = List(Map("key" -> null)),
+      rows = List(Map("key" -> CellValue.Null)),
       totalRows = 1L,
       isPartial = false
     )
@@ -86,7 +86,7 @@ class CSVFormatterTest extends AnyFlatSpec with Matchers {
 
   it should "render Double NaN as NaN string" in {
     val content = FileContent(
-      rows = List(Map("val" -> Double.NaN)),
+      rows = List(Map("val" -> CellValue.F64(Double.NaN))),
       totalRows = 1L,
       isPartial = false
     )
@@ -96,7 +96,7 @@ class CSVFormatterTest extends AnyFlatSpec with Matchers {
 
   it should "render Double Infinity as Infinity string" in {
     val content = FileContent(
-      rows = List(Map("val" -> Double.PositiveInfinity)),
+      rows = List(Map("val" -> CellValue.F64(Double.PositiveInfinity))),
       totalRows = 1L,
       isPartial = false
     )
@@ -106,7 +106,7 @@ class CSVFormatterTest extends AnyFlatSpec with Matchers {
 
   it should "render BigDecimal without scientific notation" in {
     val content = FileContent(
-      rows = List(Map("amount" -> BigDecimal("0.0000001"))),
+      rows = List(Map("amount" -> CellValue.Dec(BigDecimal("0.0000001")))),
       totalRows = 1L,
       isPartial = false
     )
@@ -117,7 +117,7 @@ class CSVFormatterTest extends AnyFlatSpec with Matchers {
 
   it should "render Float values as plain decimal string" in {
     val content = FileContent(
-      rows = List(Map("ratio" -> 1.5f)),
+      rows = List(Map("ratio" -> CellValue.F32(1.5f))),
       totalRows = 1L,
       isPartial = false
     )
@@ -128,8 +128,8 @@ class CSVFormatterTest extends AnyFlatSpec with Matchers {
   it should "render Boolean values as true/false" in {
     val content = FileContent(
       rows = List(
-        Map("active" -> true),
-        Map("active" -> false)
+        Map("active" -> CellValue.Bool(true)),
+        Map("active" -> CellValue.Bool(false))
       ),
       totalRows = 2L,
       isPartial = false

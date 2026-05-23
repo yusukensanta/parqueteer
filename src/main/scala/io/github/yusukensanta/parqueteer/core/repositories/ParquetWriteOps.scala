@@ -1,20 +1,22 @@
 package io.github.yusukensanta.parqueteer.core.repositories
 
-import io.github.yusukensanta.parqueteer.core.models.CompressionType
+import io.github.yusukensanta.parqueteer.core.models.{
+  CellValue,
+  CompressionType
+}
 import org.apache.parquet.hadoop.metadata.CompressionCodecName
 import org.apache.parquet.schema.MessageType
-import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
 import org.apache.parquet.example.data.Group
 
 private[repositories] object ParquetWriteOps {
 
   def writeRowToGroup(
       group: Group,
-      row: Map[String, Any],
+      row: Map[String, CellValue],
       schema: MessageType
   ): Unit = {
     row.foreach { case (key, value) =>
-      if (value != null) {
+      if (value != CellValue.Null) {
         val fieldIndex =
           try schema.getFieldIndex(key)
           catch {
@@ -23,30 +25,19 @@ private[repositories] object ParquetWriteOps {
                 s"Column '$key' in input row not found in schema. The schema was inferred from the first batch of rows — all rows must contain a consistent set of columns."
               )
           }
-        val fieldTypeName =
-          schema.getType(fieldIndex).asPrimitiveType().getPrimitiveTypeName
         value match {
-          case i: Int =>
-            fieldTypeName match {
-              case PrimitiveTypeName.INT64  => group.add(fieldIndex, i.toLong)
-              case PrimitiveTypeName.DOUBLE => group.add(fieldIndex, i.toDouble)
-              case PrimitiveTypeName.FLOAT  => group.add(fieldIndex, i.toFloat)
-              case _                        => group.add(fieldIndex, i)
-            }
-          case l: Long =>
-            fieldTypeName match {
-              case PrimitiveTypeName.DOUBLE => group.add(fieldIndex, l.toDouble)
-              case PrimitiveTypeName.FLOAT  => group.add(fieldIndex, l.toFloat)
-              case _                        => group.add(fieldIndex, l)
-            }
-          case d: Double  => group.add(fieldIndex, d)
-          case f: Float   => group.add(fieldIndex, f)
-          case b: Boolean => group.add(fieldIndex, b)
-          case s: String  => group.add(fieldIndex, s)
-          case date: java.time.LocalDate =>
-            group.add(fieldIndex, date.toEpochDay.toInt)
-          case ts: java.time.Instant => group.add(fieldIndex, ts.toEpochMilli)
-          case other                 => group.add(fieldIndex, other.toString)
+          case CellValue.I32(i)  => group.add(fieldIndex, i)
+          case CellValue.I64(l)  => group.add(fieldIndex, l)
+          case CellValue.F64(d)  => group.add(fieldIndex, d)
+          case CellValue.F32(f)  => group.add(fieldIndex, f)
+          case CellValue.Bool(b) => group.add(fieldIndex, b)
+          case CellValue.Str(s)  => group.add(fieldIndex, s)
+          case CellValue.Date(d) => group.add(fieldIndex, d.toEpochDay.toInt)
+          case CellValue.Ts(i)   => group.add(fieldIndex, i.toEpochMilli)
+          case CellValue.Dec(bd) => group.add(fieldIndex, bd.toString)
+          case CellValue.Bytes(b) =>
+            group.add(fieldIndex, new String(b, "UTF-8"))
+          case CellValue.Null => ()
         }
       }
     }

@@ -124,7 +124,7 @@ private[repositories] object ParquetSchemaBuilder {
   }
 
 // Helper to infer schema from data
-  def inferSchemaFromData(data: List[Map[String, Any]]): MessageType = {
+  def inferSchemaFromData(data: List[Map[String, CellValue]]): MessageType = {
     import org.apache.parquet.schema.{Types, PrimitiveType}
     import org.apache.parquet.schema.Type.Repetition
 
@@ -136,7 +136,8 @@ private[repositories] object ParquetSchemaBuilder {
     val allKeys = data.flatMap(_.keys).distinct.sorted
 
     allKeys.foreach { key =>
-      val nonNullValues = data.flatMap(_.get(key)).filter(_ != null)
+      val nonNullValues =
+        data.flatMap(_.get(key)).filter(_ != CellValue.Null)
       val effectiveRank = nonNullValues
         .map(typeRankForValue)
         .reduceOption(widenTypeRanks)
@@ -232,15 +233,15 @@ private[repositories] object ParquetSchemaBuilder {
   // Type ranks: 0=Int, 1=Long, 2=Float, 3=Double, 4=Boolean, 5=LocalDate, 6=Instant, 7=String/Binary
   private val numericRanks: Set[Int] = Set(0, 1, 2, 3)
 
-  private def typeRankForValue(v: Any): Int = v match {
-    case _: Int                 => 0
-    case _: Long                => 1
-    case _: Float               => 2
-    case _: Double              => 3
-    case _: Boolean             => 4
-    case _: java.time.LocalDate => 5
-    case _: java.time.Instant   => 6
-    case _                      => 7
+  private def typeRankForValue(v: CellValue): Int = v match {
+    case CellValue.I32(_)  => 0
+    case CellValue.I64(_)  => 1
+    case CellValue.F32(_)  => 2
+    case CellValue.F64(_)  => 3
+    case CellValue.Bool(_) => 4
+    case CellValue.Date(_) => 5
+    case CellValue.Ts(_)   => 6
+    case _                 => 7
   }
 
   // Within the numeric family widen to the max rank; incompatible types fall back to String (7).

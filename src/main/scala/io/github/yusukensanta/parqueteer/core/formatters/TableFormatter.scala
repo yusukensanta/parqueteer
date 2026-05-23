@@ -1,6 +1,7 @@
 package io.github.yusukensanta.parqueteer.core.formatters
 
 import io.github.yusukensanta.parqueteer.core.models.{
+  CellValue,
   FileContent,
   ParquetSchema,
   FileMetadata
@@ -127,7 +128,7 @@ class TableFormatter extends OutputFormatter {
 
   private[formatters] def calculateColumnWidths(
       columns: List[String],
-      rows: List[Map[String, Any]]
+      rows: List[Map[String, CellValue]]
   ): List[Int] = {
     val widths = columns.map(c => displayWidth(c)).toArray
     rows.foreach { row =>
@@ -157,15 +158,12 @@ class TableFormatter extends OutputFormatter {
   }
 
   private def drawDataRow(
-      row: Map[String, Any],
+      row: Map[String, CellValue],
       columns: List[String],
       widths: List[Int]
   ): String = {
     val values = columns.map { col =>
-      row
-        .get(col)
-        .map(v => formatValue(v))
-        .getOrElse("null")
+      row.get(col).map(v => formatValue(v)).getOrElse("null")
     }
     drawRow(values, widths)
   }
@@ -181,15 +179,7 @@ class TableFormatter extends OutputFormatter {
     "│" + paddedValues.mkString("│") + "│"
   }
 
-  private[formatters] def formatValue(value: Any): String = value match {
-    case null           => "null"
-    case d: Double      => d.toString
-    case f: Float       => f.toString
-    case b: Boolean     => if (b) "true" else "false"
-    case bd: BigDecimal => bd.underlying.toPlainString
-    case s: String      => s
-    case other          => other.toString
-  }
+  private[formatters] def formatValue(value: CellValue): String = value.display
 
   private def truncate(str: String, maxWidth: Int): String = {
     if (displayWidth(str) <= maxWidth) str

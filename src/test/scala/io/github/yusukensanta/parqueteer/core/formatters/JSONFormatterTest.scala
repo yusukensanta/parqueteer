@@ -12,8 +12,16 @@ class JSONFormatterTest extends AnyFlatSpec with Matchers {
 
   private val sampleContent = FileContent(
     rows = List(
-      Map("id" -> 1L, "name" -> "Alice", "active" -> true),
-      Map("id" -> 2L, "name" -> "Bob", "active" -> false)
+      Map(
+        "id" -> CellValue.I64(1L),
+        "name" -> CellValue.Str("Alice"),
+        "active" -> CellValue.Bool(true)
+      ),
+      Map(
+        "id" -> CellValue.I64(2L),
+        "name" -> CellValue.Str("Bob"),
+        "active" -> CellValue.Bool(false)
+      )
     ),
     totalRows = 2L,
     isPartial = false
@@ -72,7 +80,7 @@ class JSONFormatterTest extends AnyFlatSpec with Matchers {
 
   it should "encode null values as JSON null" in {
     val withNull = FileContent(
-      rows = List(Map("key" -> null)),
+      rows = List(Map("key" -> CellValue.Null)),
       totalRows = 1L,
       isPartial = false
     )

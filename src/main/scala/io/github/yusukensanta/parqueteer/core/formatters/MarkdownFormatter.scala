@@ -1,6 +1,7 @@
 package io.github.yusukensanta.parqueteer.core.formatters
 
 import io.github.yusukensanta.parqueteer.core.models.{
+  CellValue,
   FileContent,
   ParquetSchema,
   FileMetadata
@@ -23,9 +24,8 @@ class MarkdownFormatter extends OutputFormatter {
       .append(" |\n")
 
     content.rows.foreach { row =>
-      val values = columns.map(col =>
-        escapeCell(row.get(col).map(formatValue).getOrElse(""))
-      )
+      val values =
+        columns.map(col => escapeCell(row.get(col).fold("")(_.display)))
       sb.append("| ").append(values.mkString(" | ")).append(" |\n")
     }
 
@@ -67,14 +67,6 @@ class MarkdownFormatter extends OutputFormatter {
       sb.append(f"- **Compression Ratio:** $r%.2f\n")
     )
     sb.toString
-  }
-
-  private def formatValue(value: Any): String = value match {
-    case null           => ""
-    case d: Double      => d.toString
-    case f: Float       => f.toString
-    case bd: BigDecimal => bd.underlying.toPlainString
-    case other          => other.toString
   }
 
   private def escapeCell(s: String): String =

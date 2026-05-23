@@ -1,6 +1,7 @@
 package io.github.yusukensanta.parqueteer.core.formatters
 
 import io.github.yusukensanta.parqueteer.core.models.{
+  CellValue,
   FileContent,
   ParquetSchema,
   FileMetadata
@@ -11,7 +12,9 @@ trait OutputFormatter {
   def formatSchema(schema: ParquetSchema): String
   def formatMetadata(metadata: FileMetadata): String
 
-  protected def extractColumns(rows: List[Map[String, Any]]): List[String] = {
+  protected def extractColumns(
+      rows: List[Map[String, CellValue]]
+  ): List[String] = {
     val seen = scala.collection.mutable.LinkedHashSet.empty[String]
     rows.foreach(_.keysIterator.foreach(seen += _))
     seen.toList.sorted

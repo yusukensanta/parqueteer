@@ -1,6 +1,10 @@
 package io.github.yusukensanta.parqueteer.core.repositories
 
-import io.github.yusukensanta.parqueteer.core.models.{ColumnInfo, ParquetSchema}
+import io.github.yusukensanta.parqueteer.core.models.{
+  CellValue,
+  ColumnInfo,
+  ParquetSchema
+}
 import org.apache.parquet.schema.{MessageType, MessageTypeParser}
 import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
 import org.apache.parquet.schema.LogicalTypeAnnotation
@@ -282,8 +286,8 @@ class ParquetSchemaBuilderTest extends AnyFlatSpec with Matchers {
     }
   }
 
-  it should "infer INT32 from Int values" in {
-    val data = List(Map[String, Any]("count" -> 42))
+  it should "infer INT32 from CellValue.I32 values" in {
+    val data = List(Map[String, CellValue]("count" -> CellValue.I32(42)))
     val mt = ParquetSchemaBuilder.inferSchemaFromData(data)
     fieldByName(
       mt,
@@ -291,14 +295,15 @@ class ParquetSchemaBuilderTest extends AnyFlatSpec with Matchers {
     ).getPrimitiveTypeName shouldBe PrimitiveTypeName.INT32
   }
 
-  it should "infer INT64 from Long values" in {
-    val data = List(Map[String, Any]("id" -> 123456789012345L))
+  it should "infer INT64 from CellValue.I64 values" in {
+    val data =
+      List(Map[String, CellValue]("id" -> CellValue.I64(123456789012345L)))
     val mt = ParquetSchemaBuilder.inferSchemaFromData(data)
     fieldByName(mt, "id").getPrimitiveTypeName shouldBe PrimitiveTypeName.INT64
   }
 
-  it should "infer DOUBLE from Double values" in {
-    val data = List(Map[String, Any]("score" -> 9.5))
+  it should "infer DOUBLE from CellValue.F64 values" in {
+    val data = List(Map[String, CellValue]("score" -> CellValue.F64(9.5)))
     val mt = ParquetSchemaBuilder.inferSchemaFromData(data)
     fieldByName(
       mt,
@@ -306,8 +311,8 @@ class ParquetSchemaBuilderTest extends AnyFlatSpec with Matchers {
     ).getPrimitiveTypeName shouldBe PrimitiveTypeName.DOUBLE
   }
 
-  it should "infer FLOAT from Float values" in {
-    val data = List(Map[String, Any]("ratio" -> 0.5f))
+  it should "infer FLOAT from CellValue.F32 values" in {
+    val data = List(Map[String, CellValue]("ratio" -> CellValue.F32(0.5f)))
     val mt = ParquetSchemaBuilder.inferSchemaFromData(data)
     fieldByName(
       mt,
@@ -315,8 +320,8 @@ class ParquetSchemaBuilderTest extends AnyFlatSpec with Matchers {
     ).getPrimitiveTypeName shouldBe PrimitiveTypeName.FLOAT
   }
 
-  it should "infer BOOLEAN from Boolean values" in {
-    val data = List(Map[String, Any]("active" -> true))
+  it should "infer BOOLEAN from CellValue.Bool values" in {
+    val data = List(Map[String, CellValue]("active" -> CellValue.Bool(true)))
     val mt = ParquetSchemaBuilder.inferSchemaFromData(data)
     fieldByName(
       mt,
@@ -324,17 +329,24 @@ class ParquetSchemaBuilderTest extends AnyFlatSpec with Matchers {
     ).getPrimitiveTypeName shouldBe PrimitiveTypeName.BOOLEAN
   }
 
-  it should "infer DATE (INT32) from LocalDate values" in {
-    val data =
-      List(Map[String, Any]("dob" -> java.time.LocalDate.of(1990, 1, 1)))
+  it should "infer DATE (INT32) from CellValue.Date values" in {
+    val data = List(
+      Map[String, CellValue](
+        "dob" -> CellValue.Date(java.time.LocalDate.of(1990, 1, 1))
+      )
+    )
     val mt = ParquetSchemaBuilder.inferSchemaFromData(data)
     val field = fieldByName(mt, "dob")
     field.getPrimitiveTypeName shouldBe PrimitiveTypeName.INT32
     field.getLogicalTypeAnnotation shouldBe LogicalTypeAnnotation.dateType()
   }
 
-  it should "infer TIMESTAMP (INT64) from Instant values" in {
-    val data = List(Map[String, Any]("created_at" -> java.time.Instant.now()))
+  it should "infer TIMESTAMP (INT64) from CellValue.Ts values" in {
+    val data = List(
+      Map[String, CellValue](
+        "created_at" -> CellValue.Ts(java.time.Instant.now())
+      )
+    )
     val mt = ParquetSchemaBuilder.inferSchemaFromData(data)
     val field = fieldByName(mt, "created_at")
     field.getPrimitiveTypeName shouldBe PrimitiveTypeName.INT64
@@ -343,22 +355,28 @@ class ParquetSchemaBuilderTest extends AnyFlatSpec with Matchers {
     ]
   }
 
-  it should "infer BINARY with string annotation from String values" in {
-    val data = List(Map[String, Any]("name" -> "Alice"))
+  it should "infer BINARY with string annotation from CellValue.Str values" in {
+    val data = List(Map[String, CellValue]("name" -> CellValue.Str("Alice")))
     val mt = ParquetSchemaBuilder.inferSchemaFromData(data)
     val field = fieldByName(mt, "name")
     field.getPrimitiveTypeName shouldBe PrimitiveTypeName.BINARY
     field.getLogicalTypeAnnotation shouldBe LogicalTypeAnnotation.stringType()
   }
 
-  it should "fall back to BINARY for unknown value types" in {
-    val data = List(Map[String, Any]("x" -> BigInt(42)))
+  it should "fall back to BINARY for CellValue.Dec (unknown rank)" in {
+    val data =
+      List(Map[String, CellValue]("x" -> CellValue.Dec(BigDecimal(42))))
     val mt = ParquetSchemaBuilder.inferSchemaFromData(data)
     fieldByName(mt, "x").getPrimitiveTypeName shouldBe PrimitiveTypeName.BINARY
   }
 
   it should "use OPTIONAL repetition for all inferred fields" in {
-    val data = List(Map[String, Any]("id" -> 1L, "name" -> "Bob"))
+    val data = List(
+      Map[String, CellValue](
+        "id" -> CellValue.I64(1L),
+        "name" -> CellValue.Str("Bob")
+      )
+    )
     val mt = ParquetSchemaBuilder.inferSchemaFromData(data)
     mt.getFields.asScala.foreach { f =>
       f.getRepetition shouldBe Repetition.OPTIONAL
@@ -367,8 +385,8 @@ class ParquetSchemaBuilderTest extends AnyFlatSpec with Matchers {
 
   it should "collect keys from all rows in the data list" in {
     val data = List(
-      Map[String, Any]("id" -> 1L),
-      Map[String, Any]("name" -> "Alice")
+      Map[String, CellValue]("id" -> CellValue.I64(1L)),
+      Map[String, CellValue]("name" -> CellValue.Str("Alice"))
     )
     val mt = ParquetSchemaBuilder.inferSchemaFromData(data)
     mt.getFieldCount shouldBe 2
@@ -376,17 +394,22 @@ class ParquetSchemaBuilderTest extends AnyFlatSpec with Matchers {
     containsField(mt, "name") shouldBe true
   }
 
-  it should "skip null values when sampling for type inference" in {
+  it should "skip CellValue.Null when sampling for type inference" in {
     val data = List(
-      Map[String, Any]("x" -> null),
-      Map[String, Any]("x" -> 42)
+      Map[String, CellValue]("x" -> CellValue.Null),
+      Map[String, CellValue]("x" -> CellValue.I32(42))
     )
     val mt = ParquetSchemaBuilder.inferSchemaFromData(data)
     fieldByName(mt, "x").getPrimitiveTypeName shouldBe PrimitiveTypeName.INT32
   }
 
-  it should "infer BINARY for columns where all values are null" in {
-    val data = List(Map[String, Any]("id" -> 1L, "blob" -> null))
+  it should "infer BINARY for columns where all values are CellValue.Null" in {
+    val data = List(
+      Map[String, CellValue](
+        "id" -> CellValue.I64(1L),
+        "blob" -> CellValue.Null
+      )
+    )
     val schema = ParquetSchemaBuilder.inferSchemaFromData(data)
     schema.getFieldCount shouldBe 2
     val blobField = schema.getFields.asScala.find(_.getName == "blob").get
@@ -396,78 +419,78 @@ class ParquetSchemaBuilderTest extends AnyFlatSpec with Matchers {
   }
 
   it should "name the resulting message type 'root'" in {
-    val data = List(Map[String, Any]("col" -> "val"))
+    val data = List(Map[String, CellValue]("col" -> CellValue.Str("val")))
     val mt = ParquetSchemaBuilder.inferSchemaFromData(data)
     mt.getName shouldBe "root"
   }
 
   // ── multi-row type widening (issue #125) ──────────────────────────────────
 
-  it should "widen Int to Long when both appear in the same column" in {
+  it should "widen I32 to I64 when both appear in the same column" in {
     val data = List(
-      Map[String, Any]("x" -> 1),
-      Map[String, Any]("x" -> 2L)
+      Map[String, CellValue]("x" -> CellValue.I32(1)),
+      Map[String, CellValue]("x" -> CellValue.I64(2L))
     )
     val mt = ParquetSchemaBuilder.inferSchemaFromData(data)
     fieldByName(mt, "x").getPrimitiveTypeName shouldBe PrimitiveTypeName.INT64
   }
 
-  it should "widen Long to Double when both appear in the same column" in {
+  it should "widen I64 to F64 when both appear in the same column" in {
     val data = List(
-      Map[String, Any]("x" -> 1L),
-      Map[String, Any]("x" -> 2.5)
+      Map[String, CellValue]("x" -> CellValue.I64(1L)),
+      Map[String, CellValue]("x" -> CellValue.F64(2.5))
     )
     val mt = ParquetSchemaBuilder.inferSchemaFromData(data)
     fieldByName(mt, "x").getPrimitiveTypeName shouldBe PrimitiveTypeName.DOUBLE
   }
 
-  it should "widen Int to Double when both appear in the same column" in {
+  it should "widen I32 to F64 when both appear in the same column" in {
     val data = List(
-      Map[String, Any]("x" -> 1),
-      Map[String, Any]("x" -> 2.0)
+      Map[String, CellValue]("x" -> CellValue.I32(1)),
+      Map[String, CellValue]("x" -> CellValue.F64(2.0))
     )
     val mt = ParquetSchemaBuilder.inferSchemaFromData(data)
     fieldByName(mt, "x").getPrimitiveTypeName shouldBe PrimitiveTypeName.DOUBLE
   }
 
-  it should "fall back to String (BINARY) when String and Long appear in the same column" in {
+  it should "fall back to BINARY when Str and I64 appear in the same column" in {
     val data = List(
-      Map[String, Any]("x" -> "twenty"),
-      Map[String, Any]("x" -> 25L)
+      Map[String, CellValue]("x" -> CellValue.Str("twenty")),
+      Map[String, CellValue]("x" -> CellValue.I64(25L))
     )
     val mt = ParquetSchemaBuilder.inferSchemaFromData(data)
     fieldByName(mt, "x").getPrimitiveTypeName shouldBe PrimitiveTypeName.BINARY
   }
 
-  it should "fall back to String (BINARY) when Boolean and Long appear in the same column" in {
+  it should "fall back to BINARY when Bool and I64 appear in the same column" in {
     val data = List(
-      Map[String, Any]("x" -> true),
-      Map[String, Any]("x" -> 1L)
+      Map[String, CellValue]("x" -> CellValue.Bool(true)),
+      Map[String, CellValue]("x" -> CellValue.I64(1L))
     )
     val mt = ParquetSchemaBuilder.inferSchemaFromData(data)
     fieldByName(mt, "x").getPrimitiveTypeName shouldBe PrimitiveTypeName.BINARY
   }
 
   it should "use widened type even when the first non-null value has a narrower type" in {
-    // row 0 is null, row 1 is String, row 2 is Long — must NOT pick String
+    // row 0 is null, row 1 is Str, row 2 is I64 — must NOT pick Str rank alone
     val data = List(
-      Map[String, Any]("score" -> null),
-      Map[String, Any]("score" -> "twenty"),
-      Map[String, Any]("score" -> 25L)
+      Map[String, CellValue]("score" -> CellValue.Null),
+      Map[String, CellValue]("score" -> CellValue.Str("twenty")),
+      Map[String, CellValue]("score" -> CellValue.I64(25L))
     )
     val mt = ParquetSchemaBuilder.inferSchemaFromData(data)
-    // String + Long → BINARY (String wins as common supertype)
+    // Str + I64 → BINARY (String wins as common supertype)
     fieldByName(
       mt,
       "score"
     ).getPrimitiveTypeName shouldBe PrimitiveTypeName.BINARY
   }
 
-  it should "use the wider numeric type when first non-null is Int but later rows have Long" in {
+  it should "use the wider numeric type when first non-null is I32 but later rows have I64" in {
     val data = List(
-      Map[String, Any]("n" -> null),
-      Map[String, Any]("n" -> 1),
-      Map[String, Any]("n" -> 9999999999L)
+      Map[String, CellValue]("n" -> CellValue.Null),
+      Map[String, CellValue]("n" -> CellValue.I32(1)),
+      Map[String, CellValue]("n" -> CellValue.I64(9999999999L))
     )
     val mt = ParquetSchemaBuilder.inferSchemaFromData(data)
     fieldByName(mt, "n").getPrimitiveTypeName shouldBe PrimitiveTypeName.INT64

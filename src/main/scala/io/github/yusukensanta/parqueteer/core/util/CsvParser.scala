@@ -1,8 +1,10 @@
 package io.github.yusukensanta.parqueteer.core.util
 
+import io.github.yusukensanta.parqueteer.core.models.CellValue
+
 object CsvParser {
 
-  def parse(content: String): List[Map[String, Any]] = {
+  def parse(content: String): List[Map[String, CellValue]] = {
     val records = parseRfc4180(content)
     if (records.isEmpty) List.empty
     else {

@@ -34,7 +34,7 @@ case class FileMetadata(
 )
 
 case class FileContent(
-    rows: List[Map[String, Any]],
+    rows: List[Map[String, CellValue]],
     totalRows: Long,
     isPartial: Boolean = false
 )

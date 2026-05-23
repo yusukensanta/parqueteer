@@ -1,5 +1,6 @@
 package io.github.yusukensanta.parqueteer.core.repositories
 
+import io.github.yusukensanta.parqueteer.core.models.CellValue
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -23,53 +24,60 @@ class ParquetRecordDecoderTest extends AnyFlatSpec with Matchers {
 
   // ── decodeValue ──────────────────────────────────────────────────────────
 
-  "ParquetRecordDecoder.decodeValue" should "return null for NullValue" in {
-    val result: Any = ParquetRecordDecoder.decodeValue(NullValue)
-    assert(result == null)
+  "ParquetRecordDecoder.decodeValue" should "return CellValue.Null for NullValue" in {
+    ParquetRecordDecoder.decodeValue(NullValue) shouldBe CellValue.Null
   }
 
   it should "decode BooleanValue true" in {
-    ParquetRecordDecoder.decodeValue(BooleanValue(true)) shouldBe true
+    ParquetRecordDecoder.decodeValue(BooleanValue(true)) shouldBe CellValue
+      .Bool(true)
   }
 
   it should "decode BooleanValue false" in {
-    ParquetRecordDecoder.decodeValue(BooleanValue(false)) shouldBe false
+    ParquetRecordDecoder.decodeValue(BooleanValue(false)) shouldBe CellValue
+      .Bool(false)
   }
 
   it should "decode IntValue" in {
-    ParquetRecordDecoder.decodeValue(IntValue(42)) shouldBe 42
+    ParquetRecordDecoder.decodeValue(IntValue(42)) shouldBe CellValue.I32(42)
   }
 
   it should "decode negative IntValue" in {
-    ParquetRecordDecoder.decodeValue(IntValue(-100)) shouldBe -100
+    ParquetRecordDecoder.decodeValue(IntValue(-100)) shouldBe CellValue.I32(
+      -100
+    )
   }
 
   it should "decode LongValue" in {
     ParquetRecordDecoder.decodeValue(
       LongValue(123456789012345L)
-    ) shouldBe 123456789012345L
+    ) shouldBe CellValue.I64(123456789012345L)
   }
 
   it should "decode FloatValue" in {
-    ParquetRecordDecoder
-      .decodeValue(FloatValue(3.14f))
-      .asInstanceOf[Float] shouldBe 3.14f +- 0.001f
+    ParquetRecordDecoder.decodeValue(FloatValue(3.14f)) match {
+      case CellValue.F32(f) => f shouldBe 3.14f +- 0.001f
+      case v                => fail(s"Expected CellValue.F32, got $v")
+    }
   }
 
   it should "decode DoubleValue" in {
-    ParquetRecordDecoder
-      .decodeValue(DoubleValue(2.718281828))
-      .asInstanceOf[Double] shouldBe 2.718281828 +- 1e-9
+    ParquetRecordDecoder.decodeValue(DoubleValue(2.718281828)) match {
+      case CellValue.F64(d) => d shouldBe 2.718281828 +- 1e-9
+      case v                => fail(s"Expected CellValue.F64, got $v")
+    }
   }
 
   it should "decode BinaryValue as UTF-8 string" in {
     val binary = Binary.fromString("hello world")
-    ParquetRecordDecoder.decodeValue(BinaryValue(binary)) shouldBe "hello world"
+    ParquetRecordDecoder.decodeValue(BinaryValue(binary)) shouldBe CellValue
+      .Str("hello world")
   }
 
   it should "decode BinaryValue with empty string" in {
     val binary = Binary.fromString("")
-    ParquetRecordDecoder.decodeValue(BinaryValue(binary)) shouldBe ""
+    ParquetRecordDecoder.decodeValue(BinaryValue(binary)) shouldBe CellValue
+      .Str("")
   }
 
   it should "decode DateTimeValue as raw Long (postProcessTemporalFields handles unit conversion)" in {
@@ -77,7 +85,7 @@ class ParquetRecordDecoderTest extends AnyFlatSpec with Matchers {
     val result = ParquetRecordDecoder.decodeValue(
       DateTimeValue(epochMillis, TimestampFormat.Int64Millis)
     )
-    result shouldBe 0L
+    result shouldBe CellValue.I64(0L)
   }
 
   it should "decode DateTimeValue for a known timestamp as raw Long" in {
@@ -85,7 +93,7 @@ class ParquetRecordDecoderTest extends AnyFlatSpec with Matchers {
     val result = ParquetRecordDecoder.decodeValue(
       DateTimeValue(ts.toEpochMilli, TimestampFormat.Int64Millis)
     )
-    result shouldBe ts.toEpochMilli
+    result shouldBe CellValue.I64(ts.toEpochMilli)
   }
 
   it should "decode DecimalValue as BigDecimal (long format)" in {
@@ -95,7 +103,9 @@ class ParquetRecordDecoderTest extends AnyFlatSpec with Matchers {
     val bigInt = new java.math.BigInteger("12345")
     val result = ParquetRecordDecoder.decodeValue(DecimalValue(bigInt, fmt))
     // scale=2 → 12345 becomes 123.45
-    result shouldBe scala.math.BigDecimal(new java.math.BigDecimal(bigInt, 2))
+    result shouldBe CellValue.Dec(
+      scala.math.BigDecimal(new java.math.BigDecimal(bigInt, 2))
+    )
   }
 
   it should "decode DecimalValue with zero amount" in {
@@ -103,33 +113,35 @@ class ParquetRecordDecoderTest extends AnyFlatSpec with Matchers {
       com.github.mjakubowski84.parquet4s.DecimalFormat.longFormat(2, 10, false)
     val bigInt = java.math.BigInteger.ZERO
     val result = ParquetRecordDecoder.decodeValue(DecimalValue(bigInt, fmt))
-    result shouldBe scala.math.BigDecimal(new java.math.BigDecimal(bigInt, 2))
+    result shouldBe CellValue.Dec(
+      scala.math.BigDecimal(new java.math.BigDecimal(bigInt, 2))
+    )
   }
 
   // ── postProcessTemporalFields ──────────────────────────────────────────────
 
-  "ParquetRecordDecoder.postProcessTemporalFields" should "convert INT32 DATE field from epoch-day Int to ISO date string" in {
+  "ParquetRecordDecoder.postProcessTemporalFields" should "convert INT32 DATE field from epoch-day Int to LocalDate" in {
     val schema: MessageType = MessageTypeParser.parseMessageType(
       """message root {
         |  optional int32 dob (DATE);
         |}""".stripMargin
     )
     // epoch day 0 = 1970-01-01
-    val row = Map[String, Any]("dob" -> 0)
+    val row = Map[String, CellValue]("dob" -> CellValue.I32(0))
     val result = ParquetRecordDecoder.postProcessTemporalFields(row, schema)
-    result("dob") shouldBe "1970-01-01"
+    result("dob") shouldBe CellValue.Date(java.time.LocalDate.of(1970, 1, 1))
   }
 
-  it should "convert a known epoch day to correct date string" in {
+  it should "convert a known epoch day to correct LocalDate" in {
     val schema: MessageType = MessageTypeParser.parseMessageType(
       """message root {
         |  optional int32 birth (DATE);
         |}""".stripMargin
     )
     val epochDay = java.time.LocalDate.of(1990, 6, 15).toEpochDay.toInt
-    val row = Map[String, Any]("birth" -> epochDay)
+    val row = Map[String, CellValue]("birth" -> CellValue.I32(epochDay))
     val result = ParquetRecordDecoder.postProcessTemporalFields(row, schema)
-    result("birth") shouldBe "1990-06-15"
+    result("birth") shouldBe CellValue.Date(java.time.LocalDate.of(1990, 6, 15))
   }
 
   it should "leave non-DATE fields unchanged" in {
@@ -139,19 +151,22 @@ class ParquetRecordDecoderTest extends AnyFlatSpec with Matchers {
         |  optional binary name (UTF8);
         |}""".stripMargin
     )
-    val row = Map[String, Any]("id" -> 42L, "name" -> "Alice")
+    val row = Map[String, CellValue](
+      "id" -> CellValue.I64(42L),
+      "name" -> CellValue.Str("Alice")
+    )
     val result = ParquetRecordDecoder.postProcessTemporalFields(row, schema)
     result shouldBe row
   }
 
-  it should "leave a DATE field unchanged when value is not an Int" in {
+  it should "leave a DATE field unchanged when value is not CellValue.I32" in {
     val schema: MessageType = MessageTypeParser.parseMessageType(
       """message root {
         |  optional int32 dob (DATE);
         |}""".stripMargin
     )
-    // value is already a String (already post-processed or unexpected type)
-    val row = Map[String, Any]("dob" -> "2001-12-01")
+    // value is already a Str (already post-processed or unexpected type)
+    val row = Map[String, CellValue]("dob" -> CellValue.Str("2001-12-01"))
     val result = ParquetRecordDecoder.postProcessTemporalFields(row, schema)
     result shouldBe row
   }
@@ -162,9 +177,9 @@ class ParquetRecordDecoderTest extends AnyFlatSpec with Matchers {
         |  optional int32 dob (DATE);
         |}""".stripMargin
     )
-    val row = Map.empty[String, Any]
+    val row = Map.empty[String, CellValue]
     val result = ParquetRecordDecoder.postProcessTemporalFields(row, schema)
-    result shouldBe Map.empty[String, Any]
+    result shouldBe Map.empty[String, CellValue]
   }
 
   it should "process multiple DATE fields independently" in {
@@ -176,10 +191,17 @@ class ParquetRecordDecoderTest extends AnyFlatSpec with Matchers {
     )
     val startDay = java.time.LocalDate.of(2020, 1, 1).toEpochDay.toInt
     val endDay = java.time.LocalDate.of(2020, 12, 31).toEpochDay.toInt
-    val row = Map[String, Any]("start_date" -> startDay, "end_date" -> endDay)
+    val row = Map[String, CellValue](
+      "start_date" -> CellValue.I32(startDay),
+      "end_date" -> CellValue.I32(endDay)
+    )
     val result = ParquetRecordDecoder.postProcessTemporalFields(row, schema)
-    result("start_date") shouldBe "2020-01-01"
-    result("end_date") shouldBe "2020-12-31"
+    result("start_date") shouldBe CellValue.Date(
+      java.time.LocalDate.of(2020, 1, 1)
+    )
+    result("end_date") shouldBe CellValue.Date(
+      java.time.LocalDate.of(2020, 12, 31)
+    )
   }
 
   // ── decodeGroup ──────────────────────────────────────────────────────────
@@ -190,7 +212,7 @@ class ParquetRecordDecoderTest extends AnyFlatSpec with Matchers {
     )
     val group = new SimpleGroupFactory(schema).newGroup().append("age", 42)
     val result = ParquetRecordDecoder.decodeGroup(group, schema)
-    result("age") shouldBe 42
+    result("age") shouldBe CellValue.I32(42)
   }
 
   it should "decode plain INT64 field" in {
@@ -200,7 +222,7 @@ class ParquetRecordDecoderTest extends AnyFlatSpec with Matchers {
     val group =
       new SimpleGroupFactory(schema).newGroup().append("big_num", 9876543210L)
     val result = ParquetRecordDecoder.decodeGroup(group, schema)
-    result("big_num") shouldBe 9876543210L
+    result("big_num") shouldBe CellValue.I64(9876543210L)
   }
 
   it should "decode BOOLEAN field" in {
@@ -209,7 +231,7 @@ class ParquetRecordDecoderTest extends AnyFlatSpec with Matchers {
     )
     val group = new SimpleGroupFactory(schema).newGroup().append("active", true)
     val result = ParquetRecordDecoder.decodeGroup(group, schema)
-    result("active") shouldBe true
+    result("active") shouldBe CellValue.Bool(true)
   }
 
   it should "decode BINARY field as UTF-8 string" in {
@@ -220,17 +242,17 @@ class ParquetRecordDecoderTest extends AnyFlatSpec with Matchers {
       .newGroup()
       .append("name", org.apache.parquet.io.api.Binary.fromString("Alice"))
     val result = ParquetRecordDecoder.decodeGroup(group, schema)
-    result("name") shouldBe "Alice"
+    result("name") shouldBe CellValue.Str("Alice")
   }
 
-  it should "decode INT32 DATE field as ISO date string" in {
+  it should "decode INT32 DATE field as LocalDate" in {
     val schema = MessageTypeParser.parseMessageType(
       "message root { required int32 dob (DATE); }"
     )
     // epoch day 0 = 1970-01-01
     val group = new SimpleGroupFactory(schema).newGroup().append("dob", 0)
     val result = ParquetRecordDecoder.decodeGroup(group, schema)
-    result("dob") shouldBe "1970-01-01"
+    result("dob") shouldBe CellValue.Date(java.time.LocalDate.of(1970, 1, 1))
   }
 
   it should "decode INT32 DATE field for a known date" in {
@@ -241,7 +263,7 @@ class ParquetRecordDecoderTest extends AnyFlatSpec with Matchers {
     val group =
       new SimpleGroupFactory(schema).newGroup().append("birth", epochDay)
     val result = ParquetRecordDecoder.decodeGroup(group, schema)
-    result("birth") shouldBe "1990-06-15"
+    result("birth") shouldBe CellValue.Date(java.time.LocalDate.of(1990, 6, 15))
   }
 
   it should "omit absent optional field from result map" in {
@@ -266,7 +288,7 @@ class ParquetRecordDecoderTest extends AnyFlatSpec with Matchers {
     val group = new SimpleGroupFactory(schema).newGroup().append("id", 1)
     // Do not add any 'tags' sub-group — non-primitive field must be silently skipped
     val result = ParquetRecordDecoder.decodeGroup(group, schema)
-    result("id") shouldBe 1
+    result("id") shouldBe CellValue.I32(1)
     result.contains("tags") shouldBe false
   }
 }

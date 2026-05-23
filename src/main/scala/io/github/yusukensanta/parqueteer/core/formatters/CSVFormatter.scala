@@ -1,6 +1,7 @@
 package io.github.yusukensanta.parqueteer.core.formatters
 
 import io.github.yusukensanta.parqueteer.core.models.{
+  CellValue,
   FileContent,
   ParquetSchema,
   FileMetadata
@@ -30,10 +31,10 @@ class CSVFormatter extends OutputFormatter {
 
     rows.foreach { row =>
       val values = columns.map { col =>
-        row
-          .get(col)
-          .map(formatValue)
-          .getOrElse("")
+        row.get(col) match {
+          case None | Some(CellValue.Null) => ""
+          case Some(v)                     => v.display
+        }
       }
       sb.append(formatRow(values))
       sb.append(Newline)
@@ -89,18 +90,6 @@ class CSVFormatter extends OutputFormatter {
 
   private def formatRow(values: List[String]): String = {
     values.map(escapeField).mkString(Delimiter)
-  }
-
-  private def formatValue(value: Any): String = value match {
-    case null                                 => ""
-    case d: Double if d.isNaN || d.isInfinite => d.toString
-    case d: Double                            => d.toString
-    case f: Float if f.isNaN || f.isInfinite  => f.toString
-    case f: Float                             => f.toString
-    case b: Boolean                           => b.toString
-    case bd: BigDecimal                       => bd.underlying.toPlainString
-    case s: String                            => s
-    case other                                => other.toString
   }
 
   private def escapeField(field: String): String = {

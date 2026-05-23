@@ -1,6 +1,7 @@
 package io.github.yusukensanta.parqueteer.core.formatters
 
 import io.github.yusukensanta.parqueteer.core.models.{
+  CellValue,
   FileContent,
   ParquetSchema,
   ColumnInfo,
@@ -15,8 +16,8 @@ class MarkdownFormatterTest extends AnyFlatSpec with Matchers {
   private val formatter = new MarkdownFormatter()
 
   private val rows = List(
-    Map("id" -> 1L, "name" -> "Alice"),
-    Map("id" -> 2L, "name" -> "Bob")
+    Map("id" -> CellValue.I64(1L), "name" -> CellValue.Str("Alice")),
+    Map("id" -> CellValue.I64(2L), "name" -> CellValue.Str("Bob"))
   )
   private val content =
     FileContent(rows = rows, totalRows = 2L, isPartial = false)
@@ -53,7 +54,7 @@ class MarkdownFormatterTest extends AnyFlatSpec with Matchers {
   }
 
   it should "escape pipe characters in cell values" in {
-    val pipeRow = List(Map("col" -> "a|b"))
+    val pipeRow = List(Map("col" -> CellValue.Str("a|b")))
     val result = formatter.formatContent(FileContent(pipeRow, 1L), None)
     result should include("a\\|b")
   }
@@ -61,7 +62,7 @@ class MarkdownFormatterTest extends AnyFlatSpec with Matchers {
   it should "render Double NaN as NaN" in {
     val result =
       formatter.formatContent(
-        FileContent(List(Map("v" -> Double.NaN)), 1L),
+        FileContent(List(Map("v" -> CellValue.F64(Double.NaN))), 1L),
         None
       )
     result should include("NaN")
@@ -69,7 +70,7 @@ class MarkdownFormatterTest extends AnyFlatSpec with Matchers {
 
   it should "render Double Infinity as Infinity" in {
     val result = formatter.formatContent(
-      FileContent(List(Map("v" -> Double.PositiveInfinity)), 1L),
+      FileContent(List(Map("v" -> CellValue.F64(Double.PositiveInfinity))), 1L),
       None
     )
     result should include("Infinity")
@@ -77,7 +78,7 @@ class MarkdownFormatterTest extends AnyFlatSpec with Matchers {
 
   it should "render Double with full precision" in {
     val result = formatter.formatContent(
-      FileContent(List(Map("v" -> 1.234567)), 1L),
+      FileContent(List(Map("v" -> CellValue.F64(1.234567))), 1L),
       None
     )
     result should include("1.234567")
@@ -85,7 +86,10 @@ class MarkdownFormatterTest extends AnyFlatSpec with Matchers {
 
   it should "render BigDecimal without scientific notation" in {
     val result = formatter.formatContent(
-      FileContent(List(Map("amount" -> BigDecimal("0.0000001"))), 1L),
+      FileContent(
+        List(Map("amount" -> CellValue.Dec(BigDecimal("0.0000001")))),
+        1L
+      ),
       None
     )
     result should include("0.0000001")
@@ -95,7 +99,10 @@ class MarkdownFormatterTest extends AnyFlatSpec with Matchers {
   it should "render Boolean values as true/false" in {
     val result = formatter.formatContent(
       FileContent(
-        List(Map("flag" -> true), Map("flag" -> false)),
+        List(
+          Map("flag" -> CellValue.Bool(true)),
+          Map("flag" -> CellValue.Bool(false))
+        ),
         2L
       ),
       None
@@ -106,7 +113,7 @@ class MarkdownFormatterTest extends AnyFlatSpec with Matchers {
 
   it should "render Int (INT32) values" in {
     val result = formatter.formatContent(
-      FileContent(List(Map("count" -> 42)), 1L),
+      FileContent(List(Map("count" -> CellValue.I32(42))), 1L),
       None
     )
     result should include("42")

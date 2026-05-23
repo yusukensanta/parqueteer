@@ -1,6 +1,9 @@
 package io.github.yusukensanta.parqueteer.core.repositories
 
-import io.github.yusukensanta.parqueteer.core.models.CompressionType
+import io.github.yusukensanta.parqueteer.core.models.{
+  CellValue,
+  CompressionType
+}
 import org.apache.parquet.hadoop.metadata.CompressionCodecName
 import org.apache.parquet.schema.{MessageType, MessageTypeParser}
 import org.apache.parquet.example.data.simple.SimpleGroupFactory
@@ -65,53 +68,73 @@ class ParquetWriteOpsTest extends AnyFlatSpec with Matchers {
   private def schema(schemaStr: String): MessageType =
     MessageTypeParser.parseMessageType(schemaStr)
 
-  "ParquetWriteOps.writeRowToGroup" should "write an Int field to an INT32 column" in {
+  "ParquetWriteOps.writeRowToGroup" should "write a CellValue.I32 to INT32 column" in {
     val mt = schema("message root { required int32 age; }")
     val group = new SimpleGroupFactory(mt).newGroup()
-    ParquetWriteOps.writeRowToGroup(group, Map("age" -> 42), mt)
+    ParquetWriteOps.writeRowToGroup(group, Map("age" -> CellValue.I32(42)), mt)
     group.getInteger("age", 0) shouldBe 42
   }
 
-  it should "write an Int to INT64 column with widening" in {
+  it should "write a CellValue.I64 to INT64 column" in {
     val mt = schema("message root { required int64 id; }")
     val group = new SimpleGroupFactory(mt).newGroup()
-    ParquetWriteOps.writeRowToGroup(group, Map("id" -> 7), mt)
+    ParquetWriteOps.writeRowToGroup(group, Map("id" -> CellValue.I64(7L)), mt)
     group.getLong("id", 0) shouldBe 7L
   }
 
-  it should "write an Int to DOUBLE column with widening" in {
+  it should "write a CellValue.F64 to DOUBLE column" in {
     val mt = schema("message root { required double score; }")
     val group = new SimpleGroupFactory(mt).newGroup()
-    ParquetWriteOps.writeRowToGroup(group, Map("score" -> 3), mt)
+    ParquetWriteOps.writeRowToGroup(
+      group,
+      Map("score" -> CellValue.F64(3.0)),
+      mt
+    )
     group.getDouble("score", 0) shouldBe 3.0
   }
 
-  it should "write an Int to FLOAT column with widening" in {
+  it should "write a CellValue.F32 to FLOAT column" in {
     val mt = schema("message root { required float ratio; }")
     val group = new SimpleGroupFactory(mt).newGroup()
-    ParquetWriteOps.writeRowToGroup(group, Map("ratio" -> 2), mt)
+    ParquetWriteOps.writeRowToGroup(
+      group,
+      Map("ratio" -> CellValue.F32(2.0f)),
+      mt
+    )
     group.getFloat("ratio", 0) shouldBe 2.0f +- 0.001f
   }
 
-  it should "write a Long to INT64 column" in {
+  it should "write a Long CellValue.I64 to INT64 column" in {
     val mt = schema("message root { required int64 big; }")
     val group = new SimpleGroupFactory(mt).newGroup()
-    ParquetWriteOps.writeRowToGroup(group, Map("big" -> 123456789012345L), mt)
+    ParquetWriteOps.writeRowToGroup(
+      group,
+      Map("big" -> CellValue.I64(123456789012345L)),
+      mt
+    )
     group.getLong("big", 0) shouldBe 123456789012345L
   }
 
-  it should "write a Long to DOUBLE column with widening" in {
+  it should "write a CellValue.F64 double to DOUBLE column" in {
     val mt = schema("message root { required double val; }")
     val group = new SimpleGroupFactory(mt).newGroup()
-    ParquetWriteOps.writeRowToGroup(group, Map("val" -> 100L), mt)
+    ParquetWriteOps.writeRowToGroup(
+      group,
+      Map("val" -> CellValue.F64(100.0)),
+      mt
+    )
     group.getDouble("val", 0) shouldBe 100.0
   }
 
-  it should "write a Long to FLOAT column with widening" in {
+  it should "write a CellValue.F32 float to FLOAT column" in {
     val mt = schema("message root { required float measurement; }")
     val group = new SimpleGroupFactory(mt).newGroup()
     val v = 123456789L
-    ParquetWriteOps.writeRowToGroup(group, Map("measurement" -> v), mt)
+    ParquetWriteOps.writeRowToGroup(
+      group,
+      Map("measurement" -> CellValue.F32(v.toFloat)),
+      mt
+    )
     group.getFloat("measurement", 0) shouldBe v.toFloat +- math.abs(
       v.toFloat * 1e-5f
     )
@@ -120,28 +143,44 @@ class ParquetWriteOpsTest extends AnyFlatSpec with Matchers {
   it should "write a Double field" in {
     val mt = schema("message root { required double score; }")
     val group = new SimpleGroupFactory(mt).newGroup()
-    ParquetWriteOps.writeRowToGroup(group, Map("score" -> 9.99), mt)
+    ParquetWriteOps.writeRowToGroup(
+      group,
+      Map("score" -> CellValue.F64(9.99)),
+      mt
+    )
     group.getDouble("score", 0) shouldBe 9.99 +- 1e-9
   }
 
   it should "write a Float field" in {
     val mt = schema("message root { required float ratio; }")
     val group = new SimpleGroupFactory(mt).newGroup()
-    ParquetWriteOps.writeRowToGroup(group, Map("ratio" -> 0.5f), mt)
+    ParquetWriteOps.writeRowToGroup(
+      group,
+      Map("ratio" -> CellValue.F32(0.5f)),
+      mt
+    )
     group.getFloat("ratio", 0) shouldBe 0.5f +- 0.001f
   }
 
   it should "write a Boolean field" in {
     val mt = schema("message root { required boolean active; }")
     val group = new SimpleGroupFactory(mt).newGroup()
-    ParquetWriteOps.writeRowToGroup(group, Map("active" -> true), mt)
+    ParquetWriteOps.writeRowToGroup(
+      group,
+      Map("active" -> CellValue.Bool(true)),
+      mt
+    )
     group.getBoolean("active", 0) shouldBe true
   }
 
   it should "write a String field" in {
     val mt = schema("message root { required binary name (UTF8); }")
     val group = new SimpleGroupFactory(mt).newGroup()
-    ParquetWriteOps.writeRowToGroup(group, Map("name" -> "Alice"), mt)
+    ParquetWriteOps.writeRowToGroup(
+      group,
+      Map("name" -> CellValue.Str("Alice")),
+      mt
+    )
     group.getString("name", 0) shouldBe "Alice"
   }
 
@@ -149,7 +188,11 @@ class ParquetWriteOpsTest extends AnyFlatSpec with Matchers {
     val mt = schema("message root { required int32 dob (DATE); }")
     val group = new SimpleGroupFactory(mt).newGroup()
     val date = java.time.LocalDate.of(1990, 6, 15)
-    ParquetWriteOps.writeRowToGroup(group, Map("dob" -> date), mt)
+    ParquetWriteOps.writeRowToGroup(
+      group,
+      Map("dob" -> CellValue.Date(date)),
+      mt
+    )
     group.getInteger("dob", 0) shouldBe date.toEpochDay.toInt
   }
 
@@ -157,22 +200,33 @@ class ParquetWriteOpsTest extends AnyFlatSpec with Matchers {
     val mt = schema("message root { required int64 created_at; }")
     val group = new SimpleGroupFactory(mt).newGroup()
     val instant = java.time.Instant.parse("2024-01-01T00:00:00Z")
-    ParquetWriteOps.writeRowToGroup(group, Map("created_at" -> instant), mt)
+    ParquetWriteOps.writeRowToGroup(
+      group,
+      Map("created_at" -> CellValue.Ts(instant)),
+      mt
+    )
     group.getLong("created_at", 0) shouldBe instant.toEpochMilli
   }
 
-  it should "fall back to toString for unknown value types" in {
+  it should "write CellValue.Dec as toString to BINARY column" in {
     val mt = schema("message root { required binary x (UTF8); }")
     val group = new SimpleGroupFactory(mt).newGroup()
-    // BigInt is not explicitly handled, so it should be stringified
-    ParquetWriteOps.writeRowToGroup(group, Map("x" -> BigInt(99)), mt)
+    ParquetWriteOps.writeRowToGroup(
+      group,
+      Map("x" -> CellValue.Dec(BigDecimal(99))),
+      mt
+    )
     group.getString("x", 0) shouldBe "99"
   }
 
-  it should "skip fields with null values" in {
+  it should "skip fields with CellValue.Null values" in {
     val mt = schema("message root { optional int32 age; }")
     val group = new SimpleGroupFactory(mt).newGroup()
-    ParquetWriteOps.writeRowToGroup(group, Map("age" -> null), mt)
+    ParquetWriteOps.writeRowToGroup(
+      group,
+      Map("age" -> CellValue.Null),
+      mt
+    )
     group.getFieldRepetitionCount("age") shouldBe 0
   }
 
@@ -183,7 +237,7 @@ class ParquetWriteOpsTest extends AnyFlatSpec with Matchers {
     val ex = intercept[IllegalArgumentException] {
       ParquetWriteOps.writeRowToGroup(
         group,
-        Map("age" -> 30, "unknown" -> "x"),
+        Map("age" -> CellValue.I32(30), "unknown" -> CellValue.Str("x")),
         mt
       )
     }
@@ -198,7 +252,7 @@ class ParquetWriteOpsTest extends AnyFlatSpec with Matchers {
     val group = new SimpleGroupFactory(mt).newGroup()
     ParquetWriteOps.writeRowToGroup(
       group,
-      Map("age" -> 30, "name" -> "Carol"),
+      Map("age" -> CellValue.I32(30), "name" -> CellValue.Str("Carol")),
       mt
     )
     group.getInteger("age", 0) shouldBe 30
@@ -214,7 +268,11 @@ class ParquetWriteOpsTest extends AnyFlatSpec with Matchers {
         |}""".stripMargin
     )
     val group = new SimpleGroupFactory(mt).newGroup()
-    val row = Map[String, Any]("id" -> 1L, "name" -> "Bob", "score" -> 7.5)
+    val row = Map[String, CellValue](
+      "id" -> CellValue.I64(1L),
+      "name" -> CellValue.Str("Bob"),
+      "score" -> CellValue.F64(7.5)
+    )
     ParquetWriteOps.writeRowToGroup(group, row, mt)
     group.getLong("id", 0) shouldBe 1L
     group.getString("name", 0) shouldBe "Bob"

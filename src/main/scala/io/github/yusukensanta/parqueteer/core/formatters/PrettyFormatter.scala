@@ -1,6 +1,7 @@
 package io.github.yusukensanta.parqueteer.core.formatters
 
 import io.github.yusukensanta.parqueteer.core.models.{
+  CellValue,
   FileContent,
   ParquetSchema,
   FileMetadata
@@ -152,15 +153,14 @@ class PrettyFormatter(useColors: Boolean = sys.env.get("NO_COLOR").isEmpty)
     }
   }
 
-  private def colorizeFormatted(formatted: String, original: Any): String =
-    original match {
-      case null             => colorize("null", Dim)
-      case _: Int | _: Long => colorize(formatted, Blue)
-      case _: Double        => colorize(formatted, Magenta)
-      case _: Float         => colorize(formatted, Magenta)
-      case true             => colorize(formatted, Green)
-      case false            => colorize(formatted, Red)
-      case _                => colorize(formatted, Reset)
+  private def colorizeFormatted(formatted: String, cv: CellValue): String =
+    cv match {
+      case CellValue.Null                      => colorize("null", Dim)
+      case CellValue.I32(_) | CellValue.I64(_) => colorize(formatted, Blue)
+      case CellValue.F64(_) | CellValue.F32(_) => colorize(formatted, Magenta)
+      case CellValue.Bool(true)                => colorize(formatted, Green)
+      case CellValue.Bool(false)               => colorize(formatted, Red)
+      case _                                   => colorize(formatted, Reset)
     }
 
   private def drawColoredHeaderRow(
@@ -178,15 +178,15 @@ class PrettyFormatter(useColors: Boolean = sys.env.get("NO_COLOR").isEmpty)
   }
 
   private def drawColoredDataRow(
-      row: Map[String, Any],
+      row: Map[String, CellValue],
       columns: List[String],
       widths: List[Int]
   ): String = {
     val paddedValues =
       columns.zip(widths).map { case (col, width) =>
-        val raw = row.getOrElse(col, null)
-        val formatted = formatValue(raw)
-        val colored = colorizeFormatted(formatted, raw)
+        val cv = row.getOrElse(col, CellValue.Null)
+        val formatted = cv.display
+        val colored = colorizeFormatted(formatted, cv)
         val padding = " " * (width - tableFormatter.displayWidth(formatted))
         colored + padding
       }
@@ -200,7 +200,7 @@ class PrettyFormatter(useColors: Boolean = sys.env.get("NO_COLOR").isEmpty)
   // Delegate to TableFormatter helpers
   private def calculateColumnWidths(
       cols: List[String],
-      rows: List[Map[String, Any]]
+      rows: List[Map[String, CellValue]]
   ) =
     tableFormatter.calculateColumnWidths(cols, rows)
   private def drawTopBorder(widths: List[Int]) =
@@ -211,6 +211,5 @@ class PrettyFormatter(useColors: Boolean = sys.env.get("NO_COLOR").isEmpty)
     tableFormatter.drawSeparator(widths)
   private def drawSummary(content: FileContent) =
     tableFormatter.drawSummary(content)
-  private def formatValue(value: Any) = tableFormatter.formatValue(value)
   private def formatBytes(bytes: Long) = tableFormatter.formatBytes(bytes)
 }

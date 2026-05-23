@@ -1,12 +1,12 @@
 package io.github.yusukensanta.parqueteer.core.formatters
 
-import io.github.yusukensanta.parqueteer.core.models.OutputFormat
+import io.github.yusukensanta.parqueteer.core.models.{CellValue, OutputFormat}
 import io.circe.Json
 import java.io.PrintStream
 
 trait RowStreamWriter {
   def begin(): Unit = ()
-  def writeRow(row: Map[String, Any]): Unit
+  def writeRow(row: Map[String, CellValue]): Unit
   def end(): Unit = ()
 }
 
@@ -23,22 +23,21 @@ object RowStreamWriter {
       case OutputFormat.Markdown => new MarkdownRowStreamWriter(out)
     }
 
-  private def encodeAny(v: Any): Json =
-    io.github.yusukensanta.parqueteer.core.util.JsonEncoder.encodeAny(v)
-
-  private def rowToJson(row: Map[String, Any]): String =
-    Json.obj(row.view.mapValues(encodeAny).toSeq*).noSpaces
+  private def rowToJson(row: Map[String, CellValue]): String = {
+    import io.github.yusukensanta.parqueteer.core.util.JsonEncoder
+    Json.obj(row.view.mapValues(JsonEncoder.encode).toSeq*).noSpaces
+  }
 
   private class NDJSONRowStreamWriter(out: PrintStream)
       extends RowStreamWriter {
-    override def writeRow(row: Map[String, Any]): Unit =
+    override def writeRow(row: Map[String, CellValue]): Unit =
       out.println(rowToJson(row))
   }
 
   private class JSONRowStreamWriter(out: PrintStream) extends RowStreamWriter {
     private var first = true
     override def begin(): Unit = out.print("[")
-    override def writeRow(row: Map[String, Any]): Unit = {
+    override def writeRow(row: Map[String, CellValue]): Unit = {
       if (!first) out.print(",")
       out.print(rowToJson(row))
       first = false
@@ -49,24 +48,21 @@ object RowStreamWriter {
   private class CSVRowStreamWriter(out: PrintStream) extends RowStreamWriter {
     private var columns: List[String] = Nil
     private def escape(s: String): String = {
-      val str = if (s == null) "" else s
       if (
-        str.contains(",") || str.contains("\"") || str.contains("\n") || str
+        s.contains(",") || s.contains("\"") || s.contains("\n") || s
           .contains("\r")
       )
-        "\"" + str.replace("\"", "\"\"") + "\""
-      else str
+        "\"" + s.replace("\"", "\"\"") + "\""
+      else s
     }
-    override def writeRow(row: Map[String, Any]): Unit = {
+    override def writeRow(row: Map[String, CellValue]): Unit = {
       if (columns.isEmpty) {
         columns = row.keys.toList.sorted
         out.println(columns.mkString(","))
       }
       out.println(
         columns
-          .map(c =>
-            escape(Option(row.getOrElse(c, null)).map(_.toString).getOrElse(""))
-          )
+          .map(c => escape(row.get(c).fold("")(_.display)))
           .mkString(",")
       )
     }
@@ -74,13 +70,12 @@ object RowStreamWriter {
 
   private class TableRowStreamWriter(out: PrintStream) extends RowStreamWriter {
     private val tf = new TableFormatter()
-    private val sample: scala.collection.mutable.ListBuffer[Map[String, Any]] =
+    private val sample
+        : scala.collection.mutable.ListBuffer[Map[String, CellValue]] =
       scala.collection.mutable.ListBuffer.empty
     private var columns: List[String] = Nil
     private var widths: List[Int] = Nil
     private var flushed = false
-
-    private def fmtVal(v: Any): String = tf.formatValue(v)
 
     private def flushSample(): Unit = {
       columns = sample.flatMap(_.keys).distinct.sorted.toList
@@ -90,19 +85,25 @@ object RowStreamWriter {
       out.println(tf.drawSeparator(widths))
       sample.foreach(r =>
         out.println(
-          tf.drawRow(columns.map(c => fmtVal(r.getOrElse(c, null))), widths)
+          tf.drawRow(
+            columns.map(c => r.getOrElse(c, CellValue.Null).display),
+            widths
+          )
         )
       )
       flushed = true
     }
 
-    override def writeRow(row: Map[String, Any]): Unit = {
+    override def writeRow(row: Map[String, CellValue]): Unit = {
       if (!flushed) {
         sample += row
         if (sample.size >= SampleSize) flushSample()
       } else {
         out.println(
-          tf.drawRow(columns.map(c => fmtVal(row.getOrElse(c, null))), widths)
+          tf.drawRow(
+            columns.map(c => row.getOrElse(c, CellValue.Null).display),
+            widths
+          )
         )
       }
     }
@@ -115,17 +116,14 @@ object RowStreamWriter {
 
   private class MarkdownRowStreamWriter(out: PrintStream)
       extends RowStreamWriter {
-    private val sample: scala.collection.mutable.ListBuffer[Map[String, Any]] =
+    private val sample
+        : scala.collection.mutable.ListBuffer[Map[String, CellValue]] =
       scala.collection.mutable.ListBuffer.empty
     private var columns: List[String] = Nil
     private var flushed = false
 
-    private def cell(v: Any): String =
-      Option(v)
-        .map(_.toString)
-        .getOrElse("")
-        .replace("|", "\\|")
-        .replace("\n", " ")
+    private def cell(v: CellValue): String =
+      v.display.replace("|", "\\|").replace("\n", " ")
 
     private def flushSample(): Unit = {
       columns = sample.flatMap(_.keys).distinct.sorted.toList
@@ -134,21 +132,21 @@ object RowStreamWriter {
       sample.foreach(r =>
         out.println(
           "| " + columns
-            .map(c => cell(r.getOrElse(c, null)))
+            .map(c => cell(r.getOrElse(c, CellValue.Null)))
             .mkString(" | ") + " |"
         )
       )
       flushed = true
     }
 
-    override def writeRow(row: Map[String, Any]): Unit = {
+    override def writeRow(row: Map[String, CellValue]): Unit = {
       if (!flushed) {
         sample += row
         if (sample.size >= SampleSize) flushSample()
       } else {
         out.println(
           "| " + columns
-            .map(c => cell(row.getOrElse(c, null)))
+            .map(c => cell(row.getOrElse(c, CellValue.Null)))
             .mkString(" | ") + " |"
         )
       }

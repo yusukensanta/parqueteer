@@ -1,6 +1,7 @@
 package io.github.yusukensanta.parqueteer.core.formatters
 
 import io.github.yusukensanta.parqueteer.core.models.{
+  CellValue,
   FileContent,
   ParquetSchema,
   ColumnInfo
@@ -14,8 +15,8 @@ class NDJSONFormatterTest extends AnyFlatSpec with Matchers {
   private val formatter = new NDJSONFormatter()
 
   private val rows = List(
-    Map("id" -> 1L, "name" -> "Alice"),
-    Map("id" -> 2L, "name" -> "Bob")
+    Map("id" -> CellValue.I64(1L), "name" -> CellValue.Str("Alice")),
+    Map("id" -> CellValue.I64(2L), "name" -> CellValue.Str("Bob"))
   )
   private val content =
     FileContent(rows = rows, totalRows = 2L, isPartial = false)

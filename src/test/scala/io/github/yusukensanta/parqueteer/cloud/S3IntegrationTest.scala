@@ -53,10 +53,22 @@ class S3IntegrationTest
     )
     .build()
 
-  private val sampleData: List[Map[String, Any]] = List(
-    Map("id" -> 1L, "name" -> "Alice", "score" -> 95.5),
-    Map("id" -> 2L, "name" -> "Bob", "score" -> 87.3),
-    Map("id" -> 3L, "name" -> "Charlie", "score" -> 92.1)
+  private val sampleData: List[Map[String, CellValue]] = List(
+    Map(
+      "id" -> CellValue.I64(1L),
+      "name" -> CellValue.Str("Alice"),
+      "score" -> CellValue.F64(95.5)
+    ),
+    Map(
+      "id" -> CellValue.I64(2L),
+      "name" -> CellValue.Str("Bob"),
+      "score" -> CellValue.F64(87.3)
+    ),
+    Map(
+      "id" -> CellValue.I64(3L),
+      "name" -> CellValue.Str("Charlie"),
+      "score" -> CellValue.F64(92.1)
+    )
   )
 
   override def beforeAll(): Unit = {
@@ -130,7 +142,7 @@ class S3IntegrationTest
       assertSuccess(repo.readContent(ParquetFile(loc), ReadConfig()), "read")
     content.rows.head.keys should contain allOf ("id", "name", "score")
     val names = content.rows.flatMap(_.get("name"))
-    names should contain("Alice")
+    names should contain(CellValue.Str("Alice"))
   }
 
   // ── Column projection ───────────────────────────────────────────────────
