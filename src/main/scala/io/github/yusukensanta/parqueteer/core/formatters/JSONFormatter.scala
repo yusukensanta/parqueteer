@@ -1,6 +1,7 @@
 package io.github.yusukensanta.parqueteer.core.formatters
 
 import io.github.yusukensanta.parqueteer.core.models.{
+  CellValue,
   FileContent,
   ParquetSchema,
   FileMetadata
@@ -40,15 +41,14 @@ class JSONFormatter extends OutputFormatter {
     metadata.asJson.spaces2
   }
 
-  private def encodeRow(row: Map[String, Any]): Json = {
+  private def encodeRow(row: Map[String, CellValue]): Json = {
     val fields = row.map { case (key, value) =>
-      key -> encodeValue(value)
+      key -> io.github.yusukensanta.parqueteer.core.util.JsonEncoder.encode(
+        value
+      )
     }
     Json.obj(fields.toSeq*)
   }
-
-  private def encodeValue(value: Any): Json =
-    io.github.yusukensanta.parqueteer.core.util.JsonEncoder.encodeAny(value)
 }
 
 object JSONFormatter {

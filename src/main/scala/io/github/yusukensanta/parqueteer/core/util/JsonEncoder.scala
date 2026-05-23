@@ -1,36 +1,29 @@
 package io.github.yusukensanta.parqueteer.core.util
 
 import io.circe.Json
+import io.github.yusukensanta.parqueteer.core.models.CellValue
 
 object JsonEncoder {
-  def encodeAny(value: Any): Json = value match {
-    case null      => Json.Null
-    case s: String => Json.fromString(s)
-    case i: Int    => Json.fromInt(i)
-    case l: Long   => Json.fromLong(l)
-    case d: Double =>
+  def encode(value: CellValue): Json = value match {
+    case CellValue.Null   => Json.Null
+    case CellValue.Str(s) => Json.fromString(s)
+    case CellValue.I32(i) => Json.fromInt(i)
+    case CellValue.I64(l) => Json.fromLong(l)
+    case CellValue.F64(d) =>
       if (d.isNaN) Json.fromString("NaN")
       else if (d.isPosInfinity) Json.fromString("Infinity")
       else if (d.isNegInfinity) Json.fromString("-Infinity")
       else Json.fromDoubleOrNull(d)
-    case f: Float =>
+    case CellValue.F32(f) =>
       if (f.isNaN) Json.fromString("NaN")
       else if (f.isPosInfinity) Json.fromString("Infinity")
       else if (f.isNegInfinity) Json.fromString("-Infinity")
       else Json.fromFloatOrNull(f)
-    case b: Boolean             => Json.fromBoolean(b)
-    case bd: BigDecimal         => Json.fromBigDecimal(bd)
-    case bi: BigInt             => Json.fromBigInt(bi)
-    case d: java.time.LocalDate => Json.fromString(d.toString)
-    case i: java.time.Instant   => Json.fromString(i.toString)
-    case bytes: Array[Byte] =>
-      Json.fromString(java.util.Base64.getEncoder.encodeToString(bytes))
-    case list: List[_] => Json.arr(list.map(encodeAny)*)
-    case arr: Array[_] => Json.arr(arr.map(encodeAny).toSeq*)
-    case map: Map[_, _] =>
-      Json.obj(map.map { case (k, v) => k.toString -> encodeAny(v) }.toSeq*)
-    case Some(v) => encodeAny(v)
-    case None    => Json.Null
-    case other   => Json.fromString(other.toString)
+    case CellValue.Bool(b) => Json.fromBoolean(b)
+    case CellValue.Dec(bd) => Json.fromBigDecimal(bd)
+    case CellValue.Date(d) => Json.fromString(d.toString)
+    case CellValue.Ts(i)   => Json.fromString(i.toString)
+    case CellValue.Bytes(b) =>
+      Json.fromString(java.util.Base64.getEncoder.encodeToString(b))
   }
 }

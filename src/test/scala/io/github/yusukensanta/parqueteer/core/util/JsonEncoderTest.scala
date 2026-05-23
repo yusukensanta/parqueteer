@@ -1,117 +1,103 @@
 package io.github.yusukensanta.parqueteer.core.util
 
+import io.github.yusukensanta.parqueteer.core.models.CellValue
 import io.circe.Json
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 class JsonEncoderTest extends AnyFlatSpec with Matchers {
 
-  "JsonEncoder.encodeAny" should "encode null as Json.Null" in {
-    JsonEncoder.encodeAny(null) shouldBe Json.Null
+  "JsonEncoder.encode" should "encode CellValue.Null as Json.Null" in {
+    JsonEncoder.encode(CellValue.Null) shouldBe Json.Null
   }
 
-  it should "encode String" in {
-    JsonEncoder.encodeAny("hello") shouldBe Json.fromString("hello")
+  it should "encode CellValue.Str" in {
+    JsonEncoder.encode(CellValue.Str("hello")) shouldBe Json.fromString("hello")
   }
 
-  it should "encode Int" in {
-    JsonEncoder.encodeAny(42: Int) shouldBe Json.fromInt(42)
+  it should "encode CellValue.I32" in {
+    JsonEncoder.encode(CellValue.I32(42)) shouldBe Json.fromInt(42)
   }
 
-  it should "encode Long" in {
-    JsonEncoder.encodeAny(100L) shouldBe Json.fromLong(100L)
+  it should "encode CellValue.I64" in {
+    JsonEncoder.encode(CellValue.I64(100L)) shouldBe Json.fromLong(100L)
   }
 
-  it should "encode Double" in {
-    JsonEncoder.encodeAny(3.14) shouldBe Json.fromDoubleOrNull(3.14)
+  it should "encode CellValue.F64" in {
+    JsonEncoder.encode(CellValue.F64(3.14)) shouldBe Json.fromDoubleOrNull(3.14)
   }
 
-  it should "encode NaN Double as string \"NaN\"" in {
-    JsonEncoder.encodeAny(Double.NaN) shouldBe Json.fromString("NaN")
-  }
-
-  it should "encode positive Infinity Double as string \"Infinity\"" in {
-    JsonEncoder.encodeAny(Double.PositiveInfinity) shouldBe Json.fromString(
-      "Infinity"
+  it should "encode CellValue.F64(NaN) as string \"NaN\"" in {
+    JsonEncoder.encode(CellValue.F64(Double.NaN)) shouldBe Json.fromString(
+      "NaN"
     )
   }
 
-  it should "encode negative Infinity Double as string \"-Infinity\"" in {
-    JsonEncoder.encodeAny(Double.NegativeInfinity) shouldBe Json.fromString(
-      "-Infinity"
-    )
+  it should "encode CellValue.F64(+Infinity) as string \"Infinity\"" in {
+    JsonEncoder.encode(
+      CellValue.F64(Double.PositiveInfinity)
+    ) shouldBe Json.fromString("Infinity")
   }
 
-  it should "encode Boolean" in {
-    JsonEncoder.encodeAny(true) shouldBe Json.fromBoolean(true)
-    JsonEncoder.encodeAny(false) shouldBe Json.fromBoolean(false)
+  it should "encode CellValue.F64(-Infinity) as string \"-Infinity\"" in {
+    JsonEncoder.encode(
+      CellValue.F64(Double.NegativeInfinity)
+    ) shouldBe Json.fromString("-Infinity")
   }
 
-  it should "encode List recursively" in {
-    val result = JsonEncoder.encodeAny(List("a", "b"))
-    result shouldBe Json.arr(Json.fromString("a"), Json.fromString("b"))
+  it should "encode CellValue.Bool(true)" in {
+    JsonEncoder.encode(CellValue.Bool(true)) shouldBe Json.fromBoolean(true)
   }
 
-  it should "encode Map as JSON object" in {
-    val result = JsonEncoder.encodeAny(Map("k" -> "v"))
-    result shouldBe Json.obj("k" -> Json.fromString("v"))
+  it should "encode CellValue.Bool(false)" in {
+    JsonEncoder.encode(CellValue.Bool(false)) shouldBe Json.fromBoolean(false)
   }
 
-  it should "encode Some(value) as the inner value" in {
-    JsonEncoder.encodeAny(Some("x")) shouldBe Json.fromString("x")
-  }
-
-  it should "encode None as Json.Null" in {
-    JsonEncoder.encodeAny(None) shouldBe Json.Null
-  }
-
-  it should "encode Array[Byte] as Base64 string" in {
+  it should "encode CellValue.Bytes as Base64 string" in {
     val bytes = "hello".getBytes
-    val result = JsonEncoder.encodeAny(bytes)
+    val result = JsonEncoder.encode(CellValue.Bytes(bytes))
     result shouldBe Json.fromString(
       java.util.Base64.getEncoder.encodeToString(bytes)
     )
   }
 
-  it should "encode unknown types as toString" in {
-    JsonEncoder.encodeAny(
-      java.util.UUID.fromString("00000000-0000-0000-0000-000000000000")
-    ) shouldBe
-      Json.fromString("00000000-0000-0000-0000-000000000000")
+  it should "encode CellValue.F32" in {
+    JsonEncoder.encode(CellValue.F32(1.5f)) shouldBe Json.fromFloatOrNull(1.5f)
   }
 
-  it should "encode Float" in {
-    JsonEncoder.encodeAny(1.5f: Float) shouldBe Json.fromFloatOrNull(1.5f)
+  it should "encode CellValue.F32(NaN) as string \"NaN\"" in {
+    JsonEncoder.encode(CellValue.F32(Float.NaN)) shouldBe Json.fromString("NaN")
   }
 
-  it should "encode NaN Float as string \"NaN\"" in {
-    JsonEncoder.encodeAny(Float.NaN) shouldBe Json.fromString("NaN")
+  it should "encode CellValue.F32(+Infinity) as string \"Infinity\"" in {
+    JsonEncoder.encode(
+      CellValue.F32(Float.PositiveInfinity)
+    ) shouldBe Json.fromString("Infinity")
   }
 
-  it should "encode positive Infinity Float as string \"Infinity\"" in {
-    JsonEncoder.encodeAny(Float.PositiveInfinity) shouldBe Json.fromString(
-      "Infinity"
+  it should "encode CellValue.F32(-Infinity) as string \"-Infinity\"" in {
+    JsonEncoder.encode(
+      CellValue.F32(Float.NegativeInfinity)
+    ) shouldBe Json.fromString("-Infinity")
+  }
+
+  it should "encode CellValue.Dec as BigDecimal JSON" in {
+    JsonEncoder.encode(
+      CellValue.Dec(BigDecimal("3.14"))
+    ) shouldBe Json.fromBigDecimal(BigDecimal("3.14"))
+  }
+
+  it should "encode CellValue.Date as ISO date string" in {
+    val date = java.time.LocalDate.of(2024, 1, 15)
+    JsonEncoder.encode(CellValue.Date(date)) shouldBe Json.fromString(
+      "2024-01-15"
     )
   }
 
-  it should "encode negative Infinity Float as string \"-Infinity\"" in {
-    JsonEncoder.encodeAny(Float.NegativeInfinity) shouldBe Json.fromString(
-      "-Infinity"
+  it should "encode CellValue.Ts as ISO instant string" in {
+    val instant = java.time.Instant.parse("2024-01-15T12:00:00Z")
+    JsonEncoder.encode(CellValue.Ts(instant)) shouldBe Json.fromString(
+      instant.toString
     )
-  }
-
-  it should "encode BigDecimal" in {
-    JsonEncoder.encodeAny(BigDecimal("3.14")) shouldBe Json.fromBigDecimal(
-      BigDecimal("3.14")
-    )
-  }
-
-  it should "encode BigInt" in {
-    JsonEncoder.encodeAny(BigInt(42)) shouldBe Json.fromBigInt(BigInt(42))
-  }
-
-  it should "encode Array of non-bytes recursively" in {
-    val result = JsonEncoder.encodeAny(Array("x", "y"))
-    result shouldBe Json.arr(Json.fromString("x"), Json.fromString("y"))
   }
 }

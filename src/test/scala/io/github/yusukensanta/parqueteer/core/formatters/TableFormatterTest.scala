@@ -11,8 +11,16 @@ class TableFormatterTest extends AnyFlatSpec with Matchers {
 
   private val sampleContent = FileContent(
     rows = List(
-      Map("name" -> "Alice", "age" -> 30L, "score" -> 9.5),
-      Map("name" -> "Bob", "age" -> 25L, "score" -> 7.2)
+      Map(
+        "name" -> CellValue.Str("Alice"),
+        "age" -> CellValue.I64(30L),
+        "score" -> CellValue.F64(9.5)
+      ),
+      Map(
+        "name" -> CellValue.Str("Bob"),
+        "age" -> CellValue.I64(25L),
+        "score" -> CellValue.F64(7.2)
+      )
     ),
     totalRows = 2L,
     isPartial = false
@@ -80,19 +88,19 @@ class TableFormatterTest extends AnyFlatSpec with Matchers {
 
   it should "format doubles with full precision" in {
     val content = FileContent(
-      rows = List(Map("v" -> 1.234567)),
+      rows = List(Map("v" -> CellValue.F64(1.234567))),
       totalRows = 1L,
       isPartial = false
     )
     val result = formatter.formatContent(content, None)
     result should include("1.234567")
-    formatter.formatValue(1.234567) shouldBe "1.234567"
-    formatter.formatValue(9.5) shouldBe "9.5"
+    formatter.formatValue(CellValue.F64(1.234567)) shouldBe "1.234567"
+    formatter.formatValue(CellValue.F64(9.5)) shouldBe "9.5"
   }
 
   it should "produce exact table structure for single-column single-row input" in {
     val minimal = FileContent(
-      rows = List(Map("id" -> 1L)),
+      rows = List(Map("id" -> CellValue.I64(1L))),
       totalRows = 1L,
       isPartial = false
     )
@@ -148,48 +156,64 @@ class TableFormatterTest extends AnyFlatSpec with Matchers {
   }
 
   "TableFormatter.formatValue" should "format Double NaN as NaN" in {
-    formatter.formatValue(Double.NaN) shouldBe "NaN"
+    formatter.formatValue(CellValue.F64(Double.NaN)) shouldBe "NaN"
   }
 
   it should "format Double positive infinity as Infinity" in {
-    formatter.formatValue(Double.PositiveInfinity) shouldBe "Infinity"
+    formatter.formatValue(
+      CellValue.F64(Double.PositiveInfinity)
+    ) shouldBe "Infinity"
   }
 
   it should "format Double negative infinity as -Infinity" in {
-    formatter.formatValue(Double.NegativeInfinity) shouldBe "-Infinity"
+    formatter.formatValue(
+      CellValue.F64(Double.NegativeInfinity)
+    ) shouldBe "-Infinity"
   }
 
   it should "format Float NaN as NaN" in {
-    formatter.formatValue(Float.NaN) shouldBe "NaN"
+    formatter.formatValue(CellValue.F32(Float.NaN)) shouldBe "NaN"
   }
 
   it should "format Float positive infinity as Infinity" in {
-    formatter.formatValue(Float.PositiveInfinity) shouldBe "Infinity"
+    formatter.formatValue(
+      CellValue.F32(Float.PositiveInfinity)
+    ) shouldBe "Infinity"
   }
 
   it should "format Int (INT32) value as string" in {
-    formatter.formatValue(42) shouldBe "42"
-    formatter.formatValue(-1) shouldBe "-1"
+    formatter.formatValue(CellValue.I32(42)) shouldBe "42"
+    formatter.formatValue(CellValue.I32(-1)) shouldBe "-1"
   }
 
   it should "format Float (FLOAT) value with full precision" in {
-    formatter.formatValue(1.5f) shouldBe "1.5"
-    formatter.formatValue(-3.0f) shouldBe "-3.0"
-    formatter.formatValue(1.234568f) shouldBe 1.234568f.toString
+    formatter.formatValue(CellValue.F32(1.5f)) shouldBe "1.5"
+    formatter.formatValue(CellValue.F32(-3.0f)) shouldBe "-3.0"
+    formatter.formatValue(CellValue.F32(1.234568f)) shouldBe 1.234568f.toString
   }
 
   it should "format BigDecimal without scientific notation" in {
     formatter.formatValue(
-      BigDecimal("1234567890.123")
+      CellValue.Dec(BigDecimal("1234567890.123"))
     ) shouldBe "1234567890.123"
-    formatter.formatValue(BigDecimal("0.0000001")) shouldBe "0.0000001"
+    formatter.formatValue(
+      CellValue.Dec(BigDecimal("0.0000001"))
+    ) shouldBe "0.0000001"
   }
 
   it should "render Boolean, Int, and Float columns in table output" in {
     val content = FileContent(
       rows = List(
-        Map("active" -> true, "count" -> 7, "ratio" -> 0.5f),
-        Map("active" -> false, "count" -> 0, "ratio" -> 1.0f)
+        Map(
+          "active" -> CellValue.Bool(true),
+          "count" -> CellValue.I32(7),
+          "ratio" -> CellValue.F32(0.5f)
+        ),
+        Map(
+          "active" -> CellValue.Bool(false),
+          "count" -> CellValue.I32(0),
+          "ratio" -> CellValue.F32(1.0f)
+        )
       ),
       totalRows = 2L,
       isPartial = false
@@ -225,7 +249,7 @@ class TableFormatterTest extends AnyFlatSpec with Matchers {
 
   "TableFormatter.formatContent" should "return an error message when row count exceeds 10000" in {
     val bigContent = FileContent(
-      rows = List.fill(10_001)(Map("id" -> 1L)),
+      rows = List.fill(10_001)(Map("id" -> CellValue.I64(1L))),
       totalRows = 10_001L,
       isPartial = false
     )
@@ -236,7 +260,7 @@ class TableFormatterTest extends AnyFlatSpec with Matchers {
 
   it should "render normally when row count is exactly 10000" in {
     val edgeContent = FileContent(
-      rows = List.fill(10_000)(Map("id" -> 1L)),
+      rows = List.fill(10_000)(Map("id" -> CellValue.I64(1L))),
       totalRows = 10_000L,
       isPartial = false
     )

@@ -1,5 +1,6 @@
 package io.github.yusukensanta.parqueteer.core.util
 
+import io.github.yusukensanta.parqueteer.core.models.CellValue
 import java.time.{Instant, LocalDate, LocalDateTime, ZoneOffset}
 import scala.util.Try
 
@@ -11,35 +12,45 @@ object TypeInferrer {
   private val TsPattern =
     raw"\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}.*".r.pattern
 
-  /** Infer a typed value from a raw CSV string. Order: Boolean > Date >
+  /** Infer a typed CellValue from a raw CSV string. Order: Boolean > Date >
     * Timestamp > Decimal > Long > String.
     */
-  def inferCsvValue(raw: String): Any = {
+  def inferCsvValue(raw: String): CellValue = {
     val s = raw.trim
-    if (s.isEmpty) null
-    else if (s.equalsIgnoreCase("true")) true
-    else if (s.equalsIgnoreCase("false")) false
+    if (s.isEmpty) CellValue.Null
+    else if (s.equalsIgnoreCase("true")) CellValue.Bool(true)
+    else if (s.equalsIgnoreCase("false")) CellValue.Bool(false)
     else if (DatePattern.matcher(s).matches())
-      Try(LocalDate.parse(s)).getOrElse(s)
+      Try(LocalDate.parse(s))
+        .map(CellValue.Date.apply)
+        .getOrElse(CellValue.Str(s))
     else if (TsPattern.matcher(s).matches())
-      tryTimestamp(s).getOrElse(s)
+      tryTimestamp(s)
+        .map(CellValue.Ts.apply)
+        .getOrElse(CellValue.Str(s))
     else if (DecimalPattern.matcher(s).matches())
-      Try(s.toDouble).getOrElse(s)
+      Try(s.toDouble).map(CellValue.F64.apply).getOrElse(CellValue.Str(s))
     else if (IntPattern.matcher(s).matches())
-      // Guard: preserve leading zeros ("007" must stay a String, not become 7L)
-      Try(s.toLong).filter(_.toString == s).getOrElse(s)
-    else s
+      Try(s.toLong)
+        .filter(_.toString == s)
+        .map(CellValue.I64.apply)
+        .getOrElse(CellValue.Str(s))
+    else CellValue.Str(s)
   }
 
   /** Infer date/timestamp from a JSON string value. JSON numbers are already
     * typed; only guess temporal types.
     */
-  def inferJsonString(s: String): Any = {
+  def inferJsonString(s: String): CellValue = {
     if (DatePattern.matcher(s).matches())
-      Try(LocalDate.parse(s)).getOrElse(s)
+      Try(LocalDate.parse(s))
+        .map(CellValue.Date.apply)
+        .getOrElse(CellValue.Str(s))
     else if (TsPattern.matcher(s).matches())
-      tryTimestamp(s).getOrElse(s)
-    else s
+      tryTimestamp(s)
+        .map(CellValue.Ts.apply)
+        .getOrElse(CellValue.Str(s))
+    else CellValue.Str(s)
   }
 
   private def tryTimestamp(s: String): Try[Instant] =

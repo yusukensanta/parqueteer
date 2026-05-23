@@ -19,10 +19,22 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
     f
   }
 
-  private val sampleData: List[Map[String, Any]] = List(
-    Map("id" -> 1L, "name" -> "Alice", "score" -> 95.5),
-    Map("id" -> 2L, "name" -> "Bob", "score" -> 87.3),
-    Map("id" -> 3L, "name" -> "Charlie", "score" -> 92.1)
+  private val sampleData: List[Map[String, CellValue]] = List(
+    Map(
+      "id" -> CellValue.I64(1L),
+      "name" -> CellValue.Str("Alice"),
+      "score" -> CellValue.F64(95.5)
+    ),
+    Map(
+      "id" -> CellValue.I64(2L),
+      "name" -> CellValue.Str("Bob"),
+      "score" -> CellValue.F64(87.3)
+    ),
+    Map(
+      "id" -> CellValue.I64(3L),
+      "name" -> CellValue.Str("Charlie"),
+      "score" -> CellValue.F64(92.1)
+    )
   )
 
   // ── Compression roundtrips ──────────────────────────────────────────────
@@ -212,7 +224,11 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
       ReadConfig(columns = Some(List("name")))
     )
     result.isSuccess shouldBe true
-    result.get.rows.map(_("name")) shouldBe List("Alice", "Bob", "Charlie")
+    result.get.rows.map(_("name")) shouldBe List(
+      CellValue.Str("Alice"),
+      CellValue.Str("Bob"),
+      CellValue.Str("Charlie")
+    )
     result.get.rows.head.keys should not contain "id"
     result.get.rows.head.keys should not contain "score"
   }
@@ -237,19 +253,25 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
     val loc = LocalPath(tempFile().getAbsolutePath)
     repo.writeContent(loc, sampleData, None).isSuccess shouldBe true
 
-    val collected = scala.collection.mutable.ListBuffer[Map[String, Any]]()
+    val collected =
+      scala.collection.mutable.ListBuffer[Map[String, CellValue]]()
     val result =
       repo.streamContent(ParquetFile(loc), ReadConfig())(collected += _)
     result.isSuccess shouldBe true
     result.get shouldBe 3L
-    collected.map(_("name")).toSet shouldBe Set("Alice", "Bob", "Charlie")
+    collected.map(_("name")).toSet shouldBe Set(
+      CellValue.Str("Alice"),
+      CellValue.Str("Bob"),
+      CellValue.Str("Charlie")
+    )
   }
 
   it should "stream respects maxRows limit" taggedAs IntegrationTest in {
     val loc = LocalPath(tempFile().getAbsolutePath)
     repo.writeContent(loc, sampleData, None).isSuccess shouldBe true
 
-    val collected = scala.collection.mutable.ListBuffer[Map[String, Any]]()
+    val collected =
+      scala.collection.mutable.ListBuffer[Map[String, CellValue]]()
     val result =
       repo.streamContent(ParquetFile(loc), ReadConfig(maxRows = Some(2L)))(
         collected += _
@@ -263,7 +285,8 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
     val loc = LocalPath(tempFile().getAbsolutePath)
     repo.writeContent(loc, sampleData, None).isSuccess shouldBe true
 
-    val collected = scala.collection.mutable.ListBuffer[Map[String, Any]]()
+    val collected =
+      scala.collection.mutable.ListBuffer[Map[String, CellValue]]()
     val result = repo.streamContent(
       ParquetFile(loc),
       ReadConfig(columns = Some(List("name")))
@@ -279,14 +302,15 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
     val loc = LocalPath(tempFile().getAbsolutePath)
     repo.writeContent(loc, sampleData, None).isSuccess shouldBe true
 
-    val collected = scala.collection.mutable.ListBuffer[Map[String, Any]]()
+    val collected =
+      scala.collection.mutable.ListBuffer[Map[String, CellValue]]()
     val result = repo.streamContent(
       ParquetFile(loc),
       ReadConfig(filter = Some("""name = "Alice""""))
     )(collected += _)
     result.isSuccess shouldBe true
     collected should have length 1
-    collected.head("name") shouldBe "Alice"
+    collected.head("name") shouldBe CellValue.Str("Alice")
   }
 
   // ── Parallel row group reading ──────────────────────────────────────────
@@ -308,7 +332,12 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
   it should "read multiple row groups in parallel and return all rows" taggedAs IntegrationTest in {
     val loc = LocalPath(tempFile().getAbsolutePath)
     val manyRows = (1 to 30)
-      .map(i => Map[String, Any]("id" -> i.toLong, "name" -> s"user$i"))
+      .map(i =>
+        Map[String, CellValue](
+          "id" -> CellValue.I64(i.toLong),
+          "name" -> CellValue.Str(s"user$i")
+        )
+      )
       .toList
     repo
       .writeContent(loc, manyRows, None, WriteConfig(rowGroupSize = 1L))
@@ -318,14 +347,19 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
     result.isSuccess shouldBe true
     result.get.rows should have length 30
     result.get.rows
-      .map(_("id").asInstanceOf[Long])
-      .toSet shouldBe (1L to 30L).toSet
+      .map(_("id"))
+      .toSet shouldBe (1L to 30L).map(CellValue.I64(_)).toSet
   }
 
   it should "respect maxRows limit in parallel mode" taggedAs IntegrationTest in {
     val loc = LocalPath(tempFile().getAbsolutePath)
     val manyRows = (1 to 20)
-      .map(i => Map[String, Any]("id" -> i.toLong, "name" -> s"u$i"))
+      .map(i =>
+        Map[String, CellValue](
+          "id" -> CellValue.I64(i.toLong),
+          "name" -> CellValue.Str(s"u$i")
+        )
+      )
       .toList
     repo
       .writeContent(loc, manyRows, None, WriteConfig(rowGroupSize = 1L))
@@ -344,10 +378,10 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
     val loc = LocalPath(tempFile().getAbsolutePath)
     val manyRows = (1 to 10)
       .map(i =>
-        Map[String, Any](
-          "id" -> i.toLong,
-          "name" -> s"u$i",
-          "score" -> i.toDouble
+        Map[String, CellValue](
+          "id" -> CellValue.I64(i.toLong),
+          "name" -> CellValue.Str(s"u$i"),
+          "score" -> CellValue.F64(i.toDouble)
         )
       )
       .toList
@@ -378,16 +412,25 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
     )
     result.isSuccess shouldBe true
     result.get.rows should have length 1
-    result.get.rows.head("name") shouldBe "Alice"
+    result.get.rows.head("name") shouldBe CellValue.Str("Alice")
   }
 
   // ── IS NULL / IS NOT NULL type-aware filter ────────────────────────────
 
   it should "filter IS NULL on INT64 column without IllegalArgumentException" taggedAs IntegrationTest in {
     val data = List(
-      Map[String, Any]("id" -> 1L, "name" -> "Alice"),
-      Map[String, Any]("id" -> 2L, "name" -> null),
-      Map[String, Any]("id" -> 3L, "name" -> "Charlie")
+      Map[String, CellValue](
+        "id" -> CellValue.I64(1L),
+        "name" -> CellValue.Str("Alice")
+      ),
+      Map[String, CellValue](
+        "id" -> CellValue.I64(2L),
+        "name" -> CellValue.Null
+      ),
+      Map[String, CellValue](
+        "id" -> CellValue.I64(3L),
+        "name" -> CellValue.Str("Charlie")
+      )
     )
     val loc = LocalPath(tempFile().getAbsolutePath)
     repo.writeContent(loc, data, None).isSuccess shouldBe true
@@ -402,9 +445,18 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
 
   it should "filter IS NULL on DOUBLE column without IllegalArgumentException" taggedAs IntegrationTest in {
     val data = List(
-      Map[String, Any]("id" -> 1L, "score" -> 9.5),
-      Map[String, Any]("id" -> 2L, "score" -> null),
-      Map[String, Any]("id" -> 3L, "score" -> 7.1)
+      Map[String, CellValue](
+        "id" -> CellValue.I64(1L),
+        "score" -> CellValue.F64(9.5)
+      ),
+      Map[String, CellValue](
+        "id" -> CellValue.I64(2L),
+        "score" -> CellValue.Null
+      ),
+      Map[String, CellValue](
+        "id" -> CellValue.I64(3L),
+        "score" -> CellValue.F64(7.1)
+      )
     )
     val loc = LocalPath(tempFile().getAbsolutePath)
     repo.writeContent(loc, data, None).isSuccess shouldBe true
@@ -427,9 +479,18 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
 
   it should "write and read back INT32 (Int) values preserving type" taggedAs IntegrationTest in {
     val data = List(
-      Map[String, Any]("id" -> 1, "count" -> 100),
-      Map[String, Any]("id" -> 2, "count" -> -50),
-      Map[String, Any]("id" -> 3, "count" -> Int.MaxValue)
+      Map[String, CellValue](
+        "id" -> CellValue.I32(1),
+        "count" -> CellValue.I32(100)
+      ),
+      Map[String, CellValue](
+        "id" -> CellValue.I32(2),
+        "count" -> CellValue.I32(-50)
+      ),
+      Map[String, CellValue](
+        "id" -> CellValue.I32(3),
+        "count" -> CellValue.I32(Int.MaxValue)
+      )
     )
     val loc = LocalPath(tempFile().getAbsolutePath)
     repo.writeContent(loc, data, None).isSuccess shouldBe true
@@ -438,15 +499,21 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
     result.isSuccess shouldBe true
     val rows = result.get.rows
     rows should have length 3
-    rows.head("id") shouldBe 1
-    rows.head("count") shouldBe 100
-    rows.last("count") shouldBe Int.MaxValue
+    rows.head("id") shouldBe CellValue.I32(1)
+    rows.head("count") shouldBe CellValue.I32(100)
+    rows.last("count") shouldBe CellValue.I32(Int.MaxValue)
   }
 
   it should "write and read back FLOAT (Float) values" taggedAs IntegrationTest in {
     val data = List(
-      Map[String, Any]("x" -> 1.5f, "y" -> -2.5f),
-      Map[String, Any]("x" -> 0.0f, "y" -> 100.0f)
+      Map[String, CellValue](
+        "x" -> CellValue.F32(1.5f),
+        "y" -> CellValue.F32(-2.5f)
+      ),
+      Map[String, CellValue](
+        "x" -> CellValue.F32(0.0f),
+        "y" -> CellValue.F32(100.0f)
+      )
     )
     val loc = LocalPath(tempFile().getAbsolutePath)
     repo.writeContent(loc, data, None).isSuccess shouldBe true
@@ -455,54 +522,81 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
     result.isSuccess shouldBe true
     val rows = result.get.rows
     rows should have length 2
-    rows.head("x").asInstanceOf[Float] shouldBe 1.5f +- 0.001f
-    rows.head("y").asInstanceOf[Float] shouldBe -2.5f +- 0.001f
+    rows.head("x") match {
+      case CellValue.F32(f) => f shouldBe 1.5f +- 0.001f
+      case v                => fail(s"Expected CellValue.F32, got $v")
+    }
+    rows.head("y") match {
+      case CellValue.F32(f) => f shouldBe -2.5f +- 0.001f
+      case v                => fail(s"Expected CellValue.F32, got $v")
+    }
   }
 
   it should "write and read back BOOLEAN values" taggedAs IntegrationTest in {
     val data = List(
-      Map[String, Any]("name" -> "Alice", "active" -> true),
-      Map[String, Any]("name" -> "Bob", "active" -> false),
-      Map[String, Any]("name" -> "Charlie", "active" -> true)
-    )
-    val loc = LocalPath(tempFile().getAbsolutePath)
-    repo.writeContent(loc, data, None).isSuccess shouldBe true
-
-    val result = repo.readContent(ParquetFile(loc), ReadConfig())
-    result.isSuccess shouldBe true
-    val rows = result.get.rows
-    rows should have length 3
-    rows.head("active") shouldBe true
-    rows(1)("active") shouldBe false
-    rows.last("active") shouldBe true
-  }
-
-  it should "read null field as null value (key present, value null) via sequential path" taggedAs IntegrationTest in {
-    val data = List(
-      Map[String, Any]("id" -> 1L, "note" -> "present"),
-      Map[String, Any]("id" -> 2L, "note" -> null),
-      Map[String, Any]("id" -> 3L, "note" -> "also present")
-    )
-    val loc = LocalPath(tempFile().getAbsolutePath)
-    repo.writeContent(loc, data, None).isSuccess shouldBe true
-
-    val result = repo.readContent(ParquetFile(loc), ReadConfig())
-    result.isSuccess shouldBe true
-    val rows = result.get.rows
-    rows should have length 3
-    rows.head.get("note") shouldBe Some("present")
-    rows(1).keys should contain("note")
-    Option(rows(1)("note")) shouldBe None
-    rows.last.get("note") shouldBe Some("also present")
-  }
-
-  it should "write and read back DATE (LocalDate) values as ISO date strings" taggedAs IntegrationTest in {
-    val data = List(
-      Map[String, Any](
-        "id" -> 1L,
-        "dob" -> java.time.LocalDate.of(1990, 6, 15)
+      Map[String, CellValue](
+        "name" -> CellValue.Str("Alice"),
+        "active" -> CellValue.Bool(true)
       ),
-      Map[String, Any]("id" -> 2L, "dob" -> java.time.LocalDate.of(2001, 12, 1))
+      Map[String, CellValue](
+        "name" -> CellValue.Str("Bob"),
+        "active" -> CellValue.Bool(false)
+      ),
+      Map[String, CellValue](
+        "name" -> CellValue.Str("Charlie"),
+        "active" -> CellValue.Bool(true)
+      )
+    )
+    val loc = LocalPath(tempFile().getAbsolutePath)
+    repo.writeContent(loc, data, None).isSuccess shouldBe true
+
+    val result = repo.readContent(ParquetFile(loc), ReadConfig())
+    result.isSuccess shouldBe true
+    val rows = result.get.rows
+    rows should have length 3
+    rows.head("active") shouldBe CellValue.Bool(true)
+    rows(1)("active") shouldBe CellValue.Bool(false)
+    rows.last("active") shouldBe CellValue.Bool(true)
+  }
+
+  it should "read null field as CellValue.Null (key present) via sequential path" taggedAs IntegrationTest in {
+    val data = List(
+      Map[String, CellValue](
+        "id" -> CellValue.I64(1L),
+        "note" -> CellValue.Str("present")
+      ),
+      Map[String, CellValue](
+        "id" -> CellValue.I64(2L),
+        "note" -> CellValue.Null
+      ),
+      Map[String, CellValue](
+        "id" -> CellValue.I64(3L),
+        "note" -> CellValue.Str("also present")
+      )
+    )
+    val loc = LocalPath(tempFile().getAbsolutePath)
+    repo.writeContent(loc, data, None).isSuccess shouldBe true
+
+    val result = repo.readContent(ParquetFile(loc), ReadConfig())
+    result.isSuccess shouldBe true
+    val rows = result.get.rows
+    rows should have length 3
+    rows.head.get("note") shouldBe Some(CellValue.Str("present"))
+    rows(1).keys should contain("note")
+    rows(1)("note") shouldBe CellValue.Null
+    rows.last.get("note") shouldBe Some(CellValue.Str("also present"))
+  }
+
+  it should "write and read back DATE (LocalDate) values as LocalDate" taggedAs IntegrationTest in {
+    val data = List(
+      Map[String, CellValue](
+        "id" -> CellValue.I64(1L),
+        "dob" -> CellValue.Date(java.time.LocalDate.of(1990, 6, 15))
+      ),
+      Map[String, CellValue](
+        "id" -> CellValue.I64(2L),
+        "dob" -> CellValue.Date(java.time.LocalDate.of(2001, 12, 1))
+      )
     )
     val loc = LocalPath(tempFile().getAbsolutePath)
     repo.writeContent(loc, data, None).isSuccess shouldBe true
@@ -511,16 +605,24 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
     result.isSuccess shouldBe true
     val rows = result.get.rows
     rows should have length 2
-    rows.head("dob") shouldBe "1990-06-15"
-    rows(1)("dob") shouldBe "2001-12-01"
+    rows.head("dob") shouldBe CellValue.Date(
+      java.time.LocalDate.of(1990, 6, 15)
+    )
+    rows(1)("dob") shouldBe CellValue.Date(java.time.LocalDate.of(2001, 12, 1))
   }
 
-  it should "write and read back TIMESTAMP (Instant) values as ISO timestamp strings" taggedAs IntegrationTest in {
+  it should "write and read back TIMESTAMP (Instant) values as Instant" taggedAs IntegrationTest in {
     val ts1 = java.time.Instant.parse("2024-01-01T08:00:00Z")
     val ts2 = java.time.Instant.parse("2024-06-15T23:59:59Z")
     val data = List(
-      Map[String, Any]("event" -> "login", "ts" -> ts1),
-      Map[String, Any]("event" -> "logout", "ts" -> ts2)
+      Map[String, CellValue](
+        "event" -> CellValue.Str("login"),
+        "ts" -> CellValue.Ts(ts1)
+      ),
+      Map[String, CellValue](
+        "event" -> CellValue.Str("logout"),
+        "ts" -> CellValue.Ts(ts2)
+      )
     )
     val loc = LocalPath(tempFile().getAbsolutePath)
     repo.writeContent(loc, data, None).isSuccess shouldBe true
@@ -529,14 +631,22 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
     result.isSuccess shouldBe true
     val rows = result.get.rows
     rows should have length 2
-    rows.head("ts") shouldBe ts1.toString
-    rows(1)("ts") shouldBe ts2.toString
+    rows.head("ts") shouldBe CellValue.Ts(ts1)
+    rows(1)("ts") shouldBe CellValue.Ts(ts2)
   }
 
   it should "omit null fields in parallel (low-level) read path" taggedAs IntegrationTest in {
     val manyRows = (1 to 10).map { i =>
-      if (i == 5) Map[String, Any]("id" -> i.toLong, "note" -> null)
-      else Map[String, Any]("id" -> i.toLong, "note" -> s"row$i")
+      if (i == 5)
+        Map[String, CellValue](
+          "id" -> CellValue.I64(i.toLong),
+          "note" -> CellValue.Null
+        )
+      else
+        Map[String, CellValue](
+          "id" -> CellValue.I64(i.toLong),
+          "note" -> CellValue.Str(s"row$i")
+        )
     }.toList
     val loc = LocalPath(tempFile().getAbsolutePath)
     repo
@@ -545,7 +655,7 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
 
     val result = repo.readContent(ParquetFile(loc), ReadConfig(parallelism = 4))
     result.isSuccess shouldBe true
-    val nullRow = result.get.rows.find(_("id") == 5L).get
+    val nullRow = result.get.rows.find(_("id") == CellValue.I64(5L)).get
     nullRow.keys should not contain "note"
   }
 
@@ -593,10 +703,12 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
 
   it should "report numerically correct min/max across multiple row groups, not lexicographic" taggedAs IntegrationTest in {
     // Values 1-200: lexicographic max is "99", numeric max is "200"
-    // Lexicographic min is "1", numeric min is "1" (same here)
     // Use a tiny rowGroupSize to force the writer to flush multiple row groups
     val data = (1 to 200).toList.map(i =>
-      Map[String, Any]("id" -> i.toLong, "label" -> s"item_$i")
+      Map[String, CellValue](
+        "id" -> CellValue.I64(i.toLong),
+        "label" -> CellValue.Str(s"item_$i")
+      )
     )
     val loc = LocalPath(tempFile().getAbsolutePath)
     repo
@@ -630,7 +742,9 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
 
   it should "spot-check (deep=false default) a multi-row-group file with no issues" taggedAs IntegrationTest in {
     val loc = LocalPath(tempFile().getAbsolutePath)
-    val rows = (1 to 5).map(i => Map[String, Any]("id" -> i.toLong)).toList
+    val rows = (1 to 5)
+      .map(i => Map[String, CellValue]("id" -> CellValue.I64(i.toLong)))
+      .toList
     repo
       .writeContent(loc, rows, None, WriteConfig(rowGroupSize = 1L))
       .isSuccess shouldBe true
@@ -642,7 +756,9 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
 
   it should "deep-validate a multi-row-group file with no issues" taggedAs IntegrationTest in {
     val loc = LocalPath(tempFile().getAbsolutePath)
-    val rows = (1 to 5).map(i => Map[String, Any]("id" -> i.toLong)).toList
+    val rows = (1 to 5)
+      .map(i => Map[String, CellValue]("id" -> CellValue.I64(i.toLong)))
+      .toList
     repo
       .writeContent(loc, rows, None, WriteConfig(rowGroupSize = 1L))
       .isSuccess shouldBe true
@@ -664,7 +780,12 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
     )
     val loc = LocalPath(tempFile().getAbsolutePath)
     val result = repo.writeContentStream(loc, schema) { write =>
-      write(Map("id" -> 1L, "unknown_col" -> "surprise"))
+      write(
+        Map(
+          "id" -> CellValue.I64(1L),
+          "unknown_col" -> CellValue.Str("surprise")
+        )
+      )
     }
     result.isFailure shouldBe true
     result.failed.get.getMessage should include("unknown_col")
@@ -673,7 +794,7 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
 
   // ── TIMESTAMP_MICROS sequential decode (#154) ────────────────────────────
 
-  it should "decode TIMESTAMP_MICROS as ISO-8601 string in sequential read" taggedAs IntegrationTest in {
+  it should "decode TIMESTAMP_MICROS as ISO-8601 Instant in sequential read" taggedAs IntegrationTest in {
     import org.apache.parquet.hadoop.example.ExampleParquetWriter
     import org.apache.parquet.schema.{Types => PTypes}
     import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
@@ -711,6 +832,8 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
     val loc = LocalPath(f.getAbsolutePath)
     val result = repo.readContent(ParquetFile(loc), ReadConfig())
     result.isSuccess shouldBe true
-    result.get.rows.head("ts") shouldBe "2024-05-22T00:00:00Z"
+    result.get.rows.head("ts") shouldBe CellValue.Ts(
+      java.time.Instant.parse("2024-05-22T00:00:00Z")
+    )
   }
 }

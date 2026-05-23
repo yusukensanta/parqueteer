@@ -7,7 +7,9 @@ import org.scalatest.matchers.should.Matchers
 class PrettyFormatterTest extends AnyFlatSpec with Matchers {
 
   private val content = FileContent(
-    rows = List(Map("name" -> "Alice", "score" -> 9.5)),
+    rows = List(
+      Map("name" -> CellValue.Str("Alice"), "score" -> CellValue.F64(9.5))
+    ),
     totalRows = 1L,
     isPartial = false
   )
@@ -35,13 +37,21 @@ class PrettyFormatterTest extends AnyFlatSpec with Matchers {
   }
 
   it should "render Double with full precision" in {
-    val c = FileContent(List(Map("v" -> 1.234567)), 1L, isPartial = false)
+    val c = FileContent(
+      List(Map("v" -> CellValue.F64(1.234567))),
+      1L,
+      isPartial = false
+    )
     val result = new PrettyFormatter(useColors = false).formatContent(c, None)
     result should include("1.234567")
   }
 
   it should "not over-pad CJK values (uses displayWidth, not .length)" in {
-    val c = FileContent(List(Map("lang" -> "日本語")), 1L, isPartial = false)
+    val c = FileContent(
+      List(Map("lang" -> CellValue.Str("日本語"))),
+      1L,
+      isPartial = false
+    )
     val result = new PrettyFormatter(useColors = true).formatContent(c, None)
     val stripped = stripAnsi(result)
     stripped should include("│日本語│")

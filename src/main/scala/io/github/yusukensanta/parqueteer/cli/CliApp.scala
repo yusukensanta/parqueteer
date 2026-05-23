@@ -3,6 +3,7 @@ package io.github.yusukensanta.parqueteer.cli
 import io.github.yusukensanta.parqueteer.core.services.ParquetService
 import io.github.yusukensanta.parqueteer.core.repositories.ParquetRepository
 import io.github.yusukensanta.parqueteer.core.models.{
+  CellValue,
   ReadConfig,
   WriteConfig,
   OutputFormat,
@@ -262,7 +263,7 @@ object CliApp {
     if (streaming) {
       import io.github.yusukensanta.parqueteer.core.formatters.RowStreamWriter
       val writer = if (globalOptions.quiet) new RowStreamWriter {
-        override def writeRow(row: Map[String, Any]): Unit = ()
+        override def writeRow(row: Map[String, CellValue]): Unit = ()
       }
       else RowStreamWriter(format, System.out)
       writer.begin()

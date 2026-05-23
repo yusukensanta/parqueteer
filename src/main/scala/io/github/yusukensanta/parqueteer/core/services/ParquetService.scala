@@ -9,21 +9,22 @@ import scala.util.{Try, Using}
 import io.circe.{Encoder, Json}
 
 object ParquetServiceEncoders {
-  given anyEncoder: Encoder[Any] =
-    Encoder.instance(
-      io.github.yusukensanta.parqueteer.core.util.JsonEncoder.encodeAny
-    )
+  import io.github.yusukensanta.parqueteer.core.models.CellValue
+  import io.github.yusukensanta.parqueteer.core.util.JsonEncoder
 
-  given mapStringAnyEncoder: Encoder[Map[String, Any]] =
+  given cellValueEncoder: Encoder[CellValue] =
+    Encoder.instance(JsonEncoder.encode)
+
+  given mapStringCellValueEncoder: Encoder[Map[String, CellValue]] =
     Encoder.instance { map =>
       Json.obj(map.map { case (k, v) =>
-        k -> anyEncoder.apply(v)
+        k -> cellValueEncoder.apply(v)
       }.toSeq*)
     }
 
-  given listMapEncoder: Encoder[List[Map[String, Any]]] =
+  given listMapEncoder: Encoder[List[Map[String, CellValue]]] =
     Encoder.instance(list =>
-      Json.fromValues(list.map(mapStringAnyEncoder.apply))
+      Json.fromValues(list.map(mapStringCellValueEncoder.apply))
     )
 }
 
@@ -77,7 +78,7 @@ class ParquetService(
   def streamRead(
       path: String,
       readConfig: ReadConfig
-  )(process: Map[String, Any] => Unit): Either[ParqueteerError, Long] =
+  )(process: Map[String, CellValue] => Unit): Either[ParqueteerError, Long] =
     for {
       _ <- requireNotStdin(path)
       _ <- readConfig.filter
@@ -205,7 +206,7 @@ class ParquetService(
                         val missing = allColumnNames -- row.keySet
                         val finalRow =
                           if (missing.isEmpty) row
-                          else row ++ missing.map(_ -> null)
+                          else row ++ missing.map(_ -> CellValue.Null)
                         write(finalRow)
                       }
                       .fold(err => streamError = Some(err), _ => ())
@@ -232,7 +233,7 @@ class ParquetService(
 
   def writeFile(
       path: String,
-      data: List[Map[String, Any]],
+      data: List[Map[String, CellValue]],
       writeConfig: WriteConfig = WriteConfig()
   ): Either[ParqueteerError, Unit] =
     for {
@@ -246,7 +247,7 @@ class ParquetService(
       path: String,
       inputFormat: String,
       stdin: java.io.InputStream = System.in
-  ): Either[ParqueteerError, List[Map[String, Any]]] =
+  ): Either[ParqueteerError, List[Map[String, CellValue]]] =
     if (path == "-")
       readFromStdin(inputFormat, stdin).toParqueteerError
     else
@@ -268,7 +269,7 @@ class ParquetService(
   private[services] def readFromStdin(
       inputFormat: String,
       stdin: java.io.InputStream = System.in
-  ): Try[List[Map[String, Any]]] = Try {
+  ): Try[List[Map[String, CellValue]]] = Try {
     val content =
       Using.resource(scala.io.Source.fromInputStream(stdin))(_.mkString)
     inputFormat.toLowerCase match {
@@ -336,22 +337,29 @@ class ParquetService(
     }
   }
 
-  private def readJsonFile(path: String): Try[List[Map[String, Any]]] = Try {
+  private def readJsonFile(
+      path: String
+  ): Try[List[Map[String, CellValue]]] = Try {
     import better.files._
     parseJsonContent(File(path).contentAsString)
   }
 
-  private def readNdjsonFile(path: String): Try[List[Map[String, Any]]] = Try {
+  private def readNdjsonFile(
+      path: String
+  ): Try[List[Map[String, CellValue]]] = Try {
     import better.files._
     parseNdjsonContent(File(path).contentAsString)
   }
 
-  private def readCsvFile(path: String): Try[List[Map[String, Any]]] = Try {
-    import better.files._
-    parseCsvContent(File(path).contentAsString)
-  }
+  private def readCsvFile(path: String): Try[List[Map[String, CellValue]]] =
+    Try {
+      import better.files._
+      parseCsvContent(File(path).contentAsString)
+    }
 
-  private def coerceJsonValue(j: io.circe.Json): Any =
+  private def coerceJsonValue(
+      j: io.circe.Json
+  ): CellValue =
     if (j.isString)
       io.github.yusukensanta.parqueteer.core.util.TypeInferrer
         .inferJsonString(j.asString.get)
@@ -359,15 +367,18 @@ class ParquetService(
       val n = j.asNumber.get
       val raw = j.noSpaces
       if (raw.contains('.') || raw.contains('e') || raw.contains('E'))
-        n.toDouble
-      else n.toLong.fold[Any](n.toDouble)(identity)
-    } else if (j.isBoolean) j.asBoolean.get
-    else if (j.isNull) null
-    else j.toString
+        CellValue.F64(n.toDouble)
+      else
+        n.toLong
+          .map(CellValue.I64.apply)
+          .getOrElse(CellValue.F64(n.toDouble))
+    } else if (j.isBoolean) CellValue.Bool(j.asBoolean.get)
+    else if (j.isNull) CellValue.Null
+    else CellValue.Str(j.toString)
 
   private[services] def parseJsonContent(
       content: String
-  ): List[Map[String, Any]] = {
+  ): List[Map[String, CellValue]] = {
     import io.circe.parser._
     parse(content) match {
       case Left(error) =>
@@ -399,7 +410,7 @@ class ParquetService(
 
   private[services] def parseNdjsonContent(
       content: String
-  ): List[Map[String, Any]] = {
+  ): List[Map[String, CellValue]] = {
     import io.circe.parser._
     content.linesIterator
       .map(_.trim)
@@ -428,7 +439,7 @@ class ParquetService(
 
   private[services] def parseCsvContent(
       content: String
-  ): List[Map[String, Any]] =
+  ): List[Map[String, CellValue]] =
     io.github.yusukensanta.parqueteer.core.util.CsvParser.parse(content)
 
 }

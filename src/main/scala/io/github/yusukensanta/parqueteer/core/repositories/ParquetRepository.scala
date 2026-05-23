@@ -87,7 +87,7 @@ class ParquetRepository(
   def streamContent(
       file: ParquetFile,
       config: ReadConfig
-  )(process: Map[String, Any] => Unit): Try[Long] = {
+  )(process: Map[String, CellValue] => Unit): Try[Long] = {
     setupHadoopConfiguration(file.location).flatMap { hadoopConfig =>
       Try {
         val path4s = Parquet4sPath(file.location.path)
@@ -126,7 +126,7 @@ class ParquetRepository(
       path: HadoopPath,
       conf: Configuration,
       config: ReadConfig
-  ): List[Map[String, Any]] = {
+  ): List[Map[String, CellValue]] = {
     val inputFile = HadoopInputFile.fromPath(path, conf)
     val (blocks, fileSchema) =
       Using.resource(ParquetFileReader.open(inputFile)) { reader =>
@@ -163,7 +163,7 @@ class ParquetRepository(
             )
           ) { reader =>
             val pageStore = reader.readNextRowGroup()
-            if (pageStore == null) List.empty[Map[String, Any]]
+            if (pageStore == null) List.empty[Map[String, CellValue]]
             else
               ParquetRecordDecoder.decodePageStore(
                 pageStore,
@@ -322,7 +322,7 @@ class ParquetRepository(
 
   def writeContent(
       location: StorageLocation,
-      data: List[Map[String, Any]],
+      data: List[Map[String, CellValue]],
       schema: Option[ParquetSchema],
       config: WriteConfig = WriteConfig()
   ): Try[Unit] = {
@@ -373,7 +373,7 @@ class ParquetRepository(
       location: StorageLocation,
       schema: ParquetSchema,
       config: WriteConfig = WriteConfig()
-  )(feed: (Map[String, Any] => Unit) => Unit): Try[Long] = {
+  )(feed: (Map[String, CellValue] => Unit) => Unit): Try[Long] = {
     setupHadoopConfiguration(location).flatMap { hadoopConfig =>
       Try {
         import org.apache.parquet.hadoop.example.ExampleParquetWriter

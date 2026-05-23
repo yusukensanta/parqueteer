@@ -15,7 +15,11 @@ class NDJSONFormatter extends OutputFormatter {
   ): String = {
     content.rows
       .map { row =>
-        val fields = row.map { case (k, v) => k -> encodeValue(v) }
+        val fields =
+          row.map { case (k, v) =>
+            k -> io.github.yusukensanta.parqueteer.core.util.JsonEncoder
+              .encode(v)
+          }
         Json.obj(fields.toSeq*).noSpaces
       }
       .mkString("\n")
@@ -42,6 +46,4 @@ class NDJSONFormatter extends OutputFormatter {
     metadata.asJson.noSpaces
   }
 
-  private def encodeValue(value: Any): Json =
-    io.github.yusukensanta.parqueteer.core.util.JsonEncoder.encodeAny(value)
 }

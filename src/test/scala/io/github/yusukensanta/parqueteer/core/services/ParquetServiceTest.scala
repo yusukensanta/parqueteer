@@ -36,14 +36,14 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
       validateResult
     override def writeContent(
         location: StorageLocation,
-        data: List[Map[String, Any]],
+        data: List[Map[String, CellValue]],
         schema: Option[ParquetSchema],
         config: WriteConfig = WriteConfig()
     ): Try[Unit] = writeResult
     override def streamContent(
         file: ParquetFile,
         config: ReadConfig
-    )(process: Map[String, Any] => Unit): Try[Long] =
+    )(process: Map[String, CellValue] => Unit): Try[Long] =
       streamResult.map { _ =>
         contentResult.get.rows.foreach(process)
         contentResult.get.rows.length.toLong
@@ -52,7 +52,7 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
         location: StorageLocation,
         schema: ParquetSchema,
         config: WriteConfig
-    )(feed: (Map[String, Any] => Unit) => Unit): Try[Long] =
+    )(feed: (Map[String, CellValue] => Unit) => Unit): Try[Long] =
       writeResult.map { _ =>
         var count = 0L
         feed { _ => count += 1 }
@@ -66,7 +66,9 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
 
   // ── Shared fixtures ──────────────────────────────────────────────────────
   private val defaultContent = FileContent(
-    rows = List(Map("id" -> 1L, "name" -> "Alice")),
+    rows = List(
+      Map("id" -> CellValue.I64(1L), "name" -> CellValue.Str("Alice"))
+    ),
     totalRows = 1L,
     isPartial = false
   )
@@ -108,7 +110,9 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     val result = service.readFile("/tmp/test.parquet")
 
     result.toOption.get.content.get.rows should have length 1
-    result.toOption.get.content.get.rows.head("name") shouldBe "Alice"
+    result.toOption.get.content.get.rows.head("name") shouldBe CellValue.Str(
+      "Alice"
+    )
   }
 
   it should "return Left for invalid path" in {
@@ -274,7 +278,11 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
         Failure(new RuntimeException("write denied"))
       )
     )
-    val result = service.writeFile("/tmp/out.parquet", List(Map("id" -> 1L)))
+    val result =
+      service.writeFile(
+        "/tmp/out.parquet",
+        List(Map("id" -> CellValue.I64(1L)))
+      )
     result.isLeft shouldBe true
     result.left.toOption.get.userMessage should include("write denied")
   }
@@ -291,7 +299,7 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
 
     result.isRight shouldBe true
     result.toOption.get should have length 1
-    result.toOption.get.head("name") shouldBe "Alice"
+    result.toOption.get.head("name") shouldBe CellValue.Str("Alice")
   }
 
   it should "parse CSV file into rows" in {
@@ -304,7 +312,7 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     val result = service.readDataFile(f.getAbsolutePath, "csv")
 
     result.isRight shouldBe true
-    result.toOption.get.head("name") shouldBe "Alice"
+    result.toOption.get.head("name") shouldBe CellValue.Str("Alice")
   }
 
   it should "return Left for unsupported format" in {
@@ -326,7 +334,7 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
 
     result.isRight shouldBe true
     result.toOption.get should have length 1
-    result.toOption.get.head("name") shouldBe "Alice"
+    result.toOption.get.head("name") shouldBe CellValue.Str("Alice")
   }
 
   it should "read CSV from stdin when path is -" in {
@@ -338,7 +346,7 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
 
     result.isRight shouldBe true
     result.toOption.get should have length 2
-    result.toOption.get.head("name") shouldBe "Alice"
+    result.toOption.get.head("name") shouldBe CellValue.Str("Alice")
   }
 
   it should "return Left for unsupported format from stdin" in {
@@ -372,27 +380,29 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     val service = new ParquetService(new FakeParquetRepository())
     val rows = service.parseJsonContent("""[{"x": 1}]""")
     rows should have length 1
-    rows.head("x") shouldBe 1L
+    rows.head("x") shouldBe CellValue.I64(1L)
   }
 
   it should "preserve Long precision for large integers" in {
     val service = new ParquetService(new FakeParquetRepository())
     val largeId = 9876543210L
     val rows = service.parseJsonContent(s"""[{"id": $largeId}]""")
-    rows.head("id") shouldBe largeId
+    rows.head("id") shouldBe CellValue.I64(largeId)
   }
 
   it should "keep Double for fractional numbers" in {
     val service = new ParquetService(new FakeParquetRepository())
     val rows = service.parseJsonContent("""[{"score": 9.5}]""")
-    rows.head("score") shouldBe 9.5
+    rows.head("score") shouldBe CellValue.F64(9.5)
   }
 
   it should "infer date string in JSON as LocalDate" in {
     val service = new ParquetService(new FakeParquetRepository())
     val rows =
       service.parseJsonContent("""[{"name": "Alice", "dob": "1990-06-15"}]""")
-    rows.head("dob") shouldBe java.time.LocalDate.of(1990, 6, 15)
+    rows.head("dob") shouldBe CellValue.Date(
+      java.time.LocalDate.of(1990, 6, 15)
+    )
   }
 
   it should "infer timestamp string in JSON as Instant" in {
@@ -401,35 +411,35 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
       service.parseJsonContent(
         """[{"event": "login", "ts": "2024-01-01T08:00:00Z"}]"""
       )
-    rows.head("ts") shouldBe a[java.time.Instant]
+    rows.head("ts") shouldBe a[CellValue.Ts]
   }
 
-  it should "keep JSON boolean strings as plain strings (JSON booleans are already typed)" in {
+  it should "keep JSON boolean strings as CellValue.Str (JSON booleans are already typed)" in {
     val service = new ParquetService(new FakeParquetRepository())
     val rows =
       service.parseJsonContent("""[{"note": "true", "active": true}]""")
-    rows.head("note") shouldBe "true"
-    rows.head("active") shouldBe true
+    rows.head("note") shouldBe CellValue.Str("true")
+    rows.head("active") shouldBe CellValue.Bool(true)
   }
 
   it should "preserve 1.0 as Double, not coerce to Long" in {
     val service = new ParquetService(new FakeParquetRepository())
     val rows = service.parseJsonContent("""[{"x": 1.0}]""")
-    rows.head("x") shouldBe 1.0
-    rows.head("x") shouldBe a[java.lang.Double]
+    rows.head("x") shouldBe CellValue.F64(1.0)
+    rows.head("x") shouldBe a[CellValue.F64]
   }
 
   it should "preserve 0.0 as Double" in {
     val service = new ParquetService(new FakeParquetRepository())
     val rows = service.parseJsonContent("""[{"x": 0.0}]""")
-    rows.head("x") shouldBe a[java.lang.Double]
+    rows.head("x") shouldBe a[CellValue.F64]
   }
 
   it should "still keep whole numbers without decimal point as Long" in {
     val service = new ParquetService(new FakeParquetRepository())
     val rows = service.parseJsonContent("""[{"n": 42}]""")
-    rows.head("n") shouldBe 42L
-    rows.head("n") shouldBe a[java.lang.Long]
+    rows.head("n") shouldBe CellValue.I64(42L)
+    rows.head("n") shouldBe a[CellValue.I64]
   }
 
   it should "throw for non-array JSON" in {
@@ -445,9 +455,9 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
 {"id": 2, "name": "Bob"}"""
     val rows = service.parseNdjsonContent(ndjson)
     rows should have length 2
-    rows.head("id") shouldBe 1L
-    rows.head("name") shouldBe "Alice"
-    rows(1)("id") shouldBe 2L
+    rows.head("id") shouldBe CellValue.I64(1L)
+    rows.head("name") shouldBe CellValue.Str("Alice")
+    rows(1)("id") shouldBe CellValue.I64(2L)
   }
 
   it should "skip blank lines" in {
@@ -463,7 +473,7 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
   it should "preserve 1.0 as Double (same logic as parseJsonContent)" in {
     val service = new ParquetService(new FakeParquetRepository())
     val rows = service.parseNdjsonContent("""{"v": 1.0}""")
-    rows.head("v") shouldBe a[java.lang.Double]
+    rows.head("v") shouldBe a[CellValue.F64]
   }
 
   it should "throw for a non-object NDJSON line" in {
@@ -479,15 +489,15 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
       """{"x": 42}""".getBytes("UTF-8")
     )
     val rows = service.readFromStdin("ndjson", stdin).get
-    rows.head("x") shouldBe 42L
+    rows.head("x") shouldBe CellValue.I64(42L)
   }
 
   "ParquetService.parseCsvContent" should "parse CSV string with type inference" in {
     val service = new ParquetService(new FakeParquetRepository())
     val rows = service.parseCsvContent("a,b\n1,2\n3,4\n")
     rows should have length 2
-    rows.head("a") shouldBe 1L
-    rows.head("b") shouldBe 2L
+    rows.head("a") shouldBe CellValue.I64(1L)
+    rows.head("b") shouldBe CellValue.I64(2L)
   }
 
   it should "return empty list for empty input" in {
@@ -499,8 +509,10 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     val service = new ParquetService(new FakeParquetRepository())
     val rows =
       service.parseCsvContent("name,dob\nAlice,1990-06-15\nBob,2001-12-01\n")
-    rows.head("dob") shouldBe java.time.LocalDate.of(1990, 6, 15)
-    rows(1)("dob") shouldBe java.time.LocalDate.of(2001, 12, 1)
+    rows.head("dob") shouldBe CellValue.Date(
+      java.time.LocalDate.of(1990, 6, 15)
+    )
+    rows(1)("dob") shouldBe CellValue.Date(java.time.LocalDate.of(2001, 12, 1))
   }
 
   it should "infer timestamp strings as Instant" in {
@@ -509,21 +521,21 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
       service.parseCsvContent(
         "event,ts\nlogin,2024-01-01T08:00:00Z\nlogout,2024-01-01T09:30:00Z\n"
       )
-    rows.head("ts") shouldBe a[java.time.Instant]
+    rows.head("ts") shouldBe a[CellValue.Ts]
   }
 
   it should "infer boolean strings as Boolean" in {
     val service = new ParquetService(new FakeParquetRepository())
     val rows = service.parseCsvContent("name,active\nAlice,true\nBob,false\n")
-    rows.head("active") shouldBe true
-    rows(1)("active") shouldBe false
+    rows.head("active") shouldBe CellValue.Bool(true)
+    rows(1)("active") shouldBe CellValue.Bool(false)
   }
 
   it should "preserve leading-zero strings as String" in {
     val service = new ParquetService(new FakeParquetRepository())
     val rows = service.parseCsvContent("code\n007\n042\n")
-    rows.head("code") shouldBe "007"
-    rows(1)("code") shouldBe "042"
+    rows.head("code") shouldBe CellValue.Str("007")
+    rows(1)("code") shouldBe CellValue.Str("042")
   }
 
   it should "parse CSV with quoted fields containing newlines" in {
@@ -532,21 +544,22 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
       "name,bio\n\"Alice\",\"Line one\nLine two\"\n\"Bob\",\"Single line\"\n"
     val result = service.parseCsvContent(csv)
     result should have length 2
-    result.head("name") shouldBe "Alice"
-    result.head("bio") shouldBe "Line one\nLine two"
-    result(1)("name") shouldBe "Bob"
+    result.head("name") shouldBe CellValue.Str("Alice")
+    result.head("bio") shouldBe CellValue.Str("Line one\nLine two")
+    result(1)("name") shouldBe CellValue.Str("Bob")
   }
 
   // ── streamRead ────────────────────────────────────────────────────────────
   "ParquetService.streamRead" should "stream all rows via callback" in {
     val service = new ParquetService(new FakeParquetRepository())
-    val collected = scala.collection.mutable.ListBuffer[Map[String, Any]]()
+    val collected =
+      scala.collection.mutable.ListBuffer[Map[String, CellValue]]()
     val result =
       service.streamRead("/tmp/test.parquet", ReadConfig())(collected += _)
     result.isRight shouldBe true
     result.toOption.get shouldBe 1L
     collected should have length 1
-    collected.head("name") shouldBe "Alice"
+    collected.head("name") shouldBe CellValue.Str("Alice")
   }
 
   it should "return Left for invalid path" in {
@@ -586,7 +599,8 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
 
   it should "return Right and invoke callback when filter is valid" in {
     val service = new ParquetService(new FakeParquetRepository())
-    val collected = scala.collection.mutable.ListBuffer[Map[String, Any]]()
+    val collected =
+      scala.collection.mutable.ListBuffer[Map[String, CellValue]]()
     val result = service.streamRead(
       "/tmp/test.parquet",
       ReadConfig(filter = Some("id = 1"))
@@ -638,7 +652,7 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     result.toOption.get.content.isDefined shouldBe true
     val rows = result.toOption.get.content.get.rows
     rows should not be empty
-    rows.head.get("name") shouldBe Some("Alice")
+    rows.head.get("name") shouldBe Some(CellValue.Str("Alice"))
   }
 
   it should "output valid JSON via OutputFormatter" in {

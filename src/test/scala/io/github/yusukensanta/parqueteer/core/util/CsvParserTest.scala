@@ -1,7 +1,7 @@
 package io.github.yusukensanta.parqueteer.core.util
 
 import io.github.yusukensanta.parqueteer.core.formatters.CSVFormatter
-import io.github.yusukensanta.parqueteer.core.models.FileContent
+import io.github.yusukensanta.parqueteer.core.models.{CellValue, FileContent}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
@@ -28,8 +28,8 @@ class CsvParserTest
   "CsvParser.parse" should "parse basic CSV into typed rows" in {
     val rows = CsvParser.parse("a,b\n1,2\n3,4\n")
     rows should have size 2
-    rows(0)("a") shouldBe 1L
-    rows(0)("b") shouldBe 2L
+    rows(0)("a") shouldBe CellValue.I64(1L)
+    rows(0)("b") shouldBe CellValue.I64(2L)
   }
 
   it should "return empty list for empty input" in {
@@ -43,8 +43,8 @@ class CsvParserTest
 
   it should "preserve leading zeros as strings" in {
     val rows = CsvParser.parse("code\n007\n042\n")
-    rows(0)("code") shouldBe "007"
-    rows(1)("code") shouldBe "042"
+    rows(0)("code") shouldBe CellValue.Str("007")
+    rows(1)("code") shouldBe CellValue.Str("042")
   }
 
   it should "reject rows with wrong field count" in {
@@ -58,8 +58,8 @@ class CsvParserTest
   it should "accept a data row with a trailing comma when header has one fewer column" in {
     val rows = CsvParser.parse("a,b\n1,2,\n")
     rows should have size 1
-    rows(0)("a") shouldBe 1L
-    rows(0)("b") shouldBe 2L
+    rows(0)("a") shouldBe CellValue.I64(1L)
+    rows(0)("b") shouldBe CellValue.I64(2L)
   }
 
   it should "not strip a trailing comma that is NOT the (header+1)th field" in {
@@ -80,8 +80,8 @@ class CsvParserTest
   it should "preserve an all-empty row in parse and include it as a row with null values" in {
     val rows = CsvParser.parse("a,b\n,\n")
     rows should have size 1
-    rows(0)("a") shouldBe (null: AnyRef)
-    rows(0)("b") shouldBe (null: AnyRef)
+    rows(0)("a") shouldBe CellValue.Null
+    rows(0)("b") shouldBe CellValue.Null
   }
 
   it should "drop genuinely blank lines (only a newline, no commas)" in {
@@ -140,8 +140,8 @@ class CsvParserTest
   // ─── CSVFormatter → CsvParser round-trip ────────────────────────────────────
 
   private def roundTrip(
-      rows: List[Map[String, Any]]
-  ): List[Map[String, Any]] = {
+      rows: List[Map[String, CellValue]]
+  ): List[Map[String, CellValue]] = {
     val csv = new CSVFormatter().formatContent(
       FileContent(rows, rows.length.toLong, isPartial = false),
       None
@@ -150,36 +150,53 @@ class CsvParserTest
   }
 
   "CSVFormatter → CsvParser round-trip" should "preserve string values with embedded double-quotes" in {
-    val rows = List(Map("a" -> "say \"hello\"", "b" -> "normal"))
+    val rows =
+      List(
+        Map(
+          "a" -> CellValue.Str("say \"hello\""),
+          "b" -> CellValue.Str("normal")
+        )
+      )
     val parsed = roundTrip(rows)
     parsed should have size 1
-    parsed(0)("a") shouldBe "say \"hello\""
-    parsed(0)("b") shouldBe "normal"
+    parsed(0)("a") shouldBe CellValue.Str("say \"hello\"")
+    parsed(0)("b") shouldBe CellValue.Str("normal")
   }
 
   it should "preserve string values containing commas" in {
-    val rows = List(Map("name" -> "Smith, John", "score" -> "42"))
+    val rows =
+      List(
+        Map(
+          "name" -> CellValue.Str("Smith, John"),
+          "score" -> CellValue.Str("42")
+        )
+      )
     val parsed = roundTrip(rows)
-    parsed(0)("name") shouldBe "Smith, John"
-    parsed(0)("score") shouldBe 42L
+    parsed(0)("name") shouldBe CellValue.Str("Smith, John")
+    parsed(0)("score") shouldBe CellValue.I64(42L)
   }
 
   it should "preserve Unicode characters" in {
-    val rows = List(Map("greeting" -> "こんにちは", "lang" -> "日本語"))
+    val rows = List(
+      Map(
+        "greeting" -> CellValue.Str("こんにちは"),
+        "lang" -> CellValue.Str("日本語")
+      )
+    )
     val parsed = roundTrip(rows)
-    parsed(0)("greeting") shouldBe "こんにちは"
-    parsed(0)("lang") shouldBe "日本語"
+    parsed(0)("greeting") shouldBe CellValue.Str("こんにちは")
+    parsed(0)("lang") shouldBe CellValue.Str("日本語")
   }
 
   it should "preserve multiple rows" in {
     val rows = List(
-      Map("id" -> 1L, "val" -> "a,b"),
-      Map("id" -> 2L, "val" -> "c\"d")
+      Map("id" -> CellValue.I64(1L), "val" -> CellValue.Str("a,b")),
+      Map("id" -> CellValue.I64(2L), "val" -> CellValue.Str("c\"d"))
     )
     val parsed = roundTrip(rows)
     parsed should have size 2
-    parsed(0)("val") shouldBe "a,b"
-    parsed(1)("val") shouldBe "c\"d"
+    parsed(0)("val") shouldBe CellValue.Str("a,b")
+    parsed(1)("val") shouldBe CellValue.Str("c\"d")
   }
 
   // ── Property-based: CSVFormatter → CsvParser round-trip ─────────────────
@@ -188,11 +205,12 @@ class CsvParserTest
   "CSVFormatter → CsvParser round-trip (property)" should "preserve any safe string value" in {
     forAll(colName, colName, safeStr, safeStr) { (col1, col2, v1, v2) =>
       whenever(col1 != col2) {
-        val rows = List(Map(col1 -> v1, col2 -> v2))
+        val rows =
+          List(Map(col1 -> CellValue.Str(v1), col2 -> CellValue.Str(v2)))
         val parsed = roundTrip(rows)
         parsed should have size 1
-        parsed(0)(col1) shouldBe v1
-        parsed(0)(col2) shouldBe v2
+        parsed(0)(col1) shouldBe CellValue.Str(v1)
+        parsed(0)(col2) shouldBe CellValue.Str(v2)
       }
     }
   }
@@ -201,7 +219,7 @@ class CsvParserTest
     val rowGen = for {
       c <- colName
       vs <- Gen.nonEmptyListOf(safeStr)
-    } yield vs.map(v => Map(c -> v))
+    } yield vs.map(v => Map(c -> CellValue.Str(v)))
     forAll(rowGen) { rows =>
       roundTrip(rows) should have size rows.size
     }
