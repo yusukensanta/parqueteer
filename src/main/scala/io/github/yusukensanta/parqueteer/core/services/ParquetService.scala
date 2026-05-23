@@ -258,6 +258,8 @@ class ParquetService(
           readNdjsonFile(path).toParqueteerError
         case "csv" =>
           readCsvFile(path).toParqueteerError
+        case "ltsv" =>
+          readLtsvFile(path).toParqueteerError
         case fmt =>
           Left(
             ParqueteerError.IOError(
@@ -276,6 +278,7 @@ class ParquetService(
       case "json"   => parseJsonContent(content)
       case "ndjson" => parseNdjsonContent(content)
       case "csv"    => parseCsvContent(content)
+      case "ltsv"   => parseLtsvContent(content)
       case fmt =>
         throw new IllegalArgumentException(s"Unsupported input format: $fmt")
     }
@@ -356,6 +359,17 @@ class ParquetService(
       import better.files._
       parseCsvContent(File(path).contentAsString)
     }
+
+  private def readLtsvFile(path: String): Try[List[Map[String, CellValue]]] =
+    Try {
+      import better.files._
+      parseLtsvContent(File(path).contentAsString)
+    }
+
+  private[services] def parseLtsvContent(
+      content: String
+  ): List[Map[String, CellValue]] =
+    io.github.yusukensanta.parqueteer.core.util.LTSVParser.parse(content)
 
   private def coerceJsonValue(
       j: io.circe.Json
