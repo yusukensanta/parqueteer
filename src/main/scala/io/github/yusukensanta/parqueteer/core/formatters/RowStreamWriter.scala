@@ -21,6 +21,7 @@ object RowStreamWriter {
       case OutputFormat.CSV      => new CSVRowStreamWriter(out)
       case OutputFormat.Table    => new TableRowStreamWriter(out)
       case OutputFormat.Markdown => new MarkdownRowStreamWriter(out)
+      case OutputFormat.LTSV     => new LTSVRowStreamWriter(out)
     }
 
   private def rowToJson(row: Map[String, CellValue]): String = {
@@ -112,6 +113,12 @@ object RowStreamWriter {
       if (!flushed) flushSample()
       if (widths.nonEmpty) out.println(tf.drawBottomBorder(widths))
     }
+  }
+
+  private class LTSVRowStreamWriter(out: PrintStream) extends RowStreamWriter {
+    private val fmt = new LTSVFormatter()
+    override def writeRow(row: Map[String, CellValue]): Unit =
+      out.println(fmt.rowToLtsv(row))
   }
 
   private class MarkdownRowStreamWriter(out: PrintStream)

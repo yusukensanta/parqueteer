@@ -109,13 +109,21 @@ object ArgumentParser {
             )
             .validate(x =>
               if (
-                List("table", "json", "csv", "pretty", "markdown", "ndjson")
+                List(
+                  "table",
+                  "json",
+                  "csv",
+                  "pretty",
+                  "markdown",
+                  "ndjson",
+                  "ltsv"
+                )
                   .contains(x.toLowerCase)
               ) success
               else failure(s"Invalid format: $x")
             )
             .text(
-              "Output format: table, json, csv, pretty, markdown, ndjson (default: table)"
+              "Output format: table, json, csv, pretty, markdown, ndjson, ltsv (default: table)"
             ),
           opt[Int]("parallel")
             .action((x, c) =>
@@ -173,10 +181,11 @@ object ArgumentParser {
               updateCmd[WriteCommand](c, _.copy(inputFormat = x))
             )
             .validate(x =>
-              if (List("json", "ndjson", "csv").contains(x.toLowerCase)) success
+              if (List("json", "ndjson", "csv", "ltsv").contains(x.toLowerCase))
+                success
               else failure(s"Invalid input format: $x")
             )
-            .text("Input file format: json, ndjson, csv (default: json)"),
+            .text("Input file format: json, ndjson, csv, ltsv (default: json)"),
           opt[String]("compression")
             .abbr("c")
             .action((x, c) =>
@@ -432,6 +441,7 @@ object ArgumentParser {
       case "pretty"   => OutputFormat.Pretty
       case "markdown" => OutputFormat.Markdown
       case "ndjson"   => OutputFormat.NDJSON
+      case "ltsv"     => OutputFormat.LTSV
       case other =>
         throw new IllegalArgumentException(s"Unknown format: $other")
     }

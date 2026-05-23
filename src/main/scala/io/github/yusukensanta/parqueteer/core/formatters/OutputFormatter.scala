@@ -32,5 +32,6 @@ object OutputFormatter {
       case OutputFormat.Pretty   => new PrettyFormatter(useColors)
       case OutputFormat.Markdown => new MarkdownFormatter()
       case OutputFormat.NDJSON   => new NDJSONFormatter()
+      case OutputFormat.LTSV     => new LTSVFormatter()
     }
 }
