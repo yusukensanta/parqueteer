@@ -118,16 +118,16 @@ lazy val root = (project in file("."))
       }
     },
     libraryDependencies ++= {
-      val parquet4sVersion = "2.22.0" // parquet-hadoop 1.15.2 — fixes CVE-2025-30065 + CVE-2025-46762
-      val circeVersion = "0.14.13"
-      val circeYamlVersion = "0.16.0"
+      val parquet4sVersion = "2.23.0"
+      val circeVersion = "0.14.14"
+      val circeYamlVersion = "1.15.0"
       val scoptVersion = "4.1.0"
       val betterFilesVersion = "3.9.2"
-      val slf4jVersion = "2.0.17"
-      val scalatestVersion = "3.2.19"
-      val scalamockVersion = "7.3.2"
+      val slf4jVersion = "2.0.18"
+      val scalatestVersion = "3.2.20"
+      val scalamockVersion = "7.5.5"
       val scalatestScalacheckVersion = "3.2.18.0"
-      val awsSdkVersion = "2.34.0"
+      val awsSdkVersion = "2.44.12"
       val googleCloudStorageVersion = "2.68.0"
       val azureStorageVersion = "12.30.0"
       val azureIdentityVersion = "1.16.2"
