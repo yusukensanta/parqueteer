@@ -286,18 +286,21 @@ object CliApp {
       streamingMode = streaming
     )
 
-    if (streaming) {
+    val effectiveStreaming = streaming || (format == OutputFormat.NDJSON)
+
+    if (effectiveStreaming) {
       val writer = if (globalOptions.quiet) new RowStreamWriter {
         override def writeRow(row: Map[String, CellValue]): Unit = ()
       }
       else RowStreamWriter(format, System.out)
       writer.begin()
-      service.streamRead(filePath, readConfig)(writer.writeRow) match {
-        case Right(_) =>
-          writer.end()
-          0
-        case Left(error) =>
-          reportError("Error", globalOptions)(error)
+      try {
+        service.streamRead(filePath, readConfig)(writer.writeRow) match {
+          case Right(_)    => 0
+          case Left(error) => reportError("Error", globalOptions)(error)
+        }
+      } finally {
+        writer.end()
       }
     } else {
       service.readFile(filePath, readConfig) match {
@@ -484,19 +487,15 @@ object CliApp {
       val outputExt = FileExtension.of(outputPath)
       val inputExt = FileExtension.of(inputPath)
       val result: Either[ParqueteerError, Unit] = (inputExt, outputExt) match {
-        case ("parquet", ext @ ("json" | "ndjson" | "csv")) =>
-          val outFormat = ext match {
-            case "json"   => OutputFormat.JSON
-            case "ndjson" => OutputFormat.NDJSON
-            case _        => OutputFormat.CSV
-          }
+        case ("parquet", "json") =>
+          // JSON array must be fully buffered to emit valid `[…]` wrapper
           service
             .readFile(inputPath, ReadConfig(maxRows = conversionConfig.maxRows))
             .flatMap { file =>
               val content =
                 file.content.getOrElse(FileContent(List.empty, 0, false))
               val text =
-                OutputFormatter(outFormat, useColors = false)
+                OutputFormatter(OutputFormat.JSON, useColors = false)
                   .formatContent(content, None)
               scala.util
                 .Try {
@@ -507,6 +506,34 @@ object CliApp {
                 .left
                 .map(ParqueteerError.IOError.apply)
                 .map(_ => ())
+            }
+        case ("parquet", ext @ ("ndjson" | "csv")) =>
+          // stream row-by-row to avoid loading the entire file into memory
+          val outFormat =
+            if (ext == "ndjson") OutputFormat.NDJSON else OutputFormat.CSV
+          import io.github.yusukensanta.parqueteer.core.formatters.RowStreamWriter
+          scala.util
+            .Try {
+              import better.files._
+              new java.io.PrintStream(
+                File(outputPath)
+                  .createIfNotExists(createParents = true)
+                  .newOutputStream
+              )
+            }
+            .toEither
+            .left
+            .map(ParqueteerError.IOError.apply)
+            .flatMap { ps =>
+              val writer = RowStreamWriter(outFormat, ps)
+              writer.begin()
+              val result = service.streamRead(
+                inputPath,
+                ReadConfig(maxRows = conversionConfig.maxRows)
+              )(writer.writeRow)
+              writer.end()
+              ps.close()
+              result.map(_ => ())
             }
         case ("parquet", "parquet") =>
           service

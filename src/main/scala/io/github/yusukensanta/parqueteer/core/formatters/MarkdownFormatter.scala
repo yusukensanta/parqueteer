@@ -15,7 +15,7 @@ class MarkdownFormatter extends OutputFormatter {
   ): String = {
     if (content.rows.isEmpty) return "No data to display"
 
-    val columns = extractColumns(content.rows)
+    val columns = extractColumns(content.rows, schema)
     val sb = new StringBuilder()
 
     sb.append("| ").append(columns.mkString(" | ")).append(" |\n")

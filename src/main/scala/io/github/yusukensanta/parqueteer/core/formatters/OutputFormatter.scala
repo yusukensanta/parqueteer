@@ -13,11 +13,15 @@ trait OutputFormatter {
   def formatMetadata(metadata: FileMetadata): String
 
   protected def extractColumns(
-      rows: List[Map[String, CellValue]]
+      rows: List[Map[String, CellValue]],
+      schema: Option[ParquetSchema] = None
   ): List[String] = {
-    val seen = scala.collection.mutable.LinkedHashSet.empty[String]
-    rows.foreach(_.keysIterator.foreach(seen += _))
-    seen.toList.sorted
+    val seen = {
+      val s = scala.collection.mutable.LinkedHashSet.empty[String]
+      rows.foreach(_.keysIterator.foreach(s += _))
+      s.toSet
+    }
+    schema.map(_.columns.map(_.name).filter(seen)).getOrElse(seen.toList.sorted)
   }
 }
 

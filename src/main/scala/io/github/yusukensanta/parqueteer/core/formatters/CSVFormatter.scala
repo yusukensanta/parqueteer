@@ -22,7 +22,7 @@ class CSVFormatter extends OutputFormatter {
     }
 
     val rows = content.rows
-    val columns = extractColumns(rows)
+    val columns = extractColumns(rows, schema)
 
     val sb = new StringBuilder()
 
