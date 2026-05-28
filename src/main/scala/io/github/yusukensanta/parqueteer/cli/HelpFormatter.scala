@@ -3,18 +3,18 @@ package io.github.yusukensanta.parqueteer.cli
 object HelpFormatter {
 
   def subcommandHelp(command: String): Option[String] = command match {
-    case "read"       => Some(readHelp())
-    case "info"       => Some(infoHelp())
-    case "write"      => Some(writeHelp())
-    case "validate"   => Some(validateHelp())
-    case "convert"    => Some(convertHelp())
-    case "schema"     => Some(schemaHelp())
+    case "read"        => Some(readHelp())
+    case "info"        => Some(infoHelp())
+    case "write"       => Some(writeHelp())
+    case "validate"    => Some(validateHelp())
+    case "convert"     => Some(convertHelp())
+    case "schema"      => Some(schemaHelp())
     case "schema diff" => Some(schemaDiffHelp())
-    case "merge"      => Some(mergeHelp())
-    case "stats"      => Some(statsHelp())
+    case "merge"       => Some(mergeHelp())
+    case "stats"       => Some(statsHelp())
     case "completions" => Some(completionsHelp())
-    case "config"     => Some(configHelp())
-    case _            => None
+    case "config"      => Some(configHelp())
+    case _             => None
   }
 
   private def readHelp(): String =
