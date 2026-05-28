@@ -20,13 +20,16 @@ class TableFormatter extends OutputFormatter {
       return "No data to display"
     }
 
-    if (content.rows.size > MaxTableRows) {
-      return s"Error: ${content.rows.size} rows is too large to render as a table " +
-        s"(limit: $MaxTableRows). Use --limit N to cap output, or " +
-        "--output-format json for large datasets."
-    }
-
-    val rows = content.rows
+    val rows =
+      if (content.rows.size > MaxTableRows) {
+        System.err.println(
+          s"[parqueteer] warning: ${content.rows.size} rows exceeds table limit ($MaxTableRows). " +
+            s"Showing first $MaxTableRows rows. Use --limit N to cap output, or --format json for large datasets."
+        )
+        content.rows.take(MaxTableRows)
+      } else {
+        content.rows
+      }
     val columns = extractColumns(rows)
 
     val columnWidths = calculateColumnWidths(columns, rows)

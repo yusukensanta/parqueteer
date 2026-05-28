@@ -33,7 +33,7 @@ object EnvConfig {
     else
       sys.env
         .get("PARQUETEER_COLOR")
-        .map(ColorMode.fromString)
+        .flatMap(ColorMode.fromString)
         .getOrElse(ColorMode.Auto)
 
   def verbose: Boolean =

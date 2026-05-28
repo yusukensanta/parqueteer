@@ -13,7 +13,11 @@ import io.github.yusukensanta.parqueteer.core.models.{
   ConversionConfig,
   FileContent
 }
-import io.github.yusukensanta.parqueteer.core.formatters.OutputFormatter
+import io.github.yusukensanta.parqueteer.core.formatters.{
+  OutputFormatter,
+  RowStreamWriter,
+  TableFormatter
+}
 import io.github.yusukensanta.parqueteer.config.{
   AppConfig,
   ConfigurationManager,
@@ -279,7 +283,6 @@ object CliApp {
     )
 
     if (streaming) {
-      import io.github.yusukensanta.parqueteer.core.formatters.RowStreamWriter
       val writer = if (globalOptions.quiet) new RowStreamWriter {
         override def writeRow(row: Map[String, CellValue]): Unit = ()
       }
@@ -301,7 +304,6 @@ object CliApp {
               case ColorMode.Always => true
               case ColorMode.Auto   => System.console() != null
             }
-            import io.github.yusukensanta.parqueteer.core.formatters.OutputFormatter
             val formatter = OutputFormatter(format, useColors)
             val output = file.content match {
               case Some(content) =>
@@ -340,7 +342,6 @@ object CliApp {
             case OutputFormat.JSON =>
               println(CliOutputFormatter.formatInfoJson(file))
             case _ =>
-              import io.github.yusukensanta.parqueteer.core.formatters.TableFormatter
               val output = file.metadata match {
                 case Some(metadata) =>
                   new TableFormatter().formatMetadata(metadata)
@@ -585,7 +586,6 @@ object CliApp {
               case OutputFormat.JSON =>
                 println(CliOutputFormatter.formatSchemaJson(file))
               case _ =>
-                import io.github.yusukensanta.parqueteer.core.formatters.TableFormatter
                 val output = file.schema match {
                   case Some(schema) => new TableFormatter().formatSchema(schema)
                   case None         => "No schema information available"

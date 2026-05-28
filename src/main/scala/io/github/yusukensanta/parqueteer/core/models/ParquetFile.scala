@@ -54,9 +54,8 @@ enum OutputFormat:
 case class WriteConfig(
     compressionType: CompressionType = CompressionType.Snappy,
     rowGroupSize: Long = WriteConfig.DefaultRowGroupSize,
-    pageSize: Long = 1024 * 1024,
-    enableDictionary: Boolean = true,
-    enableStatistics: Boolean = true
+    pageSize: Int = 1024 * 1024,
+    enableDictionary: Boolean = true
 )
 
 object WriteConfig {
