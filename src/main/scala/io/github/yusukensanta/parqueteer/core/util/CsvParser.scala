@@ -4,12 +4,15 @@ import io.github.yusukensanta.parqueteer.core.models.CellValue
 
 object CsvParser {
 
-  def parse(content: String): List[Map[String, CellValue]] = {
+  def parse(content: String): List[Map[String, CellValue]] =
+    parseStream(content).toList
+
+  def parseStream(content: String): Iterator[Map[String, CellValue]] = {
     val records = parseRfc4180(content)
-    if (records.isEmpty) List.empty
+    if (records.isEmpty) Iterator.empty
     else {
       val headers = records.head
-      records.tail.zipWithIndex.map { case (values, idx) =>
+      records.iterator.drop(1).zipWithIndex.map { case (values, idx) =>
         // Tolerate a single trailing empty field produced by a trailing comma
         val normalized =
           if (values.length == headers.length + 1 && values.last.isEmpty)

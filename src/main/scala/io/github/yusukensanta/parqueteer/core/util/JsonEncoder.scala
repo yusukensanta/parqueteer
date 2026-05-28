@@ -3,6 +3,8 @@ package io.github.yusukensanta.parqueteer.core.util
 import io.circe.Json
 import io.github.yusukensanta.parqueteer.core.models.CellValue
 
+// NaN and Infinity float/double values are serialized as JSON strings ("NaN", "Infinity", "-Infinity")
+// because RFC 8259 disallows them as number literals. Downstream consumers must handle string fallback.
 object JsonEncoder {
   def encode(value: CellValue): Json = value match {
     case CellValue.Null   => Json.Null

@@ -264,17 +264,21 @@ object CliApp {
       streaming: Boolean,
       globalOptions: GlobalOptions
   ): Int = {
-    if (parallelism > 1 && filter.nonEmpty && !globalOptions.quiet)
-      System.err.println(
-        "Warning: --filter is not supported in parallel mode; falling back to sequential read."
-      )
+    val effectiveParallelism =
+      if (filter.nonEmpty && parallelism > 1) {
+        if (!globalOptions.quiet)
+          System.err.println(
+            "Warning: --filter disables parallel mode; falling back to sequential read."
+          )
+        1
+      } else parallelism
 
     val readConfig = ReadConfig(
       maxRows = maxRows,
       columns = columns,
       filter = filter,
       outputFormat = format,
-      parallelism = parallelism,
+      parallelism = effectiveParallelism,
       streamingMode = streaming
     )
 

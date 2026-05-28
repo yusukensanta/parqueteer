@@ -13,6 +13,15 @@ import software.amazon.awssdk.auth.credentials.{
 }
 import scala.util.{Try, Success, Failure}
 
+private object S3Tuning {
+  val MaxConnections = "100"
+  val MaxAttempts = "3"
+  val ThrottleRetryLimit = "20"
+  val ThrottleRetryInterval = "50ms"
+  val MultipartSize = "100m"
+  val MultipartThreshold = "100m"
+}
+
 class S3CredentialManager(profile: Option[String] = None)
     extends CloudCredentialManager {
   override def configureHadoop(
@@ -43,16 +52,25 @@ class S3CredentialManager(profile: Option[String] = None)
                 conf.set("fs.s3a.endpoint.region", region)
               })
 
-              conf.set("fs.s3a.connection.maximum", "100")
-              conf.set("fs.s3a.attempts.maximum", "3")
-              conf.set("fs.s3a.retry.throttle.limit", "20")
-              conf.set("fs.s3a.retry.throttle.interval", "50ms")
+              conf.set("fs.s3a.connection.maximum", S3Tuning.MaxConnections)
+              conf.set("fs.s3a.attempts.maximum", S3Tuning.MaxAttempts)
+              conf.set(
+                "fs.s3a.retry.throttle.limit",
+                S3Tuning.ThrottleRetryLimit
+              )
+              conf.set(
+                "fs.s3a.retry.throttle.interval",
+                S3Tuning.ThrottleRetryInterval
+              )
 
               conf.set("fs.s3a.buffer.dir", "/tmp")
               conf.set("fs.s3a.fast.upload", "true")
               conf.set("fs.s3a.fast.upload.buffer", "disk")
-              conf.set("fs.s3a.multipart.size", "100m")
-              conf.set("fs.s3a.multipart.threshold", "100m")
+              conf.set("fs.s3a.multipart.size", S3Tuning.MultipartSize)
+              conf.set(
+                "fs.s3a.multipart.threshold",
+                S3Tuning.MultipartThreshold
+              )
 
               // Support custom S3-compatible endpoints (RustFS, LocalStack, etc.)
               // AWS_ENDPOINT_URL is the standard override used by AWS CLI v2 and SDKs

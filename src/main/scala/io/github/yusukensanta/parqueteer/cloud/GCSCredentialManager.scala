@@ -11,6 +11,21 @@ import scala.util.{Try, Success, Failure, Using}
 import java.io.FileInputStream
 import java.nio.file.{Files, Paths}
 
+private object GCSTuning {
+  // All values as plain bytes to avoid NumberFormatException: Hadoop 3.5
+  // core-default.xml ships GCS defaults with suffix notation ("8m", "64m")
+  // but conf.getLong/getInt call Long.parseLong directly.
+  val BlockSize = "67108864" // 64MB
+  val InputBufferSize = "8388608" // 8MB
+  val InplaceSeekLimit = "8388608" // 8MB
+  val MinRangeRequestSize = "2097152" // 2MB
+  val OutputBufferSize = "8388608" // 8MB
+  val UploadChunkSize = "67108864" // 64MB
+  val RewriteMaxChunkSize = "536870912" // 512MB
+  val MaxRequestsPerBatch = "30"
+  val BatchThreads = "15"
+}
+
 class GCSCredentialManager extends CloudCredentialManager {
   private val logger = LoggerFactory.getLogger(getClass)
   override def configureHadoop(
@@ -56,21 +71,30 @@ class GCSCredentialManager extends CloudCredentialManager {
               conf.set("fs.gs.project.id", projectId)
             }
 
-          // Performance settings — all values as plain bytes to avoid
-          // NumberFormatException: Hadoop 3.5 core-default.xml ships GCS
-          // defaults with suffix notation ("8m", "64m") but conf.getLong/getInt
-          // call Long.parseLong directly and choke on those suffixes.
-          conf.set("fs.gs.block.size", "67108864") // 64MB
-          conf.set("fs.gs.inputstream.buffer.size", "8388608") // 8MB
-          conf.set("fs.gs.inputstream.inplace.seek.limit", "8388608") // 8MB
-          conf.set("fs.gs.inputstream.min.range.request.size", "2097152") // 2MB
-          conf.set("fs.gs.outputstream.buffer.size", "8388608") // 8MB
-          conf.set("fs.gs.outputstream.upload.chunk.size", "67108864") // 64MB
-          conf.set("fs.gs.rewrite.max.chunk.size", "536870912") // 512MB
-
-          // Retry settings
-          conf.set("fs.gs.max.requests.per.batch", "30")
-          conf.set("fs.gs.batch.threads", "15")
+          conf.set("fs.gs.block.size", GCSTuning.BlockSize)
+          conf.set("fs.gs.inputstream.buffer.size", GCSTuning.InputBufferSize)
+          conf.set(
+            "fs.gs.inputstream.inplace.seek.limit",
+            GCSTuning.InplaceSeekLimit
+          )
+          conf.set(
+            "fs.gs.inputstream.min.range.request.size",
+            GCSTuning.MinRangeRequestSize
+          )
+          conf.set("fs.gs.outputstream.buffer.size", GCSTuning.OutputBufferSize)
+          conf.set(
+            "fs.gs.outputstream.upload.chunk.size",
+            GCSTuning.UploadChunkSize
+          )
+          conf.set(
+            "fs.gs.rewrite.max.chunk.size",
+            GCSTuning.RewriteMaxChunkSize
+          )
+          conf.set(
+            "fs.gs.max.requests.per.batch",
+            GCSTuning.MaxRequestsPerBatch
+          )
+          conf.set("fs.gs.batch.threads", GCSTuning.BatchThreads)
 
           conf
         }

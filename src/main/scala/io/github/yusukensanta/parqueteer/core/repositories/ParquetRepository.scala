@@ -27,13 +27,16 @@ class ParquetRepository(
   private val hadoopConfigCache =
     scala.collection.concurrent.TrieMap.empty[StorageLocation, Configuration]
 
+  // Close S3A/GCS/ABFS connection pools on JVM exit to prevent background thread leaks
+  Runtime.getRuntime.addShutdownHook(new Thread(() => FileSystem.closeAll()))
+
   def readContent(file: ParquetFile, config: ReadConfig): Try[FileContent] = {
     setupHadoopConfiguration(file.location).flatMap { hadoopConfig =>
       Try {
         val hadoopPath = new HadoopPath(file.location.path)
         val (totalRows, fileSchema) = getFileMetadata(hadoopPath, hadoopConfig)
 
-        val useParallel = config.parallelism > 1 && config.filter.isEmpty
+        val useParallel = config.parallelism > 1
         if (useParallel) {
           val rows = readParallel(hadoopPath, hadoopConfig, config)
           val isPartial =
@@ -431,25 +434,16 @@ class ParquetRepository(
             case scala.util.Success(reader) =>
               Using.resource(reader) { r =>
                 val footer = r.getFooter
-
                 val schema = footer.getFileMetaData.getSchema
-                if (schema.getColumns.isEmpty) {
-                  issues += "Schema has no columns"
-                }
+                if (schema.getColumns.isEmpty) issues += "Schema has no columns"
 
                 val blocks = footer.getBlocks.asScala.toList
-                if (blocks.isEmpty) {
-                  issues += "File has no row groups"
-                }
+                if (blocks.isEmpty) issues += "File has no row groups"
 
-                val indicesToCheck: Set[Int] =
-                  if (deep || blocks.size <= 3) blocks.indices.toSet
-                  else Set(0, blocks.size / 2, blocks.size - 1)
-
+                val indicesToCheck = spotCheckIndices(blocks.size, deep)
                 blocks.zipWithIndex.foreach { case (block, index) =>
-                  if (block.getRowCount <= 0) {
+                  if (block.getRowCount <= 0)
                     issues += s"Row group $index has invalid row count: ${block.getRowCount}"
-                  }
                   if (indicesToCheck.contains(index)) {
                     Try(r.readNextRowGroup()) match {
                       case scala.util.Failure(ex) =>
@@ -468,6 +462,13 @@ class ParquetRepository(
       }
     }
   }
+
+  // Returns the set of row-group indices to decompress during validation.
+  // In deep mode (or for small files), checks all groups.
+  // Otherwise spot-checks first, middle, and last to bound I/O cost.
+  private def spotCheckIndices(blockCount: Int, deep: Boolean): Set[Int] =
+    if (deep || blockCount <= 3) (0 until blockCount).toSet
+    else Set(0, blockCount / 2, blockCount - 1)
 
   def readSchemaFields(
       file: ParquetFile
