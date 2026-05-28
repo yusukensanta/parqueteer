@@ -6,39 +6,6 @@ ThisBuild / scalaVersion := "3.7.4"
 // sbt-ci-release configuration
 ThisBuild / versionScheme := Some("early-semver")
 
-// Maven Central publishing configuration (Central Portal via sbt 1.11+)
-ThisBuild / publishTo := {
-  val centralSnapshots = "https://central.sonatype.com/repository/maven-snapshots/"
-  if (isSnapshot.value) Some("central-snapshots" at centralSnapshots)
-  else localStaging.value
-}
-ThisBuild / publishMavenStyle := true
-ThisBuild / pomIncludeRepository := { _ => false }
-
-// Exclude publishing settings from lintUnused check
-// These are used by sbt-ci-release plugin at runtime
-Global / excludeLintKeys += publishMavenStyle
-Global / excludeLintKeys += pomIncludeRepository
-
-// POM metadata (required by Maven Central)
-ThisBuild / licenses := Seq(
-  "Apache-2.0" -> url("http://www.apache.org/licenses/LICENSE-2.0")
-)
-ThisBuild / developers := List(
-  Developer(
-    id = "yusukensanta",
-    name = "Yusuke Nakayama",
-    email = "yusukensanta@gmail.com", // TODO: Update with your actual email
-    url = url("https://github.com/yusukensanta")
-  )
-)
-ThisBuild / homepage := Some(url("https://github.com/yusukensanta/parqueteer"))
-ThisBuild / scmInfo := Some(
-  ScmInfo(
-    url("https://github.com/yusukensanta/parqueteer"),
-    "scm:git@github.com:yusukensanta/parqueteer.git"
-  )
-)
 
 ThisBuild / scalacOptions ++= Seq(
   "-encoding",
@@ -232,5 +199,5 @@ lazy val root = (project in file("."))
     }
   )
 
-// Version is automatically managed by sbt-ci-release from git tags
+// Version is automatically managed by sbt-dynver from git tags
 // No manual release process needed - just push a tag to trigger CI publishing
