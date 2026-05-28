@@ -21,12 +21,12 @@ object CellValue:
       case I32(i) => i.toString
       case I64(l) => l.toString
       case F32(f) =>
-        java.math.BigDecimal
-          .valueOf(f.toDouble)
-          .stripTrailingZeros
-          .toPlainString
+        if (f.isNaN || f.isInfinite) f.toString
+        else
+          new java.math.BigDecimal(f.toString).stripTrailingZeros.toPlainString
       case F64(d) =>
-        java.math.BigDecimal.valueOf(d).stripTrailingZeros.toPlainString
+        if (d.isNaN || d.isInfinite) d.toString
+        else java.math.BigDecimal.valueOf(d).stripTrailingZeros.toPlainString
       case Bool(b)  => b.toString
       case Date(d)  => d.toString
       case Ts(i)    => i.toString

@@ -20,15 +20,16 @@ class TableFormatter extends OutputFormatter {
       return "No data to display"
     }
 
-    val rows =
+    val (rows, effectiveContent) =
       if (content.rows.size > MaxTableRows) {
         System.err.println(
           s"[parqueteer] warning: ${content.rows.size} rows exceeds table limit ($MaxTableRows). " +
             s"Showing first $MaxTableRows rows. Use --limit N to cap output, or --format json for large datasets."
         )
-        content.rows.take(MaxTableRows)
+        val truncated = content.rows.take(MaxTableRows)
+        (truncated, content.copy(rows = truncated, isPartial = true))
       } else {
-        content.rows
+        (content.rows, content)
       }
     val columns = extractColumns(rows)
 
@@ -52,7 +53,7 @@ class TableFormatter extends OutputFormatter {
     sb.append(drawBottomBorder(columnWidths))
     sb.append("\n")
 
-    sb.append(drawSummary(content))
+    sb.append(drawSummary(effectiveContent))
     sb.toString
   }
 
