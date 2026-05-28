@@ -56,11 +56,17 @@ class GCSCredentialManager extends CloudCredentialManager {
               conf.set("fs.gs.project.id", projectId)
             }
 
-          // Performance settings
-          conf.set("fs.gs.block.size", "67108864") // 64MB
-          conf.set("fs.gs.inputstream.buffer.size", "8388608") // 8MB
-          conf.set("fs.gs.outputstream.buffer.size", "8388608") // 8MB
+          // Performance settings — all values as plain bytes to avoid
+          // NumberFormatException: Hadoop 3.5 core-default.xml ships GCS
+          // defaults with suffix notation ("8m", "64m") but conf.getLong/getInt
+          // call Long.parseLong directly and choke on those suffixes.
+          conf.set("fs.gs.block.size", "67108864")                  // 64MB
+          conf.set("fs.gs.inputstream.buffer.size", "8388608")      // 8MB
+          conf.set("fs.gs.inputstream.inplace.seek.limit", "8388608") // 8MB
+          conf.set("fs.gs.inputstream.min.range.request.size", "2097152") // 2MB
+          conf.set("fs.gs.outputstream.buffer.size", "8388608")     // 8MB
           conf.set("fs.gs.outputstream.upload.chunk.size", "67108864") // 64MB
+          conf.set("fs.gs.rewrite.max.chunk.size", "536870912")     // 512MB
 
           // Retry settings
           conf.set("fs.gs.max.requests.per.batch", "30")
