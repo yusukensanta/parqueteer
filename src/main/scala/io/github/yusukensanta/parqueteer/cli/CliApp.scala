@@ -39,6 +39,12 @@ object CliApp {
       System.exit(0)
     }
 
+    // Show subcommand-specific help when subcommand + --help is present
+    detectSubcommandHelp(args).foreach { cmd =>
+      HelpFormatter.subcommandHelp(cmd).foreach(println)
+      System.exit(0)
+    }
+
     val initialConfig = ArgumentParser.Config(
       globalOptions = EnvConfig.buildInitialGlobalOptions
     )
@@ -83,6 +89,13 @@ object CliApp {
     val hasHelp = args.contains("--help") || args.contains("-h")
     val hasCommand = args.exists(knownCommands.contains)
     hasHelp && !hasCommand
+  }
+
+  private def detectSubcommandHelp(args: Array[String]): Option[String] = {
+    val hasHelp = args.contains("--help") || args.contains("-h")
+    if (!hasHelp) return None
+    if (args.contains("schema") && args.contains("diff")) Some("schema diff")
+    else knownCommands.find(args.contains)
   }
 
   private def run(config: ArgumentParser.Config): Int =
