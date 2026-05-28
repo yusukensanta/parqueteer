@@ -128,6 +128,9 @@ class ParquetRepository(
 
   // ── Public API ────────────────────────────────────────────────────────────
 
+  // Close S3A/GCS/ABFS connection pools on JVM exit to prevent background thread leaks
+  Runtime.getRuntime.addShutdownHook(new Thread(() => FileSystem.closeAll()))
+
   def readContent(file: ParquetFile, config: ReadConfig): Try[FileContent] = {
     setupHadoopConfiguration(file.location).flatMap { hadoopConfig =>
       Try {
@@ -135,7 +138,7 @@ class ParquetRepository(
         val (fileSchema, blocks) = getFooter(hadoopPath, hadoopConfig)
         val totalRows = blocks.map(_.getRowCount).sum
 
-        val useParallel = config.parallelism > 1 && config.filter.isEmpty
+        val useParallel = config.parallelism > 1
         if (useParallel) {
           // getFooter above is already cached; readParallel reuses it
           val rows = readParallel(hadoopPath, hadoopConfig, config)
