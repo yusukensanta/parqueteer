@@ -79,23 +79,28 @@ object CliApp {
     "convert",
     "merge",
     "schema",
+    "schema diff",
     "stats",
     "config",
-    "completions",
-    "diff"
+    "completions"
   )
+
+  private def commandMatches(cmd: String, args: Array[String]): Boolean =
+    cmd.split(' ').forall(args.contains)
 
   private def shouldShowTopLevelHelp(args: Array[String]): Boolean = {
     val hasHelp = args.contains("--help") || args.contains("-h")
-    val hasCommand = args.exists(knownCommands.contains)
+    val hasCommand = knownCommands.exists(commandMatches(_, args))
     hasHelp && !hasCommand
   }
 
   private def detectSubcommandHelp(args: Array[String]): Option[String] = {
     val hasHelp = args.contains("--help") || args.contains("-h")
     if (!hasHelp) return None
-    if (args.contains("schema") && args.contains("diff")) Some("schema diff")
-    else knownCommands.find(args.contains)
+    // prefer longer match: "schema diff" over "schema"
+    knownCommands
+      .filter(commandMatches(_, args))
+      .maxByOption(_.length)
   }
 
   private def run(config: ArgumentParser.Config): Int =
