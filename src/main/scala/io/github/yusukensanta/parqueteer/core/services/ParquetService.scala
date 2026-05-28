@@ -17,9 +17,9 @@ object ParquetServiceEncoders {
 
   given mapStringCellValueEncoder: Encoder[Map[String, CellValue]] =
     Encoder.instance { map =>
-      Json.obj(map.map { case (k, v) =>
+      Json.fromFields(map.map { case (k, v) =>
         k -> cellValueEncoder.apply(v)
-      }.toSeq*)
+      })
     }
 
   given listMapEncoder: Encoder[List[Map[String, CellValue]]] =

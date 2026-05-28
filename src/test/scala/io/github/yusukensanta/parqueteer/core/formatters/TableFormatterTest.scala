@@ -188,8 +188,10 @@ class TableFormatterTest extends AnyFlatSpec with Matchers {
 
   it should "format Float (FLOAT) value with full precision" in {
     formatter.formatValue(CellValue.F32(1.5f)) shouldBe "1.5"
-    formatter.formatValue(CellValue.F32(-3.0f)) shouldBe "-3.0"
-    formatter.formatValue(CellValue.F32(1.234568f)) shouldBe 1.234568f.toString
+    formatter.formatValue(
+      CellValue.F32(-3.0f)
+    ) shouldBe "-3" // stripTrailingZeros removes .0
+    formatter.formatValue(CellValue.F32(1.234568f)) shouldBe "1.234568"
   }
 
   it should "format BigDecimal without scientific notation" in {
@@ -254,8 +256,10 @@ class TableFormatterTest extends AnyFlatSpec with Matchers {
       isPartial = false
     )
     val result = formatter.formatContent(bigContent, None)
-    result should startWith("Error:")
-    result should include("--limit")
+    // rows are truncated to 10 000 and a warning is emitted to stderr; result is still a valid table
+    result should not startWith "Error:"
+    result should include("┌")
+    result should include("10001 rows total")
   }
 
   it should "render normally when row count is exactly 10000" in {

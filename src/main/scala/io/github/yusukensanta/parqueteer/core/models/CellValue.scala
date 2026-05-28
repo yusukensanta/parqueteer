@@ -16,12 +16,17 @@ enum CellValue:
 object CellValue:
   extension (v: CellValue)
     def display: String = v match
-      case Null     => "null"
-      case Str(s)   => s
-      case I32(i)   => i.toString
-      case I64(l)   => l.toString
-      case F32(f)   => f.toString
-      case F64(d)   => d.toString
+      case Null   => "null"
+      case Str(s) => s
+      case I32(i) => i.toString
+      case I64(l) => l.toString
+      case F32(f) =>
+        if (f.isNaN || f.isInfinite) f.toString
+        else
+          new java.math.BigDecimal(f.toString).stripTrailingZeros.toPlainString
+      case F64(d) =>
+        if (d.isNaN || d.isInfinite) d.toString
+        else java.math.BigDecimal.valueOf(d).stripTrailingZeros.toPlainString
       case Bool(b)  => b.toString
       case Date(d)  => d.toString
       case Ts(i)    => i.toString

@@ -20,13 +20,17 @@ class TableFormatter extends OutputFormatter {
       return "No data to display"
     }
 
-    if (content.rows.size > MaxTableRows) {
-      return s"Error: ${content.rows.size} rows is too large to render as a table " +
-        s"(limit: $MaxTableRows). Use --limit N to cap output, or " +
-        "--output-format json for large datasets."
-    }
-
-    val rows = content.rows
+    val (rows, effectiveContent) =
+      if (content.rows.size > MaxTableRows) {
+        System.err.println(
+          s"[parqueteer] warning: ${content.rows.size} rows exceeds table limit ($MaxTableRows). " +
+            s"Showing first $MaxTableRows rows. Use --limit N to cap output, or --format json for large datasets."
+        )
+        val truncated = content.rows.take(MaxTableRows)
+        (truncated, content.copy(rows = truncated, isPartial = true))
+      } else {
+        (content.rows, content)
+      }
     val columns = extractColumns(rows)
 
     val columnWidths = calculateColumnWidths(columns, rows)
@@ -49,7 +53,7 @@ class TableFormatter extends OutputFormatter {
     sb.append(drawBottomBorder(columnWidths))
     sb.append("\n")
 
-    sb.append(drawSummary(content))
+    sb.append(drawSummary(effectiveContent))
     sb.toString
   }
 

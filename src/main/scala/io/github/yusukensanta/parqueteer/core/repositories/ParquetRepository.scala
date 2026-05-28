@@ -231,9 +231,11 @@ class ParquetRepository(
           val footer = reader.getFooter
           val schema = footer.getFileMetaData.getSchema
 
+          val blocks = footer.getBlocks.asScala
+
           // Get compression types from first row group (if available)
           val compressionMap: Map[String, String] =
-            footer.getBlocks.asScala.headOption
+            blocks.headOption
               .map { rowGroup =>
                 rowGroup.getColumns.asScala.map { columnChunk =>
                   val columnPath = columnChunk.getPath.toDotString
@@ -258,7 +260,7 @@ class ParquetRepository(
           ParquetSchema(
             columns = columns,
             rowGroupCount = footer.getBlocks.size().toLong,
-            totalRowCount = footer.getBlocks.asScala.map(_.getRowCount).sum
+            totalRowCount = blocks.map(_.getRowCount).sum
           )
         }
       }
@@ -350,7 +352,7 @@ class ParquetRepository(
             ParquetWriteOps.convertCompressionType(config.compressionType)
           )
           .withRowGroupSize(config.rowGroupSize)
-          .withPageSize(config.pageSize.toInt)
+          .withPageSize(config.pageSize)
           .withDictionaryEncoding(config.enableDictionary)
           .withValidation(true)
           .build()
@@ -389,7 +391,7 @@ class ParquetRepository(
             ParquetWriteOps.convertCompressionType(config.compressionType)
           )
           .withRowGroupSize(config.rowGroupSize)
-          .withPageSize(config.pageSize.toInt)
+          .withPageSize(config.pageSize)
           .withDictionaryEncoding(config.enableDictionary)
           .withValidation(true)
           .build()

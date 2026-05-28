@@ -88,13 +88,30 @@ class S3CredentialManager(profile: Option[String] = None)
         )
     }
 
-    strategies.foldLeft(
-      Failure(new RuntimeException("No credentials found")): Try[
-        (String, String, Option[String])
-      ]
+    val (result, failures) = strategies.foldLeft(
+      (
+        Failure(new RuntimeException("No credentials found")): Try[
+          (String, String, Option[String])
+        ],
+        List.empty[String]
+      )
     ) {
-      case (Success(creds), _)    => Success(creds)
-      case (Failure(_), strategy) => strategy()
+      case ((Success(creds), msgs), _) => (Success(creds), msgs)
+      case ((Failure(_), msgs), strategy) =>
+        strategy() match {
+          case s @ Success(_) => (s, msgs)
+          case Failure(err)   => (Failure(err), msgs :+ err.getMessage)
+        }
+    }
+    result match {
+      case s @ Success(_) => s
+      case Failure(_) =>
+        Failure(
+          new RuntimeException(
+            "No S3 credentials found. Attempted strategies:\n" + failures
+              .mkString("\n")
+          )
+        )
     }
   }
 

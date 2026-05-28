@@ -77,10 +77,11 @@ enum ColorMode:
   case Auto, Always, Never
 
 object ColorMode:
-  def fromString(s: String): ColorMode = s.toLowerCase match
-    case "always" => Always
-    case "never"  => Never
-    case _        => Auto
+  def fromString(s: String): Option[ColorMode] = s.toLowerCase match
+    case "always" => Some(Always)
+    case "never"  => Some(Never)
+    case "auto"   => Some(Auto)
+    case _        => None
 
 case class GlobalOptions(
     verbose: Boolean = false,

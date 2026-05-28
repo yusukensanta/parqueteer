@@ -59,7 +59,9 @@ object ArgumentParser {
       opt[String]("color")
         .action((x, c) =>
           c.copy(globalOptions =
-            c.globalOptions.copy(colorMode = ColorMode.fromString(x))
+            c.globalOptions.copy(colorMode =
+              ColorMode.fromString(x).getOrElse(ColorMode.Auto)
+            )
           )
         )
         .validate(x =>
@@ -151,7 +153,21 @@ object ArgumentParser {
         .children(
           arg[String]("<file>")
             .required()
-            .action((x, c) => c.copy(command = Some(InfoCommand(x))))
+            .action((x, c) =>
+              c.copy(command =
+                Some(
+                  InfoCommand(
+                    x,
+                    format =
+                      if (
+                        EnvConfig.parsedDefaultFormat
+                          .contains(OutputFormat.JSON)
+                      ) OutputFormat.JSON
+                      else OutputFormat.Table
+                  )
+                )
+              )
+            )
             .text("Path to parquet file"),
           opt[String]("format")
             .action((x, c) =>
@@ -281,7 +297,20 @@ object ArgumentParser {
         ),
       cmd("schema")
         .text("Show column structure (names, types, nullability, compression)")
-        .action((_, c) => c.copy(command = Some(SchemaCommand(""))))
+        .action((_, c) =>
+          c.copy(command =
+            Some(
+              SchemaCommand(
+                "",
+                format = EnvConfig.parsedDefaultFormat
+                  .collect {
+                    case f @ (OutputFormat.JSON | OutputFormat.Table) => f
+                  }
+                  .getOrElse(OutputFormat.Table)
+              )
+            )
+          )
+        )
         .children(
           arg[String]("<file>")
             .optional()
@@ -298,7 +327,22 @@ object ArgumentParser {
             .text("Output format: table, json (default: table)"),
           cmd("diff")
             .text("Compare schemas of two parquet files")
-            .action((_, c) => c.copy(command = Some(SchemaDiffCommand("", ""))))
+            .action((_, c) =>
+              c.copy(command =
+                Some(
+                  SchemaDiffCommand(
+                    "",
+                    "",
+                    format =
+                      if (
+                        EnvConfig.parsedDefaultFormat
+                          .contains(OutputFormat.JSON)
+                      ) OutputFormat.JSON
+                      else OutputFormat.Table
+                  )
+                )
+              )
+            )
             .children(
               arg[String]("<file1>")
                 .required()
@@ -387,7 +431,21 @@ object ArgumentParser {
         .children(
           arg[String]("<file>")
             .required()
-            .action((x, c) => c.copy(command = Some(StatsCommand(x))))
+            .action((x, c) =>
+              c.copy(command =
+                Some(
+                  StatsCommand(
+                    x,
+                    format =
+                      if (
+                        EnvConfig.parsedDefaultFormat
+                          .contains(OutputFormat.JSON)
+                      ) OutputFormat.JSON
+                      else OutputFormat.Table
+                  )
+                )
+              )
+            )
             .text("Path to parquet file"),
           opt[String]("format")
             .action((x, c) =>
