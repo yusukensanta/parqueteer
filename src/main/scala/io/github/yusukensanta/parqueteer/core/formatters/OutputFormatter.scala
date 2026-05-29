@@ -19,9 +19,9 @@ trait OutputFormatter {
     val seen = {
       val s = scala.collection.mutable.LinkedHashSet.empty[String]
       rows.foreach(_.keysIterator.foreach(s += _))
-      s.toSet
+      s
     }
-    schema.map(_.columns.map(_.name).filter(seen)).getOrElse(seen.toList.sorted)
+    schema.map(_.columns.map(_.name).filter(seen)).getOrElse(seen.toList)
   }
 }
 
