@@ -28,14 +28,14 @@ class CSVFormatterTest extends AnyFlatSpec with Matchers {
 
   "CSVFormatter.formatContent" should "produce header row from column names" in {
     val result = formatter.formatContent(sampleContent, None)
-    val lines = result.split("\n")
+    val lines = result.split("\r\n")
     lines.head should include("age")
     lines.head should include("name")
   }
 
   it should "produce correct number of lines (header + 2 data)" in {
     val result = formatter.formatContent(sampleContent, None)
-    val lines = result.strip().split("\n")
+    val lines = result.strip().split("\r\n")
     lines.length shouldBe 3
   }
 
@@ -78,7 +78,7 @@ class CSVFormatterTest extends AnyFlatSpec with Matchers {
       isPartial = false
     )
     val result = formatter.formatContent(withNull, None)
-    val lines = result.split("\n", -1)
+    val lines = result.split("\r\n", -1)
     lines.length shouldBe 3
     lines(0) shouldBe "key"
     lines(1) shouldBe ""
@@ -90,7 +90,7 @@ class CSVFormatterTest extends AnyFlatSpec with Matchers {
       totalRows = 1L,
       isPartial = false
     )
-    val lines = formatter.formatContent(content, None).strip().split("\n")
+    val lines = formatter.formatContent(content, None).strip().split("\r\n")
     lines(1) shouldBe "NaN"
   }
 
@@ -100,7 +100,7 @@ class CSVFormatterTest extends AnyFlatSpec with Matchers {
       totalRows = 1L,
       isPartial = false
     )
-    val lines = formatter.formatContent(content, None).strip().split("\n")
+    val lines = formatter.formatContent(content, None).strip().split("\r\n")
     lines(1) shouldBe "Infinity"
   }
 
@@ -121,7 +121,7 @@ class CSVFormatterTest extends AnyFlatSpec with Matchers {
       totalRows = 1L,
       isPartial = false
     )
-    val lines = formatter.formatContent(content, None).strip().split("\n")
+    val lines = formatter.formatContent(content, None).strip().split("\r\n")
     lines(1) shouldBe "1.5"
   }
 
