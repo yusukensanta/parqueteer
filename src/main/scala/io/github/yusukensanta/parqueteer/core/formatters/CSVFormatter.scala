@@ -11,7 +11,7 @@ class CSVFormatter extends OutputFormatter {
 
   private val Delimiter = ","
   private val Quote = "\""
-  private val Newline = "\n"
+  private val Newline = "\r\n"
 
   override def formatContent(
       content: FileContent,
