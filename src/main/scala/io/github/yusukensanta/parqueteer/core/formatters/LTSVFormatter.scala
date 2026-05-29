@@ -12,8 +12,13 @@ class LTSVFormatter extends OutputFormatter {
   override def formatContent(
       content: FileContent,
       schema: Option[ParquetSchema]
-  ): String =
-    content.rows.map(rowToLtsv).mkString("\n")
+  ): String = {
+    val rows = content.rows.map(rowToLtsv).mkString("\n")
+    if (content.isPartial)
+      rows + s"\n# partial:true\ttotal_rows:${content.totalRows}\tshown:${content.rows.size}"
+    else
+      rows
+  }
 
   override def formatSchema(schema: ParquetSchema): String =
     schema.columns
