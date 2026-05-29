@@ -116,6 +116,8 @@ lazy val root = (project in file("."))
 
         // Logging - using simple logger for smaller distribution
         "org.slf4j" % "slf4j-simple" % slf4jVersion,
+        // Bridge JUL→SLF4J so GCS connector logs are filtered by simplelogger.properties
+        "org.slf4j" % "jul-to-slf4j" % slf4jVersion,
 
         // ================================================================
         // Cloud Storage - AWS S3 (Optimized to exclude 641 MB bundle)
