@@ -110,11 +110,28 @@ class GCSCredentialManager extends CloudCredentialManager {
       () => tryWellKnownLocation()
     )
 
-    strategies.foldLeft(
-      Failure(new RuntimeException("No GCS credentials found")): Try[String]
+    val (result, failures) = strategies.foldLeft(
+      (
+        Failure(new RuntimeException("No GCS credentials found")): Try[String],
+        List.empty[String]
+      )
     ) {
-      case (Success(path), _)     => Success(path)
-      case (Failure(_), strategy) => strategy()
+      case ((Success(path), msgs), _) => (Success(path), msgs)
+      case ((Failure(_), msgs), strategy) =>
+        strategy() match {
+          case s @ Success(_) => (s, msgs)
+          case Failure(err)   => (Failure(err), msgs :+ err.getMessage)
+        }
+    }
+    result match {
+      case s @ Success(_) => s
+      case Failure(_) =>
+        Failure(
+          new RuntimeException(
+            "No GCS credentials found. Attempted strategies:\n" +
+              failures.mkString("\n")
+          )
+        )
     }
   }
 
