@@ -99,7 +99,7 @@ class ConfigurationManagerTest extends AnyFlatSpec with Matchers {
     result shouldBe a[Success[?]]
 
     val config = result.get
-    config.cloud.s3.defaultRegion shouldBe "us-east-1"
+    config.cloud.s3.defaultRegion shouldBe None
     config.cloud.s3.useSsl shouldBe true
     config.cloud.s3.bufferSize shouldBe "64MB"
     config.cloud.s3.multipartThreshold shouldBe "100MB"
@@ -155,7 +155,7 @@ class ConfigurationManagerTest extends AnyFlatSpec with Matchers {
     result shouldBe a[Success[?]]
 
     val config = result.get
-    config.cloud.s3.defaultRegion shouldBe "eu-west-1"
+    config.cloud.s3.defaultRegion shouldBe Some("eu-west-1")
     config.cloud.s3.useSsl shouldBe false
     config.cloud.s3.bufferSize shouldBe "128MB"
     config.cloud.s3.multipartThreshold shouldBe "200MB"
