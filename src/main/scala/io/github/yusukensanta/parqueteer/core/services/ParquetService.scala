@@ -222,11 +222,7 @@ class ParquetService(
               streamError match {
                 case Some(e) =>
                   // Delete partial output; merge is not atomic so partial writes are unusable
-                  scala.util.Try(
-                    java.nio.file.Files.deleteIfExists(
-                      java.nio.file.Paths.get(outputPath)
-                    )
-                  )
+                  repository.deleteFile(outputLocation).recover { case _ => () }
                   Left(ParqueteerError.IOError(e))
                 case None => Right(count)
               }
