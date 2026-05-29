@@ -96,4 +96,34 @@ class CloudCredentialManagerTest extends AnyFlatSpec with Matchers {
     conf.get.get("fs.s3a.endpoint") shouldBe sys.env("AWS_ENDPOINT_URL")
     conf.get.get("fs.s3a.path.style.access") shouldBe "true"
   }
+
+  // ── GCSCredentialManager ────────────────────────────────────────────────
+
+  "GCSCredentialManager.configureHadoop" should "succeed for GCSLocation (falls back to application default when no service account found)" in {
+    val conf =
+      new GCSCredentialManager().configureHadoop(GCSLocation("bucket", "path"))
+    conf.isSuccess shouldBe true
+    conf.get.get("fs.gs.impl") shouldBe
+      "com.google.cloud.hadoop.fs.gcs.GoogleHadoopFileSystem"
+  }
+
+  it should "return Failure for non-GCS location" in {
+    val conf =
+      new GCSCredentialManager().configureHadoop(S3Location("bucket", "key"))
+    conf.isFailure shouldBe true
+    conf.failed.get shouldBe a[IllegalArgumentException]
+  }
+
+  it should "set fs.gs.project.id when GCP_PROJECT_ID env var is present" in {
+    assume(
+      sys.env.contains("GCP_PROJECT_ID") || sys.env.contains(
+        "GOOGLE_CLOUD_PROJECT"
+      ),
+      "Skipped: GCP_PROJECT_ID / GOOGLE_CLOUD_PROJECT not set"
+    )
+    val conf =
+      new GCSCredentialManager().configureHadoop(GCSLocation("bucket", "path"))
+    conf.isSuccess shouldBe true
+    conf.get.get("fs.gs.project.id") should not be null
+  }
 }
