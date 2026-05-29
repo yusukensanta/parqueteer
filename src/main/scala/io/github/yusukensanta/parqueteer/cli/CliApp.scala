@@ -288,6 +288,11 @@ object CliApp {
 
     val effectiveStreaming = streaming || (format == OutputFormat.NDJSON)
 
+    if (effectiveStreaming && effectiveParallelism > 1 && !globalOptions.quiet)
+      System.err.println(
+        s"Warning: --parallelism $effectiveParallelism is ignored in streaming mode; streaming is always sequential."
+      )
+
     if (effectiveStreaming) {
       val writer = if (globalOptions.quiet) new RowStreamWriter {
         override def writeRow(row: Map[String, CellValue]): Unit = ()
