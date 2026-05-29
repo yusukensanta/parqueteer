@@ -122,19 +122,19 @@ class ParquetService(
     else
       for {
         inputLocations <- inputPaths
-          .foldLeft[Either[ParqueteerError, List[StorageLocation]]](
-            Right(Nil)
+          .foldLeft[Either[ParqueteerError, Vector[StorageLocation]]](
+            Right(Vector.empty)
           ) { (acc, p) =>
             acc.flatMap(locs => parseLocation(p).map(locs :+ _))
           }
-        schemas <- inputLocations.foldLeft[Either[ParqueteerError, List[
+        schemas <- inputLocations.foldLeft[Either[ParqueteerError, Vector[
           List[FieldSummary]
-        ]]](Right(Nil)) { (acc, loc) =>
-          acc.flatMap { list =>
+        ]]](Right(Vector.empty)) { (acc, loc) =>
+          acc.flatMap { vec =>
             repository
               .readSchemaFields(ParquetFile(loc))
               .toParqueteerError
-              .map(list :+ _)
+              .map(vec :+ _)
           }
         }
         mergedFields <- schemaMode match {
@@ -194,6 +194,10 @@ class ParquetService(
             rowGroupCount = 1L,
             totalRowCount = 0L
           )
+          // precompute per-file missing columns — avoids O(cols) set diff per row
+          val missingPerFile = schemas.map { fields =>
+            allColumnNames -- fields.map(_.name).toSet
+          }
           var streamError: Option[Throwable] = None
           repository
             .writeContentStream(outputLocation, explicitSchema, writeConfig) {
@@ -201,12 +205,12 @@ class ParquetService(
                 inputLocations.zipWithIndex.foreach { case (loc, i) =>
                   if (streamError.isEmpty) {
                     onProgress(i + 1, inputLocations.size, inputPaths(i))
+                    val fileMissing = missingPerFile(i)
                     repository
                       .streamContent(ParquetFile(loc), ReadConfig()) { row =>
-                        val missing = allColumnNames -- row.keySet
                         val finalRow =
-                          if (missing.isEmpty) row
-                          else row ++ missing.map(_ -> CellValue.Null)
+                          if (fileMissing.isEmpty) row
+                          else row ++ fileMissing.map(_ -> CellValue.Null)
                         write(finalRow)
                       }
                       .fold(err => streamError = Some(err), _ => ())

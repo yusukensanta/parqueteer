@@ -31,7 +31,7 @@ class TableFormatter extends OutputFormatter {
       } else {
         (content.rows, content)
       }
-    val columns = extractColumns(rows)
+    val columns = extractColumns(rows, schema)
 
     val columnWidths = calculateColumnWidths(columns, rows)
     val sb = new StringBuilder()

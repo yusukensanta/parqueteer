@@ -35,7 +35,7 @@ class PrettyFormatter(useColors: Boolean = sys.env.get("NO_COLOR").isEmpty)
     }
 
     val rows = content.rows
-    val columns = extractColumns(rows)
+    val columns = extractColumns(rows, schema)
     val columnWidths = calculateColumnWidths(columns, rows)
 
     val sb = new StringBuilder()

@@ -25,7 +25,15 @@ class ParquetRepository(
     region: Option[String] = None
 ) {
   private val hadoopConfigCache =
-    scala.collection.concurrent.TrieMap.empty[StorageLocation, Configuration]
+    scala.collection.concurrent.TrieMap.empty[String, Configuration]
+
+  private def configCacheKey(location: StorageLocation): String =
+    location match {
+      case LocalPath(_)                    => "local"
+      case S3Location(bucket, _, _)        => s"s3:$bucket"
+      case GCSLocation(bucket, _)          => s"gcs:$bucket"
+      case AzureLocation(account, cont, _) => s"azure:$account/$cont"
+    }
 
   // Close S3A/GCS/ABFS connection pools on JVM exit to prevent background thread leaks
   Runtime.getRuntime.addShutdownHook(new Thread(() => FileSystem.closeAll()))
@@ -588,8 +596,9 @@ class ParquetRepository(
 
   private def setupHadoopConfiguration(
       location: StorageLocation
-  ): Try[Configuration] =
-    hadoopConfigCache.get(location) match {
+  ): Try[Configuration] = {
+    val key = configCacheKey(location)
+    hadoopConfigCache.get(key) match {
       case Some(cfg) => Success(cfg)
       case None =>
         val effectiveLocation = (location, region) match {
@@ -602,9 +611,10 @@ class ParquetRepository(
             credManager.configureHadoop(effectiveLocation)
           case None => Success(new Configuration())
         }
-        result.foreach(cfg => hadoopConfigCache.put(location, cfg))
+        result.foreach(cfg => hadoopConfigCache.put(key, cfg))
         result
     }
+  }
 
   private def getFileMetadata(
       path: HadoopPath,
