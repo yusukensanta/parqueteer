@@ -1,12 +1,7 @@
 package io.github.yusukensanta.parqueteer.core.repositories
 
 import io.github.yusukensanta.parqueteer.core.models._
-import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.{Path => HadoopPath}
-import org.apache.parquet.hadoop.ParquetFileReader
-import org.apache.parquet.hadoop.util.HadoopInputFile
 import org.apache.parquet.schema.MessageType
-import scala.util.Using
 import scala.jdk.CollectionConverters._
 
 private[repositories] object ParquetSchemaBuilder {
@@ -24,17 +19,6 @@ private[repositories] object ParquetSchemaBuilder {
         s"None of the requested columns exist in the file: ${columns.mkString(", ")}"
       )
     new MessageType("root", fields.asJava)
-  }
-
-  def buildProjectedSchema(
-      path: HadoopPath,
-      conf: Configuration,
-      columns: List[String]
-  ): MessageType = {
-    val inputFile = HadoopInputFile.fromPath(path, conf)
-    Using.resource(ParquetFileReader.open(inputFile)) { reader =>
-      projectSchema(reader.getFooter.getFileMetaData.getSchema, columns)
-    }
   }
 
   def buildMessageType(schema: ParquetSchema): MessageType = {

@@ -145,13 +145,7 @@ class ParquetRepository(
         } else {
           val path4s = Parquet4sPath(file.location.path)
           Using.resource(
-            openParquetReader(
-              path4s,
-              hadoopPath,
-              hadoopConfig,
-              config,
-              Some(fileSchema)
-            )
+            openParquetReader(path4s, hadoopConfig, config, fileSchema)
           ) { reader =>
             val rows = config.maxRows match {
               case Some(limit) =>
@@ -197,13 +191,7 @@ class ParquetRepository(
         val hadoopPath = new HadoopPath(file.location.path)
         val (fileSchema, _) = getFooter(hadoopPath, hadoopConfig)
         Using.resource(
-          openParquetReader(
-            path4s,
-            hadoopPath,
-            hadoopConfig,
-            config,
-            Some(fileSchema)
-          )
+          openParquetReader(path4s, hadoopConfig, config, fileSchema)
         ) { source =>
           val iter = config.maxRows match {
             case Some(limit) =>
@@ -303,29 +291,19 @@ class ParquetRepository(
 
   private def openParquetReader(
       path4s: Parquet4sPath,
-      hadoopPath: HadoopPath,
       hadoopConfig: Configuration,
       config: ReadConfig,
-      fileSchema: Option[MessageType]
+      fileSchema: MessageType
   ): com.github.mjakubowski84.parquet4s.ParquetIterable[RowParquetRecord] = {
     val filter = config.filter
       .flatMap { expr =>
         import io.github.yusukensanta.parqueteer.core.filters.FilterParser
-        fileSchema
-          .map(s => FilterParser.parseWithSchema(expr, s))
-          .getOrElse(FilterParser.parse(expr))
-          .toOption
+        FilterParser.parseWithSchema(expr, fileSchema).toOption
       }
       .getOrElse(Filter.noopFilter)
     config.columns match {
       case Some(cols) if cols.nonEmpty =>
-        // Use projectSchema with the pre-fetched fileSchema — avoids a redundant file open
-        val schema = fileSchema
-          .map(s => ParquetSchemaBuilder.projectSchema(s, cols))
-          .getOrElse(
-            ParquetSchemaBuilder
-              .buildProjectedSchema(hadoopPath, hadoopConfig, cols)
-          )
+        val schema = ParquetSchemaBuilder.projectSchema(fileSchema, cols)
         ParquetReader
           .projectedGeneric(schema)
           .options(ParquetReader.Options(hadoopConf = hadoopConfig))
