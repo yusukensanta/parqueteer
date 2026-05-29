@@ -469,7 +469,11 @@ class ParquetRepository(
                       case _ =>
                     }
                   } else {
-                    r.skipNextRowGroup()
+                    Try(r.skipNextRowGroup()) match {
+                      case scala.util.Failure(ex) =>
+                        issues += s"Row group $index could not be skipped: ${ex.getMessage}"
+                      case _ =>
+                    }
                   }
                 }
               }

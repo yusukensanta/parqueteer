@@ -768,6 +768,23 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
     result.get shouldBe empty
   }
 
+  // Exercises the skipNextRowGroup path: with 4 row groups, spot-check reads
+  // indices {0, 2, 3} and skips index 1. If skipNextRowGroup throws it must
+  // be collected into issues (not escape as Failure).
+  it should "spot-check a 4-row-group file collecting any skipNextRowGroup failure as an issue" taggedAs IntegrationTest in {
+    val loc = LocalPath(tempFile().getAbsolutePath)
+    val rows = (1 to 4)
+      .map(i => Map[String, CellValue]("id" -> CellValue.I64(i.toLong)))
+      .toList
+    repo
+      .writeContent(loc, rows, None, WriteConfig(rowGroupSize = 1L))
+      .isSuccess shouldBe true
+
+    val result = repo.validateFile(ParquetFile(loc), deep = false)
+    result.isSuccess shouldBe true
+    result.get shouldBe empty
+  }
+
   // ── writeContentStream sparse-column error (#153) ───────────────────────
 
   it should "give actionable error for column absent from schema in writeContentStream" taggedAs IntegrationTest in {
