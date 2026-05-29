@@ -32,6 +32,11 @@ object CliApp {
   private val logger = LoggerFactory.getLogger(getClass)
 
   def main(args: Array[String]): Unit = {
+    // Route JUL (used by GCS Hadoop connector) through SLF4J so
+    // simplelogger.properties filters apply (com.google.cloud=error).
+    org.slf4j.bridge.SLF4JBridgeHandler.removeHandlersForRootLogger()
+    org.slf4j.bridge.SLF4JBridgeHandler.install()
+
     if (shouldShowVersion(args)) {
       showVersion()
       System.exit(0)
