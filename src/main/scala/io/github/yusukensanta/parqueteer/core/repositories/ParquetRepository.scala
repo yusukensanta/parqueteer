@@ -11,6 +11,7 @@ import com.github.mjakubowski84.parquet4s.{
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path => HadoopPath}
 import org.apache.parquet.hadoop.ParquetFileReader
+import org.apache.parquet.hadoop.metadata.BlockMetaData
 import org.apache.parquet.hadoop.util.HadoopInputFile
 import org.apache.parquet.schema.MessageType
 import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
@@ -26,6 +27,12 @@ class ParquetRepository(
   private val hadoopConfigCache =
     scala.collection.concurrent.TrieMap.empty[String, Configuration]
 
+  // Caches (MessageType, blocks) per file path for the lifetime of this repository instance.
+  // Safe because ParquetRepository is created once per CLI invocation.
+  private val footerCache =
+    scala.collection.concurrent.TrieMap
+      .empty[String, (MessageType, List[BlockMetaData])]
+
   private def configCacheKey(location: StorageLocation): String =
     location match {
       case LocalPath(_)                    => "local"
@@ -37,14 +44,100 @@ class ParquetRepository(
   // Close S3A/GCS/ABFS connection pools on JVM exit to prevent background thread leaks
   Runtime.getRuntime.addShutdownHook(new Thread(() => FileSystem.closeAll()))
 
+  // ── Shared footer infrastructure ──────────────────────────────────────────
+
+  private def readFooterBytes(inputFile: HadoopInputFile): Array[Byte] =
+    Using.resource(inputFile.newStream()) { stream =>
+      val fileLen = inputFile.getLength
+      val tail = new Array[Byte](8)
+      stream.seek(fileLen - 8)
+      stream.readFully(tail)
+      val footerLen = java.nio.ByteBuffer
+        .wrap(tail, 0, 4)
+        .order(java.nio.ByteOrder.LITTLE_ENDIAN)
+        .getInt
+      stream.seek(fileLen - 8 - footerLen)
+      val footerBytes = new Array[Byte](footerLen)
+      stream.readFully(footerBytes)
+      footerBytes
+    }
+
+  private def parseFooter(
+      footerBytes: Array[Byte]
+  ): org.apache.parquet.hadoop.metadata.ParquetMetadata = {
+    val converter =
+      new org.apache.parquet.format.converter.ParquetMetadataConverter()
+    converter.readParquetMetadata(
+      new java.io.ByteArrayInputStream(footerBytes),
+      org.apache.parquet.format.converter.ParquetMetadataConverter.NO_FILTER
+    )
+  }
+
+  // Returns (formatVersion, createdBy) from the raw Thrift footer
+  private def parseRawMeta(footerBytes: Array[Byte]): (String, String) = {
+    val raw = org.apache.parquet.format.Util.readFileMetaData(
+      new java.io.ByteArrayInputStream(footerBytes)
+    )
+    (
+      if (raw.version == 2) "2.0" else "1.0",
+      Option(raw.created_by).getOrElse("")
+    )
+  }
+
+  private def buildParquetSchema(
+      msgSchema: MessageType,
+      blocks: List[BlockMetaData]
+  ): ParquetSchema = {
+    val compressionMap = blocks.headOption
+      .map(
+        _.getColumns.asScala
+          .map(c => c.getPath.toDotString -> c.getCodec.name())
+          .toMap
+      )
+      .getOrElse(Map.empty[String, String])
+    val columns = msgSchema.getColumns.asScala.map { col =>
+      val colPath = col.getPath.mkString(".")
+      ColumnInfo(
+        name = colPath,
+        dataType = col.getPrimitiveType.getPrimitiveTypeName.name(),
+        isOptional = col.getMaxRepetitionLevel == 0,
+        maxDefinitionLevel = col.getMaxDefinitionLevel,
+        maxRepetitionLevel = col.getMaxRepetitionLevel,
+        compressionType = compressionMap.getOrElse(colPath, "UNKNOWN")
+      )
+    }.toList
+    ParquetSchema(
+      columns = columns,
+      rowGroupCount = blocks.size.toLong,
+      totalRowCount = blocks.map(_.getRowCount).sum
+    )
+  }
+
+  // Cache-aware footer fetch: 0 cloud ops on hit, 1 stat + 1 stream on miss.
+  private def getFooter(
+      path: HadoopPath,
+      conf: Configuration
+  ): (MessageType, List[BlockMetaData]) =
+    footerCache.getOrElseUpdate(
+      path.toString, {
+        val footerBytes = readFooterBytes(HadoopInputFile.fromPath(path, conf))
+        val meta = parseFooter(footerBytes)
+        (meta.getFileMetaData.getSchema, meta.getBlocks.asScala.toList)
+      }
+    )
+
+  // ── Public API ────────────────────────────────────────────────────────────
+
   def readContent(file: ParquetFile, config: ReadConfig): Try[FileContent] = {
     setupHadoopConfiguration(file.location).flatMap { hadoopConfig =>
       Try {
         val hadoopPath = new HadoopPath(file.location.path)
-        val (totalRows, fileSchema) = getFileMetadata(hadoopPath, hadoopConfig)
+        val (fileSchema, blocks) = getFooter(hadoopPath, hadoopConfig)
+        val totalRows = blocks.map(_.getRowCount).sum
 
         val useParallel = config.parallelism > 1 && config.filter.isEmpty
         if (useParallel) {
+          // getFooter above is already cached; readParallel reuses it
           val rows = readParallel(hadoopPath, hadoopConfig, config)
           val isPartial =
             config.maxRows.exists(limit => rows.size.toLong >= limit)
@@ -102,7 +195,7 @@ class ParquetRepository(
       Try {
         val path4s = Parquet4sPath(file.location.path)
         val hadoopPath = new HadoopPath(file.location.path)
-        val (_, fileSchema) = getFileMetadata(hadoopPath, hadoopConfig)
+        val (fileSchema, _) = getFooter(hadoopPath, hadoopConfig)
         Using.resource(
           openParquetReader(
             path4s,
@@ -138,14 +231,8 @@ class ParquetRepository(
       conf: Configuration,
       config: ReadConfig
   ): List[Map[String, CellValue]] = {
-    val inputFile = HadoopInputFile.fromPath(path, conf)
-    val (blocks, fileSchema) =
-      Using.resource(ParquetFileReader.open(inputFile)) { reader =>
-        (
-          reader.getFooter.getBlocks.asScala.toList,
-          reader.getFooter.getFileMetaData.getSchema
-        )
-      }
+    // getFooter is a cache hit here — readContent already called it
+    val (fileSchema, blocks) = getFooter(path, conf)
 
     val requestedSchema = config.columns match {
       case Some(cols) if cols.nonEmpty =>
@@ -161,7 +248,7 @@ class ParquetRepository(
     try {
       val requestedNames =
         requestedSchema.getFields.asScala.map(_.getName).toSet
-      val futures = blocks.toList.map { block =>
+      val futures = blocks.map { block =>
         Future {
           val colChunks = block.getColumns.asScala.toList
           val relevantChunks = {
@@ -219,7 +306,7 @@ class ParquetRepository(
       hadoopPath: HadoopPath,
       hadoopConfig: Configuration,
       config: ReadConfig,
-      fileSchema: Option[org.apache.parquet.schema.MessageType]
+      fileSchema: Option[MessageType]
   ): com.github.mjakubowski84.parquet4s.ParquetIterable[RowParquetRecord] = {
     val filter = config.filter
       .flatMap { expr =>
@@ -232,11 +319,13 @@ class ParquetRepository(
       .getOrElse(Filter.noopFilter)
     config.columns match {
       case Some(cols) if cols.nonEmpty =>
-        val schema = ParquetSchemaBuilder.buildProjectedSchema(
-          hadoopPath,
-          hadoopConfig,
-          cols
-        )
+        // Use projectSchema with the pre-fetched fileSchema — avoids a redundant file open
+        val schema = fileSchema
+          .map(s => ParquetSchemaBuilder.projectSchema(s, cols))
+          .getOrElse(
+            ParquetSchemaBuilder
+              .buildProjectedSchema(hadoopPath, hadoopConfig, cols)
+          )
         ParquetReader
           .projectedGeneric(schema)
           .options(ParquetReader.Options(hadoopConf = hadoopConfig))
@@ -251,52 +340,14 @@ class ParquetRepository(
     }
   }
 
-  def readSchema(file: ParquetFile): Try[ParquetSchema] = {
+  def readSchema(file: ParquetFile): Try[ParquetSchema] =
     setupHadoopConfiguration(file.location).flatMap { hadoopConfig =>
       Try {
         val path = new HadoopPath(file.location.path)
-
-        // Open ParquetFileReader with InputFile
-        val inputFile = HadoopInputFile.fromPath(path, hadoopConfig)
-        Using.resource(ParquetFileReader.open(inputFile)) { reader =>
-          val footer = reader.getFooter
-          val schema = footer.getFileMetaData.getSchema
-
-          val blocks = footer.getBlocks.asScala
-
-          // Get compression types from first row group (if available)
-          val compressionMap: Map[String, String] =
-            blocks.headOption
-              .map { rowGroup =>
-                rowGroup.getColumns.asScala.map { columnChunk =>
-                  val columnPath = columnChunk.getPath.toDotString
-                  val compression = columnChunk.getCodec.name()
-                  columnPath -> compression
-                }.toMap
-              }
-              .getOrElse(Map.empty[String, String])
-
-          val columns = schema.getColumns.asScala.map { column =>
-            val columnPath = column.getPath.mkString(".")
-            ColumnInfo(
-              name = columnPath,
-              dataType = column.getPrimitiveType.getPrimitiveTypeName.name(),
-              isOptional = column.getMaxRepetitionLevel == 0,
-              maxDefinitionLevel = column.getMaxDefinitionLevel,
-              maxRepetitionLevel = column.getMaxRepetitionLevel,
-              compressionType = compressionMap.getOrElse(columnPath, "UNKNOWN")
-            )
-          }.toList
-
-          ParquetSchema(
-            columns = columns,
-            rowGroupCount = footer.getBlocks.size().toLong,
-            totalRowCount = blocks.map(_.getRowCount).sum
-          )
-        }
+        val (msgSchema, blocks) = getFooter(path, hadoopConfig)
+        buildParquetSchema(msgSchema, blocks)
       }
     }
-  }
 
   def readFileInfo(
       file: ParquetFile
@@ -305,83 +356,27 @@ class ParquetRepository(
       Try {
         val path = new HadoopPath(file.location.path)
         val fs = FileSystem.get(path.toUri, hadoopConfig)
-        // ONE stat call — reused for both schema (file length) and metadata (size/mtime)
         val fileStatus = fs.getFileStatus(path)
         val inputFile = HadoopInputFile.fromStatus(fileStatus, hadoopConfig)
-
-        // ONE stream open: read raw footer bytes, extract schema + metadata from memory
-        val (schema, formatVersion, compressionRatio, createdBy) =
-          Using.resource(inputFile.newStream()) { stream =>
-            val fileLen = inputFile.getLength
-            val tail = new Array[Byte](8)
-            stream.seek(fileLen - 8)
-            stream.readFully(tail)
-            val footerLen = java.nio.ByteBuffer
-              .wrap(tail, 0, 4)
-              .order(java.nio.ByteOrder.LITTLE_ENDIAN)
-              .getInt
-            stream.seek(fileLen - 8 - footerLen)
-            val footerBytes = new Array[Byte](footerLen)
-            stream.readFully(footerBytes)
-
-            val rawMeta = org.apache.parquet.format.Util.readFileMetaData(
-              new java.io.ByteArrayInputStream(footerBytes)
-            )
-            val version = if (rawMeta.version == 2) "2.0" else "1.0"
-            val createdByStr = Option(rawMeta.created_by).getOrElse("")
-
-            val converter =
-              new org.apache.parquet.format.converter.ParquetMetadataConverter()
-            val parquetMeta = converter.readParquetMetadata(
-              new java.io.ByteArrayInputStream(footerBytes),
-              org.apache.parquet.format.converter.ParquetMetadataConverter.NO_FILTER
-            )
-            val ratio = calculateCompressionRatio(
-              parquetMeta.getBlocks.asScala.toList
-            )
-
-            val msgSchema = parquetMeta.getFileMetaData.getSchema
-            val blocks = parquetMeta.getBlocks.asScala
-            val compressionMap = blocks.headOption
-              .map(
-                _.getColumns.asScala
-                  .map(c => c.getPath.toDotString -> c.getCodec.name())
-                  .toMap
-              )
-              .getOrElse(Map.empty[String, String])
-
-            val columns = msgSchema.getColumns.asScala.map { col =>
-              val colPath = col.getPath.mkString(".")
-              ColumnInfo(
-                name = colPath,
-                dataType = col.getPrimitiveType.getPrimitiveTypeName.name(),
-                isOptional = col.getMaxRepetitionLevel == 0,
-                maxDefinitionLevel = col.getMaxDefinitionLevel,
-                maxRepetitionLevel = col.getMaxRepetitionLevel,
-                compressionType = compressionMap.getOrElse(colPath, "UNKNOWN")
-              )
-            }.toList
-
-            val parsedSchema = ParquetSchema(
-              columns = columns,
-              rowGroupCount = parquetMeta.getBlocks.size().toLong,
-              totalRowCount = blocks.map(_.getRowCount).sum
-            )
-
-            (parsedSchema, version, ratio, createdByStr)
-          }
-
+        val footerBytes = readFooterBytes(inputFile)
+        val (version, createdBy) = parseRawMeta(footerBytes)
+        val meta = parseFooter(footerBytes)
+        val blocks = meta.getBlocks.asScala.toList
+        val msgSchema = meta.getFileMetaData.getSchema
+        footerCache.put(path.toString, (msgSchema, blocks))
+        val ratio = calculateCompressionRatio(blocks)
+        val parsedSchema = buildParquetSchema(msgSchema, blocks)
         val metadata = FileMetadata(
           fileSize = fileStatus.getLen,
           createdAt = None,
           modifiedAt = Some(
             java.time.Instant.ofEpochMilli(fileStatus.getModificationTime)
           ),
-          compressionRatio = compressionRatio,
-          version = formatVersion,
+          compressionRatio = ratio,
+          version = version,
           createdBy = Some(createdBy)
         )
-        (schema, metadata)
+        (parsedSchema, metadata)
       }
     }
   }
@@ -392,50 +387,21 @@ class ParquetRepository(
         val path = new HadoopPath(file.location.path)
         val fs = FileSystem.get(path.toUri, hadoopConfig)
         val fileStatus = fs.getFileStatus(path)
-        // fromStatus reuses the already-fetched FileStatus — no extra stat call
         val inputFile = HadoopInputFile.fromStatus(fileStatus, hadoopConfig)
-
-        // One stream open: read raw footer bytes, parse twice from memory.
-        val (formatVersion, compressionRatio, createdBy) =
-          Using.resource(inputFile.newStream()) { stream =>
-            val fileLen = inputFile.getLength
-            val tail = new Array[Byte](8)
-            stream.seek(fileLen - 8)
-            stream.readFully(tail)
-            val footerLen = java.nio.ByteBuffer
-              .wrap(tail, 0, 4)
-              .order(java.nio.ByteOrder.LITTLE_ENDIAN)
-              .getInt
-            stream.seek(fileLen - 8 - footerLen)
-            val footerBytes = new Array[Byte](footerLen)
-            stream.readFully(footerBytes)
-
-            val rawMeta = org.apache.parquet.format.Util.readFileMetaData(
-              new java.io.ByteArrayInputStream(footerBytes)
-            )
-            val version = if (rawMeta.version == 2) "2.0" else "1.0"
-            val createdByStr = Option(rawMeta.created_by).getOrElse("")
-
-            val converter =
-              new org.apache.parquet.format.converter.ParquetMetadataConverter()
-            val parquetMeta = converter.readParquetMetadata(
-              new java.io.ByteArrayInputStream(footerBytes),
-              org.apache.parquet.format.converter.ParquetMetadataConverter.NO_FILTER
-            )
-            val ratio = calculateCompressionRatio(
-              parquetMeta.getBlocks.asScala.toList
-            )
-            (version, ratio, createdByStr)
-          }
-
+        val footerBytes = readFooterBytes(inputFile)
+        val (version, createdBy) = parseRawMeta(footerBytes)
+        val meta = parseFooter(footerBytes)
+        val blocks = meta.getBlocks.asScala.toList
+        footerCache.put(path.toString, (meta.getFileMetaData.getSchema, blocks))
+        val ratio = calculateCompressionRatio(blocks)
         FileMetadata(
           fileSize = fileStatus.getLen,
           createdAt = None,
           modifiedAt = Some(
             java.time.Instant.ofEpochMilli(fileStatus.getModificationTime)
           ),
-          compressionRatio = compressionRatio,
-          version = formatVersion,
+          compressionRatio = ratio,
+          version = version,
           createdBy = Some(createdBy)
         )
       }
@@ -450,20 +416,15 @@ class ParquetRepository(
   ): Try[Unit] = {
     setupHadoopConfiguration(location).flatMap { hadoopConfig =>
       Try {
-        // For parquet4s 2.x, we need to use the low-level Hadoop API
-        // or convert data to proper case classes
-
         import org.apache.parquet.hadoop.example.ExampleParquetWriter
         import org.apache.parquet.example.data.simple.SimpleGroupFactory
         import org.apache.hadoop.fs.{Path => HadoopPath}
 
-        // Build Parquet schema from data structure
         val parquetSchema = schema match {
           case Some(ps) => ParquetSchemaBuilder.buildMessageType(ps)
           case None     => ParquetSchemaBuilder.inferSchemaFromData(data)
         }
 
-        // Use ExampleParquetWriter.builder for Group writing
         val writer = ExampleParquetWriter
           .builder(new HadoopPath(location.path))
           .withType(parquetSchema)
@@ -595,26 +556,22 @@ class ParquetRepository(
 
   def readSchemaFields(
       file: ParquetFile
-  ): Try[List[FieldSummary]] = {
+  ): Try[List[FieldSummary]] =
     setupHadoopConfiguration(file.location).flatMap { hadoopConfig =>
       Try {
         val path = new HadoopPath(file.location.path)
-        val inputFile = HadoopInputFile.fromPath(path, hadoopConfig)
-        Using.resource(ParquetFileReader.open(inputFile)) { reader =>
-          val schema = reader.getFooter.getFileMetaData.getSchema
-          schema.getFields.asScala.toList.map { field =>
-            val typeName =
-              if (field.isPrimitive)
-                field.asPrimitiveType().getPrimitiveTypeName.name()
-              else groupTypeCanonical(field.asGroupType())
-            val optional =
-              field.getRepetition == org.apache.parquet.schema.Type.Repetition.OPTIONAL
-            FieldSummary(field.getName, typeName, optional)
-          }
+        val (schema, _) = getFooter(path, hadoopConfig)
+        schema.getFields.asScala.toList.map { field =>
+          val typeName =
+            if (field.isPrimitive)
+              field.asPrimitiveType().getPrimitiveTypeName.name()
+            else groupTypeCanonical(field.asGroupType())
+          val optional =
+            field.getRepetition == org.apache.parquet.schema.Type.Repetition.OPTIONAL
+          FieldSummary(field.getName, typeName, optional)
         }
       }
     }
-  }
 
   def deleteFile(location: StorageLocation): Try[Unit] =
     setupHadoopConfiguration(location).map { hadoopConfig =>
@@ -623,47 +580,41 @@ class ParquetRepository(
       fs.delete(path, false)
     }
 
-  def readStats(file: ParquetFile): Try[FileStats] = {
+  def readStats(file: ParquetFile): Try[FileStats] =
     setupHadoopConfiguration(file.location).flatMap { hadoopConfig =>
       Try {
         val path = new HadoopPath(file.location.path)
-        val inputFile = HadoopInputFile.fromPath(path, hadoopConfig)
-        Using.resource(ParquetFileReader.open(inputFile)) { reader =>
-          val footer = reader.getFooter
-          val schema = footer.getFileMetaData.getSchema
-          val blocks = footer.getBlocks.asScala.toList
-          val totalRows = blocks.map(_.getRowCount).sum
+        val (schema, blocks) = getFooter(path, hadoopConfig)
+        val totalRows = blocks.map(_.getRowCount).sum
 
-          val columns = schema.getColumns.asScala.toList.map { colDescriptor =>
-            val colPath = colDescriptor.getPath.mkString(".")
-            val typeName = colDescriptor.getPrimitiveType.getPrimitiveTypeName
-            val dataType = typeName.name()
+        val columns = schema.getColumns.asScala.toList.map { colDescriptor =>
+          val colPath = colDescriptor.getPath.mkString(".")
+          val typeName = colDescriptor.getPrimitiveType.getPrimitiveTypeName
+          val dataType = typeName.name()
 
-            val chunkStats = blocks
-              .flatMap { block =>
-                block.getColumns.asScala
-                  .find(_.getPath.toDotString == colPath)
-                  .map(_.getStatistics)
-              }
-              .filter(_ != null)
-
-            val nullCount = {
-              val counts = chunkStats.filter(_.isNumNullsSet).map(_.getNumNulls)
-              if (counts.nonEmpty) counts.sum else -1L
+          val chunkStats = blocks
+            .flatMap { block =>
+              block.getColumns.asScala
+                .find(_.getPath.toDotString == colPath)
+                .map(_.getStatistics)
             }
+            .filter(_ != null)
 
-            val withValues =
-              chunkStats.filter(s => !s.isEmpty && s.hasNonNullValue)
-            val (minVal, maxVal) = computeTypedMinMax(withValues, typeName)
-
-            ColumnStats(colPath, dataType, nullCount, minVal, maxVal)
+          val nullCount = {
+            val counts = chunkStats.filter(_.isNumNullsSet).map(_.getNumNulls)
+            if (counts.nonEmpty) counts.sum else -1L
           }
 
-          FileStats(columns, totalRows, blocks.size.toLong)
+          val withValues =
+            chunkStats.filter(s => !s.isEmpty && s.hasNonNullValue)
+          val (minVal, maxVal) = computeTypedMinMax(withValues, typeName)
+
+          ColumnStats(colPath, dataType, nullCount, minVal, maxVal)
         }
+
+        FileStats(columns, totalRows, blocks.size.toLong)
       }
     }
-  }
 
   private def numericMinMax[T: Ordering](
       withValues: List[org.apache.parquet.column.statistics.Statistics[?]],
@@ -736,23 +687,11 @@ class ParquetRepository(
     }
   }
 
-  private def getFileMetadata(
-      path: HadoopPath,
-      conf: Configuration
-  ): (Long, MessageType) = {
-    val inputFile = HadoopInputFile.fromPath(path, conf)
-    Using.resource(ParquetFileReader.open(inputFile)) { reader =>
-      val rowCount = reader.getFooter.getBlocks.asScala.map(_.getRowCount).sum
-      val schema = reader.getFooter.getFileMetaData.getSchema
-      (rowCount, schema)
-    }
-  }
-
   /** Calculate compression ratio from row group metadata Ratio =
     * uncompressed_size / compressed_size Higher ratio means better compression
     */
   private def calculateCompressionRatio(
-      rowGroups: List[org.apache.parquet.hadoop.metadata.BlockMetaData]
+      rowGroups: List[BlockMetaData]
   ): Option[Double] = {
     if (rowGroups.isEmpty) return None
 
