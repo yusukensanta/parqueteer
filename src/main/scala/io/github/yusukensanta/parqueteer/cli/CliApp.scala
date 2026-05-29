@@ -128,7 +128,9 @@ object CliApp {
         } catch {
           case e: Exception =>
             logger.error("Unexpected error", e)
-            System.err.println(s"Error: ${e.getMessage}")
+            System.err.println(
+              s"Error: ${CredentialRedactor.redact(e.getMessage)}"
+            )
             if (config.globalOptions.verbose) e.printStackTrace()
             1
         }
@@ -778,7 +780,9 @@ object CliApp {
       opts: GlobalOptions,
       hint: Option[String] = None
   )(error: ParqueteerError): Int = {
-    System.err.println(s"$prefix: ${error.userMessage}")
+    System.err.println(
+      s"$prefix: ${CredentialRedactor.redact(error.userMessage)}"
+    )
     hint.foreach(System.err.println)
     if (opts.verbose) error match {
       case ParqueteerError.IOError(cause) =>
