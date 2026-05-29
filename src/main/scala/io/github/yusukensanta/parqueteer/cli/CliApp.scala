@@ -527,13 +527,16 @@ object CliApp {
             .flatMap { ps =>
               val writer = RowStreamWriter(outFormat, ps)
               writer.begin()
-              val result = service.streamRead(
-                inputPath,
-                ReadConfig(maxRows = conversionConfig.maxRows)
-              )(writer.writeRow)
-              writer.end()
-              ps.close()
-              result.map(_ => ())
+              try {
+                val result = service.streamRead(
+                  inputPath,
+                  ReadConfig(maxRows = conversionConfig.maxRows)
+                )(writer.writeRow)
+                result.map(_ => ())
+              } finally {
+                writer.end()
+                ps.close()
+              }
             }
         case ("parquet", "parquet") =>
           service
