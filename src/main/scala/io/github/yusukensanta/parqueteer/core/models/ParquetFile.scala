@@ -1,6 +1,7 @@
 package io.github.yusukensanta.parqueteer.core.models
 
 import java.time.Instant
+import scala.concurrent.duration.{Duration, FiniteDuration}
 
 case class ParquetFile(
     location: StorageLocation,
@@ -45,7 +46,8 @@ case class ReadConfig(
     filter: Option[String] = None,
     outputFormat: OutputFormat = OutputFormat.Table,
     parallelism: Int = 1,
-    streamingMode: Boolean = false
+    streamingMode: Boolean = false,
+    readTimeout: FiniteDuration = Duration(5, "minutes")
 )
 
 enum OutputFormat:

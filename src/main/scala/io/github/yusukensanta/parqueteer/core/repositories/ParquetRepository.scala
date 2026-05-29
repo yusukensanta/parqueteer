@@ -15,7 +15,6 @@ import org.apache.parquet.hadoop.util.HadoopInputFile
 import org.apache.parquet.schema.MessageType
 import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
 import scala.concurrent.{Future, Await, ExecutionContext}
-import scala.concurrent.duration.Duration
 import java.util.concurrent.Executors
 import scala.util.{Try, Success, Using}
 import scala.jdk.CollectionConverters._
@@ -184,7 +183,15 @@ class ParquetRepository(
           }
         }
       }
-      val allRows = Await.result(Future.sequence(futures), Duration.Inf).flatten
+      val allRows =
+        try Await.result(Future.sequence(futures), config.readTimeout).flatten
+        catch {
+          case _: java.util.concurrent.TimeoutException =>
+            throw new RuntimeException(
+              s"parallel read timed out after ${config.readTimeout} — " +
+                "retry with --parallelism 1, or check network connectivity"
+            )
+        }
       config.maxRows match {
         case Some(limit) => allRows.take(limit.toInt)
         case None        => allRows
