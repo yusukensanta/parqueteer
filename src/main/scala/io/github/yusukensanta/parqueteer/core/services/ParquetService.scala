@@ -418,6 +418,7 @@ class ParquetService(
       else
         n.toLong
           .map(CellValue.I64.apply)
+          .orElse(n.toBigDecimal.map(CellValue.Dec.apply))
           .getOrElse(CellValue.F64(n.toDouble))
     } else if (j.isBoolean) CellValue.Bool(j.asBoolean.get)
     else if (j.isNull) CellValue.Null
