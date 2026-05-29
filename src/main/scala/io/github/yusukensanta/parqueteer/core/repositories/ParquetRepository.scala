@@ -63,7 +63,7 @@ class ParquetRepository(
             val rows = config.maxRows match {
               case Some(limit) =>
                 reader
-                  .take(limit.toInt)
+                  .take(limit.min(Int.MaxValue).toInt)
                   .map(r =>
                     ParquetRecordDecoder.postProcessTemporalFields(
                       ParquetRecordDecoder.convertRecordToMap(r),
@@ -113,8 +113,9 @@ class ParquetRepository(
           )
         ) { source =>
           val iter = config.maxRows match {
-            case Some(limit) => source.iterator.take(limit.toInt)
-            case None        => source.iterator
+            case Some(limit) =>
+              source.iterator.take(limit.min(Int.MaxValue).toInt)
+            case None => source.iterator
           }
           var count = 0L
           iter.foreach { record =>
@@ -193,7 +194,7 @@ class ParquetRepository(
             )
         }
       config.maxRows match {
-        case Some(limit) => allRows.take(limit.toInt)
+        case Some(limit) => allRows.take(limit.min(Int.MaxValue).toInt)
         case None        => allRows
       }
     } finally {
