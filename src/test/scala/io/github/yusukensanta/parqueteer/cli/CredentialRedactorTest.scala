@@ -127,4 +127,26 @@ class CredentialRedactorTest
     result should include("-----BEGIN PRIVATE KEY-----")
     result should include("[REDACTED]")
   }
+
+  // ── CliApp call-site shapes ───────────────────────────────────────────────
+
+  it should "redact credentials in Hadoop S3A exception message (catch-all handler shape)" in {
+    val exceptionMessage =
+      "com.amazonaws.services.s3.model.AmazonS3Exception: " +
+        "Status Code: 403, AWS Service: Amazon S3, AWS Request ID: 1234, " +
+        "AWSAccessKeyId=AKIAIOSFODNN7EXAMPLE&Signature=wJalrXUtnFEMI%2FK7MDENG"
+    val printed = s"Error: ${CredentialRedactor.redact(exceptionMessage)}"
+    printed should not include "AKIAIOSFODNN7EXAMPLE"
+    printed should not include "wJalrXUtnFEMI"
+    printed should include("[REDACTED]")
+  }
+
+  it should "redact credentials embedded in IOError userMessage (reportError shape)" in {
+    val causeMsg =
+      "I/O error: Software caused connection abort — " +
+        "Authorization: Bearer eyJsZWFrZWRUb2tlbn0secret"
+    val printed = s"Failed to read: ${CredentialRedactor.redact(causeMsg)}"
+    printed should not include "eyJsZWFrZWRUb2tlbn0secret"
+    printed should include("[REDACTED]")
+  }
 }
