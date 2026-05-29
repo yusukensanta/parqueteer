@@ -138,7 +138,7 @@ class ParquetRepository(
         val (fileSchema, blocks) = getFooter(hadoopPath, hadoopConfig)
         val totalRows = blocks.map(_.getRowCount).sum
 
-        val useParallel = config.parallelism > 1
+        val useParallel = config.parallelism > 1 && config.filter.isEmpty
         if (useParallel) {
           // getFooter above is already cached; readParallel reuses it
           val rows = readParallel(hadoopPath, hadoopConfig, config)
