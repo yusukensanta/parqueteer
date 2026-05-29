@@ -24,7 +24,7 @@ class JSONFormatter extends OutputFormatter {
       "displayedRows" -> Json.fromInt(content.rows.size)
     )
 
-    json.spaces2
+    json.noSpaces
   }
 
   override def formatSchema(schema: ParquetSchema): String = {
@@ -34,21 +34,18 @@ class JSONFormatter extends OutputFormatter {
       "totalRowCount" -> Json.fromLong(schema.totalRowCount)
     )
 
-    json.spaces2
+    json.noSpaces
   }
 
   override def formatMetadata(metadata: FileMetadata): String = {
-    metadata.asJson.spaces2
+    metadata.asJson.noSpaces
   }
 
-  private def encodeRow(row: Map[String, CellValue]): Json = {
-    val fields = row.map { case (key, value) =>
-      key -> io.github.yusukensanta.parqueteer.core.util.JsonEncoder.encode(
-        value
-      )
-    }
-    Json.obj(fields.toSeq*)
-  }
+  private def encodeRow(row: Map[String, CellValue]): Json =
+    Json.fromFields(row.map { case (key, value) =>
+      key -> io.github.yusukensanta.parqueteer.core.util.JsonEncoder
+        .encode(value)
+    })
 }
 
 object JSONFormatter {

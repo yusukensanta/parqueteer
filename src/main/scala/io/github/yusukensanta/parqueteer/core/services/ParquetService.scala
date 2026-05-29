@@ -215,9 +215,17 @@ class ParquetService(
             }
             .toParqueteerError
             .flatMap(count =>
-              streamError
-                .map(e => Left(ParqueteerError.IOError(e)))
-                .getOrElse(Right(count))
+              streamError match {
+                case Some(e) =>
+                  // Delete partial output; merge is not atomic so partial writes are unusable
+                  scala.util.Try(
+                    java.nio.file.Files.deleteIfExists(
+                      java.nio.file.Paths.get(outputPath)
+                    )
+                  )
+                  Left(ParqueteerError.IOError(e))
+                case None => Right(count)
+              }
             )
         }
       } yield count
@@ -351,7 +359,30 @@ class ParquetService(
       path: String
   ): Try[List[Map[String, CellValue]]] = Try {
     import better.files._
-    parseNdjsonContent(File(path).contentAsString)
+    import io.circe.parser._
+    File(path).lineIterator
+      .map(_.trim)
+      .filter(_.nonEmpty)
+      .map { line =>
+        parse(line) match {
+          case Left(error) =>
+            throw new IllegalArgumentException(
+              s"Failed to parse NDJSON line: ${error.getMessage}"
+            )
+          case Right(json) =>
+            json.asObject
+              .getOrElse(
+                throw new IllegalArgumentException(
+                  s"Each NDJSON line must be a JSON object, got: ${json.noSpaces}"
+                )
+              )
+              .toMap
+              .view
+              .mapValues(coerceJsonValue)
+              .toMap
+        }
+      }
+      .toList
   }
 
   private def readCsvFile(path: String): Try[List[Map[String, CellValue]]] =
@@ -363,7 +394,9 @@ class ParquetService(
   private def readLtsvFile(path: String): Try[List[Map[String, CellValue]]] =
     Try {
       import better.files._
-      parseLtsvContent(File(path).contentAsString)
+      io.github.yusukensanta.parqueteer.core.util.LTSVParser
+        .parseLines(File(path).lineIterator)
+        .toList
     }
 
   private[services] def parseLtsvContent(

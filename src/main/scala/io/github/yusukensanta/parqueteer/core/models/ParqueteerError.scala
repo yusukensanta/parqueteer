@@ -42,6 +42,14 @@ object ParqueteerError:
     val userMessage =
       s"I/O error: ${Option(cause.getMessage).getOrElse(cause.getClass.getSimpleName)}"
 
+  case class ParseError(format: String, message: String)
+      extends ParqueteerError:
+    val exitCode = 2
+    val userMessage = s"Parse error ($format): $message"
+
   extension [A](t: Try[A])
     def toParqueteerError: Either[ParqueteerError, A] =
-      t.toEither.left.map(IOError.apply)
+      t.toEither.left.map {
+        case e: IllegalArgumentException => ParseError("input", e.getMessage)
+        case e                           => IOError(e)
+      }
