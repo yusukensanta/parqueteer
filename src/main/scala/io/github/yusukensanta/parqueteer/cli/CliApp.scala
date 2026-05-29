@@ -141,9 +141,7 @@ object CliApp {
     val s3 = appConfig.cloud.s3
     opts.copy(
       profile = opts.profile.orElse(s3.profile),
-      region = opts.region.orElse(
-        if (s3.defaultRegion != "us-east-1") Some(s3.defaultRegion) else None
-      )
+      region = opts.region.orElse(s3.defaultRegion)
     )
   }
 

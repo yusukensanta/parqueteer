@@ -19,7 +19,7 @@ case class CloudConfig(
 )
 
 case class S3Config(
-    defaultRegion: String = "us-east-1",
+    defaultRegion: Option[String] = None,
     profile: Option[String] = None,
     endpointUrl: Option[String] = None,
     useSsl: Boolean = true,
@@ -136,7 +136,7 @@ class ConfigurationManager {
       val defaultYaml =
         """cloud:
           |  s3:
-          |    default_region: "us-east-1"
+          |    default_region: null
           |    profile: null
           |    endpoint_url: null
           |    use_ssl: true
