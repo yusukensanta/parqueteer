@@ -37,6 +37,22 @@ object CliApp {
     org.slf4j.bridge.SLF4JBridgeHandler.removeHandlersForRootLogger()
     org.slf4j.bridge.SLF4JBridgeHandler.install()
 
+    // Force UTF-8 for stdout/stderr regardless of platform locale.
+    // The launcher scripts also pass -Dfile.encoding=UTF-8 / -Dstdout.encoding=UTF-8
+    // so this backstop only matters when the JAR is invoked directly via `java -jar`.
+    val utf8 = java.nio.charset.StandardCharsets.UTF_8
+    val utf8Out = new java.io.PrintStream(System.out, true, utf8)
+    val utf8Err = new java.io.PrintStream(System.err, true, utf8)
+    System.setOut(utf8Out)
+    System.setErr(utf8Err)
+    Console.withOut(utf8Out) {
+      Console.withErr(utf8Err) {
+        mainImpl(args)
+      }
+    }
+  }
+
+  private def mainImpl(args: Array[String]): Unit = {
     if (shouldShowVersion(args)) {
       showVersion()
       System.exit(0)
