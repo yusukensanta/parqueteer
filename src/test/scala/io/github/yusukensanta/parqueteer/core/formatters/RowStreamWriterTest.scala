@@ -1,0 +1,161 @@
+package io.github.yusukensanta.parqueteer.core.formatters
+
+import io.github.yusukensanta.parqueteer.core.models.{CellValue, OutputFormat}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
+import java.io.{ByteArrayOutputStream, PrintStream}
+
+class RowStreamWriterTest extends AnyFlatSpec with Matchers {
+
+  private def capture(f: PrintStream => Unit): String = {
+    val baos = new ByteArrayOutputStream()
+    val ps = new PrintStream(baos, true, "UTF-8")
+    f(ps)
+    ps.flush()
+    baos.toString("UTF-8")
+  }
+
+  private def run(
+      format: OutputFormat,
+      rows: List[Map[String, CellValue]]
+  ): String = capture { ps =>
+    val w = RowStreamWriter(format, ps)
+    w.begin()
+    rows.foreach(w.writeRow)
+    w.end()
+  }
+
+  private val row1 =
+    Map("a" -> CellValue.I64(1L), "b" -> CellValue.Str("hello"))
+  private val row2 =
+    Map("a" -> CellValue.I64(2L), "b" -> CellValue.Str("world"))
+
+  // ── NDJSON ──────────────────────────────────────────────────────────────────
+
+  "RowStreamWriter NDJSON" should "emit one JSON object per line" in {
+    val out = run(OutputFormat.NDJSON, List(row1, row2))
+    val lines = out.trim.split("\n")
+    lines should have length 2
+    lines(0) should (include("\"a\":1") and include("\"b\":\"hello\""))
+    lines(1) should (include("\"a\":2") and include("\"b\":\"world\""))
+  }
+
+  it should "emit nothing for empty input" in {
+    run(OutputFormat.NDJSON, List.empty) shouldBe ""
+  }
+
+  // ── JSON ─────────────────────────────────────────────────────────────────────
+
+  "RowStreamWriter JSON" should "emit a valid JSON array" in {
+    val out = run(OutputFormat.JSON, List(row1, row2))
+    out should startWith("[")
+    out.trim should endWith("]")
+    out should include("\"a\":1")
+    out should include("\"a\":2")
+  }
+
+  it should "emit no comma before the first element" in {
+    val out = run(OutputFormat.JSON, List(row1))
+    out should not include ",{"
+  }
+
+  it should "separate elements with commas" in {
+    val out = run(OutputFormat.JSON, List(row1, row2))
+    out should include("},{")
+  }
+
+  it should "emit [] for empty input" in {
+    run(OutputFormat.JSON, List.empty).trim shouldBe "[]"
+  }
+
+  // ── CSV ──────────────────────────────────────────────────────────────────────
+
+  "RowStreamWriter CSV" should "emit header then data rows" in {
+    val out = run(OutputFormat.CSV, List(row1))
+    val lines = out.trim.split("\r?\n")
+    lines should have length 2
+    lines(0) should (include("a") and include("b"))
+    lines(1) should (include("1") and include("hello"))
+  }
+
+  it should "quote values containing commas" in {
+    val r = Map("x" -> CellValue.Str("a,b"))
+    val out = run(OutputFormat.CSV, List(r))
+    out should include("\"a,b\"")
+  }
+
+  it should "quote values containing double quotes" in {
+    val r = Map("x" -> CellValue.Str("say \"hi\""))
+    val out = run(OutputFormat.CSV, List(r))
+    out should include("\"say \"\"hi\"\"\"")
+  }
+
+  it should "emit nothing for empty input" in {
+    run(OutputFormat.CSV, List.empty) shouldBe ""
+  }
+
+  // ── Table ─────────────────────────────────────────────────────────────────────
+
+  "RowStreamWriter Table" should "emit table borders and header" in {
+    val out = run(OutputFormat.Table, List(row1, row2))
+    out should include("┌")
+    out should include("┐")
+    out should include("└")
+    out should include("┘")
+    out should include("a")
+    out should include("b")
+  }
+
+  it should "emit data values in the table" in {
+    val out = run(OutputFormat.Table, List(row1))
+    out should include("1")
+    out should include("hello")
+  }
+
+  it should "handle empty input gracefully" in {
+    val out = run(OutputFormat.Table, List.empty)
+    out should include("┌")
+  }
+
+  // ── Markdown ─────────────────────────────────────────────────────────────────
+
+  "RowStreamWriter Markdown" should "emit header and separator rows" in {
+    val out = run(OutputFormat.Markdown, List(row1, row2))
+    val lines = out.trim.split("\n")
+    lines(0) should startWith("|")
+    lines(1) should include("---")
+    lines should have length 4
+  }
+
+  it should "escape pipe characters in values" in {
+    val r = Map("x" -> CellValue.Str("a|b"))
+    val out = run(OutputFormat.Markdown, List(r))
+    out should include("a\\|b")
+  }
+
+  it should "handle empty input" in {
+    val out = run(OutputFormat.Markdown, List.empty)
+    out.trim.split("\n") should have length 2
+  }
+
+  // ── LTSV ─────────────────────────────────────────────────────────────────────
+
+  "RowStreamWriter LTSV" should "emit one LTSV line per row" in {
+    val out = run(OutputFormat.LTSV, List(row1, row2))
+    val lines = out.trim.split("\n")
+    lines should have length 2
+    lines(0) should (include("a:1") or include("b:hello"))
+    lines(1) should (include("a:2") or include("b:world"))
+  }
+
+  it should "emit nothing for empty input" in {
+    run(OutputFormat.LTSV, List.empty) shouldBe ""
+  }
+
+  // ── Pretty (delegates to NDJSON) ─────────────────────────────────────────────
+
+  "RowStreamWriter Pretty" should "emit one JSON object per line (same as NDJSON)" in {
+    val out = run(OutputFormat.Pretty, List(row1))
+    out.trim should (include("\"a\":1") and include("\"b\":\"hello\""))
+  }
+}

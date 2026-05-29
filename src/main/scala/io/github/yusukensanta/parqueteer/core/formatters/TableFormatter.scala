@@ -22,7 +22,7 @@ class TableFormatter extends OutputFormatter {
 
     val (rows, effectiveContent) =
       if (content.rows.size > MaxTableRows) {
-        System.err.println(
+        Console.err.println(
           s"[parqueteer] warning: ${content.rows.size} rows exceeds table limit ($MaxTableRows). " +
             s"Showing first $MaxTableRows rows. Use --limit N to cap output, or --format json for large datasets."
         )
