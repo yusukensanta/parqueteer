@@ -510,6 +510,13 @@ class ParquetRepository(
     }
   }
 
+  def deleteFile(location: StorageLocation): Try[Unit] =
+    setupHadoopConfiguration(location).map { hadoopConfig =>
+      val path = new HadoopPath(location.path)
+      val fs = FileSystem.get(path.toUri, hadoopConfig)
+      fs.delete(path, false)
+    }
+
   def readStats(file: ParquetFile): Try[FileStats] = {
     setupHadoopConfiguration(file.location).flatMap { hadoopConfig =>
       Try {
