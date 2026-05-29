@@ -85,4 +85,30 @@ class LTSVFormatterTest extends AnyFlatSpec with Matchers {
     parsed(0)("host") shouldBe CellValue.Str("example.com")
     parsed(0)("status") shouldBe CellValue.I64(200L)
   }
+
+  it should "append a #-comment when isPartial is true" in {
+    val content = FileContent(
+      rows = List(Map("k" -> CellValue.Str("v"))),
+      totalRows = 1000L,
+      isPartial = true
+    )
+    val lines = fmt.formatContent(content, None).split("\n")
+    lines should have length 2
+    val comment = lines(1)
+    comment should startWith("#")
+    comment should include("partial:true")
+    comment should include("total_rows:1000")
+    comment should include("shown:1")
+  }
+
+  it should "not append a comment when isPartial is false" in {
+    val content = FileContent(
+      rows = List(Map("k" -> CellValue.Str("v"))),
+      totalRows = 1L,
+      isPartial = false
+    )
+    val lines = fmt.formatContent(content, None).split("\n")
+    lines should have length 1
+    lines(0) should not startWith "#"
+  }
 }
