@@ -231,6 +231,26 @@ class FilterParserTest extends AnyFlatSpec with Matchers {
     FilterParser.parse("???!!!") shouldBe a[Left[?, ?]]
   }
 
+  it should "return Left with position hint for unknown character '&'" in {
+    val result = FilterParser.parse("""name = "Alice" & age > 10""")
+    result shouldBe a[Left[?, ?]]
+    result.left.toOption.get.message should include("unexpected character")
+    result.left.toOption.get.message should include("&")
+  }
+
+  it should "return Left with position hint for pipe character '|'" in {
+    val result = FilterParser.parse("age > 5 | age < 2")
+    result shouldBe a[Left[?, ?]]
+    result.left.toOption.get.message should include("unexpected character")
+    result.left.toOption.get.message should include("|")
+  }
+
+  it should "return Left with hint for Long overflow" in {
+    val result = FilterParser.parse("id = 99999999999999999999")
+    result shouldBe a[Left[?, ?]]
+    result.left.toOption.get.message should include("out of Long range")
+  }
+
   it should "return Left for dangling AND" in {
     FilterParser.parse("age > 5 AND") shouldBe a[Left[?, ?]]
   }

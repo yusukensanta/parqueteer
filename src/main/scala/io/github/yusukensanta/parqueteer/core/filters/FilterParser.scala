@@ -103,9 +103,21 @@ private class FilterParserImpl(schema: Option[MessageType]) {
             }
             buf += Token.Dbl(input.substring(start, i).toDouble)
           } else {
-            buf += Token.Lng(input.substring(start, i).toLong)
+            val raw = input.substring(start, i)
+            val l =
+              try raw.toLong
+              catch {
+                case _: NumberFormatException =>
+                  throw new IllegalArgumentException(
+                    s"numeric literal '$raw' is out of Long range; add a decimal point to use Double (e.g. ${raw}.0)"
+                  )
+              }
+            buf += Token.Lng(l)
           }
-        case _ => i += 1
+        case c =>
+          throw new IllegalArgumentException(
+            s"unexpected character '${c}' at position $i — use AND/OR (not &/|), or check for smart quotes"
+          )
       }
       skipWS()
     }
