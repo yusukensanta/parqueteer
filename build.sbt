@@ -60,11 +60,15 @@ lazy val root = (project in file("."))
     bashScriptExtraDefines += """addJava "--add-opens=java.base/java.lang=ALL-UNNAMED"""",
     bashScriptExtraDefines += """addJava "--add-opens=java.base/sun.nio.ch=ALL-UNNAMED"""",
     bashScriptExtraDefines += """addJava "-Xmx1G"""",
+    bashScriptExtraDefines += """addJava "-Dfile.encoding=UTF-8"""",
+    bashScriptExtraDefines += """addJava "-Dstdout.encoding=UTF-8"""",
 
     // For Windows batch scripts
     batScriptExtraDefines += """set "_JAVA_OPTS=%_JAVA_OPTS% --add-opens=java.base/java.lang=ALL-UNNAMED"""",
     batScriptExtraDefines += """set "_JAVA_OPTS=%_JAVA_OPTS% --add-opens=java.base/sun.nio.ch=ALL-UNNAMED"""",
     batScriptExtraDefines += """set "_JAVA_OPTS=%_JAVA_OPTS% -Xmx1G"""",
+    batScriptExtraDefines += """set "_JAVA_OPTS=%_JAVA_OPTS% -Dfile.encoding=UTF-8"""",
+    batScriptExtraDefines += """set "_JAVA_OPTS=%_JAVA_OPTS% -Dstdout.encoding=UTF-8"""",
 
     // Universal packaging configuration for distribution
     Universal / packageName := s"${name.value}-${version.value}",
