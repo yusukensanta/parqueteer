@@ -36,7 +36,7 @@ class ParquetRepository(
         val hadoopPath = new HadoopPath(file.location.path)
         val (totalRows, fileSchema) = getFileMetadata(hadoopPath, hadoopConfig)
 
-        val useParallel = config.parallelism > 1
+        val useParallel = config.parallelism > 1 && config.filter.isEmpty
         if (useParallel) {
           val rows = readParallel(hadoopPath, hadoopConfig, config)
           val isPartial =
