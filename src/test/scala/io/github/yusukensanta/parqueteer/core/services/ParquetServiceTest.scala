@@ -442,6 +442,14 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     rows.head("n") shouldBe a[CellValue.I64]
   }
 
+  it should "preserve integers exceeding Long.MaxValue as CellValue.Dec (not F64)" in {
+    val service = new ParquetService(new FakeParquetRepository())
+    // 9223372036854775808 = Long.MaxValue + 1, cannot fit in Long
+    val rows = service.parseJsonContent("""[{"n": 9223372036854775808}]""")
+    rows.head("n") shouldBe a[CellValue.Dec]
+    rows.head("n").display shouldBe "9223372036854775808"
+  }
+
   it should "throw for non-array JSON" in {
     val service = new ParquetService(new FakeParquetRepository())
     an[IllegalArgumentException] should be thrownBy {
