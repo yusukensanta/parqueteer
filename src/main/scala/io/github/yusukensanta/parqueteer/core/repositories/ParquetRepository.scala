@@ -298,13 +298,102 @@ class ParquetRepository(
     }
   }
 
+  def readFileInfo(
+      file: ParquetFile
+  ): Try[(ParquetSchema, FileMetadata)] = {
+    setupHadoopConfiguration(file.location).flatMap { hadoopConfig =>
+      Try {
+        val path = new HadoopPath(file.location.path)
+        val fs = FileSystem.get(path.toUri, hadoopConfig)
+        // ONE stat call — reused for both schema (file length) and metadata (size/mtime)
+        val fileStatus = fs.getFileStatus(path)
+        val inputFile = HadoopInputFile.fromStatus(fileStatus, hadoopConfig)
+
+        // ONE stream open: read raw footer bytes, extract schema + metadata from memory
+        val (schema, formatVersion, compressionRatio, createdBy) =
+          Using.resource(inputFile.newStream()) { stream =>
+            val fileLen = inputFile.getLength
+            val tail = new Array[Byte](8)
+            stream.seek(fileLen - 8)
+            stream.readFully(tail)
+            val footerLen = java.nio.ByteBuffer
+              .wrap(tail, 0, 4)
+              .order(java.nio.ByteOrder.LITTLE_ENDIAN)
+              .getInt
+            stream.seek(fileLen - 8 - footerLen)
+            val footerBytes = new Array[Byte](footerLen)
+            stream.readFully(footerBytes)
+
+            val rawMeta = org.apache.parquet.format.Util.readFileMetaData(
+              new java.io.ByteArrayInputStream(footerBytes)
+            )
+            val version = if (rawMeta.version == 2) "2.0" else "1.0"
+            val createdByStr = Option(rawMeta.created_by).getOrElse("")
+
+            val converter =
+              new org.apache.parquet.format.converter.ParquetMetadataConverter()
+            val parquetMeta = converter.readParquetMetadata(
+              new java.io.ByteArrayInputStream(footerBytes),
+              org.apache.parquet.format.converter.ParquetMetadataConverter.NO_FILTER
+            )
+            val ratio = calculateCompressionRatio(
+              parquetMeta.getBlocks.asScala.toList
+            )
+
+            val msgSchema = parquetMeta.getFileMetaData.getSchema
+            val blocks = parquetMeta.getBlocks.asScala
+            val compressionMap = blocks.headOption
+              .map(
+                _.getColumns.asScala
+                  .map(c => c.getPath.toDotString -> c.getCodec.name())
+                  .toMap
+              )
+              .getOrElse(Map.empty[String, String])
+
+            val columns = msgSchema.getColumns.asScala.map { col =>
+              val colPath = col.getPath.mkString(".")
+              ColumnInfo(
+                name = colPath,
+                dataType = col.getPrimitiveType.getPrimitiveTypeName.name(),
+                isOptional = col.getMaxRepetitionLevel == 0,
+                maxDefinitionLevel = col.getMaxDefinitionLevel,
+                maxRepetitionLevel = col.getMaxRepetitionLevel,
+                compressionType = compressionMap.getOrElse(colPath, "UNKNOWN")
+              )
+            }.toList
+
+            val parsedSchema = ParquetSchema(
+              columns = columns,
+              rowGroupCount = parquetMeta.getBlocks.size().toLong,
+              totalRowCount = blocks.map(_.getRowCount).sum
+            )
+
+            (parsedSchema, version, ratio, createdByStr)
+          }
+
+        val metadata = FileMetadata(
+          fileSize = fileStatus.getLen,
+          createdAt = None,
+          modifiedAt = Some(
+            java.time.Instant.ofEpochMilli(fileStatus.getModificationTime)
+          ),
+          compressionRatio = compressionRatio,
+          version = formatVersion,
+          createdBy = Some(createdBy)
+        )
+        (schema, metadata)
+      }
+    }
+  }
+
   def readMetadata(file: ParquetFile): Try[FileMetadata] = {
     setupHadoopConfiguration(file.location).flatMap { hadoopConfig =>
       Try {
         val path = new HadoopPath(file.location.path)
         val fs = FileSystem.get(path.toUri, hadoopConfig)
         val fileStatus = fs.getFileStatus(path)
-        val inputFile = HadoopInputFile.fromPath(path, hadoopConfig)
+        // fromStatus reuses the already-fetched FileStatus — no extra stat call
+        val inputFile = HadoopInputFile.fromStatus(fileStatus, hadoopConfig)
 
         // One stream open: read raw footer bytes, parse twice from memory.
         val (formatVersion, compressionRatio, createdBy) =

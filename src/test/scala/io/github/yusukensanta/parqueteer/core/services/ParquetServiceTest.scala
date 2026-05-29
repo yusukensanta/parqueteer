@@ -29,6 +29,10 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
       schemaResult
     override def readMetadata(file: ParquetFile): Try[FileMetadata] =
       metadataResult
+    override def readFileInfo(
+        file: ParquetFile
+    ): Try[(ParquetSchema, FileMetadata)] =
+      for { s <- schemaResult; m <- metadataResult } yield (s, m)
     override def validateFile(
         file: ParquetFile,
         deep: Boolean = false

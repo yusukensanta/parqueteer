@@ -60,14 +60,13 @@ class ParquetService(
         .getOrElse(Right(()))
       location <- parseLocation(path)
       file = ParquetFile(location)
+      // readFileInfo: ONE stat + ONE footer download covers both schema and metadata
+      schemaAndMeta <- repository
+        .readFileInfo(file)
+        .toParqueteerError
+      (schema, metadata) = schemaAndMeta
       content <- repository
         .readContent(file, readConfig)
-        .toParqueteerError
-      schema <- repository
-        .readSchema(file)
-        .toParqueteerError
-      metadata <- repository
-        .readMetadata(file)
         .toParqueteerError
     } yield file.copy(
       content = Some(content),
@@ -97,12 +96,11 @@ class ParquetService(
     for {
       location <- parseLocation(path)
       file = ParquetFile(location)
-      schema <- repository
-        .readSchema(file)
+      // readFileInfo: ONE stat + ONE footer download instead of separate readSchema + readMetadata
+      schemaAndMeta <- repository
+        .readFileInfo(file)
         .toParqueteerError
-      metadata <- repository
-        .readMetadata(file)
-        .toParqueteerError
+      (schema, metadata) = schemaAndMeta
     } yield file.copy(schema = Some(schema), metadata = Some(metadata))
 
   def mergeFiles(
