@@ -159,10 +159,22 @@ class ParquetRepository(
       ExecutionContext.fromExecutorService(executor)
 
     try {
+      val requestedNames =
+        requestedSchema.getFields.asScala.map(_.getName).toSet
       val futures = blocks.toList.map { block =>
         Future {
-          val rangeStart = block.getStartingPos
-          val rangeLength = block.getColumns.asScala.map(_.getTotalSize).sum
+          val colChunks = block.getColumns.asScala.toList
+          val relevantChunks = {
+            val projected = colChunks.filter(c =>
+              requestedNames.contains(c.getPath.toDotString)
+            )
+            if (projected.isEmpty) colChunks else projected
+          }
+          val rangeStart = relevantChunks.map(_.getStartingPos).min
+          val rangeLength =
+            relevantChunks
+              .map(c => c.getStartingPos + c.getTotalSize)
+              .max - rangeStart
           val readOptions = org.apache.parquet.ParquetReadOptions
             .builder()
             .withRange(rangeStart, rangeLength)
