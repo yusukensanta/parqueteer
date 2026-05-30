@@ -336,30 +336,7 @@ class ParquetService(
       path: String
   ): Try[List[Map[String, CellValue]]] = Try {
     import better.files._
-    import io.circe.parser._
-    File(path).lineIterator
-      .map(_.trim)
-      .filter(_.nonEmpty)
-      .map { line =>
-        parse(line) match {
-          case Left(error) =>
-            throw new IllegalArgumentException(
-              s"Failed to parse NDJSON line: ${error.getMessage}"
-            )
-          case Right(json) =>
-            json.asObject
-              .getOrElse(
-                throw new IllegalArgumentException(
-                  s"Each NDJSON line must be a JSON object, got: ${json.noSpaces}"
-                )
-              )
-              .toMap
-              .view
-              .mapValues(coerceJsonValue)
-              .toMap
-        }
-      }
-      .toList
+    parseNdjsonLines(File(path).lineIterator)
   }
 
   private def readCsvFile(path: String): Try[List[Map[String, CellValue]]] =
@@ -414,16 +391,10 @@ class ParquetService(
         json.asArray match {
           case Some(array) =>
             array.toList.map { elem =>
-              elem.asObject
-                .getOrElse(
-                  throw new IllegalArgumentException(
-                    s"Each element of the JSON array must be an object, got: ${elem.noSpaces}"
-                  )
-                )
-                .toMap
-                .view
-                .mapValues(coerceJsonValue)
-                .toMap
+              jsonObjectToRow(
+                elem,
+                s"Each element of the JSON array must be an object, got: ${elem.noSpaces}"
+              )
             }
           case None =>
             throw new IllegalArgumentException(
@@ -435,9 +406,16 @@ class ParquetService(
 
   private[services] def parseNdjsonContent(
       content: String
+  ): List[Map[String, CellValue]] =
+    parseNdjsonLines(content.linesIterator)
+
+  // Shared NDJSON line decoder: parse each non-blank line as a JSON object
+  // and coerce values to CellValues. Used by both file and string entry points.
+  private def parseNdjsonLines(
+      lines: Iterator[String]
   ): List[Map[String, CellValue]] = {
     import io.circe.parser._
-    content.linesIterator
+    lines
       .map(_.trim)
       .filter(_.nonEmpty)
       .map { line =>
@@ -447,20 +425,27 @@ class ParquetService(
               s"Failed to parse NDJSON line: ${error.getMessage}"
             )
           case Right(json) =>
-            json.asObject
-              .getOrElse(
-                throw new IllegalArgumentException(
-                  s"Each NDJSON line must be a JSON object, got: ${json.noSpaces}"
-                )
-              )
-              .toMap
-              .view
-              .mapValues(coerceJsonValue)
-              .toMap
+            jsonObjectToRow(
+              json,
+              s"Each NDJSON line must be a JSON object, got: ${json.noSpaces}"
+            )
         }
       }
       .toList
   }
+
+  // Turn a JSON object into a CellValue row; raise a precise error if the
+  // value is not an object. Used by both JSON-array and NDJSON code paths.
+  private def jsonObjectToRow(
+      json: io.circe.Json,
+      notAnObjectMessage: => String
+  ): Map[String, CellValue] =
+    json.asObject
+      .getOrElse(throw new IllegalArgumentException(notAnObjectMessage))
+      .toMap
+      .view
+      .mapValues(coerceJsonValue)
+      .toMap
 
   private[services] def parseCsvContent(
       content: String
