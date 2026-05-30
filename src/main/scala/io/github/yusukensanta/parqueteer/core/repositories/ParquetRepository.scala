@@ -136,50 +136,51 @@ class ParquetRepository(
         val totalRows = blocks.map(_.getRowCount).sum
 
         val useParallel = config.parallelism > 1 && config.filter.isEmpty
-        if (useParallel) {
-          // getFooter above is already cached; readParallel reuses it
-          val rows = readParallel(hadoopPath, hadoopConfig, config)
-          val isPartial =
-            config.maxRows.exists(limit => rows.size.toLong >= limit)
-          FileContent(rows = rows, totalRows = totalRows, isPartial = isPartial)
-        } else {
-          val path4s = Parquet4sPath(file.location.path)
-          Using.resource(
-            openParquetReader(path4s, hadoopConfig, config, fileSchema)
-          ) { reader =>
-            val rows = config.maxRows match {
-              case Some(limit) =>
-                reader
-                  .take(limit.min(Int.MaxValue).toInt)
-                  .map(r =>
-                    ParquetRecordDecoder.postProcessTemporalFields(
-                      ParquetRecordDecoder.convertRecordToMap(r),
-                      fileSchema
-                    )
+        val rows =
+          if (useParallel)
+            // getFooter above is already cached; readParallel reuses it
+            readParallel(hadoopPath, hadoopConfig, config)
+          else {
+            val path4s = Parquet4sPath(file.location.path)
+            Using.resource(
+              openParquetReader(path4s, hadoopConfig, config, fileSchema)
+            ) { reader =>
+              applyMaxRows(reader, config.maxRows)
+                .map(r =>
+                  ParquetRecordDecoder.postProcessTemporalFields(
+                    ParquetRecordDecoder.convertRecordToMap(r),
+                    fileSchema
                   )
-                  .toList
-              case None =>
-                reader
-                  .map(r =>
-                    ParquetRecordDecoder.postProcessTemporalFields(
-                      ParquetRecordDecoder.convertRecordToMap(r),
-                      fileSchema
-                    )
-                  )
-                  .toList
+                )
+                .toList
             }
-            val isPartial =
-              config.maxRows.exists(limit => rows.size.toLong >= limit)
-            FileContent(
-              rows = rows,
-              totalRows = totalRows,
-              isPartial = isPartial
-            )
           }
-        }
+        val isPartial =
+          config.maxRows.exists(limit => rows.size.toLong >= limit)
+        FileContent(rows = rows, totalRows = totalRows, isPartial = isPartial)
       }
     }
   }
+
+  // Apply the optional row-limit to an iterable source. Centralizes the
+  // `Some(limit) => take | None => iter` dance so callers can chain transforms.
+  private def applyMaxRows[A](
+      source: Iterable[A],
+      maxRows: Option[Long]
+  ): Iterable[A] =
+    maxRows match {
+      case Some(limit) => source.take(limit.min(Int.MaxValue).toInt)
+      case None        => source
+    }
+
+  private def applyMaxRows[A](
+      source: Iterator[A],
+      maxRows: Option[Long]
+  ): Iterator[A] =
+    maxRows match {
+      case Some(limit) => source.take(limit.min(Int.MaxValue).toInt)
+      case None        => source
+    }
 
   def streamContent(
       file: ParquetFile,
@@ -193,11 +194,7 @@ class ParquetRepository(
         Using.resource(
           openParquetReader(path4s, hadoopConfig, config, fileSchema)
         ) { source =>
-          val iter = config.maxRows match {
-            case Some(limit) =>
-              source.iterator.take(limit.min(Int.MaxValue).toInt)
-            case None => source.iterator
-          }
+          val iter = applyMaxRows(source.iterator, config.maxRows)
           var count = 0L
           iter.foreach { record =>
             process(

@@ -26,38 +26,30 @@ class PrettyFormatter(useColors: Boolean = sys.env.get("NO_COLOR").isEmpty)
       content: FileContent,
       schema: Option[ParquetSchema]
   ): String = {
-    if (!useColors) {
+    if (!useColors)
       return tableFormatter.formatContent(content, schema)
-    }
 
-    if (content.rows.isEmpty) {
+    if (content.rows.isEmpty)
       return colorize("No data to display", Yellow)
-    }
 
     val rows = content.rows
     val columns = extractColumns(rows, schema)
-    val columnWidths = calculateColumnWidths(columns, rows)
+    val columnWidths = tableFormatter.calculateColumnWidths(columns, rows)
 
     val sb = new StringBuilder()
-    sb.append(colorize(drawTopBorder(columnWidths), Dim))
+    sb.append(colorize(tableFormatter.drawTopBorder(columnWidths), Dim))
     sb.append("\n")
-
     sb.append(drawColoredHeaderRow(columns, columnWidths))
     sb.append("\n")
-
-    sb.append(colorize(drawSeparator(columnWidths), Dim))
+    sb.append(colorize(tableFormatter.drawSeparator(columnWidths), Dim))
     sb.append("\n")
-
     rows.foreach { row =>
       sb.append(drawColoredDataRow(row, columns, columnWidths))
       sb.append("\n")
     }
-
-    sb.append(colorize(drawBottomBorder(columnWidths), Dim))
+    sb.append(colorize(tableFormatter.drawBottomBorder(columnWidths), Dim))
     sb.append("\n")
-
-    sb.append(colorize(drawSummary(content), Green))
-
+    sb.append(colorize(tableFormatter.drawSummary(content), Green))
     sb.toString
   }
 
@@ -112,7 +104,7 @@ class PrettyFormatter(useColors: Boolean = sys.env.get("NO_COLOR").isEmpty)
     sb.append("\n\n")
 
     sb.append(
-      s"File Size: ${colorize(formatBytes(metadata.fileSize), Yellow)}\n"
+      s"File Size: ${colorize(tableFormatter.formatBytes(metadata.fileSize), Yellow)}\n"
     )
 
     metadata.createdAt.foreach { created =>
@@ -197,19 +189,4 @@ class PrettyFormatter(useColors: Boolean = sys.env.get("NO_COLOR").isEmpty)
     )
   }
 
-  // Delegate to TableFormatter helpers
-  private def calculateColumnWidths(
-      cols: List[String],
-      rows: List[Map[String, CellValue]]
-  ) =
-    tableFormatter.calculateColumnWidths(cols, rows)
-  private def drawTopBorder(widths: List[Int]) =
-    tableFormatter.drawTopBorder(widths)
-  private def drawBottomBorder(widths: List[Int]) =
-    tableFormatter.drawBottomBorder(widths)
-  private def drawSeparator(widths: List[Int]) =
-    tableFormatter.drawSeparator(widths)
-  private def drawSummary(content: FileContent) =
-    tableFormatter.drawSummary(content)
-  private def formatBytes(bytes: Long) = tableFormatter.formatBytes(bytes)
 }
