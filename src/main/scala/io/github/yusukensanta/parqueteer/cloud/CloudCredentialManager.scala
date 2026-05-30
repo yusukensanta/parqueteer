@@ -34,14 +34,12 @@ object CloudCredentialManager {
       header: String,
       strategies: List[() => Try[A]]
   ): Try[A] = {
-    val failures = scala.collection.mutable.ListBuffer.empty[String]
-    val it = strategies.iterator
-    while (it.hasNext) {
-      it.next().apply() match {
-        case s @ Success(_) => return s
-        case Failure(err)   => failures += err.getMessage
-      }
+    val results = strategies.iterator.map(f => f()).toList
+    results.collectFirst { case s @ Success(_) => s } match {
+      case Some(s) => s
+      case None =>
+        val failures = results.collect { case Failure(err) => err.getMessage }
+        Failure(new RuntimeException(s"$header\n${failures.mkString("\n")}"))
     }
-    Failure(new RuntimeException(s"$header\n${failures.mkString("\n")}"))
   }
 }
