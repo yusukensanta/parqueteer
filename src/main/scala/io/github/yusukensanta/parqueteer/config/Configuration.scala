@@ -101,12 +101,6 @@ class ConfigurationManager {
     else parseConfigFile(configFile)
   }
 
-  def initDefaultConfig(configPath: Option[String] = None): Try[Unit] = {
-    val configFile = configPath.map(File(_)).getOrElse(defaultConfigPath)
-    if (configFile.exists) Success(())
-    else createDefaultConfig(configFile)
-  }
-
   private def parseConfigFile(configFile: File): Try[AppConfig] = {
     import io.circe.yaml.parser
 
@@ -126,54 +120,6 @@ class ConfigurationManager {
             s"Invalid YAML syntax: ${error.getMessage}"
           )
       }
-    }
-  }
-
-  private def createDefaultConfig(configFile: File): Try[Unit] = {
-    Try {
-      configFile.parent.createDirectoryIfNotExists()
-
-      val defaultYaml =
-        """cloud:
-          |  s3:
-          |    default_region: null
-          |    profile: null
-          |    endpoint_url: null
-          |    use_ssl: true
-          |    buffer_size: "64MB"
-          |    multipart_threshold: "100MB"
-          |  gcs:
-          |    project_id: null
-          |    credentials_file: null
-          |    buffer_size: "64MB"
-          |    chunk_size: "32MB"
-          |  azure:
-          |    account_name: null
-          |    auth_method: "managed_identity"
-          |    buffer_size: "64MB"
-          |
-          |output:
-          |  default_format: "table"
-          |  max_rows: 1000
-          |  precision: 2
-          |  show_nulls: true
-          |  color_output: true
-          |
-          |performance:
-          |  read_buffer_size: "64MB"
-          |  write_buffer_size: "64MB"
-          |  max_concurrency: 4
-          |  enable_caching: true
-          |  cache_size: "256MB"
-          |
-          |logging:
-          |  level: "INFO"
-          |  file: null
-          |  enable_console: true
-          |  enable_structured: false
-          |""".stripMargin
-
-      configFile.write(defaultYaml)
     }
   }
 

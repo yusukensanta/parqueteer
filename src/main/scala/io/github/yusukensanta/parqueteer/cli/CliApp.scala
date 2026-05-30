@@ -10,8 +10,7 @@ import io.github.yusukensanta.parqueteer.core.models.{
   CompressionType,
   ParqueteerError,
   SchemaMode,
-  ConversionConfig,
-  FileContent
+  ConversionConfig
 }
 import io.github.yusukensanta.parqueteer.core.formatters.{
   OutputFormatter,
@@ -553,11 +552,12 @@ object CliApp {
     val inputExt = FileExtension.of(inputPath)
     val outputExt = FileExtension.of(outputPath)
     (inputExt, outputExt) match {
-      case ("parquet", "json") =>
-        convertParquetToJson(service, inputPath, outputPath, conversionConfig)
-      case ("parquet", ext @ ("ndjson" | "csv")) =>
-        val outFormat =
-          if (ext == "ndjson") OutputFormat.NDJSON else OutputFormat.CSV
+      case ("parquet", ext @ ("json" | "ndjson" | "csv")) =>
+        val outFormat = ext match {
+          case "json"   => OutputFormat.JSON
+          case "ndjson" => OutputFormat.NDJSON
+          case _        => OutputFormat.CSV
+        }
         convertParquetStreamed(
           service,
           inputPath,
@@ -588,34 +588,7 @@ object CliApp {
     }
   }
 
-  /** parquet → json: must fully buffer rows so we can emit a valid `[…]`
-    * JSON-array wrapper.
-    */
-  private def convertParquetToJson(
-      service: ParquetService,
-      inputPath: String,
-      outputPath: String,
-      conversionConfig: ConversionConfig
-  ): Either[ParqueteerError, Unit] =
-    service
-      .readFile(inputPath, ReadConfig(maxRows = conversionConfig.maxRows))
-      .flatMap { file =>
-        val content = file.content.getOrElse(FileContent(List.empty, 0, false))
-        val text =
-          OutputFormatter(OutputFormat.JSON, useColors = false)
-            .formatContent(content, None)
-        scala.util
-          .Try {
-            import better.files._
-            File(outputPath).createIfNotExists().write(text)
-          }
-          .toEither
-          .left
-          .map(ParqueteerError.IOError.apply)
-          .map(_ => ())
-      }
-
-  /** parquet → ndjson / csv: stream rows one at a time to avoid loading the
+  /** parquet → json / ndjson / csv: stream rows one at a time to avoid loading the
     * entire file into memory.
     */
   private def convertParquetStreamed(

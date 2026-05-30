@@ -24,6 +24,7 @@ object EnvConfig {
         case "pretty"   => Some(OutputFormat.Pretty)
         case "markdown" => Some(OutputFormat.Markdown)
         case "ndjson"   => Some(OutputFormat.NDJSON)
+        case "ltsv"     => Some(OutputFormat.LTSV)
         case _          => None
       }
     }
