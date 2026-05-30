@@ -476,116 +476,16 @@ object CliApp {
       maxRows = maxRows
     )
 
-    if (dryRun) {
-      val inputExt = FileExtension.of(inputPath)
-      if (inputExt == "parquet") {
-        service.getFileInfo(inputPath) match {
-          case Left(error) =>
-            reportError("Failed to read input", globalOptions)(error)
-          case Right(file) =>
-            println(s"Dry run: would convert $inputPath → $outputPath")
-            println(s"  Input:       $inputPath")
-            file.metadata.foreach(m =>
-              println(
-                s"  File size:   ${CliOutputFormatter.formatBytesForDisplay(m.fileSize)}"
-              )
-            )
-            file.schema.foreach { s =>
-              println(s"  Rows:        ${s.totalRowCount}")
-              println(s"  Columns:     ${s.columns.size}")
-              s.columns.headOption.foreach(c =>
-                println(
-                  s"  Compression: ${c.compressionType.toLowerCase} → ${compression.toString.toLowerCase}"
-                )
-              )
-            }
-            0
-        }
-      } else {
-        println(s"Dry run: would convert $inputPath → $outputPath")
-        println(s"  Input format: $inputExt")
-        println(
-          s"  Compression:  ${compression.toString.toLowerCase} (output)"
-        )
-        0
-      }
-    } else {
-      val outputExt = FileExtension.of(outputPath)
-      val inputExt = FileExtension.of(inputPath)
-      val result: Either[ParqueteerError, Unit] = (inputExt, outputExt) match {
-        case ("parquet", "json") =>
-          // JSON array must be fully buffered to emit valid `[…]` wrapper
-          service
-            .readFile(inputPath, ReadConfig(maxRows = conversionConfig.maxRows))
-            .flatMap { file =>
-              val content =
-                file.content.getOrElse(FileContent(List.empty, 0, false))
-              val text =
-                OutputFormatter(OutputFormat.JSON, useColors = false)
-                  .formatContent(content, None)
-              scala.util
-                .Try {
-                  import better.files._
-                  File(outputPath).createIfNotExists().write(text)
-                }
-                .toEither
-                .left
-                .map(ParqueteerError.IOError.apply)
-                .map(_ => ())
-            }
-        case ("parquet", ext @ ("ndjson" | "csv")) =>
-          // stream row-by-row to avoid loading the entire file into memory
-          val outFormat =
-            if (ext == "ndjson") OutputFormat.NDJSON else OutputFormat.CSV
-          import io.github.yusukensanta.parqueteer.core.formatters.RowStreamWriter
-          scala.util
-            .Try {
-              import better.files._
-              new java.io.PrintStream(
-                File(outputPath)
-                  .createIfNotExists(createParents = true)
-                  .newOutputStream
-              )
-            }
-            .toEither
-            .left
-            .map(ParqueteerError.IOError.apply)
-            .flatMap { ps =>
-              val writer = RowStreamWriter(outFormat, ps)
-              writer.begin()
-              try {
-                val result = service.streamRead(
-                  inputPath,
-                  ReadConfig(maxRows = conversionConfig.maxRows)
-                )(writer.writeRow)
-                result.map(_ => ())
-              } finally {
-                writer.end()
-                ps.close()
-              }
-            }
-        case ("parquet", "parquet") =>
-          service
-            .readFile(inputPath, ReadConfig(maxRows = conversionConfig.maxRows))
-            .flatMap { file =>
-              val data = file.content.map(_.rows).getOrElse(List.empty)
-              service.writeFile(outputPath, data, conversionConfig.writeConfig)
-            }
-        case (ext @ ("json" | "csv"), "parquet") =>
-          service
-            .readDataFile(inputPath, ext)
-            .flatMap(data =>
-              service.writeFile(outputPath, data, conversionConfig.writeConfig)
-            )
-        case _ =>
-          Left(
-            ParqueteerError.InvalidFormat(
-              inputPath,
-              s"Unsupported conversion: $inputExt → $outputExt. Supported: parquet→parquet, parquet→json, parquet→ndjson, parquet→csv, json→parquet, csv→parquet"
-            )
-          )
-      }
-      result match {
+    if (dryRun)
+      runConvertDryRun(
+        service,
+        inputPath,
+        outputPath,
+        compression,
+        globalOptions
+      )
+    else
+      performConvert(service, inputPath, outputPath, conversionConfig) match {
         case Right(_) =>
           if (showStatus(globalOptions))
             println(s"Successfully converted $inputPath to $outputPath")
@@ -593,8 +493,181 @@ object CliApp {
         case Left(error) =>
           reportError("Failed to convert file", globalOptions)(error)
       }
+  }
+
+  /** Print the dry-run summary for `convert`. For parquet inputs we read the
+    * footer to surface row count, column count and the compression-codec
+    * change; for non-parquet inputs we only know what the user told us.
+    */
+  private def runConvertDryRun(
+      service: ParquetService,
+      inputPath: String,
+      outputPath: String,
+      compression: CompressionType,
+      globalOptions: GlobalOptions
+  ): Int = {
+    val inputExt = FileExtension.of(inputPath)
+    if (inputExt == "parquet")
+      service.getFileInfo(inputPath) match {
+        case Left(error) =>
+          reportError("Failed to read input", globalOptions)(error)
+        case Right(file) =>
+          println(s"Dry run: would convert $inputPath → $outputPath")
+          println(s"  Input:       $inputPath")
+          file.metadata.foreach(m =>
+            println(
+              s"  File size:   ${CliOutputFormatter.formatBytesForDisplay(m.fileSize)}"
+            )
+          )
+          file.schema.foreach { s =>
+            println(s"  Rows:        ${s.totalRowCount}")
+            println(s"  Columns:     ${s.columns.size}")
+            s.columns.headOption.foreach(c =>
+              println(
+                s"  Compression: ${c.compressionType.toLowerCase} → ${compression.toString.toLowerCase}"
+              )
+            )
+          }
+          0
+      }
+    else {
+      println(s"Dry run: would convert $inputPath → $outputPath")
+      println(s"  Input format: $inputExt")
+      println(
+        s"  Compression:  ${compression.toString.toLowerCase} (output)"
+      )
+      0
     }
   }
+
+  /** Dispatch on the (input, output) extension pair to the appropriate
+    * conversion strategy. Returns a `Right(())` on success so the caller can
+    * print the standard "Successfully converted…" message.
+    */
+  private def performConvert(
+      service: ParquetService,
+      inputPath: String,
+      outputPath: String,
+      conversionConfig: ConversionConfig
+  ): Either[ParqueteerError, Unit] = {
+    val inputExt = FileExtension.of(inputPath)
+    val outputExt = FileExtension.of(outputPath)
+    (inputExt, outputExt) match {
+      case ("parquet", "json") =>
+        convertParquetToJson(service, inputPath, outputPath, conversionConfig)
+      case ("parquet", ext @ ("ndjson" | "csv")) =>
+        val outFormat =
+          if (ext == "ndjson") OutputFormat.NDJSON else OutputFormat.CSV
+        convertParquetStreamed(
+          service,
+          inputPath,
+          outputPath,
+          outFormat,
+          conversionConfig
+        )
+      case ("parquet", "parquet") =>
+        convertParquetToParquet(
+          service,
+          inputPath,
+          outputPath,
+          conversionConfig
+        )
+      case (ext @ ("json" | "csv"), "parquet") =>
+        service
+          .readDataFile(inputPath, ext)
+          .flatMap(data =>
+            service.writeFile(outputPath, data, conversionConfig.writeConfig)
+          )
+      case _ =>
+        Left(
+          ParqueteerError.InvalidFormat(
+            inputPath,
+            s"Unsupported conversion: $inputExt → $outputExt. Supported: parquet→parquet, parquet→json, parquet→ndjson, parquet→csv, json→parquet, csv→parquet"
+          )
+        )
+    }
+  }
+
+  /** parquet → json: must fully buffer rows so we can emit a valid `[…]`
+    * JSON-array wrapper.
+    */
+  private def convertParquetToJson(
+      service: ParquetService,
+      inputPath: String,
+      outputPath: String,
+      conversionConfig: ConversionConfig
+  ): Either[ParqueteerError, Unit] =
+    service
+      .readFile(inputPath, ReadConfig(maxRows = conversionConfig.maxRows))
+      .flatMap { file =>
+        val content = file.content.getOrElse(FileContent(List.empty, 0, false))
+        val text =
+          OutputFormatter(OutputFormat.JSON, useColors = false)
+            .formatContent(content, None)
+        scala.util
+          .Try {
+            import better.files._
+            File(outputPath).createIfNotExists().write(text)
+          }
+          .toEither
+          .left
+          .map(ParqueteerError.IOError.apply)
+          .map(_ => ())
+      }
+
+  /** parquet → ndjson / csv: stream rows one at a time to avoid loading the
+    * entire file into memory.
+    */
+  private def convertParquetStreamed(
+      service: ParquetService,
+      inputPath: String,
+      outputPath: String,
+      outFormat: OutputFormat,
+      conversionConfig: ConversionConfig
+  ): Either[ParqueteerError, Unit] =
+    scala.util
+      .Try {
+        import better.files._
+        new java.io.PrintStream(
+          File(outputPath)
+            .createIfNotExists(createParents = true)
+            .newOutputStream
+        )
+      }
+      .toEither
+      .left
+      .map(ParqueteerError.IOError.apply)
+      .flatMap { ps =>
+        val writer = RowStreamWriter(outFormat, ps)
+        writer.begin()
+        try
+          service
+            .streamRead(
+              inputPath,
+              ReadConfig(maxRows = conversionConfig.maxRows)
+            )(writer.writeRow)
+            .map(_ => ())
+        finally {
+          writer.end()
+          ps.close()
+        }
+      }
+
+  /** parquet → parquet: read everything then re-write with the target
+    * compression / maxRows.
+    */
+  private def convertParquetToParquet(
+      service: ParquetService,
+      inputPath: String,
+      outputPath: String,
+      conversionConfig: ConversionConfig
+  ): Either[ParqueteerError, Unit] =
+    service
+      .readFile(inputPath, ReadConfig(maxRows = conversionConfig.maxRows))
+      .flatMap { file =>
+        val data = file.content.map(_.rows).getOrElse(List.empty)
+        service.writeFile(outputPath, data, conversionConfig.writeConfig)
+      }
 
   private def executeMerge(
       service: ParquetService,
