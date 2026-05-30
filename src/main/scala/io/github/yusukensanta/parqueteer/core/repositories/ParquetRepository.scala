@@ -128,6 +128,9 @@ class ParquetRepository(
 
   // ── Public API ────────────────────────────────────────────────────────────
 
+  // Close S3A/GCS/ABFS connection pools on JVM exit to prevent background thread leaks
+  Runtime.getRuntime.addShutdownHook(new Thread(() => FileSystem.closeAll()))
+
   def readContent(file: ParquetFile, config: ReadConfig): Try[FileContent] = {
     setupHadoopConfiguration(file.location).flatMap { hadoopConfig =>
       Try {
