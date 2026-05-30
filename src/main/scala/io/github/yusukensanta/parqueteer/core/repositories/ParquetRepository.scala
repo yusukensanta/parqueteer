@@ -128,9 +128,6 @@ class ParquetRepository(
 
   // ── Public API ────────────────────────────────────────────────────────────
 
-  // Close S3A/GCS/ABFS connection pools on JVM exit to prevent background thread leaks
-  Runtime.getRuntime.addShutdownHook(new Thread(() => FileSystem.closeAll()))
-
   def readContent(file: ParquetFile, config: ReadConfig): Try[FileContent] = {
     setupHadoopConfiguration(file.location).flatMap { hadoopConfig =>
       Try {
@@ -139,50 +136,51 @@ class ParquetRepository(
         val totalRows = blocks.map(_.getRowCount).sum
 
         val useParallel = config.parallelism > 1 && config.filter.isEmpty
-        if (useParallel) {
-          // getFooter above is already cached; readParallel reuses it
-          val rows = readParallel(hadoopPath, hadoopConfig, config)
-          val isPartial =
-            config.maxRows.exists(limit => rows.size.toLong >= limit)
-          FileContent(rows = rows, totalRows = totalRows, isPartial = isPartial)
-        } else {
-          val path4s = Parquet4sPath(file.location.path)
-          Using.resource(
-            openParquetReader(path4s, hadoopConfig, config, fileSchema)
-          ) { reader =>
-            val rows = config.maxRows match {
-              case Some(limit) =>
-                reader
-                  .take(limit.min(Int.MaxValue).toInt)
-                  .map(r =>
-                    ParquetRecordDecoder.postProcessTemporalFields(
-                      ParquetRecordDecoder.convertRecordToMap(r),
-                      fileSchema
-                    )
+        val rows =
+          if (useParallel)
+            // getFooter above is already cached; readParallel reuses it
+            readParallel(hadoopPath, hadoopConfig, config)
+          else {
+            val path4s = Parquet4sPath(file.location.path)
+            Using.resource(
+              openParquetReader(path4s, hadoopConfig, config, fileSchema)
+            ) { reader =>
+              applyMaxRows(reader, config.maxRows)
+                .map(r =>
+                  ParquetRecordDecoder.postProcessTemporalFields(
+                    ParquetRecordDecoder.convertRecordToMap(r),
+                    fileSchema
                   )
-                  .toList
-              case None =>
-                reader
-                  .map(r =>
-                    ParquetRecordDecoder.postProcessTemporalFields(
-                      ParquetRecordDecoder.convertRecordToMap(r),
-                      fileSchema
-                    )
-                  )
-                  .toList
+                )
+                .toList
             }
-            val isPartial =
-              config.maxRows.exists(limit => rows.size.toLong >= limit)
-            FileContent(
-              rows = rows,
-              totalRows = totalRows,
-              isPartial = isPartial
-            )
           }
-        }
+        val isPartial =
+          config.maxRows.exists(limit => rows.size.toLong >= limit)
+        FileContent(rows = rows, totalRows = totalRows, isPartial = isPartial)
       }
     }
   }
+
+  // Apply the optional row-limit to an iterable source. Centralizes the
+  // `Some(limit) => take | None => iter` dance so callers can chain transforms.
+  private def applyMaxRows[A](
+      source: Iterable[A],
+      maxRows: Option[Long]
+  ): Iterable[A] =
+    maxRows match {
+      case Some(limit) => source.take(limit.min(Int.MaxValue).toInt)
+      case None        => source
+    }
+
+  private def applyMaxRows[A](
+      source: Iterator[A],
+      maxRows: Option[Long]
+  ): Iterator[A] =
+    maxRows match {
+      case Some(limit) => source.take(limit.min(Int.MaxValue).toInt)
+      case None        => source
+    }
 
   def streamContent(
       file: ParquetFile,
@@ -196,11 +194,7 @@ class ParquetRepository(
         Using.resource(
           openParquetReader(path4s, hadoopConfig, config, fileSchema)
         ) { source =>
-          val iter = config.maxRows match {
-            case Some(limit) =>
-              source.iterator.take(limit.min(Int.MaxValue).toInt)
-            case None => source.iterator
-          }
+          val iter = applyMaxRows(source.iterator, config.maxRows)
           var count = 0L
           iter.foreach { record =>
             process(
@@ -599,10 +593,12 @@ class ParquetRepository(
 
   private def numericMinMax[T: Ordering](
       withValues: List[org.apache.parquet.column.statistics.Statistics[?]],
-      extract: Any => T
+      extract: PartialFunction[Any, T]
   ): (Option[String], Option[String]) = {
-    val mins = withValues.flatMap(s => Option(s.genericGetMin()).map(extract))
-    val maxs = withValues.flatMap(s => Option(s.genericGetMax()).map(extract))
+    val mins =
+      withValues.flatMap(s => Option(s.genericGetMin()).collect(extract))
+    val maxs =
+      withValues.flatMap(s => Option(s.genericGetMax()).collect(extract))
     (mins.minOption.map(_.toString), maxs.maxOption.map(_.toString))
   }
 
@@ -612,15 +608,24 @@ class ParquetRepository(
   ): (Option[String], Option[String]) =
     typeName match {
       case PrimitiveTypeName.INT32 =>
-        numericMinMax(withValues, _.asInstanceOf[java.lang.Integer].intValue())
-      case PrimitiveTypeName.INT64 =>
-        numericMinMax(withValues, _.asInstanceOf[java.lang.Long].longValue())
-      case PrimitiveTypeName.FLOAT =>
-        numericMinMax(withValues, _.asInstanceOf[java.lang.Float].floatValue())
-      case PrimitiveTypeName.DOUBLE =>
-        numericMinMax(
+        numericMinMax[Int](
           withValues,
-          _.asInstanceOf[java.lang.Double].doubleValue()
+          { case n: java.lang.Integer => n.intValue() }
+        )
+      case PrimitiveTypeName.INT64 =>
+        numericMinMax[Long](
+          withValues,
+          { case n: java.lang.Long => n.longValue() }
+        )
+      case PrimitiveTypeName.FLOAT =>
+        numericMinMax[Float](
+          withValues,
+          { case n: java.lang.Float => n.floatValue() }
+        )
+      case PrimitiveTypeName.DOUBLE =>
+        numericMinMax[Double](
+          withValues,
+          { case n: java.lang.Double => n.doubleValue() }
         )
       case _ =>
         val minVal = withValues

@@ -6,27 +6,6 @@ import io.github.yusukensanta.parqueteer.core.models.StorageLocationParser
 import io.github.yusukensanta.parqueteer.core.repositories.ParquetRepository
 import io.github.yusukensanta.parqueteer.core.filters.FilterParser
 import scala.util.{Try, Using}
-import io.circe.{Encoder, Json}
-
-object ParquetServiceEncoders {
-  import io.github.yusukensanta.parqueteer.core.models.CellValue
-  import io.github.yusukensanta.parqueteer.core.util.JsonEncoder
-
-  given cellValueEncoder: Encoder[CellValue] =
-    Encoder.instance(JsonEncoder.encode)
-
-  given mapStringCellValueEncoder: Encoder[Map[String, CellValue]] =
-    Encoder.instance { map =>
-      Json.fromFields(map.map { case (k, v) =>
-        k -> cellValueEncoder.apply(v)
-      })
-    }
-
-  given listMapEncoder: Encoder[List[Map[String, CellValue]]] =
-    Encoder.instance(list =>
-      Json.fromValues(list.map(mapStringCellValueEncoder.apply))
-    )
-}
 
 class ParquetService(
     repository: ParquetRepository
@@ -119,114 +98,158 @@ class ParquetService(
       )
     else
       for {
-        inputLocations <- inputPaths
-          .foldLeft[Either[ParqueteerError, Vector[StorageLocation]]](
-            Right(Vector.empty)
-          ) { (acc, p) =>
-            acc.flatMap(locs => parseLocation(p).map(locs :+ _))
-          }
-        schemas <- inputLocations.foldLeft[Either[ParqueteerError, Vector[
-          List[FieldSummary]
-        ]]](Right(Vector.empty)) { (acc, loc) =>
-          acc.flatMap { vec =>
-            repository
-              .readSchemaFields(ParquetFile(loc))
-              .toParqueteerError
-              .map(vec :+ _)
-          }
-        }
-        mergedFields <- schemaMode match {
-          case SchemaMode.Strict =>
-            val first = schemas.head
-            schemas.zipWithIndex
-              .collectFirst {
-                case (s, i) if s != first =>
-                  Left(
-                    ParqueteerError.InvalidFormat(
-                      inputPaths(i),
-                      s"Schema mismatch at file '${inputPaths(i)}'. Use --schema-mode union to allow schema differences."
-                    )
-                  )
-              }
-              .getOrElse(Right(first))
-          case SchemaMode.Union =>
-            val seen =
-              scala.collection.mutable.LinkedHashMap.empty[String, String]
-            schemas
-              .foldLeft[Either[ParqueteerError, Unit]](Right(())) {
-                (acc, fields) =>
-                  acc.flatMap { _ =>
-                    val conflicts = fields.collect {
-                      case f if seen.get(f.name).exists(_ != f.dataType) =>
-                        s"'${f.name}' (${seen(f.name)} vs ${f.dataType})"
-                    }
-                    if (conflicts.nonEmpty)
-                      Left(
-                        ParqueteerError.InvalidFormat(
-                          "merge",
-                          s"Type conflicts in union merge: ${conflicts.mkString(", ")}. " +
-                            "Cannot union-merge columns with incompatible types."
-                        )
-                      )
-                    else {
-                      fields.foreach(f =>
-                        seen.getOrElseUpdate(f.name, f.dataType)
-                      )
-                      Right(())
-                    }
-                  }
-              }
-              .map(_ =>
-                seen.map { case (name, t) =>
-                  FieldSummary(name, t, isOptional = true)
-                }.toList
-              )
-        }
+        inputLocations <- parseLocations(inputPaths)
+        schemas <- readAllSchemas(inputLocations)
+        mergedFields <- mergeSchemas(schemas, inputPaths, schemaMode)
         outputLocation <- parseLocation(outputPath)
-        count <- {
-          val allColumnNames = mergedFields.map(_.name).toSet
-          val explicitSchema = ParquetSchema(
-            columns = mergedFields.map { f =>
-              ColumnInfo(f.name, f.dataType, f.isOptional, 1, 0, "SNAPPY")
-            },
-            rowGroupCount = 1L,
-            totalRowCount = 0L
-          )
-          // precompute per-file missing columns — avoids O(cols) set diff per row
-          val missingPerFile = schemas.map { fields =>
-            allColumnNames -- fields.map(_.name).toSet
-          }
-          var streamError: Option[Throwable] = None
-          repository
-            .writeContentStream(outputLocation, explicitSchema, writeConfig) {
-              write =>
-                inputLocations.zipWithIndex.foreach { case (loc, i) =>
-                  if (streamError.isEmpty) {
-                    onProgress(i + 1, inputLocations.size, inputPaths(i))
-                    val fileMissing = missingPerFile(i)
-                    repository
-                      .streamContent(ParquetFile(loc), ReadConfig()) { row =>
-                        val finalRow =
-                          if (fileMissing.isEmpty) row
-                          else row ++ fileMissing.map(_ -> CellValue.Null)
-                        write(finalRow)
-                      }
-                      .fold(err => streamError = Some(err), _ => ())
-                  }
-                }
-            }
-            .toParqueteerError
-            .flatMap(count =>
-              streamError match {
-                case Some(e) =>
-                  // Delete partial output; merge is not atomic so partial writes are unusable
-                  repository.deleteFile(outputLocation).recover { case _ => () }
-                  Left(ParqueteerError.IOError(e))
-                case None => Right(count)
-              }
+        count <- streamMerge(
+          inputLocations,
+          inputPaths,
+          schemas,
+          mergedFields,
+          outputLocation,
+          writeConfig,
+          onProgress
+        )
+      } yield count
+
+  /** Lift a list of paths into a single Either of parsed locations,
+    * short-circuiting on the first malformed path.
+    */
+  private def parseLocations(
+      paths: List[String]
+  ): Either[ParqueteerError, Vector[StorageLocation]] =
+    paths.foldLeft[Either[ParqueteerError, Vector[StorageLocation]]](
+      Right(Vector.empty)
+    )((acc, p) => acc.flatMap(locs => parseLocation(p).map(locs :+ _)))
+
+  /** Read the field-summary schema for each input file, preserving order. Stops
+    * on the first read failure.
+    */
+  private def readAllSchemas(
+      locations: Vector[StorageLocation]
+  ): Either[ParqueteerError, Vector[List[FieldSummary]]] =
+    locations.foldLeft[Either[ParqueteerError, Vector[List[FieldSummary]]]](
+      Right(Vector.empty)
+    )((acc, loc) =>
+      acc.flatMap(vec =>
+        repository
+          .readSchemaFields(ParquetFile(loc))
+          .toParqueteerError
+          .map(vec :+ _)
+      )
+    )
+
+  /** Combine per-file schemas under the chosen strategy:
+    *   - Strict: every input must match the first file's schema exactly.
+    *   - Union: collect the union of fields, surfacing per-column type
+    *     conflicts as a single InvalidFormat error. Union-merged fields are
+    *     marked optional because not every file is guaranteed to supply them.
+    */
+  private def mergeSchemas(
+      schemas: Vector[List[FieldSummary]],
+      inputPaths: List[String],
+      schemaMode: SchemaMode
+  ): Either[ParqueteerError, List[FieldSummary]] = schemaMode match {
+    case SchemaMode.Strict =>
+      val first = schemas.head
+      schemas.zipWithIndex
+        .collectFirst {
+          case (s, i) if s != first =>
+            Left(
+              ParqueteerError.InvalidFormat(
+                inputPaths(i),
+                s"Schema mismatch at file '${inputPaths(i)}'. Use --schema-mode union to allow schema differences."
+              )
             )
         }
-      } yield count
+        .getOrElse(Right(first))
+
+    case SchemaMode.Union =>
+      val seen = scala.collection.mutable.LinkedHashMap.empty[String, String]
+      schemas
+        .foldLeft[Either[ParqueteerError, Unit]](Right(())) { (acc, fields) =>
+          acc.flatMap { _ =>
+            val conflicts = fields.collect {
+              case f if seen.get(f.name).exists(_ != f.dataType) =>
+                s"'${f.name}' (${seen(f.name)} vs ${f.dataType})"
+            }
+            if (conflicts.nonEmpty)
+              Left(
+                ParqueteerError.InvalidFormat(
+                  "merge",
+                  s"Type conflicts in union merge: ${conflicts.mkString(", ")}. " +
+                    "Cannot union-merge columns with incompatible types."
+                )
+              )
+            else {
+              fields.foreach(f => seen.getOrElseUpdate(f.name, f.dataType))
+              Right(())
+            }
+          }
+        }
+        .map(_ =>
+          seen.map { case (name, t) =>
+            FieldSummary(name, t, isOptional = true)
+          }.toList
+        )
+  }
+
+  /** Stream rows from each input file into a single output writer. Tracks the
+    * first read failure and, on any failure, deletes the partial output (merge
+    * is not atomic). Returns the count of rows written on success.
+    */
+  private def streamMerge(
+      inputLocations: Vector[StorageLocation],
+      inputPaths: List[String],
+      schemas: Vector[List[FieldSummary]],
+      mergedFields: List[FieldSummary],
+      outputLocation: StorageLocation,
+      writeConfig: WriteConfig,
+      onProgress: (Int, Int, String) => Unit
+  ): Either[ParqueteerError, Long] = {
+    val allColumnNames = mergedFields.map(_.name).toSet
+    val explicitSchema = ParquetSchema(
+      columns = mergedFields.map { f =>
+        ColumnInfo(f.name, f.dataType, f.isOptional, 1, 0, "SNAPPY")
+      },
+      rowGroupCount = 1L,
+      totalRowCount = 0L
+    )
+    // precompute per-file missing columns — avoids O(cols) set diff per row
+    val missingPerFile = schemas.map { fields =>
+      allColumnNames -- fields.map(_.name).toSet
+    }
+    var streamError: Option[Throwable] = None
+    repository
+      .writeContentStream(outputLocation, explicitSchema, writeConfig) {
+        write =>
+          inputLocations.zipWithIndex.foreach { case (loc, i) =>
+            if (streamError.isEmpty) {
+              onProgress(i + 1, inputLocations.size, inputPaths(i))
+              val fileMissing = missingPerFile(i)
+              repository
+                .streamContent(ParquetFile(loc), ReadConfig()) { row =>
+                  val finalRow =
+                    if (fileMissing.isEmpty) row
+                    else row ++ fileMissing.map(_ -> CellValue.Null)
+                  write(finalRow)
+                }
+                .fold(err => streamError = Some(err), _ => ())
+            }
+          }
+      }
+      .toParqueteerError
+      .flatMap(count =>
+        streamError match {
+          case Some(e) =>
+            // Delete partial output; merge is not atomic so partial writes are unusable
+            repository.deleteFile(outputLocation).recover { case _ => () }
+            Left(ParqueteerError.IOError(e))
+          case None => Right(count)
+        }
+      )
+  }
 
   def getStats(path: String): Either[ParqueteerError, FileStats] =
     for {
@@ -357,30 +380,7 @@ class ParquetService(
       path: String
   ): Try[List[Map[String, CellValue]]] = Try {
     import better.files._
-    import io.circe.parser._
-    File(path).lineIterator
-      .map(_.trim)
-      .filter(_.nonEmpty)
-      .map { line =>
-        parse(line) match {
-          case Left(error) =>
-            throw new IllegalArgumentException(
-              s"Failed to parse NDJSON line: ${error.getMessage}"
-            )
-          case Right(json) =>
-            json.asObject
-              .getOrElse(
-                throw new IllegalArgumentException(
-                  s"Each NDJSON line must be a JSON object, got: ${json.noSpaces}"
-                )
-              )
-              .toMap
-              .view
-              .mapValues(coerceJsonValue)
-              .toMap
-        }
-      }
-      .toList
+    parseNdjsonLines(File(path).lineIterator)
   }
 
   private def readCsvFile(path: String): Try[List[Map[String, CellValue]]] =
@@ -435,16 +435,10 @@ class ParquetService(
         json.asArray match {
           case Some(array) =>
             array.toList.map { elem =>
-              elem.asObject
-                .getOrElse(
-                  throw new IllegalArgumentException(
-                    s"Each element of the JSON array must be an object, got: ${elem.noSpaces}"
-                  )
-                )
-                .toMap
-                .view
-                .mapValues(coerceJsonValue)
-                .toMap
+              jsonObjectToRow(
+                elem,
+                s"Each element of the JSON array must be an object, got: ${elem.noSpaces}"
+              )
             }
           case None =>
             throw new IllegalArgumentException(
@@ -456,9 +450,16 @@ class ParquetService(
 
   private[services] def parseNdjsonContent(
       content: String
+  ): List[Map[String, CellValue]] =
+    parseNdjsonLines(content.linesIterator)
+
+  // Shared NDJSON line decoder: parse each non-blank line as a JSON object
+  // and coerce values to CellValues. Used by both file and string entry points.
+  private def parseNdjsonLines(
+      lines: Iterator[String]
   ): List[Map[String, CellValue]] = {
     import io.circe.parser._
-    content.linesIterator
+    lines
       .map(_.trim)
       .filter(_.nonEmpty)
       .map { line =>
@@ -468,20 +469,27 @@ class ParquetService(
               s"Failed to parse NDJSON line: ${error.getMessage}"
             )
           case Right(json) =>
-            json.asObject
-              .getOrElse(
-                throw new IllegalArgumentException(
-                  s"Each NDJSON line must be a JSON object, got: ${json.noSpaces}"
-                )
-              )
-              .toMap
-              .view
-              .mapValues(coerceJsonValue)
-              .toMap
+            jsonObjectToRow(
+              json,
+              s"Each NDJSON line must be a JSON object, got: ${json.noSpaces}"
+            )
         }
       }
       .toList
   }
+
+  // Turn a JSON object into a CellValue row; raise a precise error if the
+  // value is not an object. Used by both JSON-array and NDJSON code paths.
+  private def jsonObjectToRow(
+      json: io.circe.Json,
+      notAnObjectMessage: => String
+  ): Map[String, CellValue] =
+    json.asObject
+      .getOrElse(throw new IllegalArgumentException(notAnObjectMessage))
+      .toMap
+      .view
+      .mapValues(coerceJsonValue)
+      .toMap
 
   private[services] def parseCsvContent(
       content: String

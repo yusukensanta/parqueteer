@@ -103,37 +103,15 @@ class GCSCredentialManager extends CloudCredentialManager {
     }
   }
 
-  private def resolveCredentials(): Try[String] = {
-    val strategies = List(
-      () => tryServiceAccountFile(),
-      () => tryEnvironmentVariable(),
-      () => tryWellKnownLocation()
-    )
-
-    val (result, failures) = strategies.foldLeft(
-      (
-        Failure(new RuntimeException("No GCS credentials found")): Try[String],
-        List.empty[String]
+  private def resolveCredentials(): Try[String] =
+    CloudCredentialManager.firstSuccess(
+      "No GCS credentials found. Attempted strategies:",
+      List(
+        () => tryServiceAccountFile(),
+        () => tryEnvironmentVariable(),
+        () => tryWellKnownLocation()
       )
-    ) {
-      case ((Success(path), msgs), _) => (Success(path), msgs)
-      case ((Failure(_), msgs), strategy) =>
-        strategy() match {
-          case s @ Success(_) => (s, msgs)
-          case Failure(err)   => (Failure(err), msgs :+ err.getMessage)
-        }
-    }
-    result match {
-      case s @ Success(_) => s
-      case Failure(_) =>
-        Failure(
-          new RuntimeException(
-            "No GCS credentials found. Attempted strategies:\n" +
-              failures.mkString("\n")
-          )
-        )
-    }
-  }
+    )
 
   private def tryServiceAccountFile(): Try[String] = {
     Try {

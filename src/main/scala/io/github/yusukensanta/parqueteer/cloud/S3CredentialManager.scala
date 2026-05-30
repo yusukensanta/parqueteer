@@ -94,43 +94,21 @@ class S3CredentialManager(profile: Option[String] = None)
   }
 
   private def resolveCredentials(): Try[(String, String, Option[String])] = {
-    val strategies = profile match {
-      case Some(p) =>
-        List(() => tryProfile(Some(p)))
-      case None =>
-        List(
-          () => tryEnvironmentVariables(),
-          () => tryDefaultCredentialsProvider(),
-          () => tryInstanceProfile(),
-          () => tryProfile(None)
-        )
-    }
-
-    val (result, failures) = strategies.foldLeft(
-      (
-        Failure(new RuntimeException("No credentials found")): Try[
-          (String, String, Option[String])
-        ],
-        List.empty[String]
-      )
-    ) {
-      case ((Success(creds), msgs), _) => (Success(creds), msgs)
-      case ((Failure(_), msgs), strategy) =>
-        strategy() match {
-          case s @ Success(_) => (s, msgs)
-          case Failure(err)   => (Failure(err), msgs :+ err.getMessage)
-        }
-    }
-    result match {
-      case s @ Success(_) => s
-      case Failure(_) =>
-        Failure(
-          new RuntimeException(
-            "No S3 credentials found. Attempted strategies:\n" + failures
-              .mkString("\n")
+    val strategies: List[() => Try[(String, String, Option[String])]] =
+      profile match {
+        case Some(p) => List(() => tryProfile(Some(p)))
+        case None =>
+          List(
+            () => tryEnvironmentVariables(),
+            () => tryDefaultCredentialsProvider(),
+            () => tryInstanceProfile(),
+            () => tryProfile(None)
           )
-        )
-    }
+      }
+    CloudCredentialManager.firstSuccess(
+      "No S3 credentials found. Attempted strategies:",
+      strategies
+    )
   }
 
   private def tryEnvironmentVariables()
