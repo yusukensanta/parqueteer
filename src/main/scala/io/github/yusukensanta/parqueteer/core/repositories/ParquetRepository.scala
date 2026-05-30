@@ -191,25 +191,13 @@ class HadoopParquetRepository(
     }
   }
 
-  // Apply the optional row-limit to an iterable source. Centralizes the
+  // Apply the optional row-limit to any IterableOnce source. Centralizes the
   // `Some(limit) => take | None => iter` dance so callers can chain transforms.
   private def applyMaxRows[A](
-      source: Iterable[A],
-      maxRows: Option[Long]
-  ): Iterable[A] =
-    maxRows match {
-      case Some(limit) => source.take(limit.min(Int.MaxValue).toInt)
-      case None        => source
-    }
-
-  private def applyMaxRows[A](
-      source: Iterator[A],
+      source: IterableOnce[A],
       maxRows: Option[Long]
   ): Iterator[A] =
-    maxRows match {
-      case Some(limit) => source.take(limit.min(Int.MaxValue).toInt)
-      case None        => source
-    }
+    maxRows.fold(source.iterator)(n => source.iterator.take(n.toInt))
 
   def streamContent(
       file: ParquetFile,
