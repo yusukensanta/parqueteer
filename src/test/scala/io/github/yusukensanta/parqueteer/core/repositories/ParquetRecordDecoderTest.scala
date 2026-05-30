@@ -291,4 +291,28 @@ class ParquetRecordDecoderTest extends AnyFlatSpec with Matchers {
     result("id") shouldBe CellValue.I32(1)
     result.contains("tags") shouldBe false
   }
+
+  it should "convert negative TIMESTAMP_MICROS correctly (pre-epoch timestamp)" in {
+    val schema: MessageType = MessageTypeParser.parseMessageType(
+      "message root { optional int64 ts (TIMESTAMP_MICROS); }"
+    )
+    // -1 microsecond = 1 microsecond before epoch = 1969-12-31T23:59:59.999999Z
+    val row = Map[String, CellValue]("ts" -> CellValue.I64(-1L))
+    val result = ParquetRecordDecoder.postProcessTemporalFields(row, schema)
+    result("ts") shouldBe CellValue.Ts(
+      java.time.Instant.EPOCH.minus(1L, java.time.temporal.ChronoUnit.MICROS)
+    )
+  }
+
+  it should "convert large negative TIMESTAMP_MICROS without arithmetic overflow" in {
+    val schema: MessageType = MessageTypeParser.parseMessageType(
+      "message root { optional int64 ts (TIMESTAMP_MICROS); }"
+    )
+    // -1_500_000 micros = -1.5 seconds = 1969-12-31T23:59:58.5Z
+    val row = Map[String, CellValue]("ts" -> CellValue.I64(-1_500_000L))
+    val result = ParquetRecordDecoder.postProcessTemporalFields(row, schema)
+    result("ts") shouldBe CellValue.Ts(
+      java.time.Instant.EPOCH.minusMillis(1500L)
+    )
+  }
 }
