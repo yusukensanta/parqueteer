@@ -48,7 +48,7 @@ private class FilterParserImpl(schema: Option[MessageType]) {
   private val keywords =
     Set("AND", "OR", "NOT", "BETWEEN", "IN", "IS", "NULL", "TRUE", "FALSE")
 
-  private def tokenize(input: String): Either[String, List[Token]] = Try {
+  private def tokenize(input: String): Either[String, Vector[Token]] = Try {
     val buf = scala.collection.mutable.ListBuffer.empty[Token]
     var i = 0
     val n = input.length
@@ -122,12 +122,12 @@ private class FilterParserImpl(schema: Option[MessageType]) {
       skipWS()
     }
     buf += Token.Eof
-    buf.toList
+    buf.toVector
   }.toEither.left.map(_.getMessage)
 
   // ── Parser state ──────────────────────────────────────────────────────────
 
-  private var tokens: List[Token] = Nil
+  private var tokens: Vector[Token] = Vector.empty
   private var pos: Int = 0
 
   private def peek: Token = if (pos < tokens.length) tokens(pos) else Token.Eof
