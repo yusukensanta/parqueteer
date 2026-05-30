@@ -289,6 +289,7 @@ class HadoopParquetRepository(
         try Await.result(Future.sequence(futures), config.readTimeout).flatten
         catch {
           case _: java.util.concurrent.TimeoutException =>
+            executor.shutdownNow()
             throw new RuntimeException(
               s"parallel read timed out after ${config.readTimeout} — " +
                 "retry with --parallelism 1, or check network connectivity"
