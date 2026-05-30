@@ -6,6 +6,23 @@ import io.github.yusukensanta.parqueteer.core.models.{
   SchemaMode
 }
 
+enum InputFormat:
+  case Json, NDJson, Csv, Ltsv
+
+object InputFormat:
+  def fromString(s: String): Option[InputFormat] = s.toLowerCase match
+    case "json"   => Some(Json)
+    case "ndjson" => Some(NDJson)
+    case "csv"    => Some(Csv)
+    case "ltsv"   => Some(Ltsv)
+    case _        => None
+
+  def toServiceString(f: InputFormat): String = f match
+    case Json  => "json"
+    case NDJson => "ndjson"
+    case Csv   => "csv"
+    case Ltsv  => "ltsv"
+
 sealed trait Command
 
 case class ReadCommand(
@@ -26,7 +43,7 @@ case class InfoCommand(
 case class WriteCommand(
     inputPath: String,
     outputPath: String,
-    inputFormat: String = "json",
+    inputFormat: InputFormat = InputFormat.Json,
     compression: CompressionType = CompressionType.Snappy,
     rowGroupSize: Option[Long] = None,
     dryRun: Boolean = false

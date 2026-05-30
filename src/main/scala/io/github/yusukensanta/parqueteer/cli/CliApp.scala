@@ -392,7 +392,7 @@ object CliApp {
       service: ParquetService,
       outputPath: String,
       inputPath: String,
-      inputFormat: String,
+      inputFormat: InputFormat,
       compression: CompressionType,
       rowGroupSize: Option[Long],
       dryRun: Boolean,
@@ -402,7 +402,8 @@ object CliApp {
       compressionType = compression,
       rowGroupSize = rowGroupSize.getOrElse(WriteConfig.DefaultRowGroupSize)
     )
-    service.readDataFile(inputPath, inputFormat) match {
+    val formatStr = InputFormat.toServiceString(inputFormat)
+    service.readDataFile(inputPath, formatStr) match {
       case Left(error) =>
         reportError("Failed to read input file", globalOptions)(error)
       case Right(inputData) =>
@@ -410,7 +411,7 @@ object CliApp {
           val columns =
             inputData.headOption.map(_.keys.toList.sorted).getOrElse(Nil)
           println(s"Dry run: would write $outputPath")
-          println(s"  Input:       $inputPath ($inputFormat)")
+          println(s"  Input:       $inputPath ($formatStr)")
           println(s"  Rows:        ${inputData.size}")
           println(s"  Columns:     ${columns.mkString(", ")}")
           println(s"  Compression: ${compression.toString.toLowerCase}")

@@ -194,7 +194,13 @@ object ArgumentParser {
             .text("Output parquet file path"),
           opt[String]("input-format")
             .action((x, c) =>
-              updateCmd[WriteCommand](c, _.copy(inputFormat = x))
+              updateCmd[WriteCommand](
+                c,
+                _.copy(
+                  inputFormat =
+                    InputFormat.fromString(x).getOrElse(InputFormat.Json)
+                )
+              )
             )
             .validate(x =>
               if (List("json", "ndjson", "csv", "ltsv").contains(x.toLowerCase))
