@@ -1,7 +1,7 @@
 package io.github.yusukensanta.parqueteer.cloud
 
 import io.github.yusukensanta.parqueteer.core.models._
-import io.github.yusukensanta.parqueteer.core.repositories.ParquetRepository
+import io.github.yusukensanta.parqueteer.core.repositories.HadoopParquetRepository
 import org.scalatest.{BeforeAndAfterAll, Tag}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -39,7 +39,7 @@ class S3IntegrationTest
   private val accessKey = sys.env.getOrElse("AWS_ACCESS_KEY_ID", "")
   private val secretKey = sys.env.getOrElse("AWS_SECRET_ACCESS_KEY", "")
   private val testBucket = "parqueteer-test"
-  private val repo = new ParquetRepository()
+  private val repo = new HadoopParquetRepository()
 
   private lazy val s3Client: S3Client = S3Client
     .builder()

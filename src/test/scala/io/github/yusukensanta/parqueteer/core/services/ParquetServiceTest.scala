@@ -66,6 +66,7 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     override def readSchemaFields(
         file: ParquetFile
     ): Try[List[FieldSummary]] = schemaFieldsResult
+    override def deleteFile(location: StorageLocation): Try[Unit] = Success(())
   }
 
   // ── Shared fixtures ──────────────────────────────────────────────────────

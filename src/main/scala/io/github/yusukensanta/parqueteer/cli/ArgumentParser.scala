@@ -184,7 +184,7 @@ object ArgumentParser {
         .children(
           arg[String]("<input>")
             .required()
-            .action((x, c) => c.copy(command = Some(WriteCommand("", x))))
+            .action((x, c) => c.copy(command = Some(WriteCommand(x, ""))))
             .text("Input data file path (JSON or CSV)"),
           arg[String]("<output>")
             .required()
@@ -194,7 +194,13 @@ object ArgumentParser {
             .text("Output parquet file path"),
           opt[String]("input-format")
             .action((x, c) =>
-              updateCmd[WriteCommand](c, _.copy(inputFormat = x))
+              updateCmd[WriteCommand](
+                c,
+                _.copy(
+                  inputFormat =
+                    InputFormat.fromString(x).getOrElse(InputFormat.Json)
+                )
+              )
             )
             .validate(x =>
               if (List("json", "ndjson", "csv", "ltsv").contains(x.toLowerCase))

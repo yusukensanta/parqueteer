@@ -56,3 +56,4 @@ mise.toml
 
 # Claude Code related dirs
 .serena
+.worktrees/

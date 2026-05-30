@@ -1,7 +1,7 @@
 package io.github.yusukensanta.parqueteer.cli
 
 import io.github.yusukensanta.parqueteer.core.services.ParquetService
-import io.github.yusukensanta.parqueteer.core.repositories.ParquetRepository
+import io.github.yusukensanta.parqueteer.core.repositories.HadoopParquetRepository
 import io.github.yusukensanta.parqueteer.core.models.{
   CellValue,
   ReadConfig,
@@ -10,8 +10,7 @@ import io.github.yusukensanta.parqueteer.core.models.{
   CompressionType,
   ParqueteerError,
   SchemaMode,
-  ConversionConfig,
-  FileContent
+  ConversionConfig
 }
 import io.github.yusukensanta.parqueteer.core.formatters.{
   OutputFormatter,
@@ -140,7 +139,7 @@ object CliApp {
             .getOrElse(AppConfig())
           val opts = applyAppConfig(config.globalOptions, appConfig)
           val effectiveCmd = applyAppConfigToCommand(cmd, appConfig)
-          val repository = new ParquetRepository(
+          val repository = new HadoopParquetRepository(
             profile = opts.profile,
             region = opts.region
           )
@@ -213,8 +212,8 @@ object CliApp {
         executeInfo(service, filePath, format, globalOptions)
 
       case WriteCommand(
-            outputPath,
             inputPath,
+            outputPath,
             inputFormat,
             compression,
             rowGroupSize,
@@ -393,7 +392,7 @@ object CliApp {
       service: ParquetService,
       outputPath: String,
       inputPath: String,
-      inputFormat: String,
+      inputFormat: InputFormat,
       compression: CompressionType,
       rowGroupSize: Option[Long],
       dryRun: Boolean,
@@ -403,7 +402,8 @@ object CliApp {
       compressionType = compression,
       rowGroupSize = rowGroupSize.getOrElse(WriteConfig.DefaultRowGroupSize)
     )
-    service.readDataFile(inputPath, inputFormat) match {
+    val formatStr = InputFormat.toServiceString(inputFormat)
+    service.readDataFile(inputPath, formatStr) match {
       case Left(error) =>
         reportError("Failed to read input file", globalOptions)(error)
       case Right(inputData) =>
@@ -411,7 +411,7 @@ object CliApp {
           val columns =
             inputData.headOption.map(_.keys.toList.sorted).getOrElse(Nil)
           println(s"Dry run: would write $outputPath")
-          println(s"  Input:       $inputPath ($inputFormat)")
+          println(s"  Input:       $inputPath ($formatStr)")
           println(s"  Rows:        ${inputData.size}")
           println(s"  Columns:     ${columns.mkString(", ")}")
           println(s"  Compression: ${compression.toString.toLowerCase}")
@@ -553,11 +553,12 @@ object CliApp {
     val inputExt = FileExtension.of(inputPath)
     val outputExt = FileExtension.of(outputPath)
     (inputExt, outputExt) match {
-      case ("parquet", "json") =>
-        convertParquetToJson(service, inputPath, outputPath, conversionConfig)
-      case ("parquet", ext @ ("ndjson" | "csv")) =>
-        val outFormat =
-          if (ext == "ndjson") OutputFormat.NDJSON else OutputFormat.CSV
+      case ("parquet", ext @ ("json" | "ndjson" | "csv")) =>
+        val outFormat = ext match {
+          case "json"   => OutputFormat.JSON
+          case "ndjson" => OutputFormat.NDJSON
+          case _        => OutputFormat.CSV
+        }
         convertParquetStreamed(
           service,
           inputPath,
@@ -588,35 +589,8 @@ object CliApp {
     }
   }
 
-  /** parquet → json: must fully buffer rows so we can emit a valid `[…]`
-    * JSON-array wrapper.
-    */
-  private def convertParquetToJson(
-      service: ParquetService,
-      inputPath: String,
-      outputPath: String,
-      conversionConfig: ConversionConfig
-  ): Either[ParqueteerError, Unit] =
-    service
-      .readFile(inputPath, ReadConfig(maxRows = conversionConfig.maxRows))
-      .flatMap { file =>
-        val content = file.content.getOrElse(FileContent(List.empty, 0, false))
-        val text =
-          OutputFormatter(OutputFormat.JSON, useColors = false)
-            .formatContent(content, None)
-        scala.util
-          .Try {
-            import better.files._
-            File(outputPath).createIfNotExists().write(text)
-          }
-          .toEither
-          .left
-          .map(ParqueteerError.IOError.apply)
-          .map(_ => ())
-      }
-
-  /** parquet → ndjson / csv: stream rows one at a time to avoid loading the
-    * entire file into memory.
+  /** parquet → json / ndjson / csv: stream rows one at a time to avoid loading
+    * the entire file into memory.
     */
   private def convertParquetStreamed(
       service: ParquetService,

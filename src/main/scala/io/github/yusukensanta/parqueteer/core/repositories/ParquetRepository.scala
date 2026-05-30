@@ -20,10 +20,39 @@ import java.util.concurrent.Executors
 import scala.util.{Try, Success, Using}
 import scala.jdk.CollectionConverters._
 
-class ParquetRepository(
+/** Public interface for Parquet file I/O. Implementations may choose to use
+  * Hadoop, in-memory fakes for testing, etc.
+  */
+trait ParquetRepository {
+  def readContent(file: ParquetFile, config: ReadConfig): Try[FileContent]
+  def streamContent(
+      file: ParquetFile,
+      config: ReadConfig
+  )(process: Map[String, CellValue] => Unit): Try[Long]
+  def readSchema(file: ParquetFile): Try[ParquetSchema]
+  def readFileInfo(file: ParquetFile): Try[(ParquetSchema, FileMetadata)]
+  def readMetadata(file: ParquetFile): Try[FileMetadata]
+  def writeContent(
+      location: StorageLocation,
+      data: List[Map[String, CellValue]],
+      schema: Option[ParquetSchema],
+      config: WriteConfig = WriteConfig()
+  ): Try[Unit]
+  def writeContentStream(
+      location: StorageLocation,
+      schema: ParquetSchema,
+      config: WriteConfig
+  )(feed: (Map[String, CellValue] => Unit) => Unit): Try[Long]
+  def validateFile(file: ParquetFile, deep: Boolean = false): Try[List[String]]
+  def readSchemaFields(file: ParquetFile): Try[List[FieldSummary]]
+  def deleteFile(location: StorageLocation): Try[Unit]
+  def readStats(file: ParquetFile): Try[FileStats]
+}
+
+class HadoopParquetRepository(
     profile: Option[String] = None,
     region: Option[String] = None
-) {
+) extends ParquetRepository {
   private val hadoopConfigCache =
     scala.collection.concurrent.TrieMap.empty[String, Configuration]
 
@@ -162,25 +191,13 @@ class ParquetRepository(
     }
   }
 
-  // Apply the optional row-limit to an iterable source. Centralizes the
+  // Apply the optional row-limit to any IterableOnce source. Centralizes the
   // `Some(limit) => take | None => iter` dance so callers can chain transforms.
   private def applyMaxRows[A](
-      source: Iterable[A],
-      maxRows: Option[Long]
-  ): Iterable[A] =
-    maxRows match {
-      case Some(limit) => source.take(limit.min(Int.MaxValue).toInt)
-      case None        => source
-    }
-
-  private def applyMaxRows[A](
-      source: Iterator[A],
+      source: IterableOnce[A],
       maxRows: Option[Long]
   ): Iterator[A] =
-    maxRows match {
-      case Some(limit) => source.take(limit.min(Int.MaxValue).toInt)
-      case None        => source
-    }
+    maxRows.fold(source.iterator)(n => source.iterator.take(n.toInt))
 
   def streamContent(
       file: ParquetFile,
@@ -356,32 +373,8 @@ class ParquetRepository(
     }
   }
 
-  def readMetadata(file: ParquetFile): Try[FileMetadata] = {
-    setupHadoopConfiguration(file.location).flatMap { hadoopConfig =>
-      Try {
-        val path = new HadoopPath(file.location.path)
-        val fs = FileSystem.get(path.toUri, hadoopConfig)
-        val fileStatus = fs.getFileStatus(path)
-        val inputFile = HadoopInputFile.fromStatus(fileStatus, hadoopConfig)
-        val footerBytes = readFooterBytes(inputFile)
-        val (version, createdBy) = parseRawMeta(footerBytes)
-        val meta = parseFooter(footerBytes)
-        val blocks = meta.getBlocks.asScala.toList
-        footerCache.put(path.toString, (meta.getFileMetaData.getSchema, blocks))
-        val ratio = calculateCompressionRatio(blocks)
-        FileMetadata(
-          fileSize = fileStatus.getLen,
-          createdAt = None,
-          modifiedAt = Some(
-            java.time.Instant.ofEpochMilli(fileStatus.getModificationTime)
-          ),
-          compressionRatio = ratio,
-          version = version,
-          createdBy = Some(createdBy)
-        )
-      }
-    }
-  }
+  def readMetadata(file: ParquetFile): Try[FileMetadata] =
+    readFileInfo(file).map(_._2)
 
   def writeContent(
       location: StorageLocation,

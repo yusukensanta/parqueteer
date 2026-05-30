@@ -10,7 +10,7 @@ object IntegrationTest extends Tag("IntegrationTest")
 
 class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
 
-  private val repo = new ParquetRepository()
+  private val repo = new HadoopParquetRepository()
 
   private def tempFile(): java.io.File = {
     val f = Files.createTempFile("parqueteer_it_", ".parquet").toFile
@@ -148,7 +148,7 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
   // ── Profile/region threading ───────────────────────────────────────────
 
   it should "accept profile and region params without breaking local file operations" taggedAs IntegrationTest in {
-    val repoWithOpts = new ParquetRepository(
+    val repoWithOpts = new HadoopParquetRepository(
       profile = Some("custom"),
       region = Some("us-east-2")
     )

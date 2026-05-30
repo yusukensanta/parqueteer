@@ -1,7 +1,7 @@
 package io.github.yusukensanta.parqueteer.core.services
 
 import io.github.yusukensanta.parqueteer.core.models._
-import io.github.yusukensanta.parqueteer.core.repositories.ParquetRepository
+import io.github.yusukensanta.parqueteer.core.repositories.HadoopParquetRepository
 import io.github.yusukensanta.parqueteer.core.models.SchemaMode
 import org.scalatest.Tag
 import org.scalatest.flatspec.AnyFlatSpec
@@ -15,7 +15,7 @@ object MergeIntegrationTest extends Tag("IntegrationTest")
 
 class MergeIntegrationTest extends AnyFlatSpec with Matchers {
 
-  private val repo = new ParquetRepository()
+  private val repo = new HadoopParquetRepository()
   private val service = new ParquetService(repo)
 
   private def tempFile(): java.io.File = {

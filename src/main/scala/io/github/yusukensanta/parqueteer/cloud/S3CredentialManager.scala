@@ -63,7 +63,7 @@ class S3CredentialManager(profile: Option[String] = None)
                 S3Tuning.ThrottleRetryInterval
               )
 
-              conf.set("fs.s3a.buffer.dir", "/tmp")
+              conf.set("fs.s3a.buffer.dir", sys.props("java.io.tmpdir"))
               conf.set("fs.s3a.fast.upload", "true")
               conf.set("fs.s3a.fast.upload.buffer", "disk")
               conf.set("fs.s3a.multipart.size", S3Tuning.MultipartSize)
