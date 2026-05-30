@@ -596,10 +596,12 @@ class ParquetRepository(
 
   private def numericMinMax[T: Ordering](
       withValues: List[org.apache.parquet.column.statistics.Statistics[?]],
-      extract: Any => T
+      extract: PartialFunction[Any, T]
   ): (Option[String], Option[String]) = {
-    val mins = withValues.flatMap(s => Option(s.genericGetMin()).map(extract))
-    val maxs = withValues.flatMap(s => Option(s.genericGetMax()).map(extract))
+    val mins =
+      withValues.flatMap(s => Option(s.genericGetMin()).collect(extract))
+    val maxs =
+      withValues.flatMap(s => Option(s.genericGetMax()).collect(extract))
     (mins.minOption.map(_.toString), maxs.maxOption.map(_.toString))
   }
 
@@ -609,15 +611,24 @@ class ParquetRepository(
   ): (Option[String], Option[String]) =
     typeName match {
       case PrimitiveTypeName.INT32 =>
-        numericMinMax(withValues, _.asInstanceOf[java.lang.Integer].intValue())
-      case PrimitiveTypeName.INT64 =>
-        numericMinMax(withValues, _.asInstanceOf[java.lang.Long].longValue())
-      case PrimitiveTypeName.FLOAT =>
-        numericMinMax(withValues, _.asInstanceOf[java.lang.Float].floatValue())
-      case PrimitiveTypeName.DOUBLE =>
-        numericMinMax(
+        numericMinMax[Int](
           withValues,
-          _.asInstanceOf[java.lang.Double].doubleValue()
+          { case n: java.lang.Integer => n.intValue() }
+        )
+      case PrimitiveTypeName.INT64 =>
+        numericMinMax[Long](
+          withValues,
+          { case n: java.lang.Long => n.longValue() }
+        )
+      case PrimitiveTypeName.FLOAT =>
+        numericMinMax[Float](
+          withValues,
+          { case n: java.lang.Float => n.floatValue() }
+        )
+      case PrimitiveTypeName.DOUBLE =>
+        numericMinMax[Double](
+          withValues,
+          { case n: java.lang.Double => n.doubleValue() }
         )
       case _ =>
         val minVal = withValues

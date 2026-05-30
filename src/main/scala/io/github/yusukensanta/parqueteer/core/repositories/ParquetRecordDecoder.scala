@@ -46,43 +46,48 @@ private[repositories] object ParquetRecordDecoder {
   def postProcessTemporalFields(
       row: Map[String, CellValue],
       schema: MessageType
-  ): Map[String, CellValue] = {
+  ): Map[String, CellValue] =
     schema.getFields.asScala.foldLeft(row) { (acc, field) =>
       if (!field.isPrimitive) acc
       else {
         val pt = field.asPrimitiveType()
-        val originalType = pt.getOriginalType
-        (pt.getPrimitiveTypeName, originalType) match {
+        val name = field.getName
+        (pt.getPrimitiveTypeName, pt.getOriginalType) match {
           case (PrimitiveTypeName.INT32, OriginalType.DATE) =>
-            acc.get(field.getName) match {
-              case Some(CellValue.I32(i)) =>
-                acc + (field.getName -> CellValue.Date(
-                  java.time.LocalDate.ofEpochDay(i.toLong)
-                ))
-              case _ => acc
-            }
+            replaceTyped[CellValue.I32](acc, name)(i =>
+              CellValue.Date(java.time.LocalDate.ofEpochDay(i.i.toLong))
+            )
           case (PrimitiveTypeName.INT64, OriginalType.TIMESTAMP_MILLIS) =>
-            acc.get(field.getName) match {
-              case Some(CellValue.I64(l)) =>
-                acc + (field.getName -> CellValue.Ts(
-                  java.time.Instant.ofEpochMilli(l)
-                ))
-              case _ => acc
-            }
+            replaceTyped[CellValue.I64](acc, name)(l =>
+              CellValue.Ts(java.time.Instant.ofEpochMilli(l.l))
+            )
           case (PrimitiveTypeName.INT64, OriginalType.TIMESTAMP_MICROS) =>
-            acc.get(field.getName) match {
-              case Some(CellValue.I64(l)) =>
-                acc + (field.getName -> CellValue.Ts(
-                  java.time.Instant
-                    .ofEpochSecond(l / 1_000_000L, (l % 1_000_000L) * 1_000L)
-                ))
-              case _ => acc
-            }
+            replaceTyped[CellValue.I64](acc, name)(l =>
+              CellValue.Ts(
+                java.time.Instant.ofEpochSecond(
+                  l.l / 1_000_000L,
+                  (l.l % 1_000_000L) * 1_000L
+                )
+              )
+            )
           case _ => acc
         }
       }
     }
-  }
+
+  /** If `row(name)` exists and matches the expected variant, replace it with
+    * `f(matched)`; otherwise return the row unchanged.
+    */
+  private inline def replaceTyped[T <: CellValue](
+      row: Map[String, CellValue],
+      name: String
+  )(
+      f: T => CellValue
+  )(using ct: scala.reflect.ClassTag[T]): Map[String, CellValue] =
+    row.get(name) match {
+      case Some(ct(t)) => row + (name -> f(t))
+      case _           => row
+    }
 
   def decodePageStore(
       pageStore: PageReadStore,
