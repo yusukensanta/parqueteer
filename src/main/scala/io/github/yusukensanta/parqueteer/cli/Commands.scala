@@ -24,8 +24,8 @@ case class InfoCommand(
 ) extends Command
 
 case class WriteCommand(
-    outputPath: String,
     inputPath: String,
+    outputPath: String,
     inputFormat: String = "json",
     compression: CompressionType = CompressionType.Snappy,
     rowGroupSize: Option[Long] = None,

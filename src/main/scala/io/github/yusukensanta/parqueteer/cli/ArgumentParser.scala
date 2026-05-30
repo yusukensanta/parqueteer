@@ -184,7 +184,7 @@ object ArgumentParser {
         .children(
           arg[String]("<input>")
             .required()
-            .action((x, c) => c.copy(command = Some(WriteCommand("", x))))
+            .action((x, c) => c.copy(command = Some(WriteCommand(x, ""))))
             .text("Input data file path (JSON or CSV)"),
           arg[String]("<output>")
             .required()

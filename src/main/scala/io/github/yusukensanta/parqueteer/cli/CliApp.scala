@@ -212,8 +212,8 @@ object CliApp {
         executeInfo(service, filePath, format, globalOptions)
 
       case WriteCommand(
-            outputPath,
             inputPath,
+            outputPath,
             inputFormat,
             compression,
             rowGroupSize,
