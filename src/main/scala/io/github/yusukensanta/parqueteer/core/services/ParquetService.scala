@@ -6,27 +6,6 @@ import io.github.yusukensanta.parqueteer.core.models.StorageLocationParser
 import io.github.yusukensanta.parqueteer.core.repositories.ParquetRepository
 import io.github.yusukensanta.parqueteer.core.filters.FilterParser
 import scala.util.{Try, Using}
-import io.circe.{Encoder, Json}
-
-object ParquetServiceEncoders {
-  import io.github.yusukensanta.parqueteer.core.models.CellValue
-  import io.github.yusukensanta.parqueteer.core.util.JsonEncoder
-
-  given cellValueEncoder: Encoder[CellValue] =
-    Encoder.instance(JsonEncoder.encode)
-
-  given mapStringCellValueEncoder: Encoder[Map[String, CellValue]] =
-    Encoder.instance { map =>
-      Json.fromFields(map.map { case (k, v) =>
-        k -> cellValueEncoder.apply(v)
-      })
-    }
-
-  given listMapEncoder: Encoder[List[Map[String, CellValue]]] =
-    Encoder.instance(list =>
-      Json.fromValues(list.map(mapStringCellValueEncoder.apply))
-    )
-}
 
 class ParquetService(
     repository: ParquetRepository
