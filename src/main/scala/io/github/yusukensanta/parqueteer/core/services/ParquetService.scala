@@ -98,114 +98,158 @@ class ParquetService(
       )
     else
       for {
-        inputLocations <- inputPaths
-          .foldLeft[Either[ParqueteerError, Vector[StorageLocation]]](
-            Right(Vector.empty)
-          ) { (acc, p) =>
-            acc.flatMap(locs => parseLocation(p).map(locs :+ _))
-          }
-        schemas <- inputLocations.foldLeft[Either[ParqueteerError, Vector[
-          List[FieldSummary]
-        ]]](Right(Vector.empty)) { (acc, loc) =>
-          acc.flatMap { vec =>
-            repository
-              .readSchemaFields(ParquetFile(loc))
-              .toParqueteerError
-              .map(vec :+ _)
-          }
-        }
-        mergedFields <- schemaMode match {
-          case SchemaMode.Strict =>
-            val first = schemas.head
-            schemas.zipWithIndex
-              .collectFirst {
-                case (s, i) if s != first =>
-                  Left(
-                    ParqueteerError.InvalidFormat(
-                      inputPaths(i),
-                      s"Schema mismatch at file '${inputPaths(i)}'. Use --schema-mode union to allow schema differences."
-                    )
-                  )
-              }
-              .getOrElse(Right(first))
-          case SchemaMode.Union =>
-            val seen =
-              scala.collection.mutable.LinkedHashMap.empty[String, String]
-            schemas
-              .foldLeft[Either[ParqueteerError, Unit]](Right(())) {
-                (acc, fields) =>
-                  acc.flatMap { _ =>
-                    val conflicts = fields.collect {
-                      case f if seen.get(f.name).exists(_ != f.dataType) =>
-                        s"'${f.name}' (${seen(f.name)} vs ${f.dataType})"
-                    }
-                    if (conflicts.nonEmpty)
-                      Left(
-                        ParqueteerError.InvalidFormat(
-                          "merge",
-                          s"Type conflicts in union merge: ${conflicts.mkString(", ")}. " +
-                            "Cannot union-merge columns with incompatible types."
-                        )
-                      )
-                    else {
-                      fields.foreach(f =>
-                        seen.getOrElseUpdate(f.name, f.dataType)
-                      )
-                      Right(())
-                    }
-                  }
-              }
-              .map(_ =>
-                seen.map { case (name, t) =>
-                  FieldSummary(name, t, isOptional = true)
-                }.toList
-              )
-        }
+        inputLocations <- parseLocations(inputPaths)
+        schemas <- readAllSchemas(inputLocations)
+        mergedFields <- mergeSchemas(schemas, inputPaths, schemaMode)
         outputLocation <- parseLocation(outputPath)
-        count <- {
-          val allColumnNames = mergedFields.map(_.name).toSet
-          val explicitSchema = ParquetSchema(
-            columns = mergedFields.map { f =>
-              ColumnInfo(f.name, f.dataType, f.isOptional, 1, 0, "SNAPPY")
-            },
-            rowGroupCount = 1L,
-            totalRowCount = 0L
-          )
-          // precompute per-file missing columns — avoids O(cols) set diff per row
-          val missingPerFile = schemas.map { fields =>
-            allColumnNames -- fields.map(_.name).toSet
-          }
-          var streamError: Option[Throwable] = None
-          repository
-            .writeContentStream(outputLocation, explicitSchema, writeConfig) {
-              write =>
-                inputLocations.zipWithIndex.foreach { case (loc, i) =>
-                  if (streamError.isEmpty) {
-                    onProgress(i + 1, inputLocations.size, inputPaths(i))
-                    val fileMissing = missingPerFile(i)
-                    repository
-                      .streamContent(ParquetFile(loc), ReadConfig()) { row =>
-                        val finalRow =
-                          if (fileMissing.isEmpty) row
-                          else row ++ fileMissing.map(_ -> CellValue.Null)
-                        write(finalRow)
-                      }
-                      .fold(err => streamError = Some(err), _ => ())
-                  }
-                }
-            }
-            .toParqueteerError
-            .flatMap(count =>
-              streamError match {
-                case Some(e) =>
-                  // Delete partial output; merge is not atomic so partial writes are unusable
-                  repository.deleteFile(outputLocation).recover { case _ => () }
-                  Left(ParqueteerError.IOError(e))
-                case None => Right(count)
-              }
+        count <- streamMerge(
+          inputLocations,
+          inputPaths,
+          schemas,
+          mergedFields,
+          outputLocation,
+          writeConfig,
+          onProgress
+        )
+      } yield count
+
+  /** Lift a list of paths into a single Either of parsed locations,
+    * short-circuiting on the first malformed path.
+    */
+  private def parseLocations(
+      paths: List[String]
+  ): Either[ParqueteerError, Vector[StorageLocation]] =
+    paths.foldLeft[Either[ParqueteerError, Vector[StorageLocation]]](
+      Right(Vector.empty)
+    )((acc, p) => acc.flatMap(locs => parseLocation(p).map(locs :+ _)))
+
+  /** Read the field-summary schema for each input file, preserving order. Stops
+    * on the first read failure.
+    */
+  private def readAllSchemas(
+      locations: Vector[StorageLocation]
+  ): Either[ParqueteerError, Vector[List[FieldSummary]]] =
+    locations.foldLeft[Either[ParqueteerError, Vector[List[FieldSummary]]]](
+      Right(Vector.empty)
+    )((acc, loc) =>
+      acc.flatMap(vec =>
+        repository
+          .readSchemaFields(ParquetFile(loc))
+          .toParqueteerError
+          .map(vec :+ _)
+      )
+    )
+
+  /** Combine per-file schemas under the chosen strategy:
+    *   - Strict: every input must match the first file's schema exactly.
+    *   - Union: collect the union of fields, surfacing per-column type
+    *     conflicts as a single InvalidFormat error. Union-merged fields are
+    *     marked optional because not every file is guaranteed to supply them.
+    */
+  private def mergeSchemas(
+      schemas: Vector[List[FieldSummary]],
+      inputPaths: List[String],
+      schemaMode: SchemaMode
+  ): Either[ParqueteerError, List[FieldSummary]] = schemaMode match {
+    case SchemaMode.Strict =>
+      val first = schemas.head
+      schemas.zipWithIndex
+        .collectFirst {
+          case (s, i) if s != first =>
+            Left(
+              ParqueteerError.InvalidFormat(
+                inputPaths(i),
+                s"Schema mismatch at file '${inputPaths(i)}'. Use --schema-mode union to allow schema differences."
+              )
             )
         }
-      } yield count
+        .getOrElse(Right(first))
+
+    case SchemaMode.Union =>
+      val seen = scala.collection.mutable.LinkedHashMap.empty[String, String]
+      schemas
+        .foldLeft[Either[ParqueteerError, Unit]](Right(())) { (acc, fields) =>
+          acc.flatMap { _ =>
+            val conflicts = fields.collect {
+              case f if seen.get(f.name).exists(_ != f.dataType) =>
+                s"'${f.name}' (${seen(f.name)} vs ${f.dataType})"
+            }
+            if (conflicts.nonEmpty)
+              Left(
+                ParqueteerError.InvalidFormat(
+                  "merge",
+                  s"Type conflicts in union merge: ${conflicts.mkString(", ")}. " +
+                    "Cannot union-merge columns with incompatible types."
+                )
+              )
+            else {
+              fields.foreach(f => seen.getOrElseUpdate(f.name, f.dataType))
+              Right(())
+            }
+          }
+        }
+        .map(_ =>
+          seen.map { case (name, t) =>
+            FieldSummary(name, t, isOptional = true)
+          }.toList
+        )
+  }
+
+  /** Stream rows from each input file into a single output writer. Tracks the
+    * first read failure and, on any failure, deletes the partial output (merge
+    * is not atomic). Returns the count of rows written on success.
+    */
+  private def streamMerge(
+      inputLocations: Vector[StorageLocation],
+      inputPaths: List[String],
+      schemas: Vector[List[FieldSummary]],
+      mergedFields: List[FieldSummary],
+      outputLocation: StorageLocation,
+      writeConfig: WriteConfig,
+      onProgress: (Int, Int, String) => Unit
+  ): Either[ParqueteerError, Long] = {
+    val allColumnNames = mergedFields.map(_.name).toSet
+    val explicitSchema = ParquetSchema(
+      columns = mergedFields.map { f =>
+        ColumnInfo(f.name, f.dataType, f.isOptional, 1, 0, "SNAPPY")
+      },
+      rowGroupCount = 1L,
+      totalRowCount = 0L
+    )
+    // precompute per-file missing columns — avoids O(cols) set diff per row
+    val missingPerFile = schemas.map { fields =>
+      allColumnNames -- fields.map(_.name).toSet
+    }
+    var streamError: Option[Throwable] = None
+    repository
+      .writeContentStream(outputLocation, explicitSchema, writeConfig) {
+        write =>
+          inputLocations.zipWithIndex.foreach { case (loc, i) =>
+            if (streamError.isEmpty) {
+              onProgress(i + 1, inputLocations.size, inputPaths(i))
+              val fileMissing = missingPerFile(i)
+              repository
+                .streamContent(ParquetFile(loc), ReadConfig()) { row =>
+                  val finalRow =
+                    if (fileMissing.isEmpty) row
+                    else row ++ fileMissing.map(_ -> CellValue.Null)
+                  write(finalRow)
+                }
+                .fold(err => streamError = Some(err), _ => ())
+            }
+          }
+      }
+      .toParqueteerError
+      .flatMap(count =>
+        streamError match {
+          case Some(e) =>
+            // Delete partial output; merge is not atomic so partial writes are unusable
+            repository.deleteFile(outputLocation).recover { case _ => () }
+            Left(ParqueteerError.IOError(e))
+          case None => Right(count)
+        }
+      )
+  }
 
   def getStats(path: String): Either[ParqueteerError, FileStats] =
     for {
