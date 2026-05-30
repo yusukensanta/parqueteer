@@ -38,6 +38,21 @@ class SchemaDiffTest extends AnyFlatSpec with Matchers {
         schema: Option[ParquetSchema],
         config: WriteConfig
     ): Try[Unit] = Success(())
+    override def streamContent(
+        file: ParquetFile,
+        config: ReadConfig
+    )(process: Map[String, CellValue] => Unit): Try[Long] = Success(0L)
+    override def writeContentStream(
+        location: StorageLocation,
+        schema: ParquetSchema,
+        config: WriteConfig
+    )(feed: (Map[String, CellValue] => Unit) => Unit): Try[Long] = Success(0L)
+    override def readSchemaFields(
+        file: ParquetFile
+    ): Try[List[FieldSummary]] = Success(List.empty)
+    override def deleteFile(location: StorageLocation): Try[Unit] = Success(())
+    override def readStats(file: ParquetFile): Try[FileStats] =
+      Success(FileStats(List.empty, 0L, 0L))
   }
 
   // ── Tests ─────────────────────────────────────────────────────────────────

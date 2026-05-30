@@ -1,7 +1,7 @@
 package io.github.yusukensanta.parqueteer.cli
 
 import io.github.yusukensanta.parqueteer.core.services.ParquetService
-import io.github.yusukensanta.parqueteer.core.repositories.ParquetRepository
+import io.github.yusukensanta.parqueteer.core.repositories.HadoopParquetRepository
 import io.github.yusukensanta.parqueteer.core.models.{
   CellValue,
   ReadConfig,
@@ -139,7 +139,7 @@ object CliApp {
             .getOrElse(AppConfig())
           val opts = applyAppConfig(config.globalOptions, appConfig)
           val effectiveCmd = applyAppConfigToCommand(cmd, appConfig)
-          val repository = new ParquetRepository(
+          val repository = new HadoopParquetRepository(
             profile = opts.profile,
             region = opts.region
           )

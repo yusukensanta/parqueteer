@@ -20,10 +20,39 @@ import java.util.concurrent.Executors
 import scala.util.{Try, Success, Using}
 import scala.jdk.CollectionConverters._
 
-class ParquetRepository(
+/** Public interface for Parquet file I/O. Implementations may choose to use
+  * Hadoop, in-memory fakes for testing, etc.
+  */
+trait ParquetRepository {
+  def readContent(file: ParquetFile, config: ReadConfig): Try[FileContent]
+  def streamContent(
+      file: ParquetFile,
+      config: ReadConfig
+  )(process: Map[String, CellValue] => Unit): Try[Long]
+  def readSchema(file: ParquetFile): Try[ParquetSchema]
+  def readFileInfo(file: ParquetFile): Try[(ParquetSchema, FileMetadata)]
+  def readMetadata(file: ParquetFile): Try[FileMetadata]
+  def writeContent(
+      location: StorageLocation,
+      data: List[Map[String, CellValue]],
+      schema: Option[ParquetSchema],
+      config: WriteConfig = WriteConfig()
+  ): Try[Unit]
+  def writeContentStream(
+      location: StorageLocation,
+      schema: ParquetSchema,
+      config: WriteConfig
+  )(feed: (Map[String, CellValue] => Unit) => Unit): Try[Long]
+  def validateFile(file: ParquetFile, deep: Boolean = false): Try[List[String]]
+  def readSchemaFields(file: ParquetFile): Try[List[FieldSummary]]
+  def deleteFile(location: StorageLocation): Try[Unit]
+  def readStats(file: ParquetFile): Try[FileStats]
+}
+
+class HadoopParquetRepository(
     profile: Option[String] = None,
     region: Option[String] = None
-) {
+) extends ParquetRepository {
   private val hadoopConfigCache =
     scala.collection.concurrent.TrieMap.empty[String, Configuration]
 
