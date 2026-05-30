@@ -296,58 +296,38 @@ private class FilterParserImpl(schema: Option[MessageType]) {
       v: FilterValue
   ): Either[String, Filter] = {
     val c = Col(col)
+
+    // Equality / inequality work for all value types — strings, numbers, bools.
+    def equality(eq: Boolean): Filter = v match {
+      case s: String  => if (eq) c === s else c !== s
+      case l: Long    => if (eq) c === l else c !== l
+      case d: Double  => if (eq) c === d else c !== d
+      case b: Boolean => if (eq) c === b else c !== b
+    }
+
+    // Ordered comparisons only make sense for numeric values; everything else
+    // produces a typed error message that names the operator and value type.
+    def numericOnly(
+        opName: String,
+        onLong: Long => Filter,
+        onDouble: Double => Filter
+    ): Either[String, Filter] = v match {
+      case l: Long   => Right(onLong(l))
+      case d: Double => Right(onDouble(d))
+      case _ =>
+        Left(
+          s"Operator '$opName' requires a numeric value, got: ${v.getClass.getSimpleName} '$v'"
+        )
+    }
+
     op match {
-      case "=" =>
-        Right(v match {
-          case s: String  => c === s
-          case l: Long    => c === l
-          case d: Double  => c === d
-          case b: Boolean => c === b
-        })
-      case "!=" =>
-        Right(v match {
-          case s: String  => c !== s
-          case l: Long    => c !== l
-          case d: Double  => c !== d
-          case b: Boolean => c !== b
-        })
-      case ">" =>
-        v match {
-          case l: Long   => Right(c > l)
-          case d: Double => Right(c > d)
-          case _ =>
-            Left(
-              s"Operator '>' requires a numeric value, got: ${v.getClass.getSimpleName} '$v'"
-            )
-        }
-      case ">=" =>
-        v match {
-          case l: Long   => Right(c >= l)
-          case d: Double => Right(c >= d)
-          case _ =>
-            Left(
-              s"Operator '>=' requires a numeric value, got: ${v.getClass.getSimpleName} '$v'"
-            )
-        }
-      case "<" =>
-        v match {
-          case l: Long   => Right(c < l)
-          case d: Double => Right(c < d)
-          case _ =>
-            Left(
-              s"Operator '<' requires a numeric value, got: ${v.getClass.getSimpleName} '$v'"
-            )
-        }
-      case "<=" =>
-        v match {
-          case l: Long   => Right(c <= l)
-          case d: Double => Right(c <= d)
-          case _ =>
-            Left(
-              s"Operator '<=' requires a numeric value, got: ${v.getClass.getSimpleName} '$v'"
-            )
-        }
-      case _ => Left(s"Unknown operator: $op")
+      case "="  => Right(equality(eq = true))
+      case "!=" => Right(equality(eq = false))
+      case ">"  => numericOnly(">", c > _, c > _)
+      case ">=" => numericOnly(">=", c >= _, c >= _)
+      case "<"  => numericOnly("<", c < _, c < _)
+      case "<=" => numericOnly("<=", c <= _, c <= _)
+      case _    => Left(s"Unknown operator: $op")
     }
   }
 
@@ -392,67 +372,46 @@ private class FilterParserImpl(schema: Option[MessageType]) {
   private def buildIsNullFilter(col: String, isNull: Boolean): Filter =
     new Filter {
       def toPredicate(vcc: ValueCodecConfiguration): FilterPredicate = {
-        val physType = schema.flatMap(resolveColumnType(_, col))
-        physType.getOrElse(PrimitiveTypeName.BINARY) match {
+        // Build a typed null-comparison predicate. The column factory and the
+        // boxed null literal must match the physical Parquet type, so we
+        // resolve the type from the schema (defaulting to BINARY) and dispatch.
+        def nullEq[C <: org.apache.parquet.filter2.predicate.Operators.Column[
+          T
+        ] & org.apache.parquet.filter2.predicate.Operators.SupportsEqNotEq, T <: Comparable[
+          T
+        ]](colRef: C, nullLit: T): FilterPredicate =
+          if (isNull) FilterApi.eq(colRef, nullLit)
+          else FilterApi.notEq(colRef, nullLit)
+
+        schema
+          .flatMap(resolveColumnType(_, col))
+          .getOrElse(
+            PrimitiveTypeName.BINARY
+          ) match {
           case PrimitiveTypeName.INT32 =>
-            if (isNull)
-              FilterApi.eq(
-                FilterApi.intColumn(col),
-                null.asInstanceOf[java.lang.Integer]
-              )
-            else
-              FilterApi.notEq(
-                FilterApi.intColumn(col),
-                null.asInstanceOf[java.lang.Integer]
-              )
+            nullEq(
+              FilterApi.intColumn(col),
+              null.asInstanceOf[java.lang.Integer]
+            )
           case PrimitiveTypeName.INT64 =>
-            if (isNull)
-              FilterApi.eq(
-                FilterApi.longColumn(col),
-                null.asInstanceOf[java.lang.Long]
-              )
-            else
-              FilterApi.notEq(
-                FilterApi.longColumn(col),
-                null.asInstanceOf[java.lang.Long]
-              )
+            nullEq(FilterApi.longColumn(col), null.asInstanceOf[java.lang.Long])
           case PrimitiveTypeName.FLOAT =>
-            if (isNull)
-              FilterApi.eq(
-                FilterApi.floatColumn(col),
-                null.asInstanceOf[java.lang.Float]
-              )
-            else
-              FilterApi.notEq(
-                FilterApi.floatColumn(col),
-                null.asInstanceOf[java.lang.Float]
-              )
+            nullEq(
+              FilterApi.floatColumn(col),
+              null.asInstanceOf[java.lang.Float]
+            )
           case PrimitiveTypeName.DOUBLE =>
-            if (isNull)
-              FilterApi.eq(
-                FilterApi.doubleColumn(col),
-                null.asInstanceOf[java.lang.Double]
-              )
-            else
-              FilterApi.notEq(
-                FilterApi.doubleColumn(col),
-                null.asInstanceOf[java.lang.Double]
-              )
+            nullEq(
+              FilterApi.doubleColumn(col),
+              null.asInstanceOf[java.lang.Double]
+            )
           case PrimitiveTypeName.BOOLEAN =>
-            if (isNull)
-              FilterApi.eq(
-                FilterApi.booleanColumn(col),
-                null.asInstanceOf[java.lang.Boolean]
-              )
-            else
-              FilterApi.notEq(
-                FilterApi.booleanColumn(col),
-                null.asInstanceOf[java.lang.Boolean]
-              )
+            nullEq(
+              FilterApi.booleanColumn(col),
+              null.asInstanceOf[java.lang.Boolean]
+            )
           case _ =>
-            val binaryCol = FilterApi.binaryColumn(col)
-            if (isNull) FilterApi.eq(binaryCol, null.asInstanceOf[Binary])
-            else FilterApi.notEq(binaryCol, null.asInstanceOf[Binary])
+            nullEq(FilterApi.binaryColumn(col), null.asInstanceOf[Binary])
         }
       }
     }
