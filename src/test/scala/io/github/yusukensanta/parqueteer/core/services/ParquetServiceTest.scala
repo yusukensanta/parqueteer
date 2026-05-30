@@ -748,4 +748,31 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     val result = service.readDataFile("/tmp/file.tsv", "tsv")
     result.isLeft shouldBe true
   }
+
+  // ── mergeFiles compression propagation ───────────────────────────────────
+  "ParquetService.mergeFiles" should "pass WriteConfig compressionType to schema in writeContentStream" in {
+    var capturedSchema: Option[ParquetSchema] = None
+    val repo = new FakeParquetRepository(
+      schemaFieldsResult = Success(List(FieldSummary("id", "INT64", isOptional = false)))
+    ) {
+      override def writeContentStream(
+          location: StorageLocation,
+          schema: ParquetSchema,
+          config: WriteConfig
+      )(feed: (Map[String, CellValue] => Unit) => Unit): scala.util.Try[Long] = {
+        capturedSchema = Some(schema)
+        super.writeContentStream(location, schema, config)(feed)
+      }
+    }
+    val service = new ParquetService(repo)
+    val result = service.mergeFiles(
+      List("/tmp/a.parquet", "/tmp/b.parquet"),
+      "/tmp/out.parquet",
+      WriteConfig(compressionType = CompressionType.Gzip),
+      SchemaMode.Strict
+    )
+    result.isRight shouldBe true
+    capturedSchema shouldBe defined
+    capturedSchema.get.columns.map(_.compressionType).distinct shouldBe List("GZIP")
+  }
 }

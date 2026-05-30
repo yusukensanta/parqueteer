@@ -211,7 +211,7 @@ class ParquetService(
     val allColumnNames = mergedFields.map(_.name).toSet
     val explicitSchema = ParquetSchema(
       columns = mergedFields.map { f =>
-        ColumnInfo(f.name, f.dataType, f.isOptional, 1, 0, "SNAPPY")
+        ColumnInfo(f.name, f.dataType, f.isOptional, 1, 0, writeConfig.compressionType.codecName)
       },
       rowGroupCount = 1L,
       totalRowCount = 0L
