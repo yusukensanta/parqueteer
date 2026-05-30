@@ -18,10 +18,10 @@ object InputFormat:
     case _        => None
 
   def toServiceString(f: InputFormat): String = f match
-    case Json  => "json"
+    case Json   => "json"
     case NDJson => "ndjson"
-    case Csv   => "csv"
-    case Ltsv  => "ltsv"
+    case Csv    => "csv"
+    case Ltsv   => "ltsv"
 
 sealed trait Command
 

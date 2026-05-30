@@ -589,8 +589,8 @@ object CliApp {
     }
   }
 
-  /** parquet → json / ndjson / csv: stream rows one at a time to avoid loading the
-    * entire file into memory.
+  /** parquet → json / ndjson / csv: stream rows one at a time to avoid loading
+    * the entire file into memory.
     */
   private def convertParquetStreamed(
       service: ParquetService,
