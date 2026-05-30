@@ -373,32 +373,8 @@ class HadoopParquetRepository(
     }
   }
 
-  def readMetadata(file: ParquetFile): Try[FileMetadata] = {
-    setupHadoopConfiguration(file.location).flatMap { hadoopConfig =>
-      Try {
-        val path = new HadoopPath(file.location.path)
-        val fs = FileSystem.get(path.toUri, hadoopConfig)
-        val fileStatus = fs.getFileStatus(path)
-        val inputFile = HadoopInputFile.fromStatus(fileStatus, hadoopConfig)
-        val footerBytes = readFooterBytes(inputFile)
-        val (version, createdBy) = parseRawMeta(footerBytes)
-        val meta = parseFooter(footerBytes)
-        val blocks = meta.getBlocks.asScala.toList
-        footerCache.put(path.toString, (meta.getFileMetaData.getSchema, blocks))
-        val ratio = calculateCompressionRatio(blocks)
-        FileMetadata(
-          fileSize = fileStatus.getLen,
-          createdAt = None,
-          modifiedAt = Some(
-            java.time.Instant.ofEpochMilli(fileStatus.getModificationTime)
-          ),
-          compressionRatio = ratio,
-          version = version,
-          createdBy = Some(createdBy)
-        )
-      }
-    }
-  }
+  def readMetadata(file: ParquetFile): Try[FileMetadata] =
+    readFileInfo(file).map(_._2)
 
   def writeContent(
       location: StorageLocation,
