@@ -749,17 +749,63 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     result.isLeft shouldBe true
   }
 
+  it should "wrap IllegalArgumentException from streamContent as ParseError, not IOError" in {
+    val illegalArg = new IllegalArgumentException("bad column type")
+    val repo = new FakeParquetRepository(streamResult = Failure(illegalArg))
+    val service = new ParquetService(repo)
+    val result = service.mergeFiles(
+      List("/tmp/a.parquet", "/tmp/b.parquet"),
+      "/tmp/out.parquet",
+      WriteConfig(),
+      SchemaMode.Strict
+    )
+    result.isLeft shouldBe true
+    val err = result.left.toOption.get
+    err shouldBe a[ParqueteerError.ParseError]
+    err.userMessage should include("bad column type")
+  }
+
+  // ── mergeFiles fail-fast on stream error ─────────────────────────────────
+  "ParquetService.mergeFiles" should "stop iterating files immediately on first stream error" in {
+    var filesAttempted = 0
+    val repo = new FakeParquetRepository {
+      override def streamContent(file: ParquetFile, config: ReadConfig)(
+          process: Map[String, CellValue] => Unit
+      ): scala.util.Try[Long] = {
+        filesAttempted += 1
+        if (filesAttempted == 1)
+          scala.util.Failure(
+            new RuntimeException("simulated read error on file 1")
+          )
+        else
+          scala.util.Success(0L)
+      }
+    }
+    val svc = new ParquetService(repo)
+    val result = svc.mergeFiles(
+      List("a.parquet", "b.parquet", "c.parquet"),
+      "out.parquet",
+      WriteConfig(),
+      SchemaMode.Strict
+    )
+    result shouldBe a[Left[?, ?]]
+    filesAttempted shouldBe 1
+  }
+
   // ── mergeFiles compression propagation ───────────────────────────────────
-  "ParquetService.mergeFiles" should "pass WriteConfig compressionType to schema in writeContentStream" in {
+  it should "pass WriteConfig compressionType to schema in writeContentStream" in {
     var capturedSchema: Option[ParquetSchema] = None
     val repo = new FakeParquetRepository(
-      schemaFieldsResult = Success(List(FieldSummary("id", "INT64", isOptional = false)))
+      schemaFieldsResult =
+        Success(List(FieldSummary("id", "INT64", isOptional = false)))
     ) {
       override def writeContentStream(
           location: StorageLocation,
           schema: ParquetSchema,
           config: WriteConfig
-      )(feed: (Map[String, CellValue] => Unit) => Unit): scala.util.Try[Long] = {
+      )(
+          feed: (Map[String, CellValue] => Unit) => Unit
+      ): scala.util.Try[Long] = {
         capturedSchema = Some(schema)
         super.writeContentStream(location, schema, config)(feed)
       }
@@ -773,6 +819,8 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     )
     result.isRight shouldBe true
     capturedSchema shouldBe defined
-    capturedSchema.get.columns.map(_.compressionType).distinct shouldBe List("GZIP")
+    capturedSchema.get.columns.map(_.compressionType).distinct shouldBe List(
+      "GZIP"
+    )
   }
 }
