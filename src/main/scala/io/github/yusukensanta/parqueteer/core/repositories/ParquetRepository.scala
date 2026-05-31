@@ -673,7 +673,7 @@ class HadoopParquetRepository(
           .forLocation(effectiveLocation, profile) match {
           case Some(credManager) =>
             credManager.configureHadoop(effectiveLocation).recoverWith {
-              case e =>
+              case e if !e.isInstanceOf[CloudAuthException] =>
                 val providerName = effectiveLocation match {
                   case _: S3Location    => "S3"
                   case _: GCSLocation   => "GCS"

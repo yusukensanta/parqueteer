@@ -1,6 +1,7 @@
 package io.github.yusukensanta.parqueteer.core.repositories
 
 import io.github.yusukensanta.parqueteer.core.models._
+import io.github.yusukensanta.parqueteer.core.models.ParqueteerError.toParqueteerError
 import org.scalatest.Tag
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -824,7 +825,7 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
 
   // ── Cloud auth error mapping (#H3) ─────────────────────────────────────
 
-  "HadoopParquetRepository" should "return CloudAuthError when S3 credentials are missing" in {
+  "HadoopParquetRepository" should "wrap S3 auth failure as CloudAuthException" in {
     // Unset AWS credentials by pointing to a non-existent profile
     val repo = new HadoopParquetRepository(profile = Some("__nonexistent_profile_xyz__"))
     val file = ParquetFile(S3Location("test-bucket", "key.parquet", None))
@@ -832,6 +833,9 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
     result.isFailure shouldBe true
     // After our fix, the error should be a CloudAuthException
     result.failed.get shouldBe a[ParqueteerError.CloudAuthException]
+    // Also verify the full error pipeline maps to CloudAuthError
+    result.toParqueteerError shouldBe a[Left[?, ?]]
+    result.toParqueteerError.swap.toOption.get shouldBe a[ParqueteerError.CloudAuthError]
   }
 
   // ── TIMESTAMP_MICROS sequential decode (#154) ────────────────────────────
