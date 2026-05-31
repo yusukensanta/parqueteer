@@ -203,15 +203,13 @@ lazy val root = (project in file("."))
         "io.netty" % "netty-transport-native-kqueue"      % nettyVersion,
         "io.netty" % "netty-transport-native-unix-common" % nettyVersion,
         "io.netty" % "netty-resolver-dns-classes-macos"   % nettyVersion,
-        "io.netty" % "netty-resolver-dns-native-macos"    % nettyVersion
+        "io.netty" % "netty-resolver-dns-native-macos"    % nettyVersion,
+        // Transitive CVE patches
+        "org.xerial.snappy" % "snappy-java"     % "1.1.10.8", // CVE-2023-43642 + CVE-2023-34455; 1.1.10.8 is current clean release
+        "com.nimbusds"      % "nimbus-jose-jwt" % "10.4",     // CVE-2025-53864 — deeply nested JSON DoS (fixed >=10.0.2; 10.4 is current)
+        "net.minidev"       % "json-smart"      % "2.6.0"     // CVE-2025-27817 — nested JSON stack overflow (nimbus transitive)
       )
     },
-    // Transitive CVE patches
-    dependencyOverrides ++= Seq(
-      "org.xerial.snappy" % "snappy-java"     % "1.1.10.8", // CVE-2024-36124 — Snappy frame OOM (parquet reads untrusted files)
-      "com.nimbusds"      % "nimbus-jose-jwt" % "10.4",     // ES256K mishandling in 10.0.x (azure-identity path)
-      "net.minidev"       % "json-smart"      % "2.5.2"     // CVE-2025-27817 — nested JSON stack overflow (nimbus transitive); 2.5.3 not published, latest 2.5.x used
-    ),
     assembly / assemblyMergeStrategy := {
       case PathList("META-INF", "services", xs @ _*) => MergeStrategy.concat
       case PathList("META-INF", "versions", xs @ _*) => MergeStrategy.first
