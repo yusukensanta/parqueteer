@@ -172,7 +172,18 @@ class RowStreamWriterTest extends AnyFlatSpec with Matchers {
     val orderedRow = scala.collection.immutable.ListMap("z_col" -> CellValue.I64(3L), "a_col" -> CellValue.I64(1L), "m_col" -> CellValue.I64(2L))
     val out = run(OutputFormat.Table, List(orderedRow))
     out should include("z_col")
-    val headerLine = out.split("\n").find(_.contains("z_col")).get
+    val headerLine = out.split("\n").find(_.contains("z_col"))
+      .getOrElse(fail("No header line containing z_col found in output"))
+    headerLine.indexOf("z_col") should be < headerLine.indexOf("a_col")
+    headerLine.indexOf("a_col") should be < headerLine.indexOf("m_col")
+  }
+
+  it should "preserve insertion order in Markdown format" in {
+    val orderedRow = scala.collection.immutable.ListMap("z_col" -> CellValue.I64(3L), "a_col" -> CellValue.I64(1L), "m_col" -> CellValue.I64(2L))
+    val out = run(OutputFormat.Markdown, List(orderedRow))
+    out should include("z_col")
+    val headerLine = out.split("\n").find(_.contains("z_col"))
+      .getOrElse(fail("No header line containing z_col found in output"))
     headerLine.indexOf("z_col") should be < headerLine.indexOf("a_col")
     headerLine.indexOf("a_col") should be < headerLine.indexOf("m_col")
   }

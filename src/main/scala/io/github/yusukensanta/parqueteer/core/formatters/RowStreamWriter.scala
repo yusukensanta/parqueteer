@@ -58,7 +58,9 @@ object RowStreamWriter {
     }
     override def writeRow(row: Map[String, CellValue]): Unit = {
       if (columns.isEmpty) {
-        columns = row.keys.toList
+        val seen = scala.collection.mutable.LinkedHashSet.empty[String]
+        row.keysIterator.foreach(seen += _)
+        columns = seen.toList
         out.println(columns.mkString(","))
       }
       out.println(
