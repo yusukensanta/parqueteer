@@ -100,7 +100,9 @@ class CloudCredentialManagerTest extends AnyFlatSpec with Matchers {
   it should "set fs.s3a.connection.ssl.enabled=false when AWS_ENDPOINT_URL uses http://" in {
     assume(
       sys.env.contains("AWS_ACCESS_KEY_ID") &&
-        sys.env.get("AWS_ENDPOINT_URL").exists(_.toLowerCase(java.util.Locale.ROOT).startsWith("http://")),
+        sys.env
+          .get("AWS_ENDPOINT_URL")
+          .exists(_.toLowerCase(java.util.Locale.ROOT).startsWith("http://")),
       "Skipped: AWS_ACCESS_KEY_ID not set or AWS_ENDPOINT_URL is not an http:// endpoint"
     )
     val conf =
@@ -112,7 +114,9 @@ class CloudCredentialManagerTest extends AnyFlatSpec with Matchers {
   it should "not set fs.s3a.connection.ssl.enabled when AWS_ENDPOINT_URL uses https://" in {
     assume(
       sys.env.contains("AWS_ACCESS_KEY_ID") &&
-        sys.env.get("AWS_ENDPOINT_URL").exists(_.toLowerCase(java.util.Locale.ROOT).startsWith("https://")),
+        sys.env
+          .get("AWS_ENDPOINT_URL")
+          .exists(_.toLowerCase(java.util.Locale.ROOT).startsWith("https://")),
       "Skipped: AWS_ACCESS_KEY_ID not set or AWS_ENDPOINT_URL is not an https:// endpoint"
     )
     val conf =
@@ -123,13 +127,13 @@ class CloudCredentialManagerTest extends AnyFlatSpec with Matchers {
 
   "S3CredentialManager.endpointDisablesSsl" should "only disable SSL for http:// endpoints" in {
     val mgr = new S3CredentialManager()
-    mgr.endpointDisablesSsl("http://localhost:9000")      shouldBe true
-    mgr.endpointDisablesSsl("http://127.0.0.1:8080")     shouldBe true
+    mgr.endpointDisablesSsl("http://localhost:9000") shouldBe true
+    mgr.endpointDisablesSsl("http://127.0.0.1:8080") shouldBe true
     mgr.endpointDisablesSsl("https://minio.example.com") shouldBe false
-    mgr.endpointDisablesSsl("https://s3.amazonaws.com")  shouldBe false
-    mgr.endpointDisablesSsl("https://localhost:9000")     shouldBe false
-    mgr.endpointDisablesSsl("HTTP://localhost:9000")      shouldBe true
-    mgr.endpointDisablesSsl("Http://minio.example.com")  shouldBe true
+    mgr.endpointDisablesSsl("https://s3.amazonaws.com") shouldBe false
+    mgr.endpointDisablesSsl("https://localhost:9000") shouldBe false
+    mgr.endpointDisablesSsl("HTTP://localhost:9000") shouldBe true
+    mgr.endpointDisablesSsl("Http://minio.example.com") shouldBe true
   }
 
   // ── GCSCredentialManager ────────────────────────────────────────────────
