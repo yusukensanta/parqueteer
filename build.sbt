@@ -179,7 +179,7 @@ lazy val root = (project in file("."))
         "org.scalatestplus" %% "scalacheck-1-17" % scalatestScalacheckVersion % Test
       )
     },
-    // Force Netty to 4.1.126.Final across all modules (current latest stable).
+    // Force Netty to 4.1.126.Final across all modules (pinned; contains CVE-2025-55163 fix).
     // CVE-2024-47535 fixed in 4.1.115.Final; CVE-2025-55163 fixed in 4.1.124.Final.
     // Prior override covered only 7 of 19 modules; 12 modules resolved at mixed 4.1.112-4.1.133.
     dependencyOverrides ++= {
@@ -207,7 +207,7 @@ lazy val root = (project in file("."))
         // Transitive CVE patches
         "org.xerial.snappy" % "snappy-java"     % "1.1.10.8", // CVE-2023-43642 + CVE-2023-34455; 1.1.10.8 is current clean release
         "com.nimbusds"      % "nimbus-jose-jwt" % "10.4",     // CVE-2025-53864 — deeply nested JSON DoS (fixed >=10.0.2; 10.4 is current)
-        "net.minidev"       % "json-smart"      % "2.6.0"     // CVE-2025-27817 — nested JSON stack overflow (nimbus transitive)
+        "net.minidev"       % "json-smart"      % "2.6.0"     // CVE-2024-57699 — nested JSON stack exhaustion DoS (nimbus transitive)
       )
     },
     assembly / assemblyMergeStrategy := {
