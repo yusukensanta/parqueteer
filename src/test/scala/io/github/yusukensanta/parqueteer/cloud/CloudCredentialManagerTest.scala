@@ -125,6 +125,14 @@ class CloudCredentialManagerTest extends AnyFlatSpec with Matchers {
     conf.get.get("fs.s3a.connection.ssl.enabled", null) shouldBe null
   }
 
+  "S3CredentialManager.tryInstanceProfile" should "return Failure gracefully when not on EC2 (no IMDS)" in {
+    val mgr = new S3CredentialManager()
+    // In non-EC2 environment InstanceProfileCredentialsProvider cannot reach IMDS.
+    // Verify the method wraps the failure in Try (does not throw).
+    val result = mgr.tryInstanceProfile()
+    result.isFailure shouldBe true
+  }
+
   "S3CredentialManager.endpointDisablesSsl" should "only disable SSL for http:// endpoints" in {
     val mgr = new S3CredentialManager()
     mgr.endpointDisablesSsl("http://localhost:9000") shouldBe true
