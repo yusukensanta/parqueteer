@@ -327,10 +327,15 @@ class HadoopParquetRepository(
     val filter = config.filter
       .map { expr =>
         import io.github.yusukensanta.parqueteer.core.filters.FilterParser
-        FilterParser.parseWithSchema(expr, fileSchema).fold(
-          err => throw new RuntimeException(s"Cannot apply filter to file schema: ${err.userMessage}"),
-          identity
-        )
+        FilterParser
+          .parseWithSchema(expr, fileSchema)
+          .fold(
+            err =>
+              throw new RuntimeException(
+                s"Cannot apply filter to file schema: ${err.userMessage}"
+              ),
+            identity
+          )
       }
       .getOrElse(Filter.noopFilter)
     config.columns match {

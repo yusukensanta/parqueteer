@@ -319,10 +319,11 @@ object CliApp {
       else RowStreamWriter(format, System.out)
       var begun = false
       val result =
-        try service.streamRead(filePath, readConfig) { row =>
-          if (!begun) { writer.begin(); begun = true }
-          writer.writeRow(row)
-        }
+        try
+          service.streamRead(filePath, readConfig) { row =>
+            if (!begun) { writer.begin(); begun = true }
+            writer.writeRow(row)
+          }
         finally if (begun) writer.end()
       result match {
         case Right(_)    => 0

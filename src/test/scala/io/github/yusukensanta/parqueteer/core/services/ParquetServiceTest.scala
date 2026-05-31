@@ -19,7 +19,9 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
       writeResult: Try[Unit] = Success(()),
       streamResult: Try[Unit] = Success(()),
       statsResult: Try[FileStats] = Success(defaultStats),
-      schemaFieldsResult: Try[List[FieldSummary]] = Success(defaultSchemaFields),
+      schemaFieldsResult: Try[List[FieldSummary]] = Success(
+        defaultSchemaFields
+      ),
       deleteResult: Try[Unit] = Success(())
   ) extends ParquetRepository {
     override def readContent(

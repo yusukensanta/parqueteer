@@ -188,25 +188,33 @@ class MergeIntegrationTest extends AnyFlatSpec with Matchers {
     val schemaIdName = Types
       .buildMessage()
       .addField(
-        Types.primitive(PrimitiveTypeName.INT64, Repetition.OPTIONAL).named("id")
+        Types
+          .primitive(PrimitiveTypeName.INT64, Repetition.OPTIONAL)
+          .named("id")
       )
       .addField(
-        Types.primitive(PrimitiveTypeName.BINARY, Repetition.OPTIONAL).named("name")
+        Types
+          .primitive(PrimitiveTypeName.BINARY, Repetition.OPTIONAL)
+          .named("name")
       )
       .named("msg")
     val schemaNameId = Types
       .buildMessage()
       .addField(
-        Types.primitive(PrimitiveTypeName.BINARY, Repetition.OPTIONAL).named("name")
+        Types
+          .primitive(PrimitiveTypeName.BINARY, Repetition.OPTIONAL)
+          .named("name")
       )
       .addField(
-        Types.primitive(PrimitiveTypeName.INT64, Repetition.OPTIONAL).named("id")
+        Types
+          .primitive(PrimitiveTypeName.INT64, Repetition.OPTIONAL)
+          .named("id")
       )
       .named("msg")
 
     val in1 = writeTempWithSchema(schemaIdName)
     val in2 = writeTempWithSchema(schemaNameId)
-    val out  = tempFile().getAbsolutePath
+    val out = tempFile().getAbsolutePath
 
     val result =
       service.mergeFiles(List(in1, in2), out, WriteConfig(), SchemaMode.Strict)
@@ -217,19 +225,23 @@ class MergeIntegrationTest extends AnyFlatSpec with Matchers {
     val schemaOptional = Types
       .buildMessage()
       .addField(
-        Types.primitive(PrimitiveTypeName.INT64, Repetition.OPTIONAL).named("id")
+        Types
+          .primitive(PrimitiveTypeName.INT64, Repetition.OPTIONAL)
+          .named("id")
       )
       .named("msg")
     val schemaRequired = Types
       .buildMessage()
       .addField(
-        Types.primitive(PrimitiveTypeName.INT64, Repetition.REQUIRED).named("id")
+        Types
+          .primitive(PrimitiveTypeName.INT64, Repetition.REQUIRED)
+          .named("id")
       )
       .named("msg")
 
     val in1 = writeTempWithSchema(schemaOptional)
     val in2 = writeTempWithSchema(schemaRequired)
-    val out  = tempFile().getAbsolutePath
+    val out = tempFile().getAbsolutePath
 
     val result =
       service.mergeFiles(List(in1, in2), out, WriteConfig(), SchemaMode.Strict)

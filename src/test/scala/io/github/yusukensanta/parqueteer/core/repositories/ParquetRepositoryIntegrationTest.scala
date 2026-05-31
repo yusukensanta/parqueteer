@@ -831,7 +831,9 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
 
   it should "return Failure when filter expression fails schema-aware parsing" taggedAs IntegrationTest in {
     val loc = LocalPath(tempFile().getAbsolutePath)
-    repo.writeContent(loc, sampleData, None).get // sampleData has columns: id, name, score
+    repo
+      .writeContent(loc, sampleData, None)
+      .get // sampleData has columns: id, name, score
 
     // "score > \"hello\"" causes parseWithSchema to return Left because '>'
     // requires a numeric value but "hello" is a String.

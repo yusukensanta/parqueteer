@@ -160,7 +160,10 @@ class ParquetService(
       val firstSet = first.map(f => (f.name, f.dataType, f.isOptional)).toSet
       schemas.zipWithIndex
         .collectFirst {
-          case (s, i) if s.map(f => (f.name, f.dataType, f.isOptional)).toSet != firstSet =>
+          case (s, i)
+              if s
+                .map(f => (f.name, f.dataType, f.isOptional))
+                .toSet != firstSet =>
             Left(
               ParqueteerError.InvalidFormat(
                 inputPaths(i),
