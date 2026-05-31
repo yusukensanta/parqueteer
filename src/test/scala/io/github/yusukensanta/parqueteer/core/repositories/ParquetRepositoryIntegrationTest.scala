@@ -827,6 +827,26 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
     result.failed.get.getMessage should include("schema")
   }
 
+  // ── Filter parse error propagation ────────────────────────────────────
+
+  it should "return Failure when filter expression fails schema-aware parsing" taggedAs IntegrationTest in {
+    val loc = LocalPath(tempFile().getAbsolutePath)
+    repo
+      .writeContent(loc, sampleData, None)
+      .get // sampleData has columns: id, name, score
+
+    // "score > \"hello\"" causes parseWithSchema to return Left because '>'
+    // requires a numeric value but "hello" is a String.
+    // Before fix: Left is silently dropped via .toOption → noopFilter → Success with all 3 rows.
+    // After fix: Left causes a throw inside Try { } → Failure propagates to the caller.
+    val config = ReadConfig(filter = Some("""score > "hello""""))
+    val result = repo.readContent(ParquetFile(loc), config)
+
+    result.isFailure shouldBe true
+    result.failed.get.getMessage should include("Cannot apply filter")
+    result.failed.get.getMessage should include("""score > "hello"""")
+  }
+
   // ── Cloud auth error mapping (#H3) ─────────────────────────────────────
 
   "HadoopParquetRepository" should "wrap S3 auth failure as CloudAuthException" in {

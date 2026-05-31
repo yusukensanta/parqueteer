@@ -184,6 +184,71 @@ class MergeIntegrationTest extends AnyFlatSpec with Matchers {
     result.isLeft shouldBe true
   }
 
+  it should "succeed strict merge when files have the same columns in different physical order" taggedAs MergeIntegrationTest in {
+    val schemaIdName = Types
+      .buildMessage()
+      .addField(
+        Types
+          .primitive(PrimitiveTypeName.INT64, Repetition.OPTIONAL)
+          .named("id")
+      )
+      .addField(
+        Types
+          .primitive(PrimitiveTypeName.BINARY, Repetition.OPTIONAL)
+          .named("name")
+      )
+      .named("msg")
+    val schemaNameId = Types
+      .buildMessage()
+      .addField(
+        Types
+          .primitive(PrimitiveTypeName.BINARY, Repetition.OPTIONAL)
+          .named("name")
+      )
+      .addField(
+        Types
+          .primitive(PrimitiveTypeName.INT64, Repetition.OPTIONAL)
+          .named("id")
+      )
+      .named("msg")
+
+    val in1 = writeTempWithSchema(schemaIdName)
+    val in2 = writeTempWithSchema(schemaNameId)
+    val out = tempFile().getAbsolutePath
+
+    val result =
+      service.mergeFiles(List(in1, in2), out, WriteConfig(), SchemaMode.Strict)
+    result.isRight shouldBe true
+  }
+
+  it should "fail strict merge when fields have the same name and type but different nullability" taggedAs MergeIntegrationTest in {
+    val schemaOptional = Types
+      .buildMessage()
+      .addField(
+        Types
+          .primitive(PrimitiveTypeName.INT64, Repetition.OPTIONAL)
+          .named("id")
+      )
+      .named("msg")
+    val schemaRequired = Types
+      .buildMessage()
+      .addField(
+        Types
+          .primitive(PrimitiveTypeName.INT64, Repetition.REQUIRED)
+          .named("id")
+      )
+      .named("msg")
+
+    val in1 = writeTempWithSchema(schemaOptional)
+    val in2 = writeTempWithSchema(schemaRequired)
+    val out = tempFile().getAbsolutePath
+
+    val result =
+      service.mergeFiles(List(in1, in2), out, WriteConfig(), SchemaMode.Strict)
+    result.isLeft shouldBe true
+    result.left.toOption.get.userMessage should include("Schema mismatch")
+  }
+
   // ── Union mode ──────────────────────────────────────────────────────────
 
   it should "merge files with different schemas in union mode" taggedAs MergeIntegrationTest in {

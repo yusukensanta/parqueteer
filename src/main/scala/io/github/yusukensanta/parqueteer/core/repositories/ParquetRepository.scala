@@ -325,9 +325,17 @@ class HadoopParquetRepository(
       fileSchema: MessageType
   ): com.github.mjakubowski84.parquet4s.ParquetIterable[RowParquetRecord] = {
     val filter = config.filter
-      .flatMap { expr =>
+      .map { expr =>
         import io.github.yusukensanta.parqueteer.core.filters.FilterParser
-        FilterParser.parseWithSchema(expr, fileSchema).toOption
+        FilterParser
+          .parseWithSchema(expr, fileSchema)
+          .fold(
+            err =>
+              throw new RuntimeException(
+                s"Cannot apply filter to file schema: ${err.userMessage}"
+              ),
+            identity
+          )
       }
       .getOrElse(Filter.noopFilter)
     config.columns match {
