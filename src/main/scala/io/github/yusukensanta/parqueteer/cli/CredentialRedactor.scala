@@ -15,4 +15,16 @@ private[cli] object CredentialRedactor {
     patterns.foldLeft(s) { (acc, pattern) =>
       pattern.replaceAllIn(acc, m => m.group(1) + "[REDACTED]")
     }
+
+  def redactThrowable(t: Throwable): String = {
+    val sb      = new StringBuilder
+    var current: Throwable = t
+    while (current != null) {
+      val msg = Option(current.getMessage).getOrElse(current.getClass.getSimpleName)
+      sb.append(redact(msg))
+      current = current.getCause
+      if (current != null) sb.append("\nCaused by: ")
+    }
+    sb.toString
+  }
 }
