@@ -192,4 +192,11 @@ class CredentialRedactorTest
     redacted should include("Caused by: ")
     redacted should include("inner msg")
   }
+
+  it should "terminate on circular cause chain without infinite loop" in {
+    val base = new RuntimeException("base: AWSAccessKeyId=AKIAIOSFODNN7EXAMPLE")
+    val chain = (1 to 100).foldLeft(base: Throwable)((acc, _) => new RuntimeException("mid", acc))
+    val result = CredentialRedactor.redactThrowable(chain)
+    result should not include "AKIAIOSFODNN7EXAMPLE"
+  }
 }
