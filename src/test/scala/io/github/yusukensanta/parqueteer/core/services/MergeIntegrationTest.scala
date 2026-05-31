@@ -234,6 +234,7 @@ class MergeIntegrationTest extends AnyFlatSpec with Matchers {
     val result =
       service.mergeFiles(List(in1, in2), out, WriteConfig(), SchemaMode.Strict)
     result.isLeft shouldBe true
+    result.left.toOption.get.userMessage should include("Schema mismatch")
   }
 
   // ── Union mode ──────────────────────────────────────────────────────────
