@@ -302,8 +302,7 @@ object CliApp {
       columns = columns,
       filter = filter,
       outputFormat = format,
-      parallelism = effectiveParallelism,
-      streamingMode = streaming
+      parallelism = effectiveParallelism
     )
 
     val effectiveStreaming = streaming || (format == OutputFormat.NDJSON)

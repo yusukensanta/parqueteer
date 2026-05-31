@@ -46,7 +46,6 @@ case class ReadConfig(
     filter: Option[String] = None,
     outputFormat: OutputFormat = OutputFormat.Table,
     parallelism: Int = 1,
-    streamingMode: Boolean = false,
     readTimeout: FiniteDuration = Duration(5, "minutes")
 )
 
