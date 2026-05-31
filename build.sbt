@@ -91,7 +91,7 @@ lazy val root = (project in file("."))
     libraryDependencies ++= {
       val parquet4sVersion = "2.23.0"
       val circeVersion = "0.14.14"
-      val circeYamlVersion = "1.15.0"
+      val circeYamlV12Version = "0.16.1"
       val scoptVersion = "4.1.0"
       val betterFilesVersion = "3.9.2"
       val slf4jVersion = "2.0.18"
@@ -113,7 +113,7 @@ lazy val root = (project in file("."))
         "io.circe" %% "circe-core" % circeVersion,
         "io.circe" %% "circe-generic" % circeVersion,
         "io.circe" %% "circe-parser" % circeVersion,
-        "io.circe" %% "circe-yaml" % circeYamlVersion,
+        "io.circe" %% "circe-yaml-v12" % circeYamlV12Version,
 
         // File I/O
         "com.github.pathikrit" %% "better-files" % betterFilesVersion,
