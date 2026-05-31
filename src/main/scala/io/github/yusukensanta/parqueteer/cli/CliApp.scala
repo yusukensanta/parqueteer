@@ -318,11 +318,12 @@ object CliApp {
       }
       else RowStreamWriter(format, System.out)
       var begun = false
-      val result = service.streamRead(filePath, readConfig) { row =>
-        if (!begun) { writer.begin(); begun = true }
-        writer.writeRow(row)
-      }
-      if (begun) writer.end()
+      val result =
+        try service.streamRead(filePath, readConfig) { row =>
+          if (!begun) { writer.begin(); begun = true }
+          writer.writeRow(row)
+        }
+        finally if (begun) writer.end()
       result match {
         case Right(_)    => 0
         case Left(error) => reportError("Error", globalOptions)(error)
