@@ -841,6 +841,7 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
     val result = repo.readContent(ParquetFile(loc), config)
 
     result.isFailure shouldBe true
+    result.failed.get.getMessage should include("Cannot apply filter")
   }
 
   // ── Cloud auth error mapping (#H3) ─────────────────────────────────────

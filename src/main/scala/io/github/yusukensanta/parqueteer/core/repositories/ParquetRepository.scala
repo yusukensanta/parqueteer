@@ -328,7 +328,7 @@ class HadoopParquetRepository(
       .map { expr =>
         import io.github.yusukensanta.parqueteer.core.filters.FilterParser
         FilterParser.parseWithSchema(expr, fileSchema).fold(
-          err => throw new RuntimeException(s"Cannot apply filter to file schema: $err"),
+          err => throw new RuntimeException(s"Cannot apply filter to file schema: ${err.userMessage}"),
           identity
         )
       }
