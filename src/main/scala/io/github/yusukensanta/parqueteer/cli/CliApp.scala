@@ -317,14 +317,15 @@ object CliApp {
         override def writeRow(row: Map[String, CellValue]): Unit = ()
       }
       else RowStreamWriter(format, System.out)
-      writer.begin()
-      try {
-        service.streamRead(filePath, readConfig)(writer.writeRow) match {
-          case Right(_)    => 0
-          case Left(error) => reportError("Error", globalOptions)(error)
-        }
-      } finally {
-        writer.end()
+      var begun = false
+      val result = service.streamRead(filePath, readConfig) { row =>
+        if (!begun) { writer.begin(); begun = true }
+        writer.writeRow(row)
+      }
+      if (begun) writer.end()
+      result match {
+        case Right(_)    => 0
+        case Left(error) => reportError("Error", globalOptions)(error)
       }
     } else {
       service.readFile(filePath, readConfig) match {

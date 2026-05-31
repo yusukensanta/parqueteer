@@ -44,6 +44,14 @@ class RowStreamWriterTest extends AnyFlatSpec with Matchers {
     run(OutputFormat.NDJSON, List.empty) shouldBe ""
   }
 
+  it should "produce no output when begin and end are never called" in {
+    val out = capture { ps =>
+      val _ = RowStreamWriter(OutputFormat.NDJSON, ps)
+      // do nothing — writer created but never opened
+    }
+    out shouldBe ""
+  }
+
   // ── JSON ─────────────────────────────────────────────────────────────────────
 
   "RowStreamWriter JSON" should "emit a valid JSON array" in {
@@ -66,6 +74,14 @@ class RowStreamWriterTest extends AnyFlatSpec with Matchers {
 
   it should "emit [] for empty input" in {
     run(OutputFormat.JSON, List.empty).trim shouldBe "[]"
+  }
+
+  "RowStreamWriter JSON" should "produce no output when begin and end are never called" in {
+    val out = capture { ps =>
+      val _ = RowStreamWriter(OutputFormat.JSON, ps)
+      // do nothing — writer created but never opened
+    }
+    out shouldBe ""
   }
 
   // ── CSV ──────────────────────────────────────────────────────────────────────
@@ -92,6 +108,14 @@ class RowStreamWriterTest extends AnyFlatSpec with Matchers {
 
   it should "emit nothing for empty input" in {
     run(OutputFormat.CSV, List.empty) shouldBe ""
+  }
+
+  "RowStreamWriter CSV" should "produce no output when begin and end are never called" in {
+    val out = capture { ps =>
+      val _ = RowStreamWriter(OutputFormat.CSV, ps)
+      // no calls at all
+    }
+    out shouldBe ""
   }
 
   // ── Table ─────────────────────────────────────────────────────────────────────
