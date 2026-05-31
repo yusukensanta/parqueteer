@@ -58,7 +58,9 @@ object RowStreamWriter {
     }
     override def writeRow(row: Map[String, CellValue]): Unit = {
       if (columns.isEmpty) {
-        columns = row.keys.toList.sorted
+        val seen = scala.collection.mutable.LinkedHashSet.empty[String]
+        row.keysIterator.foreach(seen += _)
+        columns = seen.toList
         out.println(columns.mkString(","))
       }
       out.println(
@@ -79,7 +81,11 @@ object RowStreamWriter {
     private var flushed = false
 
     private def flushSample(): Unit = {
-      columns = sample.flatMap(_.keys).distinct.sorted.toList
+      columns = {
+        val seen = scala.collection.mutable.LinkedHashSet.empty[String]
+        sample.foreach(_.keysIterator.foreach(seen += _))
+        seen.toList
+      }
       widths = tf.calculateColumnWidths(columns, sample.toList)
       out.println(tf.drawTopBorder(widths))
       out.println(tf.drawRow(columns, widths))
@@ -133,7 +139,11 @@ object RowStreamWriter {
       v.display.replace("|", "\\|").replace("\n", " ")
 
     private def flushSample(): Unit = {
-      columns = sample.flatMap(_.keys).distinct.sorted.toList
+      columns = {
+        val seen = scala.collection.mutable.LinkedHashSet.empty[String]
+        sample.foreach(_.keysIterator.foreach(seen += _))
+        seen.toList
+      }
       out.println("| " + columns.mkString(" | ") + " |")
       out.println("| " + columns.map(_ => "---").mkString(" | ") + " |")
       sample.foreach(r =>

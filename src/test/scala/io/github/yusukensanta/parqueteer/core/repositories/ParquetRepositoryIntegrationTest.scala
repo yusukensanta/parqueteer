@@ -1,6 +1,7 @@
 package io.github.yusukensanta.parqueteer.core.repositories
 
 import io.github.yusukensanta.parqueteer.core.models._
+import io.github.yusukensanta.parqueteer.core.models.ParqueteerError.toParqueteerError
 import org.scalatest.Tag
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -369,6 +370,23 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
       ParquetFile(loc),
       ReadConfig(parallelism = 4, maxRows = Some(5L))
     )
+    result.isSuccess shouldBe true
+    result.get.rows should have length 5
+    result.get.isPartial shouldBe true
+  }
+
+  it should "return exactly maxRows rows when parallel + maxRows spans fewer row groups than total" taggedAs IntegrationTest in {
+    val loc = LocalPath(tempFile().getAbsolutePath)
+    val rows = (1 to 100)
+      .map(i => Map[String, CellValue]("id" -> CellValue.I64(i.toLong)))
+      .toList
+    // rowGroupSize = 1L forces one row per row group → 100 row groups total
+    repo
+      .writeContent(loc, rows, None, WriteConfig(rowGroupSize = 1L))
+      .isSuccess shouldBe true
+
+    val config = ReadConfig(maxRows = Some(5L), parallelism = 4)
+    val result = repo.readContent(ParquetFile(loc), config)
     result.isSuccess shouldBe true
     result.get.rows should have length 5
     result.get.isPartial shouldBe true
@@ -807,6 +825,24 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
     result.isFailure shouldBe true
     result.failed.get.getMessage should include("unknown_col")
     result.failed.get.getMessage should include("schema")
+  }
+
+  // ── Cloud auth error mapping (#H3) ─────────────────────────────────────
+
+  "HadoopParquetRepository" should "wrap S3 auth failure as CloudAuthException" in {
+    // Unset AWS credentials by pointing to a non-existent profile
+    val repo =
+      new HadoopParquetRepository(profile = Some("__nonexistent_profile_xyz__"))
+    val file = ParquetFile(S3Location("test-bucket", "key.parquet", None))
+    val result = repo.readSchema(file)
+    result.isFailure shouldBe true
+    // After our fix, the error should be a CloudAuthException
+    result.failed.get shouldBe a[ParqueteerError.CloudAuthException]
+    // Also verify the full error pipeline maps to CloudAuthError
+    result.toParqueteerError shouldBe a[Left[?, ?]]
+    result.toParqueteerError.swap.toOption.get shouldBe a[
+      ParqueteerError.CloudAuthError
+    ]
   }
 
   // ── TIMESTAMP_MICROS sequential decode (#154) ────────────────────────────

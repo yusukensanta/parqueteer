@@ -47,9 +47,16 @@ object ParqueteerError:
     val exitCode = 2
     val userMessage = s"Parse error ($format): $message"
 
+  class CloudAuthException(
+      val provider: String,
+      message: String,
+      cause: Throwable = null
+  ) extends RuntimeException(message, cause)
+
   extension [A](t: Try[A])
     def toParqueteerError: Either[ParqueteerError, A] =
       t.toEither.left.map {
+        case e: CloudAuthException => CloudAuthError(e.provider, e.getMessage)
         case e: IllegalArgumentException => ParseError("input", e.getMessage)
         case e                           => IOError(e)
       }

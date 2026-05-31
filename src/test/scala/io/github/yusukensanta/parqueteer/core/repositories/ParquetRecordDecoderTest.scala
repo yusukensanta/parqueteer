@@ -291,4 +291,54 @@ class ParquetRecordDecoderTest extends AnyFlatSpec with Matchers {
     result("id") shouldBe CellValue.I32(1)
     result.contains("tags") shouldBe false
   }
+
+  it should "convert negative TIMESTAMP_MICROS correctly (pre-epoch timestamp)" in {
+    val schema: MessageType = MessageTypeParser.parseMessageType(
+      "message root { optional int64 ts (TIMESTAMP_MICROS); }"
+    )
+    // -1 microsecond = 1 microsecond before epoch = 1969-12-31T23:59:59.999999Z
+    val row = Map[String, CellValue]("ts" -> CellValue.I64(-1L))
+    val result = ParquetRecordDecoder.postProcessTemporalFields(row, schema)
+    result("ts") shouldBe CellValue.Ts(
+      java.time.Instant.EPOCH.minus(1L, java.time.temporal.ChronoUnit.MICROS)
+    )
+  }
+
+  it should "convert extreme negative TIMESTAMP_MICROS without arithmetic overflow" in {
+    val schema: MessageType = MessageTypeParser.parseMessageType(
+      "message root { optional int64 ts (TIMESTAMP_MICROS); }"
+    )
+    val micros = Long.MinValue / 2
+    val row = Map[String, CellValue]("ts" -> CellValue.I64(micros))
+    val result = ParquetRecordDecoder.postProcessTemporalFields(row, schema)
+    val expectedInstant = java.time.Instant.ofEpochSecond(
+      Math.floorDiv(micros, 1_000_000L),
+      Math.floorMod(micros, 1_000_000L) * 1000L
+    )
+    result("ts") shouldBe CellValue.Ts(expectedInstant)
+  }
+
+  it should "convert TIMESTAMP_MICROS in decodeGroup (positive)" in {
+    val schema = MessageTypeParser.parseMessageType(
+      "message root { required int64 ts (TIMESTAMP_MICROS); }"
+    )
+    val micros =
+      java.time.Instant.parse("2024-01-01T00:00:00Z").toEpochMilli * 1000L
+    val group = new SimpleGroupFactory(schema).newGroup().append("ts", micros)
+    val result = ParquetRecordDecoder.decodeGroup(group, schema)
+    result("ts") shouldBe CellValue.Ts(
+      java.time.Instant.parse("2024-01-01T00:00:00Z")
+    )
+  }
+
+  it should "convert negative TIMESTAMP_MICROS in decodeGroup (pre-epoch)" in {
+    val schema = MessageTypeParser.parseMessageType(
+      "message root { required int64 ts (TIMESTAMP_MICROS); }"
+    )
+    val group = new SimpleGroupFactory(schema).newGroup().append("ts", -1L)
+    val result = ParquetRecordDecoder.decodeGroup(group, schema)
+    result("ts") shouldBe CellValue.Ts(
+      java.time.Instant.EPOCH.minus(1L, java.time.temporal.ChronoUnit.MICROS)
+    )
+  }
 }

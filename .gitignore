@@ -57,3 +57,5 @@ mise.toml
 # Claude Code related dirs
 .serena
 .worktrees/
+
+test_output.log

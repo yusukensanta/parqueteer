@@ -6,6 +6,8 @@ import io.github.yusukensanta.parqueteer.core.models.StorageLocationParser
 import io.github.yusukensanta.parqueteer.core.repositories.ParquetRepository
 import io.github.yusukensanta.parqueteer.core.filters.FilterParser
 import scala.util.{Try, Using}
+import scala.util.boundary
+import scala.util.boundary.break
 
 class ParquetService(
     repository: ParquetRepository
@@ -195,9 +197,10 @@ class ParquetService(
         )
   }
 
-  /** Stream rows from each input file into a single output writer. Tracks the
-    * first read failure and, on any failure, deletes the partial output (merge
-    * is not atomic). Returns the count of rows written on success.
+  /** Stream rows from each input file into a single output writer. On the first
+    * read failure, immediately exits the loop via boundary/break, deletes the
+    * partial output (merge is not atomic), and returns the error. Returns the
+    * count of rows written on success.
     */
   private def streamMerge(
       inputLocations: Vector[StorageLocation],
@@ -211,7 +214,14 @@ class ParquetService(
     val allColumnNames = mergedFields.map(_.name).toSet
     val explicitSchema = ParquetSchema(
       columns = mergedFields.map { f =>
-        ColumnInfo(f.name, f.dataType, f.isOptional, 1, 0, "SNAPPY")
+        ColumnInfo(
+          f.name,
+          f.dataType,
+          f.isOptional,
+          1,
+          0,
+          writeConfig.compressionType.codecName
+        )
       },
       rowGroupCount = 1L,
       totalRowCount = 0L
@@ -220,12 +230,12 @@ class ParquetService(
     val missingPerFile = schemas.map { fields =>
       allColumnNames -- fields.map(_.name).toSet
     }
-    var streamError: Option[Throwable] = None
+    var streamError: Option[ParqueteerError] = None
     repository
       .writeContentStream(outputLocation, explicitSchema, writeConfig) {
         write =>
-          inputLocations.zipWithIndex.foreach { case (loc, i) =>
-            if (streamError.isEmpty) {
+          boundary[Unit] {
+            inputLocations.zipWithIndex.foreach { case (loc, i) =>
               onProgress(i + 1, inputLocations.size, inputPaths(i))
               val fileMissing = missingPerFile(i)
               repository
@@ -235,7 +245,17 @@ class ParquetService(
                     else row ++ fileMissing.map(_ -> CellValue.Null)
                   write(finalRow)
                 }
-                .fold(err => streamError = Some(err), _ => ())
+                .fold(
+                  err => {
+                    streamError = Some(err match {
+                      case e: IllegalArgumentException =>
+                        ParqueteerError.ParseError("input", e.getMessage)
+                      case e => ParqueteerError.IOError(e)
+                    })
+                    break(())
+                  },
+                  _ => ()
+                )
             }
           }
       }
@@ -244,8 +264,8 @@ class ParquetService(
         streamError match {
           case Some(e) =>
             // Delete partial output; merge is not atomic so partial writes are unusable
-            repository.deleteFile(outputLocation).recover { case _ => () }
-            Left(ParqueteerError.IOError(e))
+            repository.deleteFile(outputLocation).recover { case _ => () }: Unit
+            Left(e)
           case None => Right(count)
         }
       )

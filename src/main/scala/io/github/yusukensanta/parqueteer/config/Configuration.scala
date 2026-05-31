@@ -102,7 +102,7 @@ class ConfigurationManager {
   }
 
   private def parseConfigFile(configFile: File): Try[AppConfig] = {
-    import io.circe.yaml.parser
+    import io.circe.yaml.v12.parser
 
     Try {
       val yamlContent = configFile.contentAsString

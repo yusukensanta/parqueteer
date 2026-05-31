@@ -67,6 +67,15 @@ object WriteConfig {
 enum CompressionType:
   case Uncompressed, Snappy, Gzip, Lzo, Brotli, Lz4, Zstd
 
+  def codecName: String = this match
+    case Uncompressed => "UNCOMPRESSED"
+    case Snappy       => "SNAPPY"
+    case Gzip         => "GZIP"
+    case Lzo          => "LZO"
+    case Brotli       => "BROTLI"
+    case Lz4          => "LZ4"
+    case Zstd         => "ZSTD"
+
 case class ColumnStats(
     name: String,
     dataType: String,

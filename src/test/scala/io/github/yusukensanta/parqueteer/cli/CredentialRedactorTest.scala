@@ -149,4 +149,56 @@ class CredentialRedactorTest
     printed should not include "eyJsZWFrZWRUb2tlbn0secret"
     printed should include("[REDACTED]")
   }
+
+  // ── redactThrowable: cause-chain walking ──────────────────────────────────
+
+  "CredentialRedactor.redactThrowable" should "redact credentials in nested cause chain" in {
+    val secret = "AKIAIOSFODNN7EXAMPLE"
+    val inner = new RuntimeException(s"AWSAccessKeyId=$secret")
+    val outer = new RuntimeException("outer error", inner)
+    val redacted = CredentialRedactor.redactThrowable(outer)
+    redacted should not include secret
+    redacted should include("[REDACTED]")
+  }
+
+  it should "redact credentials in second-level cause" in {
+    val secret = "AKIAIOSFODNN7EXAMPLE"
+    val root = new RuntimeException(s"AWSAccessKeyId=$secret")
+    val mid = new RuntimeException("mid", root)
+    val top = new RuntimeException("top", mid)
+    val redacted = CredentialRedactor.redactThrowable(top)
+    redacted should not include secret
+  }
+
+  it should "include the top-level message when no cause exists" in {
+    val secret = "AKIAIOSFODNN7EXAMPLE"
+    val ex = new RuntimeException(s"AWSAccessKeyId=$secret")
+    val redacted = CredentialRedactor.redactThrowable(ex)
+    redacted should not include secret
+    redacted should include("[REDACTED]")
+  }
+
+  it should "use class name when getMessage returns null" in {
+    val ex = new RuntimeException(null: String)
+    val redacted = CredentialRedactor.redactThrowable(ex)
+    redacted should include("RuntimeException")
+  }
+
+  it should "include Caused by prefix for each nested cause" in {
+    val inner = new RuntimeException("inner msg")
+    val outer = new RuntimeException("outer msg", inner)
+    val redacted = CredentialRedactor.redactThrowable(outer)
+    redacted should include("outer msg")
+    redacted should include("Caused by: ")
+    redacted should include("inner msg")
+  }
+
+  it should "terminate on circular cause chain without infinite loop" in {
+    val base = new RuntimeException("base: AWSAccessKeyId=AKIAIOSFODNN7EXAMPLE")
+    val chain = (1 to 100).foldLeft(base: Throwable)((acc, _) =>
+      new RuntimeException("mid", acc)
+    )
+    val result = CredentialRedactor.redactThrowable(chain)
+    result should not include "AKIAIOSFODNN7EXAMPLE"
+  }
 }

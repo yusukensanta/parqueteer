@@ -1,6 +1,7 @@
 package io.github.yusukensanta.parqueteer.core.repositories
 
 import io.github.yusukensanta.parqueteer.core.models._
+import io.github.yusukensanta.parqueteer.core.models.ParqueteerError.CloudAuthException
 import io.github.yusukensanta.parqueteer.cloud.CloudCredentialManager
 import com.github.mjakubowski84.parquet4s.{
   ParquetReader,
@@ -236,13 +237,26 @@ class HadoopParquetRepository(
     // getFooter is a cache hit here — readContent already called it
     val (fileSchema, blocks) = getFooter(path, conf)
 
+    // Pre-select the minimum prefix of row groups needed to satisfy maxRows.
+    // Without this, all row groups are decoded before the limit is applied.
+    val selectedBlocks = config.maxRows match {
+      case None => blocks
+      case Some(limit) =>
+        var cumulative = 0L
+        blocks.takeWhile { block =>
+          if (cumulative >= limit) false
+          else { cumulative += block.getRowCount; true }
+        }
+    }
+
     val requestedSchema = config.columns match {
       case Some(cols) if cols.nonEmpty =>
         ParquetSchemaBuilder.projectSchema(fileSchema, cols)
       case _ => fileSchema
     }
 
-    val threadCount = math.min(config.parallelism, math.max(1, blocks.size))
+    val threadCount =
+      math.min(config.parallelism, math.max(1, selectedBlocks.size))
     val executor = Executors.newFixedThreadPool(threadCount)
     implicit val ec: ExecutionContext =
       ExecutionContext.fromExecutorService(executor)
@@ -250,7 +264,7 @@ class HadoopParquetRepository(
     try {
       val requestedNames =
         requestedSchema.getFields.asScala.map(_.getName).toSet
-      val futures = blocks.map { block =>
+      val futures = selectedBlocks.map { block =>
         Future {
           val colChunks = block.getColumns.asScala.toList
           val relevantChunks = {
@@ -289,6 +303,7 @@ class HadoopParquetRepository(
         try Await.result(Future.sequence(futures), config.readTimeout).flatten
         catch {
           case _: java.util.concurrent.TimeoutException =>
+            executor.shutdownNow()
             throw new RuntimeException(
               s"parallel read timed out after ${config.readTimeout} — " +
                 "retry with --parallelism 1, or check network connectivity"
@@ -658,7 +673,18 @@ class HadoopParquetRepository(
         val result = CloudCredentialManager
           .forLocation(effectiveLocation, profile) match {
           case Some(credManager) =>
-            credManager.configureHadoop(effectiveLocation)
+            credManager.configureHadoop(effectiveLocation).recoverWith {
+              case e if !e.isInstanceOf[CloudAuthException] =>
+                val providerName = effectiveLocation match {
+                  case _: S3Location    => "S3"
+                  case _: GCSLocation   => "GCS"
+                  case _: AzureLocation => "Azure"
+                  case _                => "cloud storage"
+                }
+                scala.util.Failure(
+                  new CloudAuthException(providerName, e.getMessage, e)
+                )
+            }
           case None => Success(new Configuration())
         }
         result.foreach(cfg => hadoopConfigCache.put(key, cfg))
