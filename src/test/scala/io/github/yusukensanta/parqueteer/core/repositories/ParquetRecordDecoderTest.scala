@@ -311,9 +311,11 @@ class ParquetRecordDecoderTest extends AnyFlatSpec with Matchers {
     val micros = Long.MinValue / 2
     val row = Map[String, CellValue]("ts" -> CellValue.I64(micros))
     val result = ParquetRecordDecoder.postProcessTemporalFields(row, schema)
-    result("ts") shouldBe CellValue.Ts(
-      java.time.Instant.EPOCH.plus(micros, java.time.temporal.ChronoUnit.MICROS)
+    val expectedInstant = java.time.Instant.ofEpochSecond(
+      Math.floorDiv(micros, 1_000_000L),
+      Math.floorMod(micros, 1_000_000L) * 1000L
     )
+    result("ts") shouldBe CellValue.Ts(expectedInstant)
   }
 
   it should "convert TIMESTAMP_MICROS in decodeGroup (positive)" in {
