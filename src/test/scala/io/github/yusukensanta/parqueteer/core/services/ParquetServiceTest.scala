@@ -19,7 +19,8 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
       writeResult: Try[Unit] = Success(()),
       streamResult: Try[Unit] = Success(()),
       statsResult: Try[FileStats] = Success(defaultStats),
-      schemaFieldsResult: Try[List[FieldSummary]] = Success(defaultSchemaFields)
+      schemaFieldsResult: Try[List[FieldSummary]] = Success(defaultSchemaFields),
+      deleteResult: Try[Unit] = Success(())
   ) extends ParquetRepository {
     override def readContent(
         file: ParquetFile,
@@ -66,7 +67,7 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     override def readSchemaFields(
         file: ParquetFile
     ): Try[List[FieldSummary]] = schemaFieldsResult
-    override def deleteFile(location: StorageLocation): Try[Unit] = Success(())
+    override def deleteFile(location: StorageLocation): Try[Unit] = deleteResult
   }
 
   // ── Shared fixtures ──────────────────────────────────────────────────────
@@ -763,6 +764,18 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     val err = result.left.toOption.get
     err shouldBe a[ParqueteerError.ParseError]
     err.userMessage should include("bad column type")
+  }
+
+  it should "return original merge error even when partial-output delete fails" in {
+    val repo = new FakeParquetRepository(
+      schemaFieldsResult = Failure(new RuntimeException("read schema failed")),
+      deleteResult = Failure(new RuntimeException("delete also failed"))
+    )
+    val service = new ParquetService(repo)
+    val result   = service.mergeFiles(List("/a.parquet", "/b.parquet"), "/out.parquet", WriteConfig(), SchemaMode.Strict)
+
+    result.isLeft shouldBe true
+    result.left.toOption.get.userMessage should not include "delete also failed"
   }
 
   // ── mergeFiles fail-fast on stream error ─────────────────────────────────

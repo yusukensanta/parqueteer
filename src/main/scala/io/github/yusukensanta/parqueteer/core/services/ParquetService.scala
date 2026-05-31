@@ -12,6 +12,8 @@ import scala.util.boundary.break
 class ParquetService(
     repository: ParquetRepository
 ) {
+  private val logger = org.slf4j.LoggerFactory.getLogger(getClass)
+
   private def parseLocation(
       path: String
   ): Either[ParqueteerError, StorageLocation] =
@@ -265,7 +267,11 @@ class ParquetService(
         streamError match {
           case Some(e) =>
             // Delete partial output; merge is not atomic so partial writes are unusable
-            repository.deleteFile(outputLocation).recover { case _ => () }: Unit
+            repository.deleteFile(outputLocation).recover { case e =>
+              logger.warn(
+                s"Failed to delete partial output at ${outputLocation.path} after merge error: ${e.getMessage}. Partial file may remain."
+              )
+            }: Unit
             Left(e)
           case None => Right(count)
         }
