@@ -171,7 +171,7 @@ lazy val root = (project in file("."))
         "org.apache.hadoop" % "hadoop-client-runtime" % hadoopVersion,
 
         // commons-lang3 required by hadoop-aws 3.5.0 S3AUtils at S3AFileSystem.initialize()
-        "org.apache.commons" % "commons-lang3" % "3.14.0",
+        "org.apache.commons" % "commons-lang3" % "3.18.0",
 
         // Testing
         "org.scalatest" %% "scalatest" % scalatestVersion % Test,
@@ -179,16 +179,37 @@ lazy val root = (project in file("."))
         "org.scalatestplus" %% "scalacheck-1-17" % scalatestScalacheckVersion % Test
       )
     },
-    // Force Netty to latest 4.1.x to patch transitive CVEs from AWS SDK
-    dependencyOverrides ++= Seq(
-      "io.netty" % "netty-common"        % "4.1.121.Final",
-      "io.netty" % "netty-buffer"        % "4.1.121.Final",
-      "io.netty" % "netty-handler"       % "4.1.121.Final",
-      "io.netty" % "netty-transport"     % "4.1.121.Final",
-      "io.netty" % "netty-codec"         % "4.1.121.Final",
-      "io.netty" % "netty-codec-http"    % "4.1.121.Final",
-      "io.netty" % "netty-codec-http2"   % "4.1.121.Final"
-    ),
+    // Force Netty to 4.1.127.Final across all modules (pinned; contains CVE-2025-55163 fix).
+    // CVE-2024-47535 fixed in 4.1.115.Final; CVE-2025-55163 fixed in 4.1.124.Final.
+    // Prior override covered only 7 of 19 modules; 12 modules resolved at mixed 4.1.112-4.1.133.
+    dependencyOverrides ++= {
+      val nettyVersion = "4.1.127.Final"
+      Seq(
+        "io.netty" % "netty-common"                       % nettyVersion,
+        "io.netty" % "netty-buffer"                       % nettyVersion,
+        "io.netty" % "netty-handler"                      % nettyVersion,
+        "io.netty" % "netty-transport"                    % nettyVersion,
+        "io.netty" % "netty-codec"                        % nettyVersion,
+        "io.netty" % "netty-codec-http"                   % nettyVersion,
+        "io.netty" % "netty-codec-http2"                  % nettyVersion,
+        "io.netty" % "netty-resolver"                     % nettyVersion,
+        "io.netty" % "netty-resolver-dns"                 % nettyVersion,
+        "io.netty" % "netty-codec-dns"                    % nettyVersion,
+        "io.netty" % "netty-codec-socks"                  % nettyVersion,
+        "io.netty" % "netty-handler-proxy"                % nettyVersion,
+        "io.netty" % "netty-transport-classes-epoll"      % nettyVersion,
+        "io.netty" % "netty-transport-classes-kqueue"     % nettyVersion,
+        "io.netty" % "netty-transport-native-epoll"       % nettyVersion,
+        "io.netty" % "netty-transport-native-kqueue"      % nettyVersion,
+        "io.netty" % "netty-transport-native-unix-common" % nettyVersion,
+        "io.netty" % "netty-resolver-dns-classes-macos"   % nettyVersion,
+        "io.netty" % "netty-resolver-dns-native-macos"    % nettyVersion,
+        // Transitive CVE patches
+        "org.xerial.snappy" % "snappy-java"     % "1.1.10.8", // CVE-2023-43642 + CVE-2023-34455; 1.1.10.8 is current clean release
+        "com.nimbusds"      % "nimbus-jose-jwt" % "10.4",     // CVE-2025-53864 — deeply nested JSON DoS (fixed >=10.0.2; 10.4 is current)
+        "net.minidev"       % "json-smart"      % "2.6.0"     // CVE-2024-57699 — nested JSON stack exhaustion DoS (nimbus transitive)
+      )
+    },
     assembly / assemblyMergeStrategy := {
       case PathList("META-INF", "services", xs @ _*) => MergeStrategy.concat
       case PathList("META-INF", "versions", xs @ _*) => MergeStrategy.first
