@@ -767,12 +767,18 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
   }
 
   it should "return original merge error even when partial-output delete fails" in {
+    val mergeError = new RuntimeException("stream read failed")
     val repo = new FakeParquetRepository(
-      schemaFieldsResult = Failure(new RuntimeException("read schema failed")),
+      streamResult = Failure(mergeError),
       deleteResult = Failure(new RuntimeException("delete also failed"))
     )
     val service = new ParquetService(repo)
-    val result   = service.mergeFiles(List("/a.parquet", "/b.parquet"), "/out.parquet", WriteConfig(), SchemaMode.Strict)
+    val result = service.mergeFiles(
+      List("/a.parquet", "/b.parquet"),
+      "/out.parquet",
+      WriteConfig(),
+      SchemaMode.Strict
+    )
 
     result.isLeft shouldBe true
     result.left.toOption.get.userMessage should not include "delete also failed"
