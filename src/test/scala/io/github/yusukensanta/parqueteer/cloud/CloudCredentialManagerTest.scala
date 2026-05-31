@@ -97,6 +97,15 @@ class CloudCredentialManagerTest extends AnyFlatSpec with Matchers {
     conf.get.get("fs.s3a.path.style.access") shouldBe "true"
   }
 
+  "S3CredentialManager.endpointDisablesSsl" should "only disable SSL for http:// endpoints" in {
+    val mgr = new S3CredentialManager()
+    mgr.endpointDisablesSsl("http://localhost:9000")      shouldBe true
+    mgr.endpointDisablesSsl("http://127.0.0.1:8080")     shouldBe true
+    mgr.endpointDisablesSsl("https://minio.example.com") shouldBe false
+    mgr.endpointDisablesSsl("https://s3.amazonaws.com")  shouldBe false
+    mgr.endpointDisablesSsl("https://localhost:9000")     shouldBe false
+  }
+
   // ── GCSCredentialManager ────────────────────────────────────────────────
 
   "GCSCredentialManager.configureHadoop" should "succeed for GCSLocation (falls back to application default when no service account found)" in {

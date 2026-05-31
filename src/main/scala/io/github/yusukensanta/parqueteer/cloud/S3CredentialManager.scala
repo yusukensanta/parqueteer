@@ -77,7 +77,8 @@ class S3CredentialManager(profile: Option[String] = None)
               sys.env.get("AWS_ENDPOINT_URL").foreach { endpoint =>
                 conf.set("fs.s3a.endpoint", endpoint)
                 conf.set("fs.s3a.path.style.access", "true")
-                conf.set("fs.s3a.connection.ssl.enabled", "false")
+                if (endpointDisablesSsl(endpoint))
+                  conf.set("fs.s3a.connection.ssl.enabled", "false")
               }
 
               conf
@@ -92,6 +93,9 @@ class S3CredentialManager(profile: Option[String] = None)
         Failure(new IllegalArgumentException("Expected S3Location"))
     }
   }
+
+  private[cloud] def endpointDisablesSsl(endpoint: String): Boolean =
+    endpoint.startsWith("http://")
 
   private def resolveCredentials(): Try[(String, String, Option[String])] = {
     val strategies: List[() => Try[(String, String, Option[String])]] =
