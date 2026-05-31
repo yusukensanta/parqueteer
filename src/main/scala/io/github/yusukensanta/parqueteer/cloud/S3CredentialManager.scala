@@ -160,13 +160,15 @@ class S3CredentialManager(profile: Option[String] = None)
     }
   }
 
-  private[cloud] def tryInstanceProfile(): Try[(String, String, Option[String])] = {
+  private[cloud] def tryInstanceProfile()
+      : Try[(String, String, Option[String])] = {
     Try {
       val provider = InstanceProfileCredentialsProvider.create()
       val credentials = provider.resolveCredentials()
       val sessionToken = credentials match {
-        case sessionCreds: AwsSessionCredentials => Some(sessionCreds.sessionToken())
-        case _                                   => None
+        case sessionCreds: AwsSessionCredentials =>
+          Some(sessionCreds.sessionToken())
+        case _ => None
       }
       (credentials.accessKeyId(), credentials.secretAccessKey(), sessionToken)
     }
