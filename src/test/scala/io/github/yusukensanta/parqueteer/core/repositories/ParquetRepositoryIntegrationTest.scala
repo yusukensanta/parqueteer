@@ -842,6 +842,7 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
 
     result.isFailure shouldBe true
     result.failed.get.getMessage should include("Cannot apply filter")
+    result.failed.get.getMessage should include("""score > "hello"""")
   }
 
   // ── Cloud auth error mapping (#H3) ─────────────────────────────────────
