@@ -95,7 +95,7 @@ class S3CredentialManager(profile: Option[String] = None)
   }
 
   private[cloud] def endpointDisablesSsl(endpoint: String): Boolean =
-    endpoint.startsWith("http://")
+    endpoint.toLowerCase(java.util.Locale.ROOT).startsWith("http://")
 
   private def resolveCredentials(): Try[(String, String, Option[String])] = {
     val strategies: List[() => Try[(String, String, Option[String])]] =
