@@ -17,15 +17,17 @@ private[cli] object CredentialRedactor {
     }
 
   def redactThrowable(t: Throwable): String = {
-    val sb   = new StringBuilder
+    val sb = new StringBuilder
     val seen = new java.util.IdentityHashMap[Throwable, Boolean]()
     var current: Throwable = t
     while (current != null && !seen.containsKey(current)) {
       seen.put(current, java.lang.Boolean.TRUE)
-      val msg = Option(current.getMessage).getOrElse(current.getClass.getSimpleName)
+      val msg =
+        Option(current.getMessage).getOrElse(current.getClass.getSimpleName)
       sb.append(redact(msg))
       current = current.getCause
-      if (current != null && !seen.containsKey(current)) sb.append("\nCaused by: ")
+      if (current != null && !seen.containsKey(current))
+        sb.append("\nCaused by: ")
     }
     sb.toString
   }

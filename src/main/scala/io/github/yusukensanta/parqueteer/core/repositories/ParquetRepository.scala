@@ -255,7 +255,8 @@ class HadoopParquetRepository(
       case _ => fileSchema
     }
 
-    val threadCount = math.min(config.parallelism, math.max(1, selectedBlocks.size))
+    val threadCount =
+      math.min(config.parallelism, math.max(1, selectedBlocks.size))
     val executor = Executors.newFixedThreadPool(threadCount)
     implicit val ec: ExecutionContext =
       ExecutionContext.fromExecutorService(executor)
@@ -680,7 +681,9 @@ class HadoopParquetRepository(
                   case _: AzureLocation => "Azure"
                   case _                => "cloud storage"
                 }
-                scala.util.Failure(new CloudAuthException(providerName, e.getMessage, e))
+                scala.util.Failure(
+                  new CloudAuthException(providerName, e.getMessage, e)
+                )
             }
           case None => Success(new Configuration())
         }

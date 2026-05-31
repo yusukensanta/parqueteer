@@ -117,47 +117,66 @@ private[repositories] object ParquetRecordDecoder {
         val name = schema.getType(i).getName
         val fieldType = schema.getType(i).asPrimitiveType()
         val logicalType = Option(fieldType.getLogicalTypeAnnotation)
-        val value: CellValue = (fieldType.getPrimitiveTypeName, logicalType) match {
-          case (PrimitiveTypeName.INT32, Some(dec: LogicalTypeAnnotation.DecimalLogicalTypeAnnotation)) =>
-            CellValue.Dec(
-              scala.math.BigDecimal(
-                new java.math.BigDecimal(
-                  java.math.BigInteger.valueOf(group.getInteger(i, 0).toLong),
-                  dec.getScale
+        val value: CellValue =
+          (fieldType.getPrimitiveTypeName, logicalType) match {
+            case (
+                  PrimitiveTypeName.INT32,
+                  Some(dec: LogicalTypeAnnotation.DecimalLogicalTypeAnnotation)
+                ) =>
+              CellValue.Dec(
+                scala.math.BigDecimal(
+                  new java.math.BigDecimal(
+                    java.math.BigInteger.valueOf(group.getInteger(i, 0).toLong),
+                    dec.getScale
+                  )
                 )
               )
-            )
-          case (PrimitiveTypeName.INT64, Some(dec: LogicalTypeAnnotation.DecimalLogicalTypeAnnotation)) =>
-            CellValue.Dec(
-              scala.math.BigDecimal(
-                new java.math.BigDecimal(
-                  java.math.BigInteger.valueOf(group.getLong(i, 0)),
-                  dec.getScale
+            case (
+                  PrimitiveTypeName.INT64,
+                  Some(dec: LogicalTypeAnnotation.DecimalLogicalTypeAnnotation)
+                ) =>
+              CellValue.Dec(
+                scala.math.BigDecimal(
+                  new java.math.BigDecimal(
+                    java.math.BigInteger.valueOf(group.getLong(i, 0)),
+                    dec.getScale
+                  )
                 )
               )
-            )
-          case (PrimitiveTypeName.INT32, Some(_: LogicalTypeAnnotation.DateLogicalTypeAnnotation)) =>
-            CellValue.Date(
-              java.time.LocalDate.ofEpochDay(group.getInteger(i, 0).toLong)
-            )
-          case (PrimitiveTypeName.INT64, Some(ts: LogicalTypeAnnotation.TimestampLogicalTypeAnnotation))
-              if ts.getUnit == LogicalTypeAnnotation.TimeUnit.MILLIS =>
-            CellValue.Ts(java.time.Instant.ofEpochMilli(group.getLong(i, 0)))
-          case (PrimitiveTypeName.INT64, Some(ts: LogicalTypeAnnotation.TimestampLogicalTypeAnnotation))
-              if ts.getUnit == LogicalTypeAnnotation.TimeUnit.MICROS =>
-            CellValue.Ts(
-              java.time.Instant.EPOCH.plus(group.getLong(i, 0), ChronoUnit.MICROS)
-            )
-          case (PrimitiveTypeName.INT32, _)  => CellValue.I32(group.getInteger(i, 0))
-          case (PrimitiveTypeName.INT64, _)  => CellValue.I64(group.getLong(i, 0))
-          case (PrimitiveTypeName.FLOAT, _)  => CellValue.F32(group.getFloat(i, 0))
-          case (PrimitiveTypeName.DOUBLE, _) => CellValue.F64(group.getDouble(i, 0))
-          case (PrimitiveTypeName.BOOLEAN, _) =>
-            CellValue.Bool(group.getBoolean(i, 0))
-          case (PrimitiveTypeName.BINARY, _) =>
-            CellValue.Str(group.getBinary(i, 0).toStringUsingUTF8)
-          case _ => CellValue.Str(group.getValueToString(i, 0))
-        }
+            case (
+                  PrimitiveTypeName.INT32,
+                  Some(_: LogicalTypeAnnotation.DateLogicalTypeAnnotation)
+                ) =>
+              CellValue.Date(
+                java.time.LocalDate.ofEpochDay(group.getInteger(i, 0).toLong)
+              )
+            case (
+                  PrimitiveTypeName.INT64,
+                  Some(ts: LogicalTypeAnnotation.TimestampLogicalTypeAnnotation)
+                ) if ts.getUnit == LogicalTypeAnnotation.TimeUnit.MILLIS =>
+              CellValue.Ts(java.time.Instant.ofEpochMilli(group.getLong(i, 0)))
+            case (
+                  PrimitiveTypeName.INT64,
+                  Some(ts: LogicalTypeAnnotation.TimestampLogicalTypeAnnotation)
+                ) if ts.getUnit == LogicalTypeAnnotation.TimeUnit.MICROS =>
+              CellValue.Ts(
+                java.time.Instant.EPOCH
+                  .plus(group.getLong(i, 0), ChronoUnit.MICROS)
+              )
+            case (PrimitiveTypeName.INT32, _) =>
+              CellValue.I32(group.getInteger(i, 0))
+            case (PrimitiveTypeName.INT64, _) =>
+              CellValue.I64(group.getLong(i, 0))
+            case (PrimitiveTypeName.FLOAT, _) =>
+              CellValue.F32(group.getFloat(i, 0))
+            case (PrimitiveTypeName.DOUBLE, _) =>
+              CellValue.F64(group.getDouble(i, 0))
+            case (PrimitiveTypeName.BOOLEAN, _) =>
+              CellValue.Bool(group.getBoolean(i, 0))
+            case (PrimitiveTypeName.BINARY, _) =>
+              CellValue.Str(group.getBinary(i, 0).toStringUsingUTF8)
+            case _ => CellValue.Str(group.getValueToString(i, 0))
+          }
         builder += name -> value
       }
       i += 1

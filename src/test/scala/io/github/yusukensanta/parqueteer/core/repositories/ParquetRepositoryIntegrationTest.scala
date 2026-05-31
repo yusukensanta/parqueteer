@@ -377,9 +377,13 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
 
   it should "return exactly maxRows rows when parallel + maxRows spans fewer row groups than total" taggedAs IntegrationTest in {
     val loc = LocalPath(tempFile().getAbsolutePath)
-    val rows = (1 to 100).map(i => Map[String, CellValue]("id" -> CellValue.I64(i.toLong))).toList
+    val rows = (1 to 100)
+      .map(i => Map[String, CellValue]("id" -> CellValue.I64(i.toLong)))
+      .toList
     // rowGroupSize = 1L forces one row per row group → 100 row groups total
-    repo.writeContent(loc, rows, None, WriteConfig(rowGroupSize = 1L)).isSuccess shouldBe true
+    repo
+      .writeContent(loc, rows, None, WriteConfig(rowGroupSize = 1L))
+      .isSuccess shouldBe true
 
     val config = ReadConfig(maxRows = Some(5L), parallelism = 4)
     val result = repo.readContent(ParquetFile(loc), config)
@@ -827,7 +831,8 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
 
   "HadoopParquetRepository" should "wrap S3 auth failure as CloudAuthException" in {
     // Unset AWS credentials by pointing to a non-existent profile
-    val repo = new HadoopParquetRepository(profile = Some("__nonexistent_profile_xyz__"))
+    val repo =
+      new HadoopParquetRepository(profile = Some("__nonexistent_profile_xyz__"))
     val file = ParquetFile(S3Location("test-bucket", "key.parquet", None))
     val result = repo.readSchema(file)
     result.isFailure shouldBe true
@@ -835,7 +840,9 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
     result.failed.get shouldBe a[ParqueteerError.CloudAuthException]
     // Also verify the full error pipeline maps to CloudAuthError
     result.toParqueteerError shouldBe a[Left[?, ?]]
-    result.toParqueteerError.swap.toOption.get shouldBe a[ParqueteerError.CloudAuthError]
+    result.toParqueteerError.swap.toOption.get shouldBe a[
+      ParqueteerError.CloudAuthError
+    ]
   }
 
   // ── TIMESTAMP_MICROS sequential decode (#154) ────────────────────────────

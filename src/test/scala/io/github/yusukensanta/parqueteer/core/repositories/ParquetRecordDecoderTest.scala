@@ -322,10 +322,13 @@ class ParquetRecordDecoderTest extends AnyFlatSpec with Matchers {
     val schema = MessageTypeParser.parseMessageType(
       "message root { required int64 ts (TIMESTAMP_MICROS); }"
     )
-    val micros = java.time.Instant.parse("2024-01-01T00:00:00Z").toEpochMilli * 1000L
+    val micros =
+      java.time.Instant.parse("2024-01-01T00:00:00Z").toEpochMilli * 1000L
     val group = new SimpleGroupFactory(schema).newGroup().append("ts", micros)
     val result = ParquetRecordDecoder.decodeGroup(group, schema)
-    result("ts") shouldBe CellValue.Ts(java.time.Instant.parse("2024-01-01T00:00:00Z"))
+    result("ts") shouldBe CellValue.Ts(
+      java.time.Instant.parse("2024-01-01T00:00:00Z")
+    )
   }
 
   it should "convert negative TIMESTAMP_MICROS in decodeGroup (pre-epoch)" in {
