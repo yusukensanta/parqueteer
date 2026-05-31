@@ -171,7 +171,7 @@ lazy val root = (project in file("."))
         "org.apache.hadoop" % "hadoop-client-runtime" % hadoopVersion,
 
         // commons-lang3 required by hadoop-aws 3.5.0 S3AUtils at S3AFileSystem.initialize()
-        "org.apache.commons" % "commons-lang3" % "3.14.0",
+        "org.apache.commons" % "commons-lang3" % "3.18.0",
 
         // Testing
         "org.scalatest" %% "scalatest" % scalatestVersion % Test,
@@ -206,6 +206,12 @@ lazy val root = (project in file("."))
         "io.netty" % "netty-resolver-dns-native-macos"    % nettyVersion
       )
     },
+    // Transitive CVE patches
+    dependencyOverrides ++= Seq(
+      "org.xerial.snappy" % "snappy-java"     % "1.1.10.8", // CVE-2024-36124 — Snappy frame OOM (parquet reads untrusted files)
+      "com.nimbusds"      % "nimbus-jose-jwt" % "10.4",     // ES256K mishandling in 10.0.x (azure-identity path)
+      "net.minidev"       % "json-smart"      % "2.5.2"     // CVE-2025-27817 — nested JSON stack overflow (nimbus transitive); 2.5.3 not published, latest 2.5.x used
+    ),
     assembly / assemblyMergeStrategy := {
       case PathList("META-INF", "services", xs @ _*) => MergeStrategy.concat
       case PathList("META-INF", "versions", xs @ _*) => MergeStrategy.first
