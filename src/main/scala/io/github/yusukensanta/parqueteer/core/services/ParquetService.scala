@@ -155,10 +155,10 @@ class ParquetService(
   ): Either[ParqueteerError, List[FieldSummary]] = schemaMode match {
     case SchemaMode.Strict =>
       val first = schemas.head
-      val firstSet = first.map(f => (f.name, f.dataType)).toSet
+      val firstSet = first.map(f => (f.name, f.dataType, f.isOptional)).toSet
       schemas.zipWithIndex
         .collectFirst {
-          case (s, i) if s.map(f => (f.name, f.dataType)).toSet != firstSet =>
+          case (s, i) if s.map(f => (f.name, f.dataType, f.isOptional)).toSet != firstSet =>
             Left(
               ParqueteerError.InvalidFormat(
                 inputPaths(i),

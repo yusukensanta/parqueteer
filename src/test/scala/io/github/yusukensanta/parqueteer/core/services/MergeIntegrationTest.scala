@@ -213,6 +213,29 @@ class MergeIntegrationTest extends AnyFlatSpec with Matchers {
     result.isRight shouldBe true
   }
 
+  it should "fail strict merge when fields have the same name and type but different nullability" taggedAs MergeIntegrationTest in {
+    val schemaOptional = Types
+      .buildMessage()
+      .addField(
+        Types.primitive(PrimitiveTypeName.INT64, Repetition.OPTIONAL).named("id")
+      )
+      .named("msg")
+    val schemaRequired = Types
+      .buildMessage()
+      .addField(
+        Types.primitive(PrimitiveTypeName.INT64, Repetition.REQUIRED).named("id")
+      )
+      .named("msg")
+
+    val in1 = writeTempWithSchema(schemaOptional)
+    val in2 = writeTempWithSchema(schemaRequired)
+    val out  = tempFile().getAbsolutePath
+
+    val result =
+      service.mergeFiles(List(in1, in2), out, WriteConfig(), SchemaMode.Strict)
+    result.isLeft shouldBe true
+  }
+
   // ── Union mode ──────────────────────────────────────────────────────────
 
   it should "merge files with different schemas in union mode" taggedAs MergeIntegrationTest in {
