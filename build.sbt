@@ -179,8 +179,9 @@ lazy val root = (project in file("."))
         "org.scalatestplus" %% "scalacheck-1-17" % scalatestScalacheckVersion % Test
       )
     },
-    // Force Netty to consistent 4.1.126.Final across ALL modules.
-    // Prior pin covered only 7/17 modules; remaining resolved at 4.1.112-133 (CVE-2024-47535, CVE-2025-55163).
+    // Force Netty to 4.1.126.Final across all modules (current latest stable).
+    // CVE-2024-47535 fixed in 4.1.115.Final; CVE-2025-55163 fixed in 4.1.124.Final.
+    // Prior override covered only 7 of 19 modules; 12 modules resolved at mixed 4.1.112-4.1.133.
     dependencyOverrides ++= {
       val nettyVersion = "4.1.126.Final"
       Seq(
