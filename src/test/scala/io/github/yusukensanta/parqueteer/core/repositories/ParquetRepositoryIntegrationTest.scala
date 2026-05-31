@@ -822,6 +822,18 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
     result.failed.get.getMessage should include("schema")
   }
 
+  // ── Cloud auth error mapping (#H3) ─────────────────────────────────────
+
+  "HadoopParquetRepository" should "return CloudAuthError when S3 credentials are missing" in {
+    // Unset AWS credentials by pointing to a non-existent profile
+    val repo = new HadoopParquetRepository(profile = Some("__nonexistent_profile_xyz__"))
+    val file = ParquetFile(S3Location("test-bucket", "key.parquet", None))
+    val result = repo.readSchema(file)
+    result.isFailure shouldBe true
+    // After our fix, the error should be a CloudAuthException
+    result.failed.get shouldBe a[ParqueteerError.CloudAuthException]
+  }
+
   // ── TIMESTAMP_MICROS sequential decode (#154) ────────────────────────────
 
   it should "decode TIMESTAMP_MICROS as ISO-8601 Instant in sequential read" taggedAs IntegrationTest in {

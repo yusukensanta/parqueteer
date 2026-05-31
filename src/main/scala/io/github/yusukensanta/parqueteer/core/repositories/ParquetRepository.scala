@@ -1,6 +1,7 @@
 package io.github.yusukensanta.parqueteer.core.repositories
 
 import io.github.yusukensanta.parqueteer.core.models._
+import io.github.yusukensanta.parqueteer.core.models.ParqueteerError.CloudAuthException
 import io.github.yusukensanta.parqueteer.cloud.CloudCredentialManager
 import com.github.mjakubowski84.parquet4s.{
   ParquetReader,
@@ -671,7 +672,16 @@ class HadoopParquetRepository(
         val result = CloudCredentialManager
           .forLocation(effectiveLocation, profile) match {
           case Some(credManager) =>
-            credManager.configureHadoop(effectiveLocation)
+            credManager.configureHadoop(effectiveLocation).recoverWith {
+              case e =>
+                val providerName = effectiveLocation match {
+                  case _: S3Location    => "S3"
+                  case _: GCSLocation   => "GCS"
+                  case _: AzureLocation => "Azure"
+                  case _                => "cloud storage"
+                }
+                scala.util.Failure(new CloudAuthException(providerName, e.getMessage, e))
+            }
           case None => Success(new Configuration())
         }
         result.foreach(cfg => hadoopConfigCache.put(key, cfg))
