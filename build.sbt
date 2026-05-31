@@ -207,7 +207,11 @@ lazy val root = (project in file("."))
         // Transitive CVE patches
         "org.xerial.snappy" % "snappy-java"     % "1.1.10.8", // CVE-2023-43642 + CVE-2023-34455; 1.1.10.8 is current clean release
         "com.nimbusds"      % "nimbus-jose-jwt" % "10.4",     // CVE-2025-53864 — deeply nested JSON DoS (fixed >=10.0.2; 10.4 is current)
-        "net.minidev"       % "json-smart"      % "2.6.0"     // CVE-2024-57699 — nested JSON stack exhaustion DoS (nimbus transitive)
+        "net.minidev"       % "json-smart"      % "2.6.0",    // CVE-2024-57699 — nested JSON stack exhaustion DoS (nimbus transitive)
+        // Jackson explicit pin — prevents resolution regression; GHSA-72hv-8253-57qq fixed in 2.18.6
+        "com.fasterxml.jackson.core" % "jackson-core"        % "2.18.6",
+        "com.fasterxml.jackson.core" % "jackson-databind"    % "2.18.6",
+        "com.fasterxml.jackson.core" % "jackson-annotations" % "2.18.6"
       )
     },
     assembly / assemblyMergeStrategy := {
