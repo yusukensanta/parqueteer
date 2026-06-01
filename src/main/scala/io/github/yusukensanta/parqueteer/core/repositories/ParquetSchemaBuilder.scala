@@ -45,18 +45,27 @@ private[repositories] object ParquetSchemaBuilder {
     if (data.isEmpty)
       throw new IllegalArgumentException("Cannot infer schema from empty data")
 
+    // Single pass: accumulate per-column TypeRank from non-null values only.
+    // seenKeys tracks all keys (including null-only columns) for schema output.
+    val seenKeys = scala.collection.mutable.LinkedHashSet.empty[String]
+    val rankByKey = scala.collection.mutable.HashMap.empty[String, TypeRank]
+    data.foreach { row =>
+      row.foreach { case (k, v) =>
+        seenKeys.add(k)
+        if (v != CellValue.Null) {
+          val r = typeRankForValue(v)
+          rankByKey.updateWith(k) {
+            case Some(prev) => Some(widenTypeRanks(prev, r))
+            case None       => Some(r)
+          }
+        }
+      }
+    }
+
     val builder = Types.buildMessage()
-    val allKeys = data.flatMap(_.keys).distinct.sorted
-
-    allKeys.foreach { key =>
-      val nonNullValues =
-        data.flatMap(_.get(key)).filter(_ != CellValue.Null)
-      val effectiveRank = nonNullValues
-        .map(typeRankForValue)
-        .reduceOption(widenTypeRanks)
-        .getOrElse(TypeRank.String)
-
-      val (primitive, annotation) = rankToParquetType(effectiveRank)
+    seenKeys.toList.sorted.foreach { key =>
+      val rank = rankByKey.getOrElse(key, TypeRank.String)
+      val (primitive, annotation) = rankToParquetType(rank)
       builder.addField(
         makeField(key, primitive, Type.Repetition.OPTIONAL, annotation)
       )

@@ -270,9 +270,9 @@ class ParquetService(
         streamError match {
           case Some(e) =>
             // Delete partial output; merge is not atomic so partial writes are unusable
-            repository.deleteFile(outputLocation).recover { case e =>
+            repository.deleteFile(outputLocation).recover { case delErr =>
               logger.warn(
-                s"Failed to delete partial output at ${outputLocation.path} after merge error: ${e.getMessage}. Partial file may remain."
+                s"Failed to delete partial output at ${outputLocation.path} after merge error: ${delErr.getMessage}. Partial file may remain."
               )
             }: Unit
             Left(e)
