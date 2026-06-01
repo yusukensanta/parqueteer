@@ -136,9 +136,9 @@ class RowStreamWriterTest extends AnyFlatSpec with Matchers {
     out should include("hello")
   }
 
-  it should "handle empty input gracefully" in {
+  it should "emit nothing for empty input" in {
     val out = run(OutputFormat.Table, List.empty)
-    out should include("┌")
+    out.trim shouldBe ""
   }
 
   // ── Markdown ─────────────────────────────────────────────────────────────────
@@ -157,9 +157,9 @@ class RowStreamWriterTest extends AnyFlatSpec with Matchers {
     out should include("a\\|b")
   }
 
-  it should "handle empty input" in {
+  it should "emit nothing for empty input" in {
     val out = run(OutputFormat.Markdown, List.empty)
-    out.trim.split("\n") should have length 2
+    out.trim shouldBe ""
   }
 
   // ── LTSV ─────────────────────────────────────────────────────────────────────

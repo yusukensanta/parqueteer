@@ -41,7 +41,14 @@ object EnvConfig {
     sys.env.get("PARQUETEER_VERBOSE").exists(_.toLowerCase == "true")
 
   def parsedMaxRows: Option[Long] =
-    sys.env.get("PARQUETEER_MAX_ROWS").flatMap(_.toLongOption.filter(_ > 0))
+    sys.env.get("PARQUETEER_MAX_ROWS").flatMap { raw =>
+      val parsed = raw.toLongOption.filter(_ > 0)
+      if (parsed.isEmpty)
+        System.err.println(
+          s"[parqueteer] warning: PARQUETEER_MAX_ROWS=$raw is not a positive integer; ignoring"
+        )
+      parsed
+    }
 
   def allSet: Map[String, String] =
     SupportedVars.flatMap(k => sys.env.get(k).map(k -> _)).toMap

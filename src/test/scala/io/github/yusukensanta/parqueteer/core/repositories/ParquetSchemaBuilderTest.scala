@@ -229,14 +229,12 @@ class ParquetSchemaBuilderTest extends AnyFlatSpec with Matchers {
     field.getLogicalTypeAnnotation shouldBe null
   }
 
-  it should "fall back to BINARY for unknown data type" in {
-    val mt = ParquetSchemaBuilder.buildMessageType(
-      schema(columnInfo("weird", "WEIRDTYPE"))
-    )
-    fieldByName(
-      mt,
-      "weird"
-    ).getPrimitiveTypeName shouldBe PrimitiveTypeName.BINARY
+  it should "throw IllegalArgumentException for unknown data type" in {
+    an[IllegalArgumentException] should be thrownBy {
+      ParquetSchemaBuilder.buildMessageType(
+        schema(columnInfo("weird", "WEIRDTYPE"))
+      )
+    }
   }
 
   it should "respect REQUIRED repetition when isOptional is false" in {

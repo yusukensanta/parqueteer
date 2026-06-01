@@ -139,7 +139,7 @@ object RowStreamWriter {
     }
 
     override def end(): Unit = {
-      if (!flushed) flushSample()
+      if (!flushed && sample.nonEmpty) flushSample()
       if (widths.nonEmpty) out.println(tf.drawBottomBorder(widths))
     }
   }
@@ -161,7 +161,11 @@ object RowStreamWriter {
     private var warnedUnseen = false
 
     private def cell(v: CellValue): String =
-      v.display.replace("|", "\\|").replace("\n", " ")
+      v.display
+        .replace("|", "\\|")
+        .replace("\r\n", " ")
+        .replace("\n", " ")
+        .replace("\r", " ")
 
     private def flushSample(): Unit = {
       columns = {
@@ -205,7 +209,7 @@ object RowStreamWriter {
     }
 
     override def end(): Unit = {
-      if (!flushed) flushSample()
+      if (!flushed && sample.nonEmpty) flushSample()
     }
   }
 }

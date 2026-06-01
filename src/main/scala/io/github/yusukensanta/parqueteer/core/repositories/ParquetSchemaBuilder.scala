@@ -87,10 +87,6 @@ private[repositories] object ParquetSchemaBuilder {
     annotation.foldLeft(base)(_.as(_)).named(name)
   }
 
-  /** Map a user-declared dataType string to its (PrimitiveTypeName,
-    * annotation). Unknown types fall back to BINARY without annotation (legacy
-    * behavior).
-    */
   private def mapDeclaredType(
       dataType: String
   ): (PrimitiveTypeName, Option[LogicalTypeAnnotation]) =
@@ -105,7 +101,10 @@ private[repositories] object ParquetSchemaBuilder {
         (PrimitiveTypeName.INT64, Some(timestampMillisAnnotation))
       case "STRING" => (PrimitiveTypeName.BINARY, Some(stringAnnotation))
       case "BINARY" => (PrimitiveTypeName.BINARY, None)
-      case _        => (PrimitiveTypeName.BINARY, None)
+      case other =>
+        throw new IllegalArgumentException(
+          s"Unknown dataType '$other'. Supported: INT32, INT64, DOUBLE, FLOAT, BOOLEAN, DATE, TIMESTAMP, STRING, BINARY"
+        )
     }
 
   private def dateAnnotation: LogicalTypeAnnotation =
