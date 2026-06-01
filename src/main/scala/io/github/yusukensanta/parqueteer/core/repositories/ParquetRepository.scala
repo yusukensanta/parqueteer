@@ -73,8 +73,9 @@ class HadoopParquetRepository(
 
   private def configCacheKey(location: StorageLocation): String =
     location match {
-      case LocalPath(_)                    => "local"
-      case S3Location(bucket, _, _)        => s"s3:$bucket"
+      case LocalPath(_) => "local"
+      case S3Location(bucket, _, r) =>
+        s"s3:$bucket:${r.orElse(region).getOrElse("")}"
       case GCSLocation(bucket, _)          => s"gcs:$bucket"
       case AzureLocation(account, cont, _) => s"azure:$account/$cont"
     }
@@ -206,9 +207,14 @@ class HadoopParquetRepository(
       source: IterableOnce[A],
       maxRows: Option[Long]
   ): Iterator[A] =
-    maxRows.fold(source.iterator)(n =>
-      source.iterator.take(n.min(Int.MaxValue.toLong).toInt)
-    )
+    maxRows.fold(source.iterator) { n =>
+      val effective = n.min(Int.MaxValue.toLong)
+      if (effective < n)
+        System.err.println(
+          s"[parqueteer] warning: --limit $n exceeds the maximum supported value (${Int.MaxValue}); clamped to ${Int.MaxValue}"
+        )
+      source.iterator.take(effective.toInt)
+    }
 
   def streamContent(
       file: ParquetFile,
@@ -540,6 +546,8 @@ class HadoopParquetRepository(
                       Try(r.readNextRowGroup()) match {
                         case scala.util.Failure(ex) =>
                           issues += s"Row group $index data is corrupt or truncated: ${ex.getMessage}"
+                        case scala.util.Success(null) =>
+                          issues += s"Row group $index returned no data (file may be truncated)"
                         case _ =>
                       }
                     } else {
