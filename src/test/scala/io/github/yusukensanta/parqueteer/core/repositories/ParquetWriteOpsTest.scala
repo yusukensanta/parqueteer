@@ -208,6 +208,18 @@ class ParquetWriteOpsTest extends AnyFlatSpec with Matchers {
     group.getLong("created_at", 0) shouldBe instant.toEpochMilli
   }
 
+  it should "write CellValue.Bytes as raw binary without UTF-8 encoding" in {
+    val mt = schema("message root { required binary data; }")
+    val group = new SimpleGroupFactory(mt).newGroup()
+    val rawBytes = Array[Byte](0xde.toByte, 0xad.toByte, 0xbe.toByte, 0xef.toByte)
+    ParquetWriteOps.writeRowToGroup(
+      group,
+      Map("data" -> CellValue.Bytes(rawBytes)),
+      mt
+    )
+    group.getBinary("data", 0).getBytes shouldBe rawBytes
+  }
+
   it should "write CellValue.Dec as toString to BINARY column" in {
     val mt = schema("message root { required binary x (UTF8); }")
     val group = new SimpleGroupFactory(mt).newGroup()

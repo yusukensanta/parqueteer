@@ -5,6 +5,7 @@ import io.github.yusukensanta.parqueteer.core.models.{
   CompressionType
 }
 import org.apache.parquet.hadoop.metadata.CompressionCodecName
+import org.apache.parquet.io.api.Binary
 import org.apache.parquet.schema.MessageType
 import org.apache.parquet.example.data.Group
 
@@ -36,7 +37,7 @@ private[repositories] object ParquetWriteOps {
           case CellValue.Ts(i)   => group.add(fieldIndex, i.toEpochMilli)
           case CellValue.Dec(bd) => group.add(fieldIndex, bd.toString)
           case CellValue.Bytes(b) =>
-            group.add(fieldIndex, new String(b, "UTF-8"))
+            group.add(fieldIndex, Binary.fromConstantByteArray(b))
           case CellValue.Null => ()
         }
       }
