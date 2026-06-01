@@ -24,6 +24,10 @@ import org.apache.parquet.example.data.simple.convert.GroupRecordConverter
 import scala.jdk.CollectionConverters._
 
 private[repositories] object ParquetRecordDecoder {
+  private val logger =
+    org.slf4j.LoggerFactory.getLogger(getClass)
+  private val warnedVariants =
+    java.util.concurrent.ConcurrentHashMap.newKeySet[String]()
 
   def decodeValue(value: Value): CellValue = value match {
     case NullValue           => CellValue.Null
@@ -38,7 +42,14 @@ private[repositories] object ParquetRecordDecoder {
       CellValue.Dec(
         scala.math.BigDecimal(new java.math.BigDecimal(bigInt, fmt.scale))
       )
-    case _ => CellValue.Str(value.toString)
+    case other =>
+      val cls = other.getClass.getName
+      if (warnedVariants.add(cls))
+        logger.warn(
+          s"Unknown parquet4s Value variant $cls — falling back to toString. " +
+            "Upgrade parqueteer to add explicit support."
+        )
+      CellValue.Str(other.toString)
   }
 
   def convertRecordToMap(record: RowParquetRecord): Map[String, CellValue] =

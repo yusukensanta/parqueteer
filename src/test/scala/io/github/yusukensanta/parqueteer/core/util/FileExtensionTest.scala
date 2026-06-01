@@ -34,4 +34,13 @@ class FileExtensionTest extends AnyFlatSpec with Matchers {
   it should "handle json extension" in {
     FileExtension.of("data.json") shouldBe "json"
   }
+
+  it should "return unknown for dot-prefixed filenames (hidden files)" in {
+    FileExtension.of("/home/user/.gitignore") shouldBe "unknown"
+    FileExtension.of(".env") shouldBe "unknown"
+  }
+
+  it should "return the real extension for files with multiple dots" in {
+    FileExtension.of("archive.tar.gz") shouldBe "gz"
+  }
 }

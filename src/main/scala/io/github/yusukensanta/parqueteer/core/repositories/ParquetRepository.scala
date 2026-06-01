@@ -707,7 +707,7 @@ class HadoopParquetRepository(
           case None => Success(new Configuration())
         }
         result.foreach(cfg => hadoopConfigCache.put(key, cfg))
-        result
+        result.map(new Configuration(_))
     }
   }
 
@@ -746,6 +746,8 @@ class HadoopParquetRepository(
           else groupTypeCanonical(f.asGroupType())
         s"${f.getName}:$t"
       }
+      .toList
+      .sorted
       .mkString(",")
     s"STRUCT<$fields>"
   }
