@@ -64,7 +64,7 @@ object RowStreamWriter {
         row.keysIterator.foreach(seen += _)
         columns = seen.toList
         columnsSet = columns.toSet
-        out.println(columns.mkString(","))
+        out.println(columns.map(escape).mkString(","))
       } else if (!warnedUnseen) {
         val unseen = row.keySet -- columnsSet
         if (unseen.nonEmpty) {

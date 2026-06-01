@@ -108,10 +108,10 @@ private[repositories] object ParquetRecordDecoder {
     val converter = new GroupRecordConverter(requestedSchema)
     val recordReader = columnIO.getRecordReader(pageStore, converter)
     val rowCount = pageStore.getRowCount
-    (0L until rowCount).map { _ =>
+    (0L until rowCount).flatMap { _ =>
       val group = recordReader.read()
-      if (group == null) Map.empty[String, CellValue]
-      else decodeGroup(group, requestedSchema)
+      if (group == null) None
+      else Some(decodeGroup(group, requestedSchema))
     }.toList
   }
 
@@ -123,6 +123,15 @@ private[repositories] object ParquetRecordDecoder {
     var i = 0
     while (i < schema.getFieldCount) {
       if (
+        group.getFieldRepetitionCount(i) > 0 && !schema.getType(i).isPrimitive
+      ) {
+        val name = schema.getType(i).getName
+        if (warnedVariants.add(s"nested:$name"))
+          logger.warn(
+            s"Column '$name' is a nested group type — nested types are not yet " +
+              "supported and will be omitted. Upgrade parqueteer to add explicit support."
+          )
+      } else if (
         group.getFieldRepetitionCount(i) > 0 && schema.getType(i).isPrimitive
       ) {
         val name = schema.getType(i).getName

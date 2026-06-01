@@ -237,9 +237,8 @@ class HadoopParquetRepository(
           count
         }
       }
-      // Evict after streaming: the footer won't be needed again for this file,
-      // and keeping it would cause unbounded cache growth when many files are streamed.
-      footerCache.remove(cacheKey)
+      // Evict on success only: on failure, a retry should not pay the footer fetch cost again.
+      result.foreach(_ => footerCache.remove(cacheKey))
       result
     }
   }
@@ -324,6 +323,9 @@ class HadoopParquetRepository(
               s"parallel read timed out after ${config.readTimeout} — " +
                 "retry with --parallelism 1, or check network connectivity"
             )
+          case t: Throwable =>
+            ec.shutdownNow()
+            throw t
         }
       config.maxRows match {
         case Some(limit) => allRows.take(limit.min(Int.MaxValue).toInt)

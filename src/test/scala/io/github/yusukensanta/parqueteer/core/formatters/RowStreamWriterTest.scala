@@ -262,4 +262,14 @@ class RowStreamWriterTest extends AnyFlatSpec with Matchers {
     headerLine.indexOf("z_col") should be < headerLine.indexOf("a_col")
     headerLine.indexOf("a_col") should be < headerLine.indexOf("m_col")
   }
+
+  it should "escape CSV header columns that contain commas" in {
+    val row = scala.collection.immutable.ListMap(
+      "a,b" -> CellValue.Str("val1"),
+      "normal" -> CellValue.Str("val2")
+    )
+    val out = run(OutputFormat.CSV, List(row))
+    val header = out.split("\n").head
+    header shouldBe "\"a,b\",normal"
+  }
 }

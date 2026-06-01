@@ -89,6 +89,10 @@ object ArgumentParser {
             .text("Path to parquet file (local, s3://, gs://, abfss://)"),
           opt[Long]("limit")
             .abbr("n")
+            .validate(x =>
+              if (x > 0) success
+              else failure("--limit must be a positive integer")
+            )
             .action((x, c) =>
               updateCmd[ReadCommand](c, _.copy(maxRows = Some(x)))
             )
@@ -289,6 +293,10 @@ object ArgumentParser {
             .text("Compression type for output"),
           opt[Long]("limit")
             .abbr("n")
+            .validate(x =>
+              if (x > 0) success
+              else failure("--limit must be a positive integer")
+            )
             .action((x, c) =>
               updateCmd[ConvertCommand](c, _.copy(maxRows = Some(x)))
             )

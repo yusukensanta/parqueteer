@@ -41,7 +41,7 @@ object EnvConfig {
     sys.env.get("PARQUETEER_VERBOSE").exists(_.toLowerCase == "true")
 
   def parsedMaxRows: Option[Long] =
-    sys.env.get("PARQUETEER_MAX_ROWS").flatMap(_.toLongOption)
+    sys.env.get("PARQUETEER_MAX_ROWS").flatMap(_.toLongOption.filter(_ > 0))
 
   def allSet: Map[String, String] =
     SupportedVars.flatMap(k => sys.env.get(k).map(k -> _)).toMap

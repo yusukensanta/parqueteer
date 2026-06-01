@@ -456,4 +456,31 @@ class ArgumentParserTest extends AnyFlatSpec with Matchers {
       .asInstanceOf[MergeCommand]
       .schemaMode shouldBe SchemaMode.Strict
   }
+
+  it should "reject --limit 0 for read command" in {
+    val result = OParser.parse(
+      ArgumentParser.parser,
+      Array("read", "a.parquet", "--limit", "0"),
+      ArgumentParser.Config()
+    )
+    result shouldBe None
+  }
+
+  it should "reject --limit -1 for read command" in {
+    val result = OParser.parse(
+      ArgumentParser.parser,
+      Array("read", "a.parquet", "--limit", "-1"),
+      ArgumentParser.Config()
+    )
+    result shouldBe None
+  }
+
+  it should "reject --limit 0 for convert command" in {
+    val result = OParser.parse(
+      ArgumentParser.parser,
+      Array("convert", "a.parquet", "out.json", "--limit", "0"),
+      ArgumentParser.Config()
+    )
+    result shouldBe None
+  }
 }
