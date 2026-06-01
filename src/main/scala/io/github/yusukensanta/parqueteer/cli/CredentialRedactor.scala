@@ -13,7 +13,9 @@ private[cli] object CredentialRedactor {
 
   def redact(s: String): String =
     patterns.foldLeft(s) { (acc, pattern) =>
-      pattern.replaceAllIn(acc, m => m.group(1) + "[REDACTED]")
+      pattern.replaceAllIn(acc, m =>
+        java.util.regex.Matcher.quoteReplacement(m.group(1) + "[REDACTED]")
+      )
     }
 
   def redactThrowable(t: Throwable): String = {

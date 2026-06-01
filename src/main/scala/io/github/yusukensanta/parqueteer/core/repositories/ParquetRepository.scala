@@ -16,7 +16,7 @@ import org.apache.parquet.hadoop.metadata.BlockMetaData
 import org.apache.parquet.hadoop.util.HadoopInputFile
 import org.apache.parquet.schema.MessageType
 import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
-import scala.concurrent.{Future, Await, ExecutionContext}
+import scala.concurrent.{Future, Await, ExecutionContext, ExecutionContextExecutorService}
 import java.util.concurrent.Executors
 import scala.util.{Try, Success, Using}
 import scala.jdk.CollectionConverters._
@@ -198,7 +198,9 @@ class HadoopParquetRepository(
       source: IterableOnce[A],
       maxRows: Option[Long]
   ): Iterator[A] =
-    maxRows.fold(source.iterator)(n => source.iterator.take(n.toInt))
+    maxRows.fold(source.iterator)(n =>
+      source.iterator.take(n.min(Int.MaxValue.toLong).toInt)
+    )
 
   def streamContent(
       file: ParquetFile,
@@ -257,9 +259,8 @@ class HadoopParquetRepository(
 
     val threadCount =
       math.min(config.parallelism, math.max(1, selectedBlocks.size))
-    val executor = Executors.newFixedThreadPool(threadCount)
-    implicit val ec: ExecutionContext =
-      ExecutionContext.fromExecutorService(executor)
+    implicit val ec: ExecutionContextExecutorService =
+      ExecutionContext.fromExecutorService(Executors.newFixedThreadPool(threadCount))
 
     try {
       val requestedNames =
@@ -303,7 +304,7 @@ class HadoopParquetRepository(
         try Await.result(Future.sequence(futures), config.readTimeout).flatten
         catch {
           case _: java.util.concurrent.TimeoutException =>
-            executor.shutdownNow()
+            ec.shutdownNow()
             throw new RuntimeException(
               s"parallel read timed out after ${config.readTimeout} — " +
                 "retry with --parallelism 1, or check network connectivity"
@@ -314,7 +315,7 @@ class HadoopParquetRepository(
         case None        => allRows
       }
     } finally {
-      executor.shutdown()
+      ec.shutdown()
     }
   }
 
@@ -565,10 +566,13 @@ class HadoopParquetRepository(
     }
 
   def deleteFile(location: StorageLocation): Try[Unit] =
-    setupHadoopConfiguration(location).map { hadoopConfig =>
-      val path = new HadoopPath(location.path)
-      val fs = FileSystem.get(path.toUri, hadoopConfig)
-      fs.delete(path, false)
+    setupHadoopConfiguration(location).flatMap { hadoopConfig =>
+      Try {
+        val path = new HadoopPath(location.path)
+        val fs = FileSystem.get(path.toUri, hadoopConfig)
+        if (!fs.delete(path, false))
+          throw new java.io.IOException(s"Failed to delete ${location.path}")
+      }
     }
 
   def readStats(file: ParquetFile): Try[FileStats] =
@@ -672,7 +676,7 @@ class HadoopParquetRepository(
   ): Try[Configuration] = {
     val key = configCacheKey(location)
     hadoopConfigCache.get(key) match {
-      case Some(cfg) => Success(cfg)
+      case Some(cfg) => Success(new Configuration(cfg))
       case None =>
         val effectiveLocation = (location, region) match {
           case (s3: S3Location, Some(r)) => s3.copy(region = Some(r))
