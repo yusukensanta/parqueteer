@@ -16,7 +16,12 @@ import org.apache.parquet.hadoop.metadata.BlockMetaData
 import org.apache.parquet.hadoop.util.HadoopInputFile
 import org.apache.parquet.schema.MessageType
 import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
-import scala.concurrent.{Future, Await, ExecutionContext, ExecutionContextExecutorService}
+import scala.concurrent.{
+  Future,
+  Await,
+  ExecutionContext,
+  ExecutionContextExecutorService
+}
 import java.util.concurrent.Executors
 import scala.util.{Try, Success, Using}
 import scala.jdk.CollectionConverters._
@@ -260,7 +265,9 @@ class HadoopParquetRepository(
     val threadCount =
       math.min(config.parallelism, math.max(1, selectedBlocks.size))
     implicit val ec: ExecutionContextExecutorService =
-      ExecutionContext.fromExecutorService(Executors.newFixedThreadPool(threadCount))
+      ExecutionContext.fromExecutorService(
+        Executors.newFixedThreadPool(threadCount)
+      )
 
     try {
       val requestedNames =
