@@ -2,12 +2,12 @@ package io.github.yusukensanta.parqueteer.core.util
 
 object SizeParser {
   private val units = Map(
-    "B"  -> 1L,
-    "K"  -> 1024L,
+    "B" -> 1L,
+    "K" -> 1024L,
     "KB" -> 1024L,
-    "M"  -> 1024L * 1024L,
+    "M" -> 1024L * 1024L,
     "MB" -> 1024L * 1024L,
-    "G"  -> 1024L * 1024L * 1024L,
+    "G" -> 1024L * 1024L * 1024L,
     "GB" -> 1024L * 1024L * 1024L
   )
   private val pattern = """(\d+(?:\.\d+)?)\s*(G(?:B)?|M(?:B)?|K(?:B)?|B)""".r
