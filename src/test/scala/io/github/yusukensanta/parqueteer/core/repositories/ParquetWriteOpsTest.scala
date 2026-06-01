@@ -211,7 +211,8 @@ class ParquetWriteOpsTest extends AnyFlatSpec with Matchers {
   it should "write CellValue.Bytes as raw binary without UTF-8 encoding" in {
     val mt = schema("message root { required binary data; }")
     val group = new SimpleGroupFactory(mt).newGroup()
-    val rawBytes = Array[Byte](0xde.toByte, 0xad.toByte, 0xbe.toByte, 0xef.toByte)
+    val rawBytes =
+      Array[Byte](0xde.toByte, 0xad.toByte, 0xbe.toByte, 0xef.toByte)
     ParquetWriteOps.writeRowToGroup(
       group,
       Map("data" -> CellValue.Bytes(rawBytes)),
