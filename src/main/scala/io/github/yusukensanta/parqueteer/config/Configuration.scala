@@ -64,10 +64,12 @@ case class LoggingConfig(
 )
 
 object AppConfig {
+  private val snakeToCamelRe = "_([a-z\\d])".r
+
   private def normalizeKeys(cursor: ACursor): ACursor =
     cursor.withFocus(_.mapObject { obj =>
       JsonObject.fromIterable(obj.toIterable.map { case (k, v) =>
-        "_([a-z\\d])".r.replaceAllIn(k, m => m.group(1).toUpperCase) -> v
+        snakeToCamelRe.replaceAllIn(k, m => m.group(1).toUpperCase) -> v
       })
     })
 
@@ -144,7 +146,4 @@ class ConfigurationManager {
     configPath
       .orElse(EnvConfig.configPath)
       .getOrElse(defaultConfigPath.pathAsString)
-
-  def parseSizeString(sizeStr: String): Long =
-    io.github.yusukensanta.parqueteer.core.util.SizeParser.parse(sizeStr)
 }

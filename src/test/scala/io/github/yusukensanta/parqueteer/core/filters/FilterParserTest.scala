@@ -116,6 +116,12 @@ class FilterParserTest extends AnyFlatSpec with Matchers {
     FilterParser.parse("") shouldBe a[Left[?, ?]]
   }
 
+  it should "return Left for unterminated string literal" in {
+    val result = FilterParser.parse("""name = "Alice""")
+    result shouldBe a[Left[?, ?]]
+    result.left.toOption.get.message should include("Unterminated")
+  }
+
   it should "return Left for incomplete expression" in {
     FilterParser.parse("age >") shouldBe a[Left[?, ?]]
   }

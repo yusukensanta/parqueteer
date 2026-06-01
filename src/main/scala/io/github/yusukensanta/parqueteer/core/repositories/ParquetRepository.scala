@@ -58,6 +58,8 @@ trait ParquetRepository {
 object HadoopParquetRepository {
   private val shutdownHookRegistered =
     new java.util.concurrent.atomic.AtomicBoolean(false)
+  private val warnedLargeLimit =
+    new java.util.concurrent.atomic.AtomicBoolean(false)
 }
 
 class HadoopParquetRepository(
@@ -91,16 +93,33 @@ class HadoopParquetRepository(
 
   // ── Shared footer infrastructure ──────────────────────────────────────────
 
+  private val parquetMagic = Array[Byte]('P', 'A', 'R', '1')
+
   private def readFooterBytes(inputFile: HadoopInputFile): Array[Byte] =
     Using.resource(inputFile.newStream()) { stream =>
       val fileLen = inputFile.getLength
+      if (fileLen < 12)
+        throw new java.io.IOException(
+          s"File too small to be a valid Parquet file (${fileLen} bytes)"
+        )
       val tail = new Array[Byte](8)
       stream.seek(fileLen - 8)
       stream.readFully(tail)
+      if (
+        tail(4) != parquetMagic(0) || tail(5) != parquetMagic(1) ||
+        tail(6) != parquetMagic(2) || tail(7) != parquetMagic(3)
+      )
+        throw new java.io.IOException(
+          "File does not end with PAR1 magic bytes — not a valid Parquet file"
+        )
       val footerLen = java.nio.ByteBuffer
         .wrap(tail, 0, 4)
         .order(java.nio.ByteOrder.LITTLE_ENDIAN)
         .getInt
+      if (footerLen <= 0 || footerLen > fileLen - 8)
+        throw new java.io.IOException(
+          s"Invalid Parquet footer length: $footerLen (file length: $fileLen)"
+        )
       stream.seek(fileLen - 8 - footerLen)
       val footerBytes = new Array[Byte](footerLen)
       stream.readFully(footerBytes)
@@ -215,7 +234,12 @@ class HadoopParquetRepository(
   ): Iterator[A] =
     maxRows.fold(source.iterator) { n =>
       val effective = n.min(Int.MaxValue.toLong)
-      if (effective < n)
+      if (
+        effective < n && HadoopParquetRepository.warnedLargeLimit.compareAndSet(
+          false,
+          true
+        )
+      )
         System.err.println(
           s"[parqueteer] warning: --limit $n exceeds the maximum supported value (${Int.MaxValue}); clamped to ${Int.MaxValue}"
         )
@@ -604,7 +628,7 @@ class HadoopParquetRepository(
       Try {
         val path = new HadoopPath(location.path)
         val fs = FileSystem.get(path.toUri, hadoopConfig)
-        if (!fs.delete(path, false))
+        if (!fs.delete(path, false) && fs.exists(path))
           throw new java.io.IOException(s"Failed to delete ${location.path}")
       }
     }

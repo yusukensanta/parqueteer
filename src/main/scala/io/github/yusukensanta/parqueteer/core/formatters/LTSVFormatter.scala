@@ -15,9 +15,10 @@ class LTSVFormatter extends OutputFormatter {
   ): String = {
     val rows = content.rows.map(rowToLtsv).mkString("\n")
     if (content.isPartial)
-      rows + s"\n# partial:true\ttotal_rows:${content.totalRows}\tshown:${content.rows.size}"
-    else
-      rows
+      System.err.println(
+        s"[parqueteer] ${content.totalRows} rows total (showing first ${content.rows.size})"
+      )
+    rows
   }
 
   override def formatSchema(schema: ParquetSchema): String =
