@@ -17,7 +17,7 @@ object EnvConfig {
 
   def parsedDefaultFormat: Option[OutputFormat] =
     sys.env.get("PARQUETEER_DEFAULT_FORMAT").flatMap { s =>
-      s.toLowerCase match {
+      val parsed = s.toLowerCase match {
         case "table"    => Some(OutputFormat.Table)
         case "json"     => Some(OutputFormat.JSON)
         case "csv"      => Some(OutputFormat.CSV)
@@ -27,18 +27,33 @@ object EnvConfig {
         case "ltsv"     => Some(OutputFormat.LTSV)
         case _          => None
       }
+      if (parsed.isEmpty)
+        System.err.println(
+          s"[parqueteer] warning: PARQUETEER_DEFAULT_FORMAT=$s is not a recognized format; ignoring"
+        )
+      parsed
     }
 
   def parsedColorMode: ColorMode =
     if (sys.env.get("NO_COLOR").exists(_.nonEmpty)) ColorMode.Never
     else
-      sys.env
-        .get("PARQUETEER_COLOR")
-        .flatMap(ColorMode.fromString)
-        .getOrElse(ColorMode.Auto)
+      sys.env.get("PARQUETEER_COLOR") match {
+        case None => ColorMode.Auto
+        case Some(s) =>
+          ColorMode.fromString(s) match {
+            case Some(mode) => mode
+            case None =>
+              System.err.println(
+                s"[parqueteer] warning: PARQUETEER_COLOR=$s is not recognized (auto/always/never); ignoring"
+              )
+              ColorMode.Auto
+          }
+      }
 
   def verbose: Boolean =
-    sys.env.get("PARQUETEER_VERBOSE").exists(_.toLowerCase == "true")
+    sys.env.get("PARQUETEER_VERBOSE").exists { v =>
+      Set("true", "1", "yes", "on").contains(v.toLowerCase)
+    }
 
   def parsedMaxRows: Option[Long] =
     sys.env.get("PARQUETEER_MAX_ROWS").flatMap { raw =>

@@ -227,7 +227,7 @@ class RowStreamWriterTest extends AnyFlatSpec with Matchers {
       "m_col" -> CellValue.I64(2L)
     )
     val out = run(OutputFormat.CSV, List(orderedRow))
-    val header = out.split("\n").head
+    val header = out.split("\r?\n").head
     header shouldBe "z_col,a_col,m_col"
   }
 
@@ -269,7 +269,7 @@ class RowStreamWriterTest extends AnyFlatSpec with Matchers {
       "normal" -> CellValue.Str("val2")
     )
     val out = run(OutputFormat.CSV, List(row))
-    val header = out.split("\n").head
+    val header = out.split("\r?\n").head
     header shouldBe "\"a,b\",normal"
   }
 }

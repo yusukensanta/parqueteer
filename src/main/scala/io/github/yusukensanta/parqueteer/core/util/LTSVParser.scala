@@ -18,7 +18,8 @@ object LTSVParser {
     lines.zipWithIndex
       .filter { case (line, _) => line.nonEmpty }
       .map { case (line, lineIdx) =>
-        line
+        val pairs = line
+          .stripSuffix("\r")
           .split("\t", -1)
           .map { field =>
             val colon = field.indexOf(':')
@@ -34,6 +35,13 @@ object LTSVParser {
               )
             label -> TypeInferrer.inferCsvValue(value)
           }
-          .toMap
+        val seen = scala.collection.mutable.Set.empty[String]
+        pairs.foreach { case (label, _) =>
+          if (!seen.add(label))
+            Console.err.println(
+              s"[parqueteer] warning: LTSV line ${lineIdx + 1}: duplicate label '$label' — last value wins"
+            )
+        }
+        pairs.toMap
       }
 }

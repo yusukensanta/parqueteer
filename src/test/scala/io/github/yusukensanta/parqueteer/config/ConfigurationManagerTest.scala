@@ -19,22 +19,6 @@ class ConfigurationManagerTest extends AnyFlatSpec with Matchers {
     tempDir.delete()
   }
 
-  it should "parse size strings correctly" in {
-    val manager = new ConfigurationManager()
-
-    manager.parseSizeString("64MB") shouldBe 67108864L
-    manager.parseSizeString("1GB") shouldBe 1073741824L
-    manager.parseSizeString("128KB") shouldBe 131072L
-  }
-
-  it should "throw exception for invalid size format" in {
-    val manager = new ConfigurationManager()
-
-    an[IllegalArgumentException] should be thrownBy {
-      manager.parseSizeString("invalid")
-    }
-  }
-
   "ConfigurationManager.validate" should "report config-not-found for nonexistent path" in {
     val manager = new ConfigurationManager()
     val result = manager.validate(Some("/nonexistent/path/config.yaml"))

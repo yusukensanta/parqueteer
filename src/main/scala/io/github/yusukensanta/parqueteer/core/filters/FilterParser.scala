@@ -63,6 +63,7 @@ private class FilterParserImpl(schema: Option[MessageType]) {
         case ',' => buf += Token.Comma; i += 1
         case '.' => buf += Token.Dot; i += 1
         case '"' =>
+          val start = i
           i += 1
           val sb = new StringBuilder
           while (i < n && input(i) != '"') {
@@ -70,7 +71,11 @@ private class FilterParserImpl(schema: Option[MessageType]) {
               sb.append(input(i + 1)); i += 2
             } else { sb.append(input(i)); i += 1 }
           }
-          if (i < n) i += 1
+          if (i >= n)
+            throw new IllegalArgumentException(
+              s"Unterminated string literal starting at position $start in filter expression"
+            )
+          i += 1
           buf += Token.Str(sb.toString)
         case '!' if i + 1 < n && input(i + 1) == '=' =>
           buf += Token.Op("!="); i += 2
