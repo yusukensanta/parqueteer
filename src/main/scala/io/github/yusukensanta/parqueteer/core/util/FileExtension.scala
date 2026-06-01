@@ -9,8 +9,8 @@ object FileExtension {
     * present.
     */
   def of(path: String): String = {
-    val fileName = path.split("/").last.split("\\?").head
-    if (fileName.contains(".")) fileName.split("\\.").last.toLowerCase
-    else "unknown"
+    val fn = path.split("/").last.split("\\?").head
+    val dot = fn.lastIndexOf('.')
+    if (dot <= 0) "unknown" else fn.substring(dot + 1).toLowerCase
   }
 }

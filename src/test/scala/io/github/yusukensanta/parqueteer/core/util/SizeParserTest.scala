@@ -35,6 +35,15 @@ class SizeParserTest
     SizeParser.parse("1gb") shouldBe 1073741824L
   }
 
+  it should "accept bare single-letter units (M, G, K)" in {
+    SizeParser.parse("128M") shouldBe 134217728L
+    SizeParser.parse("128m") shouldBe 134217728L
+    SizeParser.parse("1G") shouldBe 1073741824L
+    SizeParser.parse("1g") shouldBe 1073741824L
+    SizeParser.parse("64K") shouldBe 65536L
+    SizeParser.parse("64k") shouldBe 65536L
+  }
+
   it should "throw IllegalArgumentException for invalid format" in {
     an[IllegalArgumentException] should be thrownBy SizeParser.parse("invalid")
   }
