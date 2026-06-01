@@ -508,45 +508,48 @@ class HadoopParquetRepository(
     setupHadoopConfiguration(file.location).flatMap { hadoopConfig =>
       Try {
         val path = new HadoopPath(file.location.path)
-        val fs = FileSystem.get(path.toUri, hadoopConfig)
         val issues = scala.collection.mutable.ListBuffer[String]()
 
-        if (!fs.exists(path)) {
-          issues += "File does not exist"
-        } else {
-          val inputFile = HadoopInputFile.fromPath(path, hadoopConfig)
-          Try(ParquetFileReader.open(inputFile)) match {
-            case scala.util.Failure(ex) =>
-              issues += s"File cannot be opened as Parquet: ${ex.getMessage}"
-            case scala.util.Success(reader) =>
-              Using.resource(reader) { r =>
-                val footer = r.getFooter
-                val schema = footer.getFileMetaData.getSchema
-                if (schema.getColumns.isEmpty) issues += "Schema has no columns"
+        Try(
+          ParquetFileReader.open(HadoopInputFile.fromPath(path, hadoopConfig))
+        ) match {
+          case scala.util.Failure(_: java.io.FileNotFoundException) =>
+            issues += "File does not exist"
+          case scala.util.Failure(ex) =>
+            issues += s"File cannot be opened as Parquet: ${ex.getMessage}"
+          case scala.util.Success(reader) =>
+            Using.resource(reader) { r =>
+              Try(r.getFooter) match {
+                case scala.util.Failure(ex) =>
+                  issues += s"Cannot read file footer: ${ex.getMessage}"
+                case scala.util.Success(footer) =>
+                  val schema = footer.getFileMetaData.getSchema
+                  if (schema.getColumns.isEmpty)
+                    issues += "Schema has no columns"
 
-                val blocks = footer.getBlocks.asScala.toList
-                if (blocks.isEmpty) issues += "File has no row groups"
+                  val blocks = footer.getBlocks.asScala.toList
+                  if (blocks.isEmpty) issues += "File has no row groups"
 
-                val indicesToCheck = spotCheckIndices(blocks.size, deep)
-                blocks.zipWithIndex.foreach { case (block, index) =>
-                  if (block.getRowCount <= 0)
-                    issues += s"Row group $index has invalid row count: ${block.getRowCount}"
-                  if (indicesToCheck.contains(index)) {
-                    Try(r.readNextRowGroup()) match {
-                      case scala.util.Failure(ex) =>
-                        issues += s"Row group $index data is corrupt or truncated: ${ex.getMessage}"
-                      case _ =>
-                    }
-                  } else {
-                    Try(r.skipNextRowGroup()) match {
-                      case scala.util.Failure(ex) =>
-                        issues += s"Row group $index could not be skipped: ${ex.getMessage}"
-                      case _ =>
+                  val indicesToCheck = spotCheckIndices(blocks.size, deep)
+                  blocks.zipWithIndex.foreach { case (block, index) =>
+                    if (block.getRowCount <= 0)
+                      issues += s"Row group $index has invalid row count: ${block.getRowCount}"
+                    if (indicesToCheck.contains(index)) {
+                      Try(r.readNextRowGroup()) match {
+                        case scala.util.Failure(ex) =>
+                          issues += s"Row group $index data is corrupt or truncated: ${ex.getMessage}"
+                        case _ =>
+                      }
+                    } else {
+                      Try(r.skipNextRowGroup()) match {
+                        case scala.util.Failure(ex) =>
+                          issues += s"Row group $index could not be skipped: ${ex.getMessage}"
+                        case _ =>
+                      }
                     }
                   }
-                }
               }
-          }
+            }
         }
 
         issues.toList

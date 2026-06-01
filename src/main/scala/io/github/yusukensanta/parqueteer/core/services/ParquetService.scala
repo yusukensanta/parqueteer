@@ -164,10 +164,21 @@ class ParquetService(
               if s
                 .map(f => (f.name, f.dataType, f.isOptional))
                 .toSet != firstSet =>
+            val thisSet = s.map(f => (f.name, f.dataType, f.isOptional)).toSet
+            val missing = firstSet -- thisSet
+            val extra = thisSet -- firstSet
+            val diffMsg = List(
+              if (missing.nonEmpty)
+                s"missing: ${missing.map(_._1).toList.sorted.mkString(", ")}"
+              else "",
+              if (extra.nonEmpty)
+                s"extra: ${extra.map(_._1).toList.sorted.mkString(", ")}"
+              else ""
+            ).filter(_.nonEmpty).mkString("; ")
             Left(
               ParqueteerError.InvalidFormat(
                 inputPaths(i),
-                s"Schema mismatch at file '${inputPaths(i)}'. Use --schema-mode union to allow schema differences."
+                s"Schema mismatch at file '${inputPaths(i)}' ($diffMsg). Use --schema-mode union to allow schema differences."
               )
             )
         }

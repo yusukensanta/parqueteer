@@ -30,6 +30,20 @@ class CloudCredentialManagerTest extends AnyFlatSpec with Matchers {
     manager.get shouldBe a[AzureCredentialManager]
   }
 
+  "CloudCredentialManager.firstSuccess" should "aggregate all failure messages and preserve the last cause" in {
+    val err1 = new RuntimeException("strategy-1-failed")
+    val err2 = new RuntimeException("strategy-2-failed")
+    val result = CloudCredentialManager.firstSuccess[Int](
+      "No strategies worked:",
+      List(() => scala.util.Failure(err1), () => scala.util.Failure(err2))
+    )
+    result.isFailure shouldBe true
+    val ex = result.failed.get
+    ex.getMessage should include("strategy-1-failed")
+    ex.getMessage should include("strategy-2-failed")
+    ex.getCause shouldBe err2
+  }
+
   it should "return None for LocalPath" in {
     val location = LocalPath("/local/path")
     val manager = CloudCredentialManager.forLocation(location)

@@ -63,7 +63,7 @@ private[repositories] object ParquetSchemaBuilder {
     }
 
     val builder = Types.buildMessage()
-    seenKeys.toList.sorted.foreach { key =>
+    seenKeys.toList.foreach { key =>
       val rank = rankByKey.getOrElse(key, TypeRank.String)
       val (primitive, annotation) = rankToParquetType(rank)
       builder.addField(

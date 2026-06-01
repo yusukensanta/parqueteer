@@ -495,4 +495,18 @@ class ParquetSchemaBuilderTest extends AnyFlatSpec with Matchers {
     val mt = ParquetSchemaBuilder.inferSchemaFromData(data)
     fieldByName(mt, "n").getPrimitiveTypeName shouldBe PrimitiveTypeName.INT64
   }
+
+  it should "preserve source insertion order (not sort alphabetically)" in {
+    // Source order: z, a, m — alphabetical would give a, m, z
+    val data = List(
+      scala.collection.immutable.ListMap[String, CellValue](
+        "z_col" -> CellValue.I64(3L),
+        "a_col" -> CellValue.I64(1L),
+        "m_col" -> CellValue.I64(2L)
+      )
+    )
+    val mt = ParquetSchemaBuilder.inferSchemaFromData(data)
+    val names = mt.getFields.asScala.map(_.getName).toList
+    names shouldBe List("z_col", "a_col", "m_col")
+  }
 }
