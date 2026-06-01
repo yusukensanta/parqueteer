@@ -33,7 +33,21 @@ class TableFormatter extends OutputFormatter {
       }
     val columns = extractColumns(rows, schema)
 
-    val columnWidths = calculateColumnWidths(columns, rows)
+    // Pre-format all cell values once: calculateColumnWidths and drawRow both
+    // need the formatted string, so computing it twice per cell is wasteful.
+    val fmtRows = rows.map(row =>
+      columns.map(col => row.get(col).map(formatValue).getOrElse("null"))
+    )
+    val columnWidths = {
+      val ws = columns.map(c => displayWidth(c)).toArray
+      fmtRows.foreach(vs =>
+        vs.zipWithIndex.foreach { case (s, i) =>
+          val w = displayWidth(s)
+          if (w > ws(i)) ws(i) = w
+        }
+      )
+      ws.map(w => math.max(MinColumnWidth, math.min(MaxColumnWidth, w))).toList
+    }
     val sb = new StringBuilder()
 
     sb.append(drawTopBorder(columnWidths))
@@ -45,8 +59,8 @@ class TableFormatter extends OutputFormatter {
     sb.append(drawSeparator(columnWidths))
     sb.append("\n")
 
-    rows.foreach { row =>
-      sb.append(drawDataRow(row, columns, columnWidths))
+    fmtRows.foreach { vs =>
+      sb.append(drawRow(vs, columnWidths))
       sb.append("\n")
     }
 
@@ -159,17 +173,6 @@ class TableFormatter extends OutputFormatter {
   private[formatters] def drawSeparator(widths: List[Int]): String = {
     val segments = widths.map("─" * (_))
     "├" + segments.mkString("┼") + "┤"
-  }
-
-  private def drawDataRow(
-      row: Map[String, CellValue],
-      columns: List[String],
-      widths: List[Int]
-  ): String = {
-    val values = columns.map { col =>
-      row.get(col).map(v => formatValue(v)).getOrElse("null")
-    }
-    drawRow(values, widths)
   }
 
   private[formatters] def drawRow(

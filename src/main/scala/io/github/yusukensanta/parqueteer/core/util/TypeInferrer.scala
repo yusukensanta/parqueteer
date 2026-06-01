@@ -32,7 +32,9 @@ object TypeInferrer {
       Try(s.toDouble).map(CellValue.F64.apply).getOrElse(CellValue.Str(s))
     else if (IntPattern.matcher(s).matches())
       Try(s.toLong)
-        .filter(_.toString == s)
+        .filter(
+          _.toString == s
+        ) // rejects leading-zero strings ("007" → Str, not I64)
         .map(CellValue.I64.apply)
         .getOrElse(CellValue.Str(s))
     else CellValue.Str(s)

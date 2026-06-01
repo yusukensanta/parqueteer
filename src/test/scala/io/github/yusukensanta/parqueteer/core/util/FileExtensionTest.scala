@@ -43,4 +43,9 @@ class FileExtensionTest extends AnyFlatSpec with Matchers {
   it should "return the real extension for files with multiple dots" in {
     FileExtension.of("archive.tar.gz") shouldBe "gz"
   }
+
+  it should "return unknown for a trailing dot (empty extension)" in {
+    FileExtension.of("file.") shouldBe "unknown"
+    FileExtension.of("/path/to/file.") shouldBe "unknown"
+  }
 }

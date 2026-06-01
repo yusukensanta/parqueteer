@@ -10,6 +10,7 @@ object SizeParser {
     "G" -> 1024L * 1024L * 1024L,
     "GB" -> 1024L * 1024L * 1024L
   )
+  // Longest alternative first: G(?:B)? before bare B prevents "GB" matching as G + leftover B.
   private val pattern = """(\d+(?:\.\d+)?)\s*(G(?:B)?|M(?:B)?|K(?:B)?|B)""".r
 
   def parse(sizeStr: String): Long =

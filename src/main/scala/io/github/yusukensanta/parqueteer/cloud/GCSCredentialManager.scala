@@ -113,29 +113,16 @@ class GCSCredentialManager extends CloudCredentialManager {
       )
     )
 
-  private def tryServiceAccountFile(): Try[String] = {
-    Try {
-      val credPath = sys.env
-        .get("GOOGLE_APPLICATION_CREDENTIALS")
-        .getOrElse(
-          throw new RuntimeException(
-            "GOOGLE_APPLICATION_CREDENTIALS not set"
-          )
-        )
-
-      if (!Files.exists(Paths.get(credPath))) {
-        throw new RuntimeException(
-          s"Credentials file not found: $credPath"
-        )
-      }
-
-      // Validate JSON format
-      Using.resource(new FileInputStream(credPath)) { stream =>
-        ServiceAccountCredentials.fromStream(stream)
-      }
-
-      credPath
+  private def tryServiceAccountFile(): Try[String] = Try {
+    val credPath = sys.env
+      .get("GOOGLE_APPLICATION_CREDENTIALS")
+      .getOrElse(
+        throw new RuntimeException("GOOGLE_APPLICATION_CREDENTIALS not set")
+      )
+    Using.resource(new FileInputStream(credPath)) { stream =>
+      ServiceAccountCredentials.fromStream(stream)
     }
+    credPath
   }
 
   private def tryEnvironmentVariable(): Try[String] = {

@@ -11,6 +11,7 @@ object FileExtension {
   def of(path: String): String = {
     val fn = path.split("/").last.split("\\?").head
     val dot = fn.lastIndexOf('.')
-    if (dot <= 0) "unknown" else fn.substring(dot + 1).toLowerCase
+    if (dot <= 0 || dot == fn.length - 1) "unknown"
+    else fn.substring(dot + 1).toLowerCase
   }
 }
