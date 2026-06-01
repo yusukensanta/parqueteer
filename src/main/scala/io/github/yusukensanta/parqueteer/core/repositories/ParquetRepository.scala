@@ -55,6 +55,11 @@ trait ParquetRepository {
   def readStats(file: ParquetFile): Try[FileStats]
 }
 
+object HadoopParquetRepository {
+  private val shutdownHookRegistered =
+    new java.util.concurrent.atomic.AtomicBoolean(false)
+}
+
 class HadoopParquetRepository(
     profile: Option[String] = None,
     region: Option[String] = None
@@ -81,7 +86,8 @@ class HadoopParquetRepository(
     }
 
   // Close S3A/GCS/ABFS connection pools on JVM exit to prevent background thread leaks
-  Runtime.getRuntime.addShutdownHook(new Thread(() => FileSystem.closeAll()))
+  if (HadoopParquetRepository.shutdownHookRegistered.compareAndSet(false, true))
+    Runtime.getRuntime.addShutdownHook(new Thread(() => FileSystem.closeAll()))
 
   // ── Shared footer infrastructure ──────────────────────────────────────────
 

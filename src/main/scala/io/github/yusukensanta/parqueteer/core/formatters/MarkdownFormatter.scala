@@ -18,7 +18,9 @@ class MarkdownFormatter extends OutputFormatter {
     val columns = extractColumns(content.rows, schema)
     val sb = new StringBuilder()
 
-    sb.append("| ").append(columns.mkString(" | ")).append(" |\n")
+    sb.append("| ")
+      .append(columns.map(escapeCell).mkString(" | "))
+      .append(" |\n")
     sb.append("| ")
       .append(columns.map(_ => "---").mkString(" | "))
       .append(" |\n")

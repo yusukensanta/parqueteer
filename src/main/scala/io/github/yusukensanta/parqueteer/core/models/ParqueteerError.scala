@@ -58,5 +58,7 @@ object ParqueteerError:
       t.toEither.left.map {
         case e: CloudAuthException => CloudAuthError(e.provider, e.getMessage)
         case e: IllegalArgumentException => ParseError("input", e.getMessage)
-        case e                           => IOError(e)
+        case e: java.io.FileNotFoundException =>
+          FileNotFound(Option(e.getMessage).getOrElse("unknown"))
+        case e => IOError(e)
       }

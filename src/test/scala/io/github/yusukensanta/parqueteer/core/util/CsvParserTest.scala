@@ -137,6 +137,15 @@ class CsvParserTest
     records(1)(0) shouldBe "1"
   }
 
+  it should "throw IllegalArgumentException for unterminated quoted field" in {
+    an[IllegalArgumentException] should be thrownBy CsvParser.parseRfc4180(
+      "a,\"unterminated\n"
+    )
+    an[IllegalArgumentException] should be thrownBy CsvParser.parseRfc4180(
+      "\"no end"
+    )
+  }
+
   // ─── CSVFormatter → CsvParser round-trip ────────────────────────────────────
 
   private def roundTrip(

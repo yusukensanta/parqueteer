@@ -53,7 +53,9 @@ private[repositories] object ParquetRecordDecoder {
   }
 
   def convertRecordToMap(record: RowParquetRecord): Map[String, CellValue] =
-    record.iterator.map { case (key, value) => key -> decodeValue(value) }.toMap
+    record.iterator
+      .map { case (key, value) => key -> decodeValue(value) }
+      .to(scala.collection.immutable.ListMap)
 
   def postProcessTemporalFields(
       row: Map[String, CellValue],
@@ -119,7 +121,8 @@ private[repositories] object ParquetRecordDecoder {
       group: Group,
       schema: MessageType
   ): Map[String, CellValue] = {
-    val builder = Map.newBuilder[String, CellValue]
+    val builder =
+      scala.collection.immutable.ListMap.newBuilder[String, CellValue]
     var i = 0
     while (i < schema.getFieldCount) {
       if (

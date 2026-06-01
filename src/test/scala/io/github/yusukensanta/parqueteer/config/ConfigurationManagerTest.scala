@@ -104,7 +104,7 @@ class ConfigurationManagerTest extends AnyFlatSpec with Matchers {
     config.cloud.s3.bufferSize shouldBe "64MB"
     config.cloud.s3.multipartThreshold shouldBe "100MB"
     config.output.defaultFormat shouldBe "table"
-    config.output.maxRows shouldBe 1000L
+    config.output.maxRows shouldBe None
     config.performance.readBufferSize shouldBe "64MB"
     config.performance.enableCaching shouldBe true
     config.logging.level shouldBe "INFO"
@@ -165,7 +165,7 @@ class ConfigurationManagerTest extends AnyFlatSpec with Matchers {
     config.cloud.azure.accountName shouldBe Some("myaccount")
     config.cloud.azure.authMethod shouldBe "service_principal"
     config.output.defaultFormat shouldBe "json"
-    config.output.maxRows shouldBe 500L
+    config.output.maxRows shouldBe Some(500L)
     config.output.precision shouldBe 4
     config.output.showNulls shouldBe false
     config.output.colorOutput shouldBe false
