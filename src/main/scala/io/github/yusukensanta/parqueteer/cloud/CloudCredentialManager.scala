@@ -41,7 +41,7 @@ object CloudCredentialManager {
       it.next()() match {
         case s @ Success(_) => return s
         case Failure(err) =>
-          failures += err.getMessage
+          failures += Option(err.getMessage).getOrElse(err.getClass.getName)
           lastCause = err
       }
     }

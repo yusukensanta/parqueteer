@@ -187,4 +187,14 @@ class CloudCredentialManagerTest extends AnyFlatSpec with Matchers {
     conf.isSuccess shouldBe true
     conf.get.get("fs.gs.project.id") should not be null
   }
+
+  it should "use class name when getMessage returns null" in {
+    val nullMsgErr = new NullPointerException()
+    val result = CloudCredentialManager.firstSuccess[Int](
+      "All failed:",
+      List(() => scala.util.Failure(nullMsgErr))
+    )
+    result.isFailure shouldBe true
+    result.failed.get.getMessage should include("NullPointerException")
+  }
 }
