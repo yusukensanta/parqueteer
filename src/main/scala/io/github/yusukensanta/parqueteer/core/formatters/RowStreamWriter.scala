@@ -160,12 +160,13 @@ object RowStreamWriter {
     private var flushed = false
     private var warnedUnseen = false
 
-    private def cell(v: CellValue): String =
-      v.display
-        .replace("|", "\\|")
+    private def escapeStr(s: String): String =
+      s.replace("|", "\\|")
         .replace("\r\n", " ")
         .replace("\n", " ")
         .replace("\r", " ")
+
+    private def cell(v: CellValue): String = escapeStr(v.display)
 
     private def flushSample(): Unit = {
       columns = {
@@ -174,7 +175,7 @@ object RowStreamWriter {
         seen.toList
       }
       columnsSet = columns.toSet
-      out.println("| " + columns.mkString(" | ") + " |")
+      out.println("| " + columns.map(escapeStr).mkString(" | ") + " |")
       out.println("| " + columns.map(_ => "---").mkString(" | ") + " |")
       sample.foreach(r =>
         out.println(

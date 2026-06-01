@@ -174,9 +174,9 @@ object CliApp {
     val outCfg = appConfig.output
     cmd match {
       case r: ReadCommand =>
-        r.copy(maxRows = r.maxRows.orElse(Some(outCfg.maxRows)))
+        r.copy(maxRows = r.maxRows.orElse(outCfg.maxRows))
       case c: ConvertCommand =>
-        c.copy(maxRows = c.maxRows.orElse(Some(outCfg.maxRows)))
+        c.copy(maxRows = c.maxRows.orElse(outCfg.maxRows))
       case other => other
     }
   }

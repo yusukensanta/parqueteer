@@ -30,5 +30,5 @@ object CellValue:
       case Bool(b)  => b.toString
       case Date(d)  => d.toString
       case Ts(i)    => i.toString
-      case Dec(bd)  => bd.underlying.toPlainString
+      case Dec(bd)  => bd.underlying.stripTrailingZeros.toPlainString
       case Bytes(b) => java.util.Base64.getEncoder.encodeToString(b)

@@ -71,6 +71,10 @@ object CsvParser {
       }
       i += 1
     }
+    if (inQuote)
+      throw new IllegalArgumentException(
+        "Unterminated quoted field in CSV input"
+      )
     // Handle content not terminated by a newline
     if (current.nonEmpty || fields.nonEmpty)
       finishRow()

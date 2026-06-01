@@ -42,7 +42,7 @@ case class AzureConfig(
 
 case class OutputConfig(
     defaultFormat: String = "table",
-    maxRows: Long = 1000,
+    maxRows: Option[Long] = None,
     precision: Int = 2,
     showNulls: Boolean = true,
     colorOutput: Boolean = true
@@ -112,12 +112,14 @@ class ConfigurationManager {
             case Right(config) => config
             case Left(error) =>
               throw new RuntimeException(
-                s"Failed to parse configuration: ${error.getMessage}"
+                s"Failed to parse configuration: ${error.getMessage}",
+                error
               )
           }
         case Left(error) =>
           throw new RuntimeException(
-            s"Invalid YAML syntax: ${error.getMessage}"
+            s"Invalid YAML syntax: ${error.getMessage}",
+            error
           )
       }
     }

@@ -203,6 +203,11 @@ class TableFormatterTest extends AnyFlatSpec with Matchers {
     ) shouldBe "0.0000001"
   }
 
+  it should "strip trailing zeros from BigDecimal display" in {
+    formatter.formatValue(CellValue.Dec(BigDecimal("1.10"))) shouldBe "1.1"
+    formatter.formatValue(CellValue.Dec(BigDecimal("100.00"))) shouldBe "100"
+  }
+
   it should "render Boolean, Int, and Float columns in table output" in {
     val content = FileContent(
       rows = List(
