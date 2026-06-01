@@ -176,6 +176,41 @@ class RowStreamWriterTest extends AnyFlatSpec with Matchers {
     run(OutputFormat.LTSV, List.empty) shouldBe ""
   }
 
+  // ── Schema drift ─────────────────────────────────────────────────────────────
+  // CSV freezes columns on the first row; extra keys in later rows are dropped.
+  // Table/Markdown use a sample window (50 rows) and include all keys seen during
+  // sampling; the unseen-key warning only fires for rows arriving after the flush.
+
+  "RowStreamWriter CSV" should "drop unseen keys introduced after the header row" in {
+    val r1 = Map("a" -> CellValue.I64(1L))
+    val r2 = Map("a" -> CellValue.I64(2L), "z" -> CellValue.Str("extra"))
+    val out = run(OutputFormat.CSV, List(r1, r2))
+    val lines = out.trim.split("\r?\n")
+    lines(0) shouldBe "a"
+    lines(1) shouldBe "1"
+    lines(2) shouldBe "2"
+    out should not include "extra"
+  }
+
+  "RowStreamWriter Table" should "include extra keys that appear within the sample window" in {
+    val r1 = Map("a" -> CellValue.I64(1L))
+    val r2 = Map("a" -> CellValue.I64(2L), "z" -> CellValue.Str("extra"))
+    val out = run(OutputFormat.Table, List(r1, r2))
+    out should include("a")
+    out should include("z")
+    out should include("1")
+    out should include("extra")
+  }
+
+  "RowStreamWriter Markdown" should "include extra keys that appear within the sample window" in {
+    val r1 = Map("a" -> CellValue.I64(1L))
+    val r2 = Map("a" -> CellValue.I64(2L), "z" -> CellValue.Str("extra"))
+    val out = run(OutputFormat.Markdown, List(r1, r2))
+    out should include("a")
+    out should include("z")
+    out should include("extra")
+  }
+
   // ── Pretty (delegates to NDJSON) ─────────────────────────────────────────────
 
   "RowStreamWriter Pretty" should "emit one JSON object per line (same as NDJSON)" in {

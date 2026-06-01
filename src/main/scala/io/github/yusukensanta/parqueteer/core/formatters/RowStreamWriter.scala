@@ -48,6 +48,8 @@ object RowStreamWriter {
 
   private class CSVRowStreamWriter(out: PrintStream) extends RowStreamWriter {
     private var columns: List[String] = Nil
+    private var columnsSet: Set[String] = Set.empty
+    private var warnedUnseen = false
     private def escape(s: String): String = {
       if (
         s.contains(",") || s.contains("\"") || s.contains("\n") || s
@@ -61,7 +63,16 @@ object RowStreamWriter {
         val seen = scala.collection.mutable.LinkedHashSet.empty[String]
         row.keysIterator.foreach(seen += _)
         columns = seen.toList
+        columnsSet = columns.toSet
         out.println(columns.mkString(","))
+      } else if (!warnedUnseen) {
+        val unseen = row.keySet -- columnsSet
+        if (unseen.nonEmpty) {
+          Console.err.println(
+            s"[parqueteer] warning: CSV writer dropping unseen column keys: ${unseen.mkString(", ")}"
+          )
+          warnedUnseen = true
+        }
       }
       out.println(
         columns
@@ -77,8 +88,10 @@ object RowStreamWriter {
         : scala.collection.mutable.ListBuffer[Map[String, CellValue]] =
       scala.collection.mutable.ListBuffer.empty
     private var columns: List[String] = Nil
+    private var columnsSet: Set[String] = Set.empty
     private var widths: List[Int] = Nil
     private var flushed = false
+    private var warnedUnseen = false
 
     private def flushSample(): Unit = {
       columns = {
@@ -86,6 +99,7 @@ object RowStreamWriter {
         sample.foreach(_.keysIterator.foreach(seen += _))
         seen.toList
       }
+      columnsSet = columns.toSet
       widths = tf.calculateColumnWidths(columns, sample.toList)
       out.println(tf.drawTopBorder(widths))
       out.println(tf.drawRow(columns, widths))
@@ -106,6 +120,15 @@ object RowStreamWriter {
         sample += row
         if (sample.size >= SampleSize) flushSample()
       } else {
+        if (!warnedUnseen) {
+          val unseen = row.keySet -- columnsSet
+          if (unseen.nonEmpty) {
+            Console.err.println(
+              s"[parqueteer] warning: table writer dropping unseen column keys: ${unseen.mkString(", ")}"
+            )
+            warnedUnseen = true
+          }
+        }
         out.println(
           tf.drawRow(
             columns.map(c => row.getOrElse(c, CellValue.Null).display),
@@ -133,7 +156,9 @@ object RowStreamWriter {
         : scala.collection.mutable.ListBuffer[Map[String, CellValue]] =
       scala.collection.mutable.ListBuffer.empty
     private var columns: List[String] = Nil
+    private var columnsSet: Set[String] = Set.empty
     private var flushed = false
+    private var warnedUnseen = false
 
     private def cell(v: CellValue): String =
       v.display.replace("|", "\\|").replace("\n", " ")
@@ -144,6 +169,7 @@ object RowStreamWriter {
         sample.foreach(_.keysIterator.foreach(seen += _))
         seen.toList
       }
+      columnsSet = columns.toSet
       out.println("| " + columns.mkString(" | ") + " |")
       out.println("| " + columns.map(_ => "---").mkString(" | ") + " |")
       sample.foreach(r =>
@@ -161,6 +187,15 @@ object RowStreamWriter {
         sample += row
         if (sample.size >= SampleSize) flushSample()
       } else {
+        if (!warnedUnseen) {
+          val unseen = row.keySet -- columnsSet
+          if (unseen.nonEmpty) {
+            Console.err.println(
+              s"[parqueteer] warning: markdown writer dropping unseen column keys: ${unseen.mkString(", ")}"
+            )
+            warnedUnseen = true
+          }
+        }
         out.println(
           "| " + columns
             .map(c => cell(row.getOrElse(c, CellValue.Null)))

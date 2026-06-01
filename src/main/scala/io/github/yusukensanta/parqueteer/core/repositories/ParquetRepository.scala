@@ -68,6 +68,9 @@ class HadoopParquetRepository(
     scala.collection.concurrent.TrieMap
       .empty[String, (MessageType, List[BlockMetaData])]
 
+  private val metadataConverter =
+    new org.apache.parquet.format.converter.ParquetMetadataConverter()
+
   private def configCacheKey(location: StorageLocation): String =
     location match {
       case LocalPath(_)                    => "local"
@@ -99,14 +102,11 @@ class HadoopParquetRepository(
 
   private def parseFooter(
       footerBytes: Array[Byte]
-  ): org.apache.parquet.hadoop.metadata.ParquetMetadata = {
-    val converter =
-      new org.apache.parquet.format.converter.ParquetMetadataConverter()
-    converter.readParquetMetadata(
+  ): org.apache.parquet.hadoop.metadata.ParquetMetadata =
+    metadataConverter.readParquetMetadata(
       new java.io.ByteArrayInputStream(footerBytes),
       org.apache.parquet.format.converter.ParquetMetadataConverter.NO_FILTER
     )
-  }
 
   // Returns (formatVersion, createdBy) from the raw Thrift footer
   private def parseRawMeta(footerBytes: Array[Byte]): (String, String) = {
@@ -170,6 +170,9 @@ class HadoopParquetRepository(
         val (fileSchema, blocks) = getFooter(hadoopPath, hadoopConfig)
         val totalRows = blocks.map(_.getRowCount).sum
 
+        // filter forces sequential: parquet4s evaluates predicates during
+        // deserialization, not at page-selection time, so parallel reads can't
+        // short-circuit and the overhead exceeds any concurrency benefit.
         val useParallel = config.parallelism > 1 && config.filter.isEmpty
         val rows =
           if (useParallel)
@@ -212,7 +215,8 @@ class HadoopParquetRepository(
       config: ReadConfig
   )(process: Map[String, CellValue] => Unit): Try[Long] = {
     setupHadoopConfiguration(file.location).flatMap { hadoopConfig =>
-      Try {
+      val cacheKey = new HadoopPath(file.location.path).toString
+      val result = Try {
         val path4s = Parquet4sPath(file.location.path)
         val hadoopPath = new HadoopPath(file.location.path)
         val (fileSchema, _) = getFooter(hadoopPath, hadoopConfig)
@@ -233,6 +237,10 @@ class HadoopParquetRepository(
           count
         }
       }
+      // Evict after streaming: the footer won't be needed again for this file,
+      // and keeping it would cause unbounded cache growth when many files are streamed.
+      footerCache.remove(cacheKey)
+      result
     }
   }
 
