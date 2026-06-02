@@ -164,6 +164,7 @@ private[repositories] object ParquetSchemaBuilder {
     case CellValue.I64(_)  => TypeRank.Long
     case CellValue.F32(_)  => TypeRank.Float
     case CellValue.F64(_)  => TypeRank.Double
+    case CellValue.Dec(_)  => TypeRank.Double
     case CellValue.Bool(_) => TypeRank.Boolean
     case CellValue.Date(_) => TypeRank.Date
     case CellValue.Ts(_)   => TypeRank.Timestamp

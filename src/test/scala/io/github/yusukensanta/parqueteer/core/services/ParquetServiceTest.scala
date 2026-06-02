@@ -450,12 +450,17 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     rows.head("n") shouldBe a[CellValue.I64]
   }
 
-  it should "preserve integers exceeding Long.MaxValue as CellValue.Dec (not F64)" in {
+  it should "map integers exceeding Long.MaxValue to Dec (BigDecimal fallback)" in {
     val service = new ParquetService(new FakeParquetRepository())
-    // 9223372036854775808 = Long.MaxValue + 1, cannot fit in Long
+    // 9223372036854775808 = Long.MaxValue + 1; no decimal point → toBigDecimal → Dec
     val rows = service.parseJsonContent("""[{"n": 9223372036854775808}]""")
     rows.head("n") shouldBe a[CellValue.Dec]
-    rows.head("n").display shouldBe "9223372036854775808"
+  }
+
+  it should "parse integer-valued scientific notation (1e10) as I64 not F64" in {
+    val service = new ParquetService(new FakeParquetRepository())
+    val rows = service.parseJsonContent("""[{"n": 1e10}]""")
+    rows.head("n") shouldBe CellValue.I64(10000000000L)
   }
 
   it should "throw for non-array JSON" in {

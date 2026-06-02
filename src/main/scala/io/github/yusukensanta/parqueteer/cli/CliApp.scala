@@ -331,8 +331,13 @@ object CliApp {
         }
       }
       // Close the document before reporting errors so output is well-formed
-      // (e.g., JSON array gets its closing `]`, table gets its bottom border)
-      writer.end()
+      // (e.g., JSON array gets its closing `]`, table gets its bottom border).
+      // Swallow writer.end() failures — they must not mask the real read result.
+      scala.util.Try(writer.end()).failed.foreach { ex =>
+        System.err.println(
+          s"[parqueteer] warning: error flushing output: ${ex.getMessage}"
+        )
+      }
       result match {
         case Right(_) => 0
         case Left(error) =>
@@ -634,9 +639,25 @@ object CliApp {
               inputPath,
               ReadConfig(maxRows = conversionConfig.maxRows)
             )(writer.writeRow)
-          writer.end()
-          failed = result.isLeft
-          result.map(_ => ())
+          // Swallow writer.end() failures — they must not mask the real read result.
+          scala.util.Try(writer.end()).failed.foreach { ex =>
+            System.err.println(
+              s"[parqueteer] warning: error flushing output: ${ex.getMessage}"
+            )
+          }
+          // PrintStream swallows I/O exceptions; checkError() surfaces disk-full / broken-pipe.
+          val writeError = ps.checkError()
+          failed = result.isLeft || writeError
+          if (writeError && result.isRight)
+            Left(
+              ParqueteerError.IOError(
+                new java.io.IOException(
+                  "Output stream write error (disk full or broken pipe)"
+                )
+              )
+            )
+          else
+            result.map(_ => ())
         } finally {
           ps.close()
           if (failed) scala.util.Try(outFile.delete(swallowIOExceptions = true))
