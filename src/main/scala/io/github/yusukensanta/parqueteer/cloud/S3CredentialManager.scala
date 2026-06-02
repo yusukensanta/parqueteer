@@ -187,7 +187,11 @@ class S3CredentialManager(profile: Option[String] = None)
         .getOrElse("default")
       val provider = ProfileCredentialsProvider.create(profileName)
       val credentials = provider.resolveCredentials()
-      (credentials.accessKeyId(), credentials.secretAccessKey(), None)
+      val sessionToken = credentials match {
+        case s: AwsSessionCredentials => Some(s.sessionToken())
+        case _                        => None
+      }
+      (credentials.accessKeyId(), credentials.secretAccessKey(), sessionToken)
     }
   }
 }

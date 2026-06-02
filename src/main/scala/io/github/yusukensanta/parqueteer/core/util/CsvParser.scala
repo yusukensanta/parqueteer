@@ -22,10 +22,11 @@ object CsvParser {
           throw new IllegalArgumentException(
             s"Row ${idx + 2} has ${normalized.length} fields, expected ${headers.length}"
           )
-        headers
-          .zip(normalized)
-          .map { case (h, v) => h -> TypeInferrer.inferCsvValue(v) }
-          .toMap
+        scala.collection.immutable.ListMap.from(
+          headers.zip(normalized).map { case (h, v) =>
+            h -> TypeInferrer.inferCsvValue(v)
+          }
+        )
       }
     }
   }

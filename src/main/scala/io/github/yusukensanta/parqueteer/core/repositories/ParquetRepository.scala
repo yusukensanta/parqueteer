@@ -269,7 +269,7 @@ class HadoopParquetRepository(
           count
         }
       }
-      footerCache.remove(cacheKey)
+      if (result.isFailure) footerCache.remove(cacheKey)
       result
     }
   }

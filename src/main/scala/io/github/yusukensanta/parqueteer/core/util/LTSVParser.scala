@@ -16,7 +16,7 @@ object LTSVParser {
 
   def parseLines(lines: Iterator[String]): Iterator[Map[String, CellValue]] =
     lines.zipWithIndex
-      .filter { case (line, _) => line.nonEmpty }
+      .filter { case (line, _) => line.strip.nonEmpty }
       .map { case (line, lineIdx) =>
         val pairs = line
           .stripSuffix("\r")

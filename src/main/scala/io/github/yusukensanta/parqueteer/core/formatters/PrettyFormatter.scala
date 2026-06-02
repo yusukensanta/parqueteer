@@ -177,7 +177,7 @@ class PrettyFormatter(useColors: Boolean = sys.env.get("NO_COLOR").isEmpty)
     val paddedValues =
       columns.zip(widths).map { case (col, width) =>
         val cv = row.getOrElse(col, CellValue.Null)
-        val formatted = cv.display
+        val formatted = tableFormatter.truncate(cv.display, width)
         val colored = colorizeFormatted(formatted, cv)
         val padding = " " * (width - tableFormatter.displayWidth(formatted))
         colored + padding

@@ -188,7 +188,7 @@ class TableFormatter extends OutputFormatter {
 
   private[formatters] def formatValue(value: CellValue): String = value.display
 
-  private def truncate(str: String, maxWidth: Int): String = {
+  private[formatters] def truncate(str: String, maxWidth: Int): String = {
     if (displayWidth(str) <= maxWidth) str
     else {
       val sb = new java.lang.StringBuilder
