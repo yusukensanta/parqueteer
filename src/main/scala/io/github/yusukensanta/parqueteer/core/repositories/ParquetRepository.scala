@@ -302,12 +302,11 @@ class HadoopParquetRepository(
 
     val threadCount =
       math.min(config.parallelism, math.max(1, selectedBlocks.size))
-    implicit val ec: ExecutionContextExecutorService =
-      ExecutionContext.fromExecutorService(
-        Executors.newFixedThreadPool(threadCount)
-      )
+    val rawEc = Executors.newFixedThreadPool(threadCount)
 
     try {
+      implicit val ec: ExecutionContextExecutorService =
+        ExecutionContext.fromExecutorService(rawEc)
       val requestedNames =
         requestedSchema.getFields.asScala.map(_.getName).toSet
       val futures = selectedBlocks.map { block =>
@@ -319,29 +318,32 @@ class HadoopParquetRepository(
             )
             if (projected.isEmpty) colChunks else projected
           }
-          val rangeStart = relevantChunks.map(_.getStartingPos).min
-          val rangeLength =
-            relevantChunks
-              .map(c => c.getStartingPos + c.getTotalSize)
-              .max - rangeStart
-          val readOptions = org.apache.parquet.ParquetReadOptions
-            .builder()
-            .withRange(rangeStart, rangeLength)
-            .build()
-          Using.resource(
-            ParquetFileReader.open(
-              HadoopInputFile.fromPath(path, conf),
-              readOptions
-            )
-          ) { reader =>
-            val pageStore = reader.readNextRowGroup()
-            if (pageStore == null) List.empty[Map[String, CellValue]]
-            else
-              ParquetRecordDecoder.decodePageStore(
-                pageStore,
-                fileSchema,
-                requestedSchema
+          if (relevantChunks.isEmpty) List.empty[Map[String, CellValue]]
+          else {
+            val rangeStart = relevantChunks.map(_.getStartingPos).min
+            val rangeLength =
+              relevantChunks
+                .map(c => c.getStartingPos + c.getTotalSize)
+                .max - rangeStart
+            val readOptions = org.apache.parquet.ParquetReadOptions
+              .builder()
+              .withRange(rangeStart, rangeLength)
+              .build()
+            Using.resource(
+              ParquetFileReader.open(
+                HadoopInputFile.fromPath(path, conf),
+                readOptions
               )
+            ) { reader =>
+              val pageStore = reader.readNextRowGroup()
+              if (pageStore == null) List.empty[Map[String, CellValue]]
+              else
+                ParquetRecordDecoder.decodePageStore(
+                  pageStore,
+                  fileSchema,
+                  requestedSchema
+                )
+            }
           }
         }
       }
@@ -363,8 +365,8 @@ class HadoopParquetRepository(
         case None        => allRows
       }
     } finally {
-      ec.shutdown()
-      if (!ec.awaitTermination(30, java.util.concurrent.TimeUnit.SECONDS))
+      rawEc.shutdown()
+      if (!rawEc.awaitTermination(30, java.util.concurrent.TimeUnit.SECONDS))
         Console.err.println(
           "[parqueteer] warning: parallel read executor did not terminate within 30s — some cloud connections may remain open"
         )
@@ -673,12 +675,17 @@ class HadoopParquetRepository(
 
   private def numericMinMax[T: Ordering](
       withValues: List[org.apache.parquet.column.statistics.Statistics[?]],
-      extract: PartialFunction[Any, T]
+      extract: PartialFunction[Any, T],
+      filter: T => Boolean = (_: T) => true
   ): (Option[String], Option[String]) = {
     val mins =
-      withValues.flatMap(s => Option(s.genericGetMin()).collect(extract))
+      withValues.flatMap(s =>
+        Option(s.genericGetMin()).collect(extract).filter(filter)
+      )
     val maxs =
-      withValues.flatMap(s => Option(s.genericGetMax()).collect(extract))
+      withValues.flatMap(s =>
+        Option(s.genericGetMax()).collect(extract).filter(filter)
+      )
     (mins.minOption.map(_.toString), maxs.maxOption.map(_.toString))
   }
 
@@ -754,12 +761,14 @@ class HadoopParquetRepository(
           case PrimitiveTypeName.FLOAT =>
             numericMinMax[Float](
               withValues,
-              { case n: java.lang.Float => n.floatValue() }
+              { case n: java.lang.Float => n.floatValue() },
+              filter = v => !v.isNaN
             )
           case PrimitiveTypeName.DOUBLE =>
             numericMinMax[Double](
               withValues,
-              { case n: java.lang.Double => n.doubleValue() }
+              { case n: java.lang.Double => n.doubleValue() },
+              filter = v => !v.isNaN
             )
           case _ =>
             val minVal = withValues

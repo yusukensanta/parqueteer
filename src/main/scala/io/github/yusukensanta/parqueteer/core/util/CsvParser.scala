@@ -12,12 +12,18 @@ object CsvParser {
     if (records.isEmpty) Iterator.empty
     else {
       val headers = records.head
+      var trailingCommaWarned = false
       records.iterator.drop(1).zipWithIndex.map { case (values, idx) =>
-        // Tolerate a single trailing empty field produced by a trailing comma
         val normalized =
-          if (values.length == headers.length + 1 && values.last.isEmpty)
+          if (values.length == headers.length + 1 && values.last.isEmpty) {
+            if (!trailingCommaWarned) {
+              Console.err.println(
+                s"[parqueteer] warning: CSV row ${idx + 2} has a trailing comma — extra empty field ignored. Suppress with a consistent schema."
+              )
+              trailingCommaWarned = true
+            }
             values.init
-          else values
+          } else values
         if (normalized.length != headers.length)
           throw new IllegalArgumentException(
             s"Row ${idx + 2} has ${normalized.length} fields, expected ${headers.length}"

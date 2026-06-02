@@ -147,7 +147,7 @@ class PrettyFormatter(useColors: Boolean = sys.env.get("NO_COLOR").isEmpty)
 
   private def colorizeFormatted(formatted: String, cv: CellValue): String =
     cv match {
-      case CellValue.Null                      => colorize("null", Dim)
+      case CellValue.Null                      => colorize(formatted, Dim)
       case CellValue.I32(_) | CellValue.I64(_) => colorize(formatted, Blue)
       case CellValue.F64(_) | CellValue.F32(_) => colorize(formatted, Magenta)
       case CellValue.Bool(true)                => colorize(formatted, Green)

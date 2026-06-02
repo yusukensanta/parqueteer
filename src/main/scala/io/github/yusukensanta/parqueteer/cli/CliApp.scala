@@ -882,9 +882,12 @@ object CliApp {
     error.exitCode
   }
 
+  private val cloudUriPattern = "^[a-z][a-z0-9+\\-.]*://".r
+
   private def checkOutputWritable(
       outputPath: String
   ): Either[ParqueteerError, Unit] = {
+    if (cloudUriPattern.findFirstIn(outputPath).isDefined) return Right(())
     val parent = java.nio.file.Paths.get(outputPath).toAbsolutePath.getParent
     if (parent != null && parent.toFile.exists() && !parent.toFile.canWrite)
       Left(

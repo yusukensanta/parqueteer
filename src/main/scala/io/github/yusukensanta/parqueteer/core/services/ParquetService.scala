@@ -6,8 +6,6 @@ import io.github.yusukensanta.parqueteer.core.models.StorageLocationParser
 import io.github.yusukensanta.parqueteer.core.repositories.ParquetRepository
 import io.github.yusukensanta.parqueteer.core.filters.FilterParser
 import scala.util.{Try, Using}
-import scala.util.boundary
-import scala.util.boundary.break
 
 class ParquetService(
     repository: ParquetRepository
@@ -214,10 +212,17 @@ class ParquetService(
         )
   }
 
+  /** Thrown inside the writeContentStream feed callback to abort streaming on
+    * read error. Propagates through writeContentStream's Try wrapper so the
+    * partial output can be cleaned up before returning the real error.
+    */
+  private class MergeStreamException(val error: ParqueteerError)
+      extends RuntimeException(error.userMessage, null, true, false)
+
   /** Stream rows from each input file into a single output writer. On the first
-    * read failure, immediately exits the loop via boundary/break, deletes the
-    * partial output (merge is not atomic), and returns the error. Returns the
-    * count of rows written on success.
+    * read failure throws a sentinel exception through the writer so the partial
+    * output is deleted before returning the real error. Returns the count of
+    * rows written on success.
     */
   private def streamMerge(
       inputLocations: Vector[StorageLocation],
@@ -241,50 +246,44 @@ class ParquetService(
       rowGroupCount = 1L,
       totalRowCount = 0L
     )
-    var streamError: Option[ParqueteerError] = None
-    repository
+    val writeResult = repository
       .writeContentStream(outputLocation, explicitSchema, writeConfig) {
         write =>
-          boundary[Unit] {
-            inputLocations.zipWithIndex.foreach { case (loc, i) =>
-              onProgress(i + 1, inputLocations.size, inputPaths(i))
-              repository
-                .streamContent(ParquetFile(loc), ReadConfig()) { row =>
-                  val finalRow = scala.collection.immutable.ListMap.from(
-                    mergedFields.map(f =>
-                      f.name -> row.getOrElse(f.name, CellValue.Null)
-                    )
+          inputLocations.zipWithIndex.foreach { case (loc, i) =>
+            onProgress(i + 1, inputLocations.size, inputPaths(i))
+            repository
+              .streamContent(ParquetFile(loc), ReadConfig()) { row =>
+                val finalRow = scala.collection.immutable.ListMap.from(
+                  mergedFields.map(f =>
+                    f.name -> row.getOrElse(f.name, CellValue.Null)
                   )
-                  write(finalRow)
-                }
-                .fold(
-                  err => {
-                    streamError = Some(err match {
-                      case e: IllegalArgumentException =>
-                        ParqueteerError.ParseError("input", e.getMessage)
-                      case e => ParqueteerError.IOError(e)
-                    })
-                    break(())
-                  },
-                  _ => ()
                 )
+                write(finalRow)
+              } match {
+              case scala.util.Failure(err) =>
+                throw new MergeStreamException(err match {
+                  case e: IllegalArgumentException =>
+                    ParqueteerError.ParseError("input", e.getMessage)
+                  case e => ParqueteerError.IOError(e)
+                })
+              case _ =>
             }
           }
       }
-      .toParqueteerError
-      .flatMap(count =>
-        streamError match {
-          case Some(e) =>
-            // Delete partial output; merge is not atomic so partial writes are unusable
-            repository.deleteFile(outputLocation).recover { case delErr =>
-              logger.warn(
-                s"Failed to delete partial output at ${outputLocation.path} after merge error: ${delErr.getMessage}. Partial file may remain."
-              )
-            }: Unit
-            Left(e)
-          case None => Right(count)
+
+    writeResult match {
+      case scala.util.Failure(ex: MergeStreamException) =>
+        // Delete partial output; merge is not atomic so partial writes are unusable
+        repository.deleteFile(outputLocation) match {
+          case scala.util.Failure(delErr) =>
+            logger.warn(
+              s"Failed to delete partial output at ${outputLocation.path} after merge error: ${delErr.getMessage}. Partial file may remain."
+            )
+          case _ =>
         }
-      )
+        Left(ex.error)
+      case other => other.toParqueteerError
+    }
   }
 
   def getStats(path: String): Either[ParqueteerError, FileStats] =
