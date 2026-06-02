@@ -161,7 +161,8 @@ class HadoopParquetRepository(
       ColumnInfo(
         name = colPath,
         dataType = col.getPrimitiveType.getPrimitiveTypeName.name(),
-        isOptional = col.getMaxRepetitionLevel == 0,
+        isOptional =
+          col.getPrimitiveType.getRepetition == org.apache.parquet.schema.Type.Repetition.OPTIONAL,
         maxDefinitionLevel = col.getMaxDefinitionLevel,
         maxRepetitionLevel = col.getMaxRepetitionLevel,
         compressionType = compressionMap.getOrElse(colPath, "UNKNOWN")
@@ -191,7 +192,8 @@ class HadoopParquetRepository(
 
   def readContent(file: ParquetFile, config: ReadConfig): Try[FileContent] = {
     setupHadoopConfiguration(file.location).flatMap { hadoopConfig =>
-      Try {
+      val cacheKey = new HadoopPath(file.location.path).toString
+      val result = Try {
         val hadoopPath = new HadoopPath(file.location.path)
         val (fileSchema, blocks) = getFooter(hadoopPath, hadoopConfig)
         val totalRows = blocks.map(_.getRowCount).sum
@@ -224,6 +226,8 @@ class HadoopParquetRepository(
             rows.size.toLong < totalRows
         FileContent(rows = rows, totalRows = totalRows, isPartial = isPartial)
       }
+      if (result.isFailure) footerCache.remove(cacheKey)
+      result
     }
   }
 

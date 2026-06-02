@@ -330,10 +330,11 @@ object CliApp {
           writer.writeRow(row)
         }
       }
+      // Close the document before reporting errors so output is well-formed
+      // (e.g., JSON array gets its closing `]`, table gets its bottom border)
+      writer.end()
       result match {
-        case Right(_) =>
-          writer.end()
-          0
+        case Right(_) => 0
         case Left(error) =>
           reportError("Error", globalOptions)(error)
       }
@@ -625,6 +626,7 @@ object CliApp {
       .map(ParqueteerError.IOError.apply)
       .flatMap { case (outFile, ps) =>
         val writer = RowStreamWriter(outFormat, ps)
+        var failed = false
         try {
           writer.begin()
           val result = service
@@ -632,13 +634,13 @@ object CliApp {
               inputPath,
               ReadConfig(maxRows = conversionConfig.maxRows)
             )(writer.writeRow)
-          if (result.isRight) writer.end()
-          else {
-            ps.close()
-            scala.util.Try(outFile.delete(swallowIOExceptions = true))
-          }
+          writer.end()
+          failed = result.isLeft
           result.map(_ => ())
-        } finally ps.close()
+        } finally {
+          ps.close()
+          if (failed) scala.util.Try(outFile.delete(swallowIOExceptions = true))
+        }
       }
 
   /** parquet → parquet: read everything then re-write with the target

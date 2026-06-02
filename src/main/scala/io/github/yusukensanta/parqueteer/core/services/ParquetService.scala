@@ -271,17 +271,23 @@ class ParquetService(
           }
       }
 
+    def deletePartial(): Unit =
+      repository.deleteFile(outputLocation) match {
+        case scala.util.Failure(delErr) =>
+          logger.warn(
+            s"Failed to delete partial output at ${outputLocation.path}: ${delErr.getMessage}. Partial file may remain."
+          )
+        case _ =>
+      }
+
     writeResult match {
       case scala.util.Failure(ex: MergeStreamException) =>
-        // Delete partial output; merge is not atomic so partial writes are unusable
-        repository.deleteFile(outputLocation) match {
-          case scala.util.Failure(delErr) =>
-            logger.warn(
-              s"Failed to delete partial output at ${outputLocation.path} after merge error: ${delErr.getMessage}. Partial file may remain."
-            )
-          case _ =>
-        }
+        deletePartial()
         Left(ex.error)
+      case scala.util.Failure(ex) =>
+        // Generic write failure (e.g., disk full, schema error) — also clean up
+        deletePartial()
+        scala.util.Failure(ex).toParqueteerError
       case other => other.toParqueteerError
     }
   }
