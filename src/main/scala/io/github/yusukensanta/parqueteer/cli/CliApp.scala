@@ -419,7 +419,7 @@ object CliApp {
       case Right(inputData) =>
         if (dryRun) {
           val columns =
-            inputData.headOption.map(_.keys.toList.sorted).getOrElse(Nil)
+            inputData.headOption.map(_.keys.toList).getOrElse(Nil)
           println(s"Dry run: would write $outputPath")
           println(s"  Input:       $inputPath ($formatStr)")
           println(s"  Rows:        ${inputData.size}")

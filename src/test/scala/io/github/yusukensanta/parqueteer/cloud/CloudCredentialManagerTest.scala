@@ -158,6 +158,14 @@ class CloudCredentialManagerTest extends AnyFlatSpec with Matchers {
     mgr.endpointDisablesSsl("Http://minio.example.com") shouldBe true
   }
 
+  it should "return false (not disable SSL) when endpoint has no scheme" in {
+    // scheme-less endpoints don't start with http:// so SSL stays enabled;
+    // the warning path is exercised separately
+    val mgr = new S3CredentialManager()
+    mgr.endpointDisablesSsl("localhost:9000") shouldBe false
+    mgr.endpointDisablesSsl("minio.example.com") shouldBe false
+  }
+
   // ── GCSCredentialManager ────────────────────────────────────────────────
 
   "GCSCredentialManager.configureHadoop" should "succeed for GCSLocation (falls back to application default when no service account found)" in {

@@ -75,6 +75,10 @@ class S3CredentialManager(profile: Option[String] = None)
               // Support custom S3-compatible endpoints (RustFS, LocalStack, etc.)
               // AWS_ENDPOINT_URL is the standard override used by AWS CLI v2 and SDKs
               sys.env.get("AWS_ENDPOINT_URL").foreach { endpoint =>
+                if (!endpoint.contains("://"))
+                  Console.err.println(
+                    s"[parqueteer] warning: AWS_ENDPOINT_URL='$endpoint' has no scheme; prepend 'http://' or 'https://' to avoid connection failures"
+                  )
                 conf.set("fs.s3a.endpoint", endpoint)
                 conf.set("fs.s3a.path.style.access", "true")
                 if (endpointDisablesSsl(endpoint))

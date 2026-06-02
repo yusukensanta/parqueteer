@@ -266,14 +266,15 @@ class ParquetRecordDecoderTest extends AnyFlatSpec with Matchers {
     result("birth") shouldBe CellValue.Date(java.time.LocalDate.of(1990, 6, 15))
   }
 
-  it should "omit absent optional field from result map" in {
+  it should "emit CellValue.Null for absent optional field (not omit it)" in {
     val schema = MessageTypeParser.parseMessageType(
       "message root { optional int32 maybe_field; }"
     )
     // Create group without appending the field — repetition count stays 0
     val group = new SimpleGroupFactory(schema).newGroup()
     val result = ParquetRecordDecoder.decodeGroup(group, schema)
-    result.contains("maybe_field") shouldBe false
+    result.contains("maybe_field") shouldBe true
+    result("maybe_field") shouldBe CellValue.Null
   }
 
   it should "skip non-primitive (GROUP) field without throwing ClassCastException" in {
@@ -340,5 +341,41 @@ class ParquetRecordDecoderTest extends AnyFlatSpec with Matchers {
     result("ts") shouldBe CellValue.Ts(
       java.time.Instant.EPOCH.minus(1L, java.time.temporal.ChronoUnit.MICROS)
     )
+  }
+
+  // ── null/absent fields ────────────────────────────────────────────────────
+
+  it should "emit CellValue.Null for absent optional INT32 field" in {
+    val schema = MessageTypeParser.parseMessageType(
+      "message root { optional int32 age; required binary name (UTF8); }"
+    )
+    // only 'name' is set; 'age' is absent (repetition count == 0)
+    val group = new SimpleGroupFactory(schema)
+      .newGroup()
+      .append("name", org.apache.parquet.io.api.Binary.fromString("Alice"))
+    val result = ParquetRecordDecoder.decodeGroup(group, schema)
+    result.contains("age") shouldBe true
+    result("age") shouldBe CellValue.Null
+    result("name") shouldBe CellValue.Str("Alice")
+  }
+
+  it should "include all column keys even when all optional fields are absent" in {
+    val schema = MessageTypeParser.parseMessageType(
+      "message root { optional int32 x; optional int64 y; }"
+    )
+    val group = new SimpleGroupFactory(schema).newGroup()
+    val result = ParquetRecordDecoder.decodeGroup(group, schema)
+    result.keys.toSet shouldBe Set("x", "y")
+    result("x") shouldBe CellValue.Null
+    result("y") shouldBe CellValue.Null
+  }
+
+  it should "preserve insertion order (schema field order) when emitting Null" in {
+    val schema = MessageTypeParser.parseMessageType(
+      "message root { optional int32 z; optional int32 a; optional int32 m; }"
+    )
+    val group = new SimpleGroupFactory(schema).newGroup()
+    val result = ParquetRecordDecoder.decodeGroup(group, schema)
+    result.keys.toList shouldBe List("z", "a", "m")
   }
 }

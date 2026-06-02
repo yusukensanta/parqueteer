@@ -220,7 +220,8 @@ class HadoopParquetRepository(
             }
           }
         val isPartial =
-          config.maxRows.exists(limit => rows.size.toLong >= limit)
+          config.maxRows.exists(limit => rows.size.toLong >= limit) &&
+            rows.size.toLong < totalRows
         FileContent(rows = rows, totalRows = totalRows, isPartial = isPartial)
       }
     }
@@ -237,7 +238,7 @@ class HadoopParquetRepository(
       var taken = 0L
       new Iterator[A] {
         def hasNext: Boolean = taken < n && base.hasNext
-        def next(): A = { taken += 1; base.next() }
+        def next(): A = { val v = base.next(); taken += 1; v }
       }
     }
 
@@ -364,6 +365,10 @@ class HadoopParquetRepository(
       }
     } finally {
       ec.shutdown()
+      if (!ec.awaitTermination(30, java.util.concurrent.TimeUnit.SECONDS))
+        Console.err.println(
+          "[parqueteer] warning: parallel read executor did not terminate within 30s — some cloud connections may remain open"
+        )
     }
   }
 
