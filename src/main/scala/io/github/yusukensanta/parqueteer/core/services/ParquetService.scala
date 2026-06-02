@@ -452,7 +452,9 @@ class ParquetService(
     else if (j.isNumber) {
       val n = j.asNumber.get
       val raw = j.noSpaces
-      if (raw.contains('.') || raw.contains('e') || raw.contains('E'))
+      // A decimal point in the raw JSON representation signals explicit floating-point (1.0, 1.5).
+      // No decimal point means integer or scientific-notation integer (1e10) — try Long first.
+      if (raw.contains('.'))
         CellValue.F64(n.toDouble)
       else
         n.toLong

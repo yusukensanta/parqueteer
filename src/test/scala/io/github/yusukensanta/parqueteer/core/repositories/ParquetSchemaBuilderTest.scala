@@ -364,11 +364,11 @@ class ParquetSchemaBuilderTest extends AnyFlatSpec with Matchers {
     field.getLogicalTypeAnnotation shouldBe LogicalTypeAnnotation.stringType()
   }
 
-  it should "fall back to BINARY for CellValue.Dec (unknown rank)" in {
+  it should "infer DOUBLE for CellValue.Dec (numeric type, not STRING)" in {
     val data =
       List(Map[String, CellValue]("x" -> CellValue.Dec(BigDecimal(42))))
     val mt = ParquetSchemaBuilder.inferSchemaFromData(data)
-    fieldByName(mt, "x").getPrimitiveTypeName shouldBe PrimitiveTypeName.BINARY
+    fieldByName(mt, "x").getPrimitiveTypeName shouldBe PrimitiveTypeName.DOUBLE
   }
 
   it should "use OPTIONAL repetition for all inferred fields" in {
@@ -524,6 +524,27 @@ class ParquetSchemaBuilderTest extends AnyFlatSpec with Matchers {
     }
     val warnCount = errCapture.toString.split('\n').count(_.contains("warning"))
     warnCount shouldBe 1
+  }
+
+  it should "infer DOUBLE schema for Dec values (not STRING)" in {
+    import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
+    val data = List(
+      Map[String, CellValue]("price" -> CellValue.Dec(BigDecimal("9.99")))
+    )
+    val mt = ParquetSchemaBuilder.inferSchemaFromData(data)
+    val field = mt.getFields.get(0)
+    field.asPrimitiveType.getPrimitiveTypeName shouldBe PrimitiveTypeName.DOUBLE
+  }
+
+  it should "widen Dec and Int64 columns together to DOUBLE" in {
+    import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
+    val data = List(
+      Map[String, CellValue]("n" -> CellValue.Dec(BigDecimal("1.5"))),
+      Map[String, CellValue]("n" -> CellValue.I64(2L))
+    )
+    val mt = ParquetSchemaBuilder.inferSchemaFromData(data)
+    val field = mt.getFields.get(0)
+    field.asPrimitiveType.getPrimitiveTypeName shouldBe PrimitiveTypeName.DOUBLE
   }
 
   it should "preserve source insertion order (not sort alphabetically)" in {

@@ -48,8 +48,9 @@ class SizeParserTest
     an[IllegalArgumentException] should be thrownBy SizeParser.parse("invalid")
   }
 
-  it should "throw for number with no unit" in {
-    an[IllegalArgumentException] should be thrownBy SizeParser.parse("128")
+  it should "accept bare integers (no unit) as bytes" in {
+    SizeParser.parse("128") shouldBe 128L
+    SizeParser.parse("134217728") shouldBe 134217728L
   }
 
   it should "throw for number that overflows Long" in {

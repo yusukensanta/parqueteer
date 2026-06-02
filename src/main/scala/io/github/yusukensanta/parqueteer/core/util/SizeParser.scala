@@ -10,13 +10,15 @@ object SizeParser {
     "G" -> 1024L * 1024L * 1024L,
     "GB" -> 1024L * 1024L * 1024L
   )
+  // Unit is optional: bare integers (e.g. 134217728) are treated as bytes.
   // Longest alternative first: G(?:B)? before bare B prevents "GB" matching as G + leftover B.
-  private val pattern = """(\d+(?:\.\d+)?)\s*(G(?:B)?|M(?:B)?|K(?:B)?|B)""".r
+  private val pattern = """(\d+(?:\.\d+)?)\s*(G(?:B)?|M(?:B)?|K(?:B)?|B)?""".r
 
   def parse(sizeStr: String): Long =
     sizeStr.toUpperCase match {
       case pattern(size, unit) =>
-        val bytes = BigDecimal(size) * units(unit)
+        val multiplier = units.getOrElse(Option(unit).getOrElse("B"), 1L)
+        val bytes = BigDecimal(size) * multiplier
         if (bytes > Long.MaxValue || bytes < 0)
           throw new IllegalArgumentException(
             s"Size too large (exceeds Long.MaxValue): $sizeStr"
@@ -24,7 +26,7 @@ object SizeParser {
         bytes.toLong
       case _ =>
         throw new IllegalArgumentException(
-          s"Invalid size format: $sizeStr. Expected format: <number><unit> (e.g., 128MB, 128M, 1.5GB)"
+          s"Invalid size format: $sizeStr. Expected format: <number>[unit] (e.g., 128MB, 128M, 1.5GB, 134217728)"
         )
     }
 }

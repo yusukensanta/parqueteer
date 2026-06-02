@@ -35,7 +35,7 @@ private[repositories] object ParquetWriteOps {
           case CellValue.Str(s)  => group.add(fieldIndex, s)
           case CellValue.Date(d) => group.add(fieldIndex, d.toEpochDay.toInt)
           case CellValue.Ts(i)   => group.add(fieldIndex, i.toEpochMilli)
-          case CellValue.Dec(bd) => group.add(fieldIndex, bd.toString)
+          case CellValue.Dec(bd) => group.add(fieldIndex, bd.toDouble)
           case CellValue.Bytes(b) =>
             group.add(fieldIndex, Binary.fromConstantByteArray(b))
           case CellValue.Null => ()

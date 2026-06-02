@@ -221,15 +221,15 @@ class ParquetWriteOpsTest extends AnyFlatSpec with Matchers {
     group.getBinary("data", 0).getBytes shouldBe rawBytes
   }
 
-  it should "write CellValue.Dec as toString to BINARY column" in {
-    val mt = schema("message root { required binary x (UTF8); }")
+  it should "write CellValue.Dec as double to DOUBLE column" in {
+    val mt = schema("message root { required double x; }")
     val group = new SimpleGroupFactory(mt).newGroup()
     ParquetWriteOps.writeRowToGroup(
       group,
-      Map("x" -> CellValue.Dec(BigDecimal(99))),
+      Map("x" -> CellValue.Dec(BigDecimal("9.99"))),
       mt
     )
-    group.getString("x", 0) shouldBe "99"
+    group.getDouble("x", 0) shouldBe 9.99
   }
 
   it should "skip fields with CellValue.Null values" in {
