@@ -42,6 +42,6 @@ object LTSVParser {
               s"[parqueteer] warning: LTSV line ${lineIdx + 1}: duplicate label '$label' — last value wins"
             )
         }
-        pairs.toMap
+        scala.collection.immutable.ListMap(pairs*)
       }
 }

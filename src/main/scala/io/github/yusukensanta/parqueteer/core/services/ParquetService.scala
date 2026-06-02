@@ -156,6 +156,7 @@ class ParquetService(
       schemaMode: SchemaMode
   ): Either[ParqueteerError, List[FieldSummary]] = schemaMode match {
     case SchemaMode.Strict =>
+      if (schemas.isEmpty) return Right(Nil)
       val first = schemas.head
       val firstSet = first.map(f => (f.name, f.dataType, f.isOptional)).toSet
       schemas.zipWithIndex
