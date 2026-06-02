@@ -135,8 +135,10 @@ private[repositories] object ParquetRecordDecoder {
               "supported and will be omitted. Upgrade parqueteer to add explicit support."
           )
       } else if (
-        group.getFieldRepetitionCount(i) > 0 && schema.getType(i).isPrimitive
+        group.getFieldRepetitionCount(i) == 0 && schema.getType(i).isPrimitive
       ) {
+        builder += schema.getType(i).getName -> CellValue.Null
+      } else if (schema.getType(i).isPrimitive) {
         val name = schema.getType(i).getName
         val fieldType = schema.getType(i).asPrimitiveType()
         val logicalType = Option(fieldType.getLogicalTypeAnnotation)

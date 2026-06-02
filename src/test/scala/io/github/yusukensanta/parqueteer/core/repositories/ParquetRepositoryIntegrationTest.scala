@@ -653,7 +653,7 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
     rows(1)("ts") shouldBe CellValue.Ts(ts2)
   }
 
-  it should "omit null fields in parallel (low-level) read path" taggedAs IntegrationTest in {
+  it should "emit CellValue.Null for absent fields in parallel (low-level) read path" taggedAs IntegrationTest in {
     val manyRows = (1 to 10).map { i =>
       if (i == 5)
         Map[String, CellValue](
@@ -674,7 +674,8 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
     val result = repo.readContent(ParquetFile(loc), ReadConfig(parallelism = 4))
     result.isSuccess shouldBe true
     val nullRow = result.get.rows.find(_("id") == CellValue.I64(5L)).get
-    nullRow.keys should not contain "note"
+    nullRow.contains("note") shouldBe true
+    nullRow("note") shouldBe CellValue.Null
   }
 
   // ── Stats ───────────────────────────────────────────────────────────────
