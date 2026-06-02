@@ -9,7 +9,10 @@ private[cli] object CredentialRedactor {
     "(?i)(aws_secret_access_key\\s*=\\s*)\\S+".r,
     "(?i)((?:\\?|&)sig=)[^&\\s]+".r,
     "(-----BEGIN [A-Z ]+-----)[^-]+".r,
-    "()\\bA(?:KIA|SIA)[A-Z0-9]{16}\\b".r
+    // AWS access key ID prefixes: AKIA/ASIA (credentials), AROA/AIPA/ANPA/AGPA/AIDA (service principals)
+    "()\\bA(?:KIA|SIA|ROA|IPA|NPA|GPA|IDA)[A-Z0-9]{16}\\b".r,
+    // Azure storage account key embedded in Hadoop config property value
+    "(?i)(fs\\.azure\\.account\\.key\\.[^=\\s]+=?)\\S+".r
   )
 
   def redact(s: String): String = {
@@ -17,7 +20,11 @@ private[cli] object CredentialRedactor {
     patterns.foldLeft(s) { (acc, pattern) =>
       pattern.replaceAllIn(
         acc,
-        m => java.util.regex.Matcher.quoteReplacement(m.group(1) + "[REDACTED]")
+        // group(1) is the prefix to preserve; patterns without a prefix use an empty capturing group
+        m =>
+          java.util.regex.Matcher.quoteReplacement(
+            Option(m.group(1)).getOrElse("") + "[REDACTED]"
+          )
       )
     }
   }
