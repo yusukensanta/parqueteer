@@ -76,4 +76,9 @@ class LTSVParserTest extends AnyFlatSpec with Matchers {
     rows(0).keys should not contain "score"
     rows(1).keys should contain("score")
   }
+
+  it should "preserve label insertion order (not sort alphabetically)" in {
+    val rows = LTSVParser.parse("z:3\ta:1\tm:2\n")
+    rows(0).keys.toList shouldBe List("z", "a", "m")
+  }
 }

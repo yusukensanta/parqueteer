@@ -53,6 +53,20 @@ class CredentialRedactorTest
     result should include("[REDACTED]")
   }
 
+  it should "redact raw AWS access key (AKIA* prefix) in unstructured message" in {
+    val input = "Forbidden for AKIAIOSFODNN7EXAMPLE while accessing bucket"
+    val result = CredentialRedactor.redact(input)
+    result should not include "AKIAIOSFODNN7EXAMPLE"
+    result should include("[REDACTED]")
+  }
+
+  it should "redact raw AWS SSO access key (ASIA* prefix) in unstructured message" in {
+    val input = "Access denied: ASIAIOSFODNN7EXAMPLE"
+    val result = CredentialRedactor.redact(input)
+    result should not include "ASIAIOSFODNN7EXAMPLE"
+    result should include("[REDACTED]")
+  }
+
   it should "leave non-credential strings unchanged" in {
     val input = "Error connecting to s3://my-bucket/key"
     CredentialRedactor.redact(input) shouldBe input

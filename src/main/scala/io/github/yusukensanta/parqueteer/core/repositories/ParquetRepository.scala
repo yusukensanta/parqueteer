@@ -58,8 +58,6 @@ trait ParquetRepository {
 object HadoopParquetRepository {
   private val shutdownHookRegistered =
     new java.util.concurrent.atomic.AtomicBoolean(false)
-  private val warnedLargeLimit =
-    new java.util.concurrent.atomic.AtomicBoolean(false)
 }
 
 class HadoopParquetRepository(
@@ -83,8 +81,10 @@ class HadoopParquetRepository(
       case LocalPath(_) => "local"
       case S3Location(bucket, _, r) =>
         s"s3:$bucket:${r.orElse(region).getOrElse("")}"
-      case GCSLocation(bucket, _)          => s"gcs:$bucket"
-      case AzureLocation(account, cont, _) => s"azure:$account/$cont"
+      case GCSLocation(bucket, _) =>
+        s"gcs:${profile.getOrElse("")}:$bucket"
+      case AzureLocation(account, cont, _) =>
+        s"azure:${profile.getOrElse("")}:$account/$cont"
     }
 
   // Close S3A/GCS/ABFS connection pools on JVM exit to prevent background thread leaks
@@ -233,17 +233,12 @@ class HadoopParquetRepository(
       maxRows: Option[Long]
   ): Iterator[A] =
     maxRows.fold(source.iterator) { n =>
-      val effective = n.min(Int.MaxValue.toLong)
-      if (
-        effective < n && HadoopParquetRepository.warnedLargeLimit.compareAndSet(
-          false,
-          true
-        )
-      )
-        System.err.println(
-          s"[parqueteer] warning: --limit $n exceeds the maximum supported value (${Int.MaxValue}); clamped to ${Int.MaxValue}"
-        )
-      source.iterator.take(effective.toInt)
+      val base = source.iterator
+      var taken = 0L
+      new Iterator[A] {
+        def hasNext: Boolean = taken < n && base.hasNext
+        def next(): A = { taken += 1; base.next() }
+      }
     }
 
   def streamContent(

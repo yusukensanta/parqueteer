@@ -135,8 +135,15 @@ object CliApp {
       case Some(cmd) =>
         try {
           val appConfig = new ConfigurationManager()
-            .loadConfig(config.globalOptions.configPath)
-            .getOrElse(AppConfig())
+            .loadConfig(config.globalOptions.configPath) match {
+            case scala.util.Success(c) => c
+            case scala.util.Failure(e) =>
+              if (!config.globalOptions.quiet)
+                System.err.println(
+                  s"[parqueteer] warning: could not load config: ${e.getMessage}; using defaults"
+                )
+              AppConfig()
+          }
           val opts = applyAppConfig(config.globalOptions, appConfig)
           val effectiveCmd = applyAppConfigToCommand(cmd, appConfig)
           val repository = new HadoopParquetRepository(
@@ -317,16 +324,18 @@ object CliApp {
         override def writeRow(row: Map[String, CellValue]): Unit = ()
       }
       else RowStreamWriter(format, System.out)
-      val result =
-        try {
-          writer.begin()
-          service.streamRead(filePath, readConfig) { row =>
-            writer.writeRow(row)
-          }
-        } finally writer.end()
+      val result = {
+        writer.begin()
+        service.streamRead(filePath, readConfig) { row =>
+          writer.writeRow(row)
+        }
+      }
       result match {
-        case Right(_)    => 0
-        case Left(error) => reportError("Error", globalOptions)(error)
+        case Right(_) =>
+          writer.end()
+          0
+        case Left(error) =>
+          reportError("Error", globalOptions)(error)
       }
     } else {
       service.readFile(filePath, readConfig) match {
@@ -614,18 +623,16 @@ object CliApp {
       .map(ParqueteerError.IOError.apply)
       .flatMap { ps =>
         val writer = RowStreamWriter(outFormat, ps)
-        writer.begin()
-        try
-          service
+        try {
+          writer.begin()
+          val result = service
             .streamRead(
               inputPath,
               ReadConfig(maxRows = conversionConfig.maxRows)
             )(writer.writeRow)
-            .map(_ => ())
-        finally {
-          writer.end()
-          ps.close()
-        }
+          if (result.isRight) writer.end()
+          result.map(_ => ())
+        } finally ps.close()
       }
 
   /** parquet → parquet: read everything then re-write with the target

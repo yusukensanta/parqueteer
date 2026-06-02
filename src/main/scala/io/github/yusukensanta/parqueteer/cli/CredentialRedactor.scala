@@ -8,7 +8,8 @@ private[cli] object CredentialRedactor {
     "(?i)(Signature=)[^&\\s]+".r,
     "(?i)(aws_secret_access_key\\s*=\\s*)\\S+".r,
     "(?i)((?:\\?|&)sig=)[^&\\s]+".r,
-    "(-----BEGIN [A-Z ]+-----)[^-]+".r
+    "(-----BEGIN [A-Z ]+-----)[^-]+".r,
+    "()\\bA(?:KIA|SIA)[A-Z0-9]{16}\\b".r
   )
 
   def redact(s: String): String =

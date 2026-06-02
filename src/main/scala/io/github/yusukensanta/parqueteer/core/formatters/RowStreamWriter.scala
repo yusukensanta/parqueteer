@@ -37,13 +37,14 @@ object RowStreamWriter {
 
   private class JSONRowStreamWriter(out: PrintStream) extends RowStreamWriter {
     private var first = true
-    override def begin(): Unit = out.print("[")
+    private var started = false
+    override def begin(): Unit = { out.print("["); started = true }
     override def writeRow(row: Map[String, CellValue]): Unit = {
       if (!first) out.print(",")
       out.print(rowToJson(row))
       first = false
     }
-    override def end(): Unit = out.println("]")
+    override def end(): Unit = if (started) out.println("]")
   }
 
   private class CSVRowStreamWriter(out: PrintStream) extends RowStreamWriter {
