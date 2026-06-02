@@ -77,7 +77,8 @@ private[cli] object CliOutputFormatter {
           Json.obj(
             "name" -> Json.fromString(col.name),
             "dataType" -> Json.fromString(col.dataType),
-            "nullCount" -> Json.fromLong(col.nullCount),
+            "nullCount" -> (if (col.nullCount < 0) Json.Null
+                            else Json.fromLong(col.nullCount)),
             "minValue" -> col.minValue.fold(Json.Null)(Json.fromString),
             "maxValue" -> col.maxValue.fold(Json.Null)(Json.fromString)
           )

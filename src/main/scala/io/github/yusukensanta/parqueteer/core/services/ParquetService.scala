@@ -520,12 +520,12 @@ class ParquetService(
       json: io.circe.Json,
       notAnObjectMessage: => String
   ): Map[String, CellValue] =
-    json.asObject
-      .getOrElse(throw new IllegalArgumentException(notAnObjectMessage))
-      .toMap
-      .view
-      .mapValues(coerceJsonValue)
-      .toMap
+    scala.collection.immutable.ListMap.from(
+      json.asObject
+        .getOrElse(throw new IllegalArgumentException(notAnObjectMessage))
+        .toIterable
+        .map { case (k, v) => k -> coerceJsonValue(v) }
+    )
 
   private[services] def parseCsvContent(
       content: String

@@ -50,9 +50,9 @@ class MarkdownFormatter extends OutputFormatter {
     sb.append("| Name | Type | Optional | Compression |\n")
     sb.append("| --- | --- | --- | --- |\n")
     schema.columns.foreach { col =>
-      sb.append(s"| ${col.name} | ${col.dataType} | ${
+      sb.append(s"| ${escapeCell(col.name)} | ${escapeCell(col.dataType)} | ${
           if (col.isOptional) "Yes" else "No"
-        } | ${col.compressionType} |\n")
+        } | ${escapeCell(col.compressionType)} |\n")
     }
     sb.toString
   }

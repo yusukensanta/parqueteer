@@ -98,7 +98,7 @@ class ConfigurationManager {
   private val defaultConfigPath = File.home / ".parqueteer" / "config.yaml"
 
   def loadConfig(configPath: Option[String] = None): Try[AppConfig] = {
-    val configFile = configPath.map(File(_)).getOrElse(defaultConfigPath)
+    val configFile = File(resolvedConfigPath(configPath))
     if (!configFile.exists) Success(AppConfig())
     else parseConfigFile(configFile)
   }

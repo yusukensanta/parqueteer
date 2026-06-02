@@ -114,6 +114,23 @@ private[repositories] object ParquetSchemaBuilder {
         (PrimitiveTypeName.INT64, Some(timestampMillisAnnotation))
       case "STRING" => (PrimitiveTypeName.BINARY, Some(stringAnnotation))
       case "BINARY" => (PrimitiveTypeName.BINARY, None)
+      case "INT96" =>
+        throw new IllegalArgumentException(
+          "INT96 is deprecated in the Parquet spec and not supported for writing. " +
+            "Use TIMESTAMP or TIMESTAMP_MILLIS instead."
+        )
+      case "FIXED_LEN_BYTE_ARRAY" =>
+        throw new IllegalArgumentException(
+          "FIXED_LEN_BYTE_ARRAY requires a byte length and is not supported via the schema config. " +
+            "Use BINARY for variable-length byte fields."
+        )
+      case t
+          if t.startsWith("STRUCT") || t
+            .startsWith("MAP") || t.startsWith("LIST") =>
+        throw new IllegalArgumentException(
+          s"Nested type '$t' (STRUCT/MAP/LIST) is not supported for writing. " +
+            "Flatten the data structure to primitive columns before writing."
+        )
       case other =>
         throw new IllegalArgumentException(
           s"Unknown dataType '$other'. Supported: INT32, INT64, DOUBLE, FLOAT, BOOLEAN, DATE, TIMESTAMP, STRING, BINARY"
