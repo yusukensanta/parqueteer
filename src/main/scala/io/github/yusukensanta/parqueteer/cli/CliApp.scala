@@ -413,6 +413,11 @@ object CliApp {
       rowGroupSize = rowGroupSize.getOrElse(WriteConfig.DefaultRowGroupSize)
     )
     val formatStr = InputFormat.toServiceString(inputFormat)
+    checkOutputWritable(outputPath) match {
+      case Left(err) =>
+        return reportError("Failed to write file", globalOptions)(err)
+      case Right(_) =>
+    }
     service.readDataFile(inputPath, formatStr) match {
       case Left(error) =>
         reportError("Failed to read input file", globalOptions)(error)
@@ -583,7 +588,7 @@ object CliApp {
           outputPath,
           conversionConfig
         )
-      case (ext @ ("json" | "csv"), "parquet") =>
+      case (ext @ ("json" | "ndjson" | "csv" | "ltsv"), "parquet") =>
         service
           .readDataFile(inputPath, ext)
           .flatMap(data =>
@@ -593,7 +598,7 @@ object CliApp {
         Left(
           ParqueteerError.InvalidFormat(
             inputPath,
-            s"Unsupported conversion: $inputExt → $outputExt. Supported: parquet→parquet, parquet→json, parquet→ndjson, parquet→csv, json→parquet, csv→parquet"
+            s"Unsupported conversion: $inputExt → $outputExt. Supported: parquet→parquet, parquet→json, parquet→ndjson, parquet→csv, json→parquet, ndjson→parquet, csv→parquet, ltsv→parquet"
           )
         )
     }
@@ -612,16 +617,13 @@ object CliApp {
     scala.util
       .Try {
         import better.files._
-        new java.io.PrintStream(
-          File(outputPath)
-            .createIfNotExists(createParents = true)
-            .newOutputStream
-        )
+        val outFile = File(outputPath).createIfNotExists(createParents = true)
+        (outFile, new java.io.PrintStream(outFile.newOutputStream))
       }
       .toEither
       .left
       .map(ParqueteerError.IOError.apply)
-      .flatMap { ps =>
+      .flatMap { case (outFile, ps) =>
         val writer = RowStreamWriter(outFormat, ps)
         try {
           writer.begin()
@@ -631,6 +633,10 @@ object CliApp {
               ReadConfig(maxRows = conversionConfig.maxRows)
             )(writer.writeRow)
           if (result.isRight) writer.end()
+          else {
+            ps.close()
+            scala.util.Try(outFile.delete(swallowIOExceptions = true))
+          }
           result.map(_ => ())
         } finally ps.close()
       }
@@ -660,6 +666,11 @@ object CliApp {
       globalOptions: GlobalOptions
   ): Int = {
     val writeConfig = WriteConfig(compressionType = compression)
+    checkOutputWritable(outputPath) match {
+      case Left(err) =>
+        return reportError("Failed to merge", globalOptions)(err)
+      case Right(_) =>
+    }
     val total = inputPaths.size
     val onProgress: (Int, Int, String) => Unit = (i, n, path) =>
       if (!globalOptions.quiet)
@@ -863,18 +874,27 @@ object CliApp {
     if (opts.verbose) error match {
       case ParqueteerError.IOError(cause) =>
         System.err.println(
-          s"[verbose] ${CredentialRedactor.redact(cause.toString)}"
+          s"[verbose] ${CredentialRedactor.redactThrowable(cause)}"
         )
         cause.getStackTrace.foreach(f => System.err.println(s"\tat $f"))
-        Option(cause.getCause).foreach { c =>
-          System.err.println(
-            s"Caused by: ${CredentialRedactor.redact(c.toString)}"
-          )
-          c.getStackTrace.foreach(f => System.err.println(s"\tat $f"))
-        }
       case _ => ()
     }
     error.exitCode
+  }
+
+  private def checkOutputWritable(
+      outputPath: String
+  ): Either[ParqueteerError, Unit] = {
+    val parent = java.nio.file.Paths.get(outputPath).toAbsolutePath.getParent
+    if (parent != null && parent.toFile.exists() && !parent.toFile.canWrite)
+      Left(
+        ParqueteerError.IOError(
+          new java.io.IOException(
+            s"Output directory is not writable: $parent"
+          )
+        )
+      )
+    else Right(())
   }
 
   private def isStdoutTTY: Boolean = System.console() != null

@@ -101,27 +101,27 @@ class CliOutputFormatterTest extends AnyFlatSpec with Matchers {
   // ─── formatBytesForDisplay ──────────────────────────────────────────────────
 
   "CliOutputFormatter.formatBytesForDisplay" should "format bytes" in {
-    CliOutputFormatter.formatBytesForDisplay(512L) shouldBe "512.0 B"
+    CliOutputFormatter.formatBytesForDisplay(512L) shouldBe "512 B"
   }
 
   it should "format kilobytes" in {
-    CliOutputFormatter.formatBytesForDisplay(1024L) shouldBe "1.0 KB"
+    CliOutputFormatter.formatBytesForDisplay(1024L) shouldBe "1 KB"
   }
 
   it should "format megabytes" in {
-    CliOutputFormatter.formatBytesForDisplay(1024L * 1024L) shouldBe "1.0 MB"
+    CliOutputFormatter.formatBytesForDisplay(1024L * 1024L) shouldBe "1 MB"
   }
 
   it should "format gigabytes" in {
     CliOutputFormatter.formatBytesForDisplay(
       1024L * 1024L * 1024L
-    ) shouldBe "1.0 GB"
+    ) shouldBe "1 GB"
   }
 
   it should "format terabytes" in {
     CliOutputFormatter.formatBytesForDisplay(
       1024L * 1024L * 1024L * 1024L
-    ) shouldBe "1.0 TB"
+    ) shouldBe "1 TB"
   }
 
   it should "cap at TB even for very large values" in {
@@ -130,7 +130,7 @@ class CliOutputFormatterTest extends AnyFlatSpec with Matchers {
   }
 
   it should "format zero bytes" in {
-    CliOutputFormatter.formatBytesForDisplay(0L) shouldBe "0.0 B"
+    CliOutputFormatter.formatBytesForDisplay(0L) shouldBe "0 B"
   }
 
   it should "format fractional kilobytes correctly" in {

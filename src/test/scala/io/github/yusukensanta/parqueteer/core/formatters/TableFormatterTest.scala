@@ -233,23 +233,23 @@ class TableFormatterTest extends AnyFlatSpec with Matchers {
   }
 
   "TableFormatter.formatBytes" should "format bytes" in {
-    formatter.formatBytes(512L) shouldBe "512.0 B"
+    formatter.formatBytes(512L) shouldBe "512 B"
   }
 
-  it should "format exactly 1024 bytes as 1.0 KB" in {
-    formatter.formatBytes(1024L) shouldBe "1.0 KB"
+  it should "format exactly 1024 bytes as 1 KB" in {
+    formatter.formatBytes(1024L) shouldBe "1 KB"
   }
 
   it should "format kilobytes" in {
-    formatter.formatBytes(2048L) shouldBe "2.0 KB"
+    formatter.formatBytes(2048L) shouldBe "2 KB"
   }
 
   it should "format megabytes" in {
-    formatter.formatBytes(2 * 1024 * 1024L) shouldBe "2.0 MB"
+    formatter.formatBytes(2 * 1024 * 1024L) shouldBe "2 MB"
   }
 
   it should "format gigabytes" in {
-    formatter.formatBytes(3L * 1024 * 1024 * 1024) shouldBe "3.0 GB"
+    formatter.formatBytes(3L * 1024 * 1024 * 1024) shouldBe "3 GB"
   }
 
   // ── OOM guard ─────────────────────────────────────────────────────────────

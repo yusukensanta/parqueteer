@@ -21,10 +21,13 @@ private[repositories] object ParquetSchemaBuilder {
     val fields = fileSchema.getFields.asScala
       .filter(f => columnSet.contains(f.getName))
       .toList
-    if (fields.isEmpty)
+    if (fields.isEmpty) {
+      val available = fileSchema.getFields.asScala.map(_.getName).mkString(", ")
       throw new IllegalArgumentException(
-        s"None of the requested columns exist in the file: ${columns.mkString(", ")}"
+        s"None of the requested columns exist in the file: ${columns
+            .mkString(", ")}. Available columns: $available"
       )
+    }
     new MessageType("root", fields.asJava)
   }
 
@@ -49,14 +52,24 @@ private[repositories] object ParquetSchemaBuilder {
     // seenKeys tracks all keys (including null-only columns) for schema output.
     val seenKeys = scala.collection.mutable.LinkedHashSet.empty[String]
     val rankByKey = scala.collection.mutable.HashMap.empty[String, TypeRank]
+    val warnedWiden = scala.collection.mutable.Set.empty[String]
     data.foreach { row =>
       row.foreach { case (k, v) =>
         seenKeys.add(k)
         if (v != CellValue.Null) {
           val r = typeRankForValue(v)
           rankByKey.updateWith(k) {
-            case Some(prev) => Some(widenTypeRanks(prev, r))
-            case None       => Some(r)
+            case Some(prev) =>
+              val widened = widenTypeRanks(prev, r)
+              if (
+                widened == TypeRank.String && prev != TypeRank.String && warnedWiden
+                  .add(k)
+              )
+                Console.err.println(
+                  s"[parqueteer] warning: column '$k' has mixed types ($prev and $r) — falling back to STRING"
+                )
+              Some(widened)
+            case None => Some(r)
           }
         }
       }
