@@ -176,6 +176,30 @@ class ConfigurationManagerTest extends AnyFlatSpec with Matchers {
     tempDir.delete()
   }
 
+  it should "return default AppConfig for an empty config file" in {
+    val manager = new ConfigurationManager()
+    val tempDir = File.newTemporaryDirectory()
+    val configFile = tempDir / "empty.yaml"
+    configFile.write("")
+
+    val result = manager.loadConfig(Some(configFile.pathAsString))
+    result.isSuccess shouldBe true
+
+    tempDir.delete()
+  }
+
+  it should "return default AppConfig for a whitespace-only config file" in {
+    val manager = new ConfigurationManager()
+    val tempDir = File.newTemporaryDirectory()
+    val configFile = tempDir / "blank.yaml"
+    configFile.write("   \n  \n")
+
+    val result = manager.loadConfig(Some(configFile.pathAsString))
+    result.isSuccess shouldBe true
+
+    tempDir.delete()
+  }
+
   "ConfigurationManager.resolvedConfigPath" should "prefer explicit path over env default" in {
     val manager = new ConfigurationManager()
     val explicit = "/explicit/config.yaml"

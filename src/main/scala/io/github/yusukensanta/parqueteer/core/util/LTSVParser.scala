@@ -35,13 +35,15 @@ object LTSVParser {
               )
             label -> TypeInferrer.inferCsvValue(value)
           }
-        val seen = scala.collection.mutable.Set.empty[String]
-        pairs.foreach { case (label, _) =>
-          if (!seen.add(label))
+        val lhm =
+          scala.collection.mutable.LinkedHashMap.empty[String, CellValue]
+        pairs.foreach { case (label, value) =>
+          if (lhm.contains(label))
             Console.err.println(
               s"[parqueteer] warning: LTSV line ${lineIdx + 1}: duplicate label '$label' — last value wins"
             )
+          lhm(label) = value
         }
-        scala.collection.immutable.ListMap(pairs*)
+        scala.collection.immutable.ListMap.from(lhm)
       }
 }

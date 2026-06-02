@@ -106,24 +106,27 @@ class ConfigurationManager {
   private def parseConfigFile(configFile: File): Try[AppConfig] = {
     import io.circe.yaml.v12.parser
 
-    Try {
-      val yamlContent = configFile.contentAsString
-      parser.parse(yamlContent) match {
-        case Right(json) =>
-          json.as[AppConfig] match {
-            case Right(config) => config
+    Try(configFile.contentAsString).flatMap { yamlContent =>
+      if (yamlContent.trim.isEmpty) Success(AppConfig())
+      else
+        Try {
+          parser.parse(yamlContent) match {
+            case Right(json) =>
+              json.as[AppConfig] match {
+                case Right(config) => config
+                case Left(error) =>
+                  throw new RuntimeException(
+                    s"Failed to parse configuration: ${error.getMessage}",
+                    error
+                  )
+              }
             case Left(error) =>
               throw new RuntimeException(
-                s"Failed to parse configuration: ${error.getMessage}",
+                s"Invalid YAML syntax: ${error.getMessage}",
                 error
               )
           }
-        case Left(error) =>
-          throw new RuntimeException(
-            s"Invalid YAML syntax: ${error.getMessage}",
-            error
-          )
-      }
+        }
     }
   }
 

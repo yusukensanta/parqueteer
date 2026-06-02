@@ -109,7 +109,6 @@ class ParquetService(
         count <- streamMerge(
           inputLocations,
           inputPaths,
-          schemas,
           mergedFields,
           outputLocation,
           writeConfig,
@@ -223,13 +222,11 @@ class ParquetService(
   private def streamMerge(
       inputLocations: Vector[StorageLocation],
       inputPaths: List[String],
-      schemas: Vector[List[FieldSummary]],
       mergedFields: List[FieldSummary],
       outputLocation: StorageLocation,
       writeConfig: WriteConfig,
       onProgress: (Int, Int, String) => Unit
   ): Either[ParqueteerError, Long] = {
-    val allColumnNames = mergedFields.map(_.name).toSet
     val explicitSchema = ParquetSchema(
       columns = mergedFields.map { f =>
         ColumnInfo(
@@ -244,10 +241,6 @@ class ParquetService(
       rowGroupCount = 1L,
       totalRowCount = 0L
     )
-    // precompute per-file missing columns — avoids O(cols) set diff per row
-    val missingPerFile = schemas.map { fields =>
-      allColumnNames -- fields.map(_.name).toSet
-    }
     var streamError: Option[ParqueteerError] = None
     repository
       .writeContentStream(outputLocation, explicitSchema, writeConfig) {
@@ -255,12 +248,13 @@ class ParquetService(
           boundary[Unit] {
             inputLocations.zipWithIndex.foreach { case (loc, i) =>
               onProgress(i + 1, inputLocations.size, inputPaths(i))
-              val fileMissing = missingPerFile(i)
               repository
                 .streamContent(ParquetFile(loc), ReadConfig()) { row =>
-                  val finalRow =
-                    if (fileMissing.isEmpty) row
-                    else row ++ fileMissing.map(_ -> CellValue.Null)
+                  val finalRow = scala.collection.immutable.ListMap.from(
+                    mergedFields.map(f =>
+                      f.name -> row.getOrElse(f.name, CellValue.Null)
+                    )
+                  )
                   write(finalRow)
                 }
                 .fold(

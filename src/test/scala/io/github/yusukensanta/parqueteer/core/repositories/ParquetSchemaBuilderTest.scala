@@ -82,6 +82,9 @@ class ParquetSchemaBuilderTest extends AnyFlatSpec with Matchers {
       ParquetSchemaBuilder.projectSchema(fileSchema, List("nonexistent"))
     }
     ex.getMessage should include("nonexistent")
+    ex.getMessage should include("Available columns")
+    ex.getMessage should include("id")
+    ex.getMessage should include("name")
   }
 
   it should "ignore unknown column names and project the ones that exist" in {
@@ -492,6 +495,35 @@ class ParquetSchemaBuilderTest extends AnyFlatSpec with Matchers {
     )
     val mt = ParquetSchemaBuilder.inferSchemaFromData(data)
     fieldByName(mt, "n").getPrimitiveTypeName shouldBe PrimitiveTypeName.INT64
+  }
+
+  it should "print a warning to stderr when column has mixed incompatible types" in {
+    val data = List(
+      Map[String, CellValue]("x" -> CellValue.I64(1L)),
+      Map[String, CellValue]("x" -> CellValue.Str("hello"))
+    )
+    val errCapture = new java.io.ByteArrayOutputStream()
+    Console.withErr(errCapture) {
+      ParquetSchemaBuilder.inferSchemaFromData(data)
+    }
+    val output = errCapture.toString
+    output should include("warning")
+    output should include("x")
+    output should include("STRING")
+  }
+
+  it should "warn only once per column for mixed-type widening" in {
+    val data = List(
+      Map[String, CellValue]("x" -> CellValue.I64(1L)),
+      Map[String, CellValue]("x" -> CellValue.Str("a")),
+      Map[String, CellValue]("x" -> CellValue.Str("b"))
+    )
+    val errCapture = new java.io.ByteArrayOutputStream()
+    Console.withErr(errCapture) {
+      ParquetSchemaBuilder.inferSchemaFromData(data)
+    }
+    val warnCount = errCapture.toString.split('\n').count(_.contains("warning"))
+    warnCount shouldBe 1
   }
 
   it should "preserve source insertion order (not sort alphabetically)" in {

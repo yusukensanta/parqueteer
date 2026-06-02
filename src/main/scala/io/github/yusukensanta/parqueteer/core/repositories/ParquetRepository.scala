@@ -269,8 +269,7 @@ class HadoopParquetRepository(
           count
         }
       }
-      // Evict on success only: on failure, a retry should not pay the footer fetch cost again.
-      result.foreach(_ => footerCache.remove(cacheKey))
+      footerCache.remove(cacheKey)
       result
     }
   }
@@ -660,7 +659,10 @@ class HadoopParquetRepository(
 
           val withValues =
             chunkStats.filter(s => !s.isEmpty && s.hasNonNullValue)
-          val (minVal, maxVal) = computeTypedMinMax(withValues, typeName)
+          val logicalType =
+            colDescriptor.getPrimitiveType.getLogicalTypeAnnotation
+          val (minVal, maxVal) =
+            computeTypedMinMax(withValues, typeName, logicalType)
 
           ColumnStats(colPath, dataType, nullCount, minVal, maxVal)
         }
@@ -682,42 +684,98 @@ class HadoopParquetRepository(
 
   private def computeTypedMinMax(
       withValues: List[org.apache.parquet.column.statistics.Statistics[?]],
-      typeName: PrimitiveTypeName
-  ): (Option[String], Option[String]) =
-    typeName match {
-      case PrimitiveTypeName.INT32 =>
-        numericMinMax[Int](
+      typeName: PrimitiveTypeName,
+      logicalType: org.apache.parquet.schema.LogicalTypeAnnotation
+  ): (Option[String], Option[String]) = {
+    import org.apache.parquet.schema.LogicalTypeAnnotation
+    logicalType match {
+      case _: LogicalTypeAnnotation.DateLogicalTypeAnnotation =>
+        val (mn, mx) = numericMinMax[Int](
           withValues,
           { case n: java.lang.Integer => n.intValue() }
         )
-      case PrimitiveTypeName.INT64 =>
-        numericMinMax[Long](
+        (
+          mn.map(v => java.time.LocalDate.ofEpochDay(v.toLong).toString),
+          mx.map(v => java.time.LocalDate.ofEpochDay(v.toLong).toString)
+        )
+
+      case ts: LogicalTypeAnnotation.TimestampLogicalTypeAnnotation =>
+        val isMicros = ts.getUnit == LogicalTypeAnnotation.TimeUnit.MICROS
+        def rawToInstant(raw: String): String = {
+          val v = raw.toLong
+          if (isMicros)
+            java.time.Instant
+              .ofEpochSecond(
+                Math.floorDiv(v, 1_000_000L),
+                Math.floorMod(v, 1_000_000L) * 1000L
+              )
+              .toString
+          else java.time.Instant.ofEpochMilli(v).toString
+        }
+        val (mn, mx) = numericMinMax[Long](
           withValues,
           { case n: java.lang.Long => n.longValue() }
         )
-      case PrimitiveTypeName.FLOAT =>
-        numericMinMax[Float](
-          withValues,
-          { case n: java.lang.Float => n.floatValue() }
-        )
-      case PrimitiveTypeName.DOUBLE =>
-        numericMinMax[Double](
-          withValues,
-          { case n: java.lang.Double => n.doubleValue() }
-        )
+        (mn.map(rawToInstant), mx.map(rawToInstant))
+
+      case dec: LogicalTypeAnnotation.DecimalLogicalTypeAnnotation =>
+        val scale = dec.getScale
+        def applyScale(raw: String): String =
+          new java.math.BigDecimal(
+            new java.math.BigInteger(raw),
+            scale
+          ).toPlainString
+        if (typeName == PrimitiveTypeName.INT32) {
+          val (mn, mx) = numericMinMax[Int](
+            withValues,
+            { case n: java.lang.Integer => n.intValue() }
+          )
+          (mn.map(applyScale), mx.map(applyScale))
+        } else {
+          val (mn, mx) = numericMinMax[Long](
+            withValues,
+            { case n: java.lang.Long => n.longValue() }
+          )
+          (mn.map(applyScale), mx.map(applyScale))
+        }
+
       case _ =>
-        val minVal = withValues
-          .flatMap(s =>
-            Option(s.genericGetMin()).map(v => formatStatVal(v, typeName))
-          )
-          .minOption
-        val maxVal = withValues
-          .flatMap(s =>
-            Option(s.genericGetMax()).map(v => formatStatVal(v, typeName))
-          )
-          .maxOption
-        (minVal, maxVal)
+        typeName match {
+          case PrimitiveTypeName.INT32 =>
+            numericMinMax[Int](
+              withValues,
+              { case n: java.lang.Integer => n.intValue() }
+            )
+          case PrimitiveTypeName.INT64 =>
+            numericMinMax[Long](
+              withValues,
+              { case n: java.lang.Long => n.longValue() }
+            )
+          case PrimitiveTypeName.FLOAT =>
+            numericMinMax[Float](
+              withValues,
+              { case n: java.lang.Float => n.floatValue() }
+            )
+          case PrimitiveTypeName.DOUBLE =>
+            numericMinMax[Double](
+              withValues,
+              { case n: java.lang.Double => n.doubleValue() }
+            )
+          case _ =>
+            val minVal = withValues
+              .flatMap(s =>
+                Option(s.genericGetMin()).map(v => formatStatVal(v, typeName))
+              )
+              .minOption
+            val maxVal = withValues
+              .flatMap(s =>
+                Option(s.genericGetMax()).map(v => formatStatVal(v, typeName))
+              )
+              .maxOption
+            (minVal, maxVal)
+        }
     }
+  }
 
   private def formatStatVal(value: Any, typeName: PrimitiveTypeName): String =
     typeName match {
