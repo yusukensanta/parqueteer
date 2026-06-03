@@ -818,6 +818,63 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     filesAttempted shouldBe 1
   }
 
+  // ── mergeFiles union required-flag correctness ───────────────────────────
+  it should "mark a column optional in union merge when it first appears in a later file" in {
+    // file 1 has only column 'a'; file 2 adds column 'b' (REQUIRED in its own schema).
+    // 'b' must be optional in the merged schema because file 1 lacks it.
+    var callIndex = 0
+    val repo = new FakeParquetRepository(
+      schemaFieldsResult = Success(Nil) // unused; overridden below
+    ) {
+      override def readSchemaFields(
+          file: ParquetFile
+      ): scala.util.Try[List[FieldSummary]] = {
+        val result =
+          if (callIndex == 0)
+            Success(List(FieldSummary("a", "INT64", isOptional = false)))
+          else
+            Success(
+              List(
+                FieldSummary("a", "INT64", isOptional = false),
+                FieldSummary("b", "INT64", isOptional = false)
+              )
+            )
+        callIndex += 1
+        result
+      }
+    }
+    var capturedSchema: Option[ParquetSchema] = None
+    val capturingRepo = new FakeParquetRepository(
+      schemaFieldsResult = Success(Nil)
+    ) {
+      val inner: ParquetRepository = repo
+      override def readSchemaFields(
+          file: ParquetFile
+      ): scala.util.Try[List[FieldSummary]] = inner.readSchemaFields(file)
+      override def writeContentStream(
+          location: StorageLocation,
+          schema: ParquetSchema,
+          config: WriteConfig
+      )(
+          feed: (Map[String, CellValue] => Unit) => Unit
+      ): scala.util.Try[Long] = {
+        capturedSchema = Some(schema)
+        Success(0L)
+      }
+    }
+    val service = new ParquetService(capturingRepo)
+    val result = service.mergeFiles(
+      List("/a.parquet", "/b.parquet"),
+      "/out.parquet",
+      WriteConfig(),
+      SchemaMode.Union
+    )
+    result.isRight shouldBe true
+    val bCol = capturedSchema.get.columns.find(_.name == "b")
+    bCol shouldBe defined
+    bCol.get.isOptional shouldBe true
+  }
+
   // ── mergeFiles compression propagation ───────────────────────────────────
   it should "pass WriteConfig compressionType to schema in writeContentStream" in {
     var capturedSchema: Option[ParquetSchema] = None

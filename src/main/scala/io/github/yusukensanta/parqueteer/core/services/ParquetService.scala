@@ -186,38 +186,42 @@ class ParquetService(
       // (dataType, requiredInAllInputsSoFar)
       val seen =
         scala.collection.mutable.LinkedHashMap.empty[String, (String, Boolean)]
-      schemas
-        .foldLeft[Either[ParqueteerError, Unit]](Right(())) { (acc, fields) =>
-          acc.flatMap { _ =>
-            val fieldMap = fields.view.map(f => f.name -> f).toMap
-            val conflicts = fields.collect {
-              case f if seen.get(f.name).exists(_._1 != f.dataType) =>
-                s"'${f.name}' (${seen(f.name)._1} vs ${f.dataType})"
-            }
-            if (conflicts.nonEmpty)
-              Left(
-                ParqueteerError.InvalidFormat(
-                  "merge",
-                  s"Type conflicts in union merge: ${conflicts.mkString(", ")}. " +
-                    "Cannot union-merge columns with incompatible types."
+      schemas.zipWithIndex
+        .foldLeft[Either[ParqueteerError, Unit]](Right(())) {
+          case (acc, (fields, fileIdx)) =>
+            acc.flatMap { _ =>
+              val fieldMap = fields.view.map(f => f.name -> f).toMap
+              val conflicts = fields.collect {
+                case f if seen.get(f.name).exists(_._1 != f.dataType) =>
+                  s"'${f.name}' (${seen(f.name)._1} vs ${f.dataType})"
+              }
+              if (conflicts.nonEmpty)
+                Left(
+                  ParqueteerError.InvalidFormat(
+                    "merge",
+                    s"Type conflicts in union merge: ${conflicts.mkString(", ")}. " +
+                      "Cannot union-merge columns with incompatible types."
+                  )
                 )
-              )
-            else {
-              // Fields already seen but absent from this schema → must become optional
-              seen.keys.filterNot(fieldMap.contains).foreach { name =>
-                seen(name) = (seen(name)._1, false)
-              }
-              fields.foreach { f =>
-                seen.get(f.name) match {
-                  case Some((dt, wasRequired)) =>
-                    seen(f.name) = (dt, wasRequired && !f.isOptional)
-                  case None =>
-                    seen(f.name) = (f.dataType, !f.isOptional)
+              else {
+                // Fields already seen but absent from this schema → must become optional
+                seen.keys.filterNot(fieldMap.contains).foreach { name =>
+                  seen(name) = (seen(name)._1, false)
                 }
+                fields.foreach { f =>
+                  seen.get(f.name) match {
+                    case Some((dt, wasRequired)) =>
+                      seen(f.name) = (dt, wasRequired && !f.isOptional)
+                    case None =>
+                      // New field: required only if it appears in the first file AND is marked required.
+                      // A field first seen in a later file was absent from earlier files, so it must be optional.
+                      val isRequired = fileIdx == 0 && !f.isOptional
+                      seen(f.name) = (f.dataType, isRequired)
+                  }
+                }
+                Right(())
               }
-              Right(())
             }
-          }
         }
         .map(_ =>
           seen.map { case (name, (t, allRequired)) =>
