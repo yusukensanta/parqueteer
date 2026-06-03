@@ -106,7 +106,9 @@ class ConfigurationManager {
   private def parseConfigFile(configFile: File): Try[AppConfig] = {
     import io.circe.yaml.v12.parser
 
-    Try(configFile.contentAsString).flatMap { yamlContent =>
+    Try(
+      configFile.contentAsString(using java.nio.charset.StandardCharsets.UTF_8)
+    ).flatMap { yamlContent =>
       if (yamlContent.trim.isEmpty) Success(AppConfig())
       else
         Try {
