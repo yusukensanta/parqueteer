@@ -48,6 +48,15 @@ class SizeParserTest
     an[IllegalArgumentException] should be thrownBy SizeParser.parse("invalid")
   }
 
+  it should "parse terabytes" in {
+    SizeParser.parse("1TB") shouldBe 1099511627776L
+  }
+
+  it should "accept bare single-letter T unit" in {
+    SizeParser.parse("1T") shouldBe 1099511627776L
+    SizeParser.parse("1t") shouldBe 1099511627776L
+  }
+
   it should "accept bare integers (no unit) as bytes" in {
     SizeParser.parse("128") shouldBe 128L
     SizeParser.parse("134217728") shouldBe 134217728L

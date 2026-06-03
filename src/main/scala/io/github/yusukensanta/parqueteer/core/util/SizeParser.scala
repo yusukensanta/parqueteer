@@ -8,11 +8,14 @@ object SizeParser {
     "M" -> 1024L * 1024L,
     "MB" -> 1024L * 1024L,
     "G" -> 1024L * 1024L * 1024L,
-    "GB" -> 1024L * 1024L * 1024L
+    "GB" -> 1024L * 1024L * 1024L,
+    "T" -> 1024L * 1024L * 1024L * 1024L,
+    "TB" -> 1024L * 1024L * 1024L * 1024L
   )
   // Unit is optional: bare integers (e.g. 134217728) are treated as bytes.
-  // Longest alternative first: G(?:B)? before bare B prevents "GB" matching as G + leftover B.
-  private val pattern = """(\d+(?:\.\d+)?)\s*(G(?:B)?|M(?:B)?|K(?:B)?|B)?""".r
+  // Longest alternative first prevents partial matches (e.g. GB matched as G).
+  private val pattern =
+    """(\d+(?:\.\d+)?)\s*(T(?:B)?|G(?:B)?|M(?:B)?|K(?:B)?|B)?""".r
 
   def parse(sizeStr: String): Long =
     sizeStr.toUpperCase match {

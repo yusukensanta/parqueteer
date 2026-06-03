@@ -11,7 +11,7 @@ object ShellCompletions {
       |  _init_completion || return
       |
       |  local commands="read info write validate convert merge schema stats config completions"
-      |  local formats="table json csv pretty markdown ndjson"
+      |  local formats="table json csv pretty markdown ndjson ltsv"
       |  local compressions="none snappy gzip lzo brotli lz4 zstd"
       |
       |  case "${words[1]}" in
@@ -97,7 +97,7 @@ object ShellCompletions {
       |    'config:Show or validate configuration'
       |    'completions:Generate shell completion scripts'
       |  )
-      |  formats=(table json csv pretty markdown ndjson)
+      |  formats=(table json csv pretty markdown ndjson ltsv)
       |  compressions=(none snappy gzip lzo brotli lz4 zstd)
       |
       |  _arguments -C \
@@ -196,7 +196,7 @@ object ShellCompletions {
       |complete -c parqueteer -l color   -f -a 'auto always never' -d 'Color output mode'
       |
       |# read
-      |complete -c parqueteer -n '__fish_seen_subcommand_from read' -l format   -f -a 'table json csv pretty markdown ndjson' -d 'Output format'
+      |complete -c parqueteer -n '__fish_seen_subcommand_from read' -l format   -f -a 'table json csv pretty markdown ndjson ltsv' -d 'Output format'
       |complete -c parqueteer -n '__fish_seen_subcommand_from read' -l limit    -s n -d 'Maximum rows'
       |complete -c parqueteer -n '__fish_seen_subcommand_from read' -l columns  -s c -d 'Columns to display'
       |complete -c parqueteer -n '__fish_seen_subcommand_from read' -l filter   -s f -d 'Filter expression'
