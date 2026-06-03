@@ -175,18 +175,28 @@ class HadoopParquetRepository(
     )
   }
 
+  private val FooterCacheMaxSize = 1024
+
   // Cache-aware footer fetch: 0 cloud ops on hit, 1 stat + 1 stream on miss.
+  // Bounded to FooterCacheMaxSize entries; evicts (clears all) when full to
+  // prevent unbounded growth during large multi-file merge operations.
   private def getFooter(
       path: HadoopPath,
       conf: Configuration
-  ): (MessageType, List[BlockMetaData]) =
-    footerCache.getOrElseUpdate(
-      path.toString, {
+  ): (MessageType, List[BlockMetaData]) = {
+    val key = path.toString
+    footerCache.get(key) match {
+      case Some(cached) => cached
+      case None =>
         val footerBytes = readFooterBytes(HadoopInputFile.fromPath(path, conf))
         val meta = parseFooter(footerBytes)
-        (meta.getFileMetaData.getSchema, meta.getBlocks.asScala.toList)
-      }
-    )
+        val entry =
+          (meta.getFileMetaData.getSchema, meta.getBlocks.asScala.toList)
+        if (footerCache.size >= FooterCacheMaxSize) footerCache.clear()
+        footerCache.put(key, entry)
+        entry
+    }
+  }
 
   // ── Public API ────────────────────────────────────────────────────────────
 

@@ -8,7 +8,7 @@ private[cli] object CredentialRedactor {
     "(?i)(Signature=)[^&\\s]+".r,
     "(?i)(aws_secret_access_key\\s*=\\s*)\\S+".r,
     "(?i)((?:\\?|&)sig=)[^&\\s]+".r,
-    "(-----BEGIN [A-Z ]+-----)[^-]+".r,
+    "(-----BEGIN [A-Z ]+-----)[\\s\\S]*?-----END [A-Z ]+-----".r,
     // AWS access key ID prefixes: AKIA/ASIA (credentials), AROA/AIPA/ANPA/AGPA/AIDA (service principals)
     "()\\bA(?:KIA|SIA|ROA|IPA|NPA|GPA|IDA)[A-Z0-9]{16}\\b".r,
     // Azure storage account key embedded in Hadoop config property value

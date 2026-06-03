@@ -139,6 +139,28 @@ class CSVFormatterTest extends AnyFlatSpec with Matchers {
     result should include("false")
   }
 
+  it should "prefix formula-injection trigger chars with single quote (CWE-1236)" in {
+    val injectionContent = FileContent(
+      rows = List(
+        Map("cmd" -> CellValue.Str("=SUM(A1:A10)")),
+        Map("cmd" -> CellValue.Str("+malicious()")),
+        Map("cmd" -> CellValue.Str("-1+1")),
+        Map("cmd" -> CellValue.Str("@SUM(1+1)")),
+        Map("cmd" -> CellValue.Str("safe value"))
+      ),
+      totalRows = 5L,
+      isPartial = false
+    )
+    val result = formatter.formatContent(injectionContent, None)
+    result should include("'=SUM(A1:A10)")
+    result should include("'+malicious()")
+    result should include("'-1+1")
+    result should include("'@SUM(1+1)")
+    result should include("safe value")
+    result should not include ",=SUM"
+    result should not include "\r\n=SUM"
+  }
+
   "CSVFormatter.formatSchema" should "include header with Column Name and Data Type" in {
     val result = formatter.formatSchema(sampleSchema)
     result should include("Column Name")

@@ -133,12 +133,13 @@ class CredentialRedactorTest
     result should include("sig=[REDACTED]")
   }
 
-  it should "redact PEM private key block content" in {
+  it should "redact PEM private key block content including END marker" in {
     val input =
       "Error parsing service account: -----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQ\n-----END PRIVATE KEY-----"
     val result = CredentialRedactor.redact(input)
     result should not include "MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQ"
     result should include("-----BEGIN PRIVATE KEY-----")
+    result should not include "-----END PRIVATE KEY-----"
     result should include("[REDACTED]")
   }
 

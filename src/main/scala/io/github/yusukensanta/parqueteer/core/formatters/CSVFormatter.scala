@@ -93,17 +93,26 @@ class CSVFormatter extends OutputFormatter {
   }
 
   private def escapeField(field: String): String = {
-    val needsQuoting = field.contains(Delimiter) ||
-      field.contains(Quote) ||
-      field.contains("\n") ||
-      field.contains("\r")
+    // CWE-1236: prefix formula-trigger chars to prevent spreadsheet formula execution
+    val sanitized =
+      if (
+        field.nonEmpty && (field.charAt(0) match {
+          case '=' | '+' | '-' | '@' | '\t' | '\r' => true
+          case _                                   => false
+        })
+      ) "'" + field
+      else field
+
+    val needsQuoting = sanitized.contains(Delimiter) ||
+      sanitized.contains(Quote) ||
+      sanitized.contains("\n") ||
+      sanitized.contains("\r")
 
     if (needsQuoting) {
-      // Escape quotes by doubling them
-      val escaped = field.replace(Quote, Quote + Quote)
+      val escaped = sanitized.replace(Quote, Quote + Quote)
       Quote + escaped + Quote
     } else {
-      field
+      sanitized
     }
   }
 }
