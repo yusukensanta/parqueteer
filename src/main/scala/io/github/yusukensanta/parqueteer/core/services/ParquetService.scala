@@ -357,7 +357,9 @@ class ParquetService(
       stdin: java.io.InputStream = System.in
   ): Try[List[Map[String, CellValue]]] = Try {
     val content =
-      Using.resource(scala.io.Source.fromInputStream(stdin))(_.mkString)
+      Using.resource(
+        scala.io.Source.fromInputStream(stdin)(using scala.io.Codec.UTF8)
+      )(_.mkString)
     inputFormat.toLowerCase match {
       case "json"   => parseJsonContent(content)
       case "ndjson" => parseNdjsonContent(content)
@@ -428,27 +430,37 @@ class ParquetService(
       path: String
   ): Try[List[Map[String, CellValue]]] = Try {
     import better.files._
-    parseJsonContent(File(path).contentAsString)
+    parseJsonContent(
+      File(path).contentAsString(using java.nio.charset.StandardCharsets.UTF_8)
+    )
   }
 
   private def readNdjsonFile(
       path: String
   ): Try[List[Map[String, CellValue]]] = Try {
     import better.files._
-    parseNdjsonLines(File(path).lineIterator)
+    parseNdjsonLines(
+      File(path).lineIterator(using java.nio.charset.StandardCharsets.UTF_8)
+    )
   }
 
   private def readCsvFile(path: String): Try[List[Map[String, CellValue]]] =
     Try {
       import better.files._
-      parseCsvContent(File(path).contentAsString)
+      parseCsvContent(
+        File(path).contentAsString(using
+          java.nio.charset.StandardCharsets.UTF_8
+        )
+      )
     }
 
   private def readLtsvFile(path: String): Try[List[Map[String, CellValue]]] =
     Try {
       import better.files._
       io.github.yusukensanta.parqueteer.core.util.LTSVParser
-        .parseLines(File(path).lineIterator)
+        .parseLines(
+          File(path).lineIterator(using java.nio.charset.StandardCharsets.UTF_8)
+        )
         .toList
     }
 
