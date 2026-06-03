@@ -105,6 +105,28 @@ class CsvParserTest
     records(0)(1) shouldBe "b"
   }
 
+  // ── RFC 4180 compliance: content after closing quote (#C6) ───────────────
+
+  it should "throw when a non-delimiter character follows a closing quote" in {
+    // "a"b is malformed — RFC 4180 §2.5 requires delimiter or EOF after closing quote
+    an[IllegalArgumentException] should be thrownBy CsvParser.parseRfc4180(
+      "\"a\"b,c\n"
+    )
+  }
+
+  it should "not throw for a valid quoted field followed by comma" in {
+    val records = CsvParser.parseRfc4180("\"a\",b\n")
+    records should have size 1
+    records(0)(0) shouldBe "a"
+    records(0)(1) shouldBe "b"
+  }
+
+  it should "not throw for a valid quoted field followed by newline" in {
+    val records = CsvParser.parseRfc4180("\"hello\"\n")
+    records should have size 1
+    records(0)(0) shouldBe "hello"
+  }
+
   // ── pre-existing RFC 4180 features (regression) ──────────────────────────
 
   "CsvParser.parseRfc4180" should "handle quoted fields with commas" in {

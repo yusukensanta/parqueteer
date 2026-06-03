@@ -44,6 +44,12 @@ class RowStreamWriterTest extends AnyFlatSpec with Matchers {
     run(OutputFormat.NDJSON, List.empty) shouldBe ""
   }
 
+  it should "use LF line endings, not CRLF" in {
+    val out = run(OutputFormat.NDJSON, List(row1))
+    out should endWith("\n")
+    out should not include "\r\n"
+  }
+
   it should "produce no output when begin and end are never called" in {
     val out = capture { ps =>
       val _ = RowStreamWriter(OutputFormat.NDJSON, ps)
@@ -191,6 +197,12 @@ class RowStreamWriterTest extends AnyFlatSpec with Matchers {
 
   it should "emit nothing for empty input" in {
     run(OutputFormat.LTSV, List.empty) shouldBe ""
+  }
+
+  it should "use LF line endings, not CRLF" in {
+    val out = run(OutputFormat.LTSV, List(row1))
+    out should endWith("\n")
+    out should not include "\r\n"
   }
 
   // ── Schema drift ─────────────────────────────────────────────────────────────
