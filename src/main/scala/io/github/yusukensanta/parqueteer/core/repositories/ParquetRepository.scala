@@ -214,7 +214,10 @@ class HadoopParquetRepository(
               applyMaxRows(reader, config.maxRows)
                 .map(r =>
                   ParquetRecordDecoder.postProcessTemporalFields(
-                    ParquetRecordDecoder.convertRecordToMap(r),
+                    ParquetRecordDecoder.convertRecordToMapWithSchema(
+                      r,
+                      fileSchema
+                    ),
                     fileSchema
                   )
                 )
@@ -475,6 +478,13 @@ class HadoopParquetRepository(
           case None     => ParquetSchemaBuilder.inferSchemaFromData(data)
         }
 
+        location match {
+          case LocalPath(p) =>
+            val parent = java.nio.file.Paths.get(p).getParent
+            if (parent != null) java.nio.file.Files.createDirectories(parent)
+          case _ =>
+        }
+
         val writer = ExampleParquetWriter
           .builder(new HadoopPath(location.path))
           .withType(parquetSchema)
@@ -514,6 +524,14 @@ class HadoopParquetRepository(
         import org.apache.hadoop.fs.{Path => HadoopPath}
 
         val parquetSchema = ParquetSchemaBuilder.buildMessageType(schema)
+
+        location match {
+          case LocalPath(p) =>
+            val parent = java.nio.file.Paths.get(p).getParent
+            if (parent != null) java.nio.file.Files.createDirectories(parent)
+          case _ =>
+        }
+
         val writer = ExampleParquetWriter
           .builder(new HadoopPath(location.path))
           .withType(parquetSchema)

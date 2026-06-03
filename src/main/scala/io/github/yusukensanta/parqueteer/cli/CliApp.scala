@@ -383,7 +383,7 @@ object CliApp {
               ) && error.userMessage.contains("BINARY")
             )
               Some(
-                "Hint: CSV-imported files store all columns as BINARY (string). Use string comparisons instead: column = \"value\""
+                "Hint: BINARY/STRING columns require quoted-string comparisons. Use: column = \"value\""
               )
             else None
           reportError("Error", globalOptions, filterHint)(error)

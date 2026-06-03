@@ -18,7 +18,7 @@ object SizeParser {
     """(\d+(?:\.\d+)?)\s*(T(?:B)?|G(?:B)?|M(?:B)?|K(?:B)?|B)?""".r
 
   def parse(sizeStr: String): Long =
-    sizeStr.toUpperCase match {
+    sizeStr.trim.toUpperCase match {
       case pattern(size, unit) =>
         val multiplier = units.getOrElse(Option(unit).getOrElse("B"), 1L)
         val bytes = BigDecimal(size) * multiplier
