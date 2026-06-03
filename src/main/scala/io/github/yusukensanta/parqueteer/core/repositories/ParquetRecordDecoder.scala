@@ -146,11 +146,14 @@ private[repositories] object ParquetRecordDecoder {
     val converter = new GroupRecordConverter(requestedSchema)
     val recordReader = columnIO.getRecordReader(pageStore, converter)
     val rowCount = pageStore.getRowCount
-    (0L until rowCount).flatMap { _ =>
+    val result = List.newBuilder[Map[String, CellValue]]
+    var i = 0L
+    while (i < rowCount) {
       val group = recordReader.read()
-      if (group == null) None
-      else Some(decodeGroup(group, requestedSchema))
-    }.toList
+      if (group != null) result += decodeGroup(group, requestedSchema)
+      i += 1
+    }
+    result.result()
   }
 
   def decodeGroup(
