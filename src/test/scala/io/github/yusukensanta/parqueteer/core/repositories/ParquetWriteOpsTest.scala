@@ -243,11 +243,12 @@ class ParquetWriteOpsTest extends AnyFlatSpec with Matchers {
     group.getFieldRepetitionCount("age") shouldBe 0
   }
 
-  it should "throw IllegalArgumentException with actionable message when a row key is absent from the schema" in {
+  it should "throw RowSchemaMismatchException with actionable message when a row key is absent from the schema" in {
+    import io.github.yusukensanta.parqueteer.core.models.ParqueteerError
     val mt =
       MessageTypeParser.parseMessageType("message root { required int32 age; }")
     val group = new SimpleGroupFactory(mt).newGroup()
-    val ex = intercept[IllegalArgumentException] {
+    val ex = intercept[ParqueteerError.RowSchemaMismatchException] {
       ParquetWriteOps.writeRowToGroup(
         group,
         Map("age" -> CellValue.I32(30), "unknown" -> CellValue.Str("x")),
@@ -256,6 +257,21 @@ class ParquetWriteOpsTest extends AnyFlatSpec with Matchers {
     }
     ex.getMessage should include("unknown")
     ex.getMessage should include("schema")
+  }
+
+  it should "throw ArithmeticException for extreme Date epoch day that overflows Int" in {
+    val mt = MessageTypeParser.parseMessageType(
+      "message root { required int32 d (DATE); }"
+    )
+    val group = new SimpleGroupFactory(mt).newGroup()
+    val extremeDate = java.time.LocalDate.of(999999999, 1, 1)
+    an[ArithmeticException] should be thrownBy {
+      ParquetWriteOps.writeRowToGroup(
+        group,
+        Map("d" -> CellValue.Date(extremeDate)),
+        mt
+      )
+    }
   }
 
   it should "write multiple known fields in a single group" in {

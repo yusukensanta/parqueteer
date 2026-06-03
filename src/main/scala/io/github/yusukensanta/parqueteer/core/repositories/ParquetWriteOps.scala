@@ -2,7 +2,8 @@ package io.github.yusukensanta.parqueteer.core.repositories
 
 import io.github.yusukensanta.parqueteer.core.models.{
   CellValue,
-  CompressionType
+  CompressionType,
+  ParqueteerError
 }
 import org.apache.parquet.hadoop.metadata.CompressionCodecName
 import org.apache.parquet.io.api.Binary
@@ -25,7 +26,7 @@ private[repositories] object ParquetWriteOps {
           try schema.getFieldIndex(key)
           catch {
             case _: org.apache.parquet.io.InvalidRecordException =>
-              throw new IllegalArgumentException(
+              throw new ParqueteerError.RowSchemaMismatchException(
                 s"Column '$key' in input row not found in schema. The schema was inferred from the first batch of rows — all rows must contain a consistent set of columns."
               )
           }
@@ -36,8 +37,9 @@ private[repositories] object ParquetWriteOps {
           case CellValue.F32(f)  => group.add(fieldIndex, f)
           case CellValue.Bool(b) => group.add(fieldIndex, b)
           case CellValue.Str(s)  => group.add(fieldIndex, s)
-          case CellValue.Date(d) => group.add(fieldIndex, d.toEpochDay.toInt)
-          case CellValue.Ts(i)   => group.add(fieldIndex, i.toEpochMilli)
+          case CellValue.Date(d) =>
+            group.add(fieldIndex, Math.toIntExact(d.toEpochDay))
+          case CellValue.Ts(i) => group.add(fieldIndex, i.toEpochMilli)
           case CellValue.Dec(bd) =>
             if (decimalWarnedOnce.compareAndSet(false, true))
               logger.warn(

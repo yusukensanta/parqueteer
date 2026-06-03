@@ -277,4 +277,30 @@ class TableFormatterTest extends AnyFlatSpec with Matchers {
     result should not startWith "Error:"
     result should include("┌")
   }
+
+  "TableFormatter.truncate" should "return empty string for maxWidth 0" in {
+    formatter.truncate("hello", 0) shouldBe ""
+  }
+
+  it should "return single dot for maxWidth 1" in {
+    formatter.truncate("hello", 1) shouldBe "."
+  }
+
+  it should "return two dots for maxWidth 2" in {
+    formatter.truncate("hello", 2) shouldBe ".."
+  }
+
+  it should "return three dots for maxWidth 3" in {
+    formatter.truncate("hello", 3) shouldBe "..."
+  }
+
+  it should "truncate with ellipsis for maxWidth 4 when string is longer" in {
+    val result = formatter.truncate("hello world", 4)
+    result.length should be <= 4
+    result should endWith("...")
+  }
+
+  it should "return string unchanged when it fits within maxWidth" in {
+    formatter.truncate("hi", 10) shouldBe "hi"
+  }
 }

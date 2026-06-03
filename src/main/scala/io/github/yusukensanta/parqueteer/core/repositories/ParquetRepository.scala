@@ -277,7 +277,8 @@ class HadoopParquetRepository(
           iter.foreach { record =>
             process(
               ParquetRecordDecoder.postProcessTemporalFields(
-                ParquetRecordDecoder.convertRecordToMap(record),
+                ParquetRecordDecoder
+                  .convertRecordToMapWithSchema(record, fileSchema),
                 fileSchema
               )
             )
@@ -557,16 +558,18 @@ class HadoopParquetRepository(
 
         var count = 0L
         val factory = new SimpleGroupFactory(parquetSchema)
-        try {
-          feed { row =>
-            val group = factory.newGroup()
-            ParquetWriteOps.writeRowToGroup(group, row, parquetSchema)
-            writer.write(group)
-            count += 1
+        // Using preserves the feed exception as primary and adds close failure as suppressed,
+        // preventing writer.close() from masking the original MergeStreamException.
+        scala.util
+          .Using(writer) { w =>
+            feed { row =>
+              val group = factory.newGroup()
+              ParquetWriteOps.writeRowToGroup(group, row, parquetSchema)
+              w.write(group)
+              count += 1
+            }
           }
-        } finally {
-          writer.close()
-        }
+          .get
         count
       }
     }

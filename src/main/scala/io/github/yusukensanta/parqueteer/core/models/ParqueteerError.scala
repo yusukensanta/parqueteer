@@ -53,10 +53,22 @@ object ParqueteerError:
       cause: Throwable = null
   ) extends RuntimeException(message, cause)
 
+  /** Thrown when a row field is missing from the write schema — maps to
+    * ParseError rather than the generic InvalidFormat to produce a clear "Parse
+    * error (input): ..." message.
+    */
+  class RowSchemaMismatchException(message: String)
+      extends IllegalArgumentException(message)
+
   extension [A](t: Try[A])
     def toParqueteerError: Either[ParqueteerError, A] =
       t.toEither.left.map {
         case e: CloudAuthException => CloudAuthError(e.provider, e.getMessage)
+        case e: RowSchemaMismatchException =>
+          ParseError(
+            "input",
+            Option(e.getMessage).getOrElse(e.getClass.getSimpleName)
+          )
         case e: IllegalArgumentException =>
           InvalidFormat(
             "argument",
