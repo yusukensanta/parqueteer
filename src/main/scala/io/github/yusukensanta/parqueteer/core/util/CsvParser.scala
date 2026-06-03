@@ -42,6 +42,8 @@ object CsvParser {
     val fields = scala.collection.mutable.ArrayBuffer.empty[String]
     val current = new StringBuilder
     var inQuote = false
+    // RFC 4180 §2.5: after a closing quote, only delimiter/newline/EOF is valid.
+    var postQuote = false
     var i = 0
     val n = content.length
 
@@ -65,15 +67,24 @@ object CsvParser {
           current.append('"'); i += 1
         case '"' if inQuote =>
           inQuote = false
+          postQuote = true
         case ',' if !inQuote =>
+          postQuote = false
           fields += current.toString
           current.clear()
         case '\r' if !inQuote =>
+          postQuote = false
           finishRow()
           if (i + 1 < n && content(i + 1) == '\n') i += 1
         case '\n' if !inQuote =>
+          postQuote = false
           finishRow()
         case c =>
+          if (postQuote)
+            throw new IllegalArgumentException(
+              s"Malformed CSV: data after closing quote at position $i — " +
+                "use double-quotes to include quotes inside a field"
+            )
           current.append(c)
       }
       i += 1

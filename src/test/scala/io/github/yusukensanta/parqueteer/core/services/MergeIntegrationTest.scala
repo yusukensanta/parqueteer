@@ -270,6 +270,65 @@ class MergeIntegrationTest extends AnyFlatSpec with Matchers {
     rows should have length 2
   }
 
+  it should "preserve REQUIRED nullability for columns present and required in all union inputs" taggedAs MergeIntegrationTest in {
+    val requiredSchema = Types
+      .buildMessage()
+      .addField(
+        Types
+          .primitive(PrimitiveTypeName.INT64, Repetition.REQUIRED)
+          .named("id")
+      )
+      .named("msg")
+    val in1 = writeTempWithSchema(requiredSchema)
+    val in2 = writeTempWithSchema(requiredSchema)
+    val out = tempFile().getAbsolutePath
+
+    val result =
+      service.mergeFiles(List(in1, in2), out, WriteConfig(), SchemaMode.Union)
+    result.isRight shouldBe true
+
+    val schema = repo.readSchema(ParquetFile(LocalPath(out))).get
+    val idCol = schema.columns.find(_.name == "id").get
+    idCol.isOptional shouldBe false
+  }
+
+  it should "mark column as OPTIONAL in union mode if it is absent from any input" taggedAs MergeIntegrationTest in {
+    val schemaWithId = Types
+      .buildMessage()
+      .addField(
+        Types
+          .primitive(PrimitiveTypeName.INT64, Repetition.REQUIRED)
+          .named("id")
+      )
+      .addField(
+        Types
+          .primitive(PrimitiveTypeName.BINARY, Repetition.OPTIONAL)
+          .named("name")
+      )
+      .named("msg")
+    val schemaIdOnly = Types
+      .buildMessage()
+      .addField(
+        Types
+          .primitive(PrimitiveTypeName.INT64, Repetition.REQUIRED)
+          .named("id")
+      )
+      .named("msg")
+    val in1 = writeTempWithSchema(schemaWithId)
+    val in2 = writeTempWithSchema(schemaIdOnly)
+    val out = tempFile().getAbsolutePath
+
+    val result =
+      service.mergeFiles(List(in1, in2), out, WriteConfig(), SchemaMode.Union)
+    result.isRight shouldBe true
+
+    val schema = repo.readSchema(ParquetFile(LocalPath(out))).get
+    val idCol = schema.columns.find(_.name == "id").get
+    val nameCol = schema.columns.find(_.name == "name").get
+    idCol.isOptional shouldBe false // required in both
+    nameCol.isOptional shouldBe true // absent from in2
+  }
+
   it should "call progress callback for each input file" taggedAs MergeIntegrationTest in {
     val in1 = writeTemp(data1)
     val in2 = writeTemp(data2)
