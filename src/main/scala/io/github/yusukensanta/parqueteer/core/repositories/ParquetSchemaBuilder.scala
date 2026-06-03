@@ -157,15 +157,13 @@ private[repositories] object ParquetSchemaBuilder {
   private def stringAnnotation: LogicalTypeAnnotation =
     LogicalTypeAnnotation.stringType()
 
-  /** Inferred CellValue type for schema-from-data. Ordering matters for
-    * `widenTypeRanks`: numeric ranks (Int < Long < Float < Double) are widened
-    * within the numeric family; everything else falls back to String.
-    */
+  /** Inferred CellValue type for schema-from-data. */
   private enum TypeRank:
     case Int, Long, Float, Double, Boolean, Date, Timestamp, String
 
-  private val numericRanks: Set[TypeRank] =
-    Set(TypeRank.Int, TypeRank.Long, TypeRank.Float, TypeRank.Double)
+  private val integerRanks: Set[TypeRank] = Set(TypeRank.Int, TypeRank.Long)
+  private val floatRanks: Set[TypeRank] = Set(TypeRank.Float, TypeRank.Double)
+  private val numericRanks: Set[TypeRank] = integerRanks | floatRanks
 
   private def typeRankForValue(v: CellValue): TypeRank = v match {
     case CellValue.I32(_)  => TypeRank.Int
@@ -179,13 +177,17 @@ private[repositories] object ParquetSchemaBuilder {
     case _                 => TypeRank.String
   }
 
-  /** Within the numeric family widen to the max rank; incompatible types fall
-    * back to String.
+  /** Widen two numeric ranks losslessly. Integer+float cross-family always
+    * produces Double — Float cannot represent the full Long range.
     */
   private def widenTypeRanks(a: TypeRank, b: TypeRank): TypeRank =
     if (a == b) a
-    else if (numericRanks(a) && numericRanks(b))
+    else if (integerRanks(a) && integerRanks(b))
       if (a.ordinal >= b.ordinal) a else b
+    else if (floatRanks(a) && floatRanks(b))
+      if (a.ordinal >= b.ordinal) a else b
+    else if (numericRanks(a) && numericRanks(b))
+      TypeRank.Double
     else TypeRank.String
 
   private def rankToParquetType(

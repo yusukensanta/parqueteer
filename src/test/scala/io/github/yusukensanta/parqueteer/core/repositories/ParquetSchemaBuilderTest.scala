@@ -465,6 +465,24 @@ class ParquetSchemaBuilderTest extends AnyFlatSpec with Matchers {
     fieldByName(mt, "x").getPrimitiveTypeName shouldBe PrimitiveTypeName.DOUBLE
   }
 
+  it should "widen I64 and F32 to DOUBLE (Float cannot represent full Long range)" in {
+    val data = List(
+      Map[String, CellValue]("x" -> CellValue.I64(Long.MaxValue)),
+      Map[String, CellValue]("x" -> CellValue.F32(1.5f))
+    )
+    val mt = ParquetSchemaBuilder.inferSchemaFromData(data)
+    fieldByName(mt, "x").getPrimitiveTypeName shouldBe PrimitiveTypeName.DOUBLE
+  }
+
+  it should "widen I32 and F32 to DOUBLE (Float cannot represent all Int values exactly)" in {
+    val data = List(
+      Map[String, CellValue]("x" -> CellValue.I32(42)),
+      Map[String, CellValue]("x" -> CellValue.F32(1.5f))
+    )
+    val mt = ParquetSchemaBuilder.inferSchemaFromData(data)
+    fieldByName(mt, "x").getPrimitiveTypeName shouldBe PrimitiveTypeName.DOUBLE
+  }
+
   it should "fall back to BINARY when Str and I64 appear in the same column" in {
     val data = List(
       Map[String, CellValue]("x" -> CellValue.Str("twenty")),

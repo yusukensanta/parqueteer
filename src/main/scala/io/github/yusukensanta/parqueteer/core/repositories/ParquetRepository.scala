@@ -339,13 +339,11 @@ class HadoopParquetRepository(
           if (relevantChunks.isEmpty) List.empty[Map[String, CellValue]]
           else {
             val rangeStart = relevantChunks.map(_.getStartingPos).min
-            val rangeLength =
-              relevantChunks
-                .map(c => c.getStartingPos + c.getTotalSize)
-                .max - rangeStart
+            val rangeEnd =
+              relevantChunks.map(c => c.getStartingPos + c.getTotalSize).max
             val readOptions = org.apache.parquet.ParquetReadOptions
               .builder()
-              .withRange(rangeStart, rangeLength)
+              .withRange(rangeStart, rangeEnd)
               .build()
             Using.resource(
               ParquetFileReader.open(
