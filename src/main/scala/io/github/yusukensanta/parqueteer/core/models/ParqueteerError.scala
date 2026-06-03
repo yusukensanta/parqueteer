@@ -57,7 +57,11 @@ object ParqueteerError:
     def toParqueteerError: Either[ParqueteerError, A] =
       t.toEither.left.map {
         case e: CloudAuthException => CloudAuthError(e.provider, e.getMessage)
-        case e: IllegalArgumentException => ParseError("input", e.getMessage)
+        case e: IllegalArgumentException =>
+          InvalidFormat(
+            "argument",
+            Option(e.getMessage).getOrElse(e.getClass.getSimpleName)
+          )
         case e: java.io.FileNotFoundException =>
           val raw = Option(e.getMessage).getOrElse("unknown")
           // getMessage is typically "path (No such file or directory)" — extract just the path

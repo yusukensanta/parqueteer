@@ -131,7 +131,7 @@ class ConfigurationManager {
   }
 
   def validate(configPath: Option[String] = None): Try[List[String]] = {
-    val configFile = configPath.map(File(_)).getOrElse(defaultConfigPath)
+    val configFile = File(resolvedConfigPath(configPath))
     if (!configFile.exists) {
       Success(
         List(

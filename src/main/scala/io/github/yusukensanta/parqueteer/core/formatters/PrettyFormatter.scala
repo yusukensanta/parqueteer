@@ -160,8 +160,9 @@ class PrettyFormatter(useColors: Boolean = sys.env.get("NO_COLOR").isEmpty)
       widths: List[Int]
   ): String = {
     val paddedValues = columns.zip(widths).map { case (col, width) =>
-      colorize(col, Bold + Cyan) + " " * (width - tableFormatter
-        .displayWidth(col))
+      val truncated = tableFormatter.truncate(col, width)
+      colorize(truncated, Bold + Cyan) + " " * (width - tableFormatter
+        .displayWidth(truncated))
     }
     colorize("│", Dim) + paddedValues.mkString(colorize("│", Dim)) + colorize(
       "│",
