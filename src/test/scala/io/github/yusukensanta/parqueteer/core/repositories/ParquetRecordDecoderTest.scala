@@ -245,6 +245,32 @@ class ParquetRecordDecoderTest extends AnyFlatSpec with Matchers {
     result("name") shouldBe CellValue.Str("Alice")
   }
 
+  it should "decode unannotated BINARY field as CellValue.Bytes (not Str)" in {
+    val schema = MessageTypeParser.parseMessageType(
+      "message root { required binary raw_data; }"
+    )
+    val bytes = Array[Byte](0x00.toByte, 0xff.toByte, 0xfe.toByte)
+    val bin = org.apache.parquet.io.api.Binary.fromConstantByteArray(bytes)
+    val group =
+      new SimpleGroupFactory(schema).newGroup().append("raw_data", bin)
+    val result = ParquetRecordDecoder.decodeGroup(group, schema)
+    result("raw_data") match {
+      case CellValue.Bytes(actual) => actual.toSeq shouldBe bytes.toSeq
+      case other => fail(s"Expected CellValue.Bytes, got $other")
+    }
+  }
+
+  it should "decode STRING-annotated BINARY as Str, not Bytes" in {
+    val schema = MessageTypeParser.parseMessageType(
+      "message root { required binary label (STRING); }"
+    )
+    val group = new SimpleGroupFactory(schema)
+      .newGroup()
+      .append("label", org.apache.parquet.io.api.Binary.fromString("hello"))
+    val result = ParquetRecordDecoder.decodeGroup(group, schema)
+    result("label") shouldBe CellValue.Str("hello")
+  }
+
   it should "decode INT32 DATE field as LocalDate" in {
     val schema = MessageTypeParser.parseMessageType(
       "message root { required int32 dob (DATE); }"

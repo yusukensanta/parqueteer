@@ -319,6 +319,13 @@ object CliApp {
         s"Warning: --parallelism $effectiveParallelism is ignored in streaming mode; streaming is always sequential."
       )
 
+    if (
+      effectiveStreaming && format == OutputFormat.Pretty && !globalOptions.quiet
+    )
+      System.err.println(
+        "Warning: --format pretty is not supported in streaming mode; falling back to ndjson."
+      )
+
     if (effectiveStreaming) {
       val writer = if (globalOptions.quiet) new RowStreamWriter {
         override def writeRow(row: Map[String, CellValue]): Unit = ()
@@ -338,7 +345,14 @@ object CliApp {
           s"[parqueteer] warning: error flushing output: ${ex.getMessage}"
         )
       }
+      // PrintStream (System.out) swallows write errors; surface disk-full / broken-pipe.
+      val stdoutError = System.out.checkError()
       result match {
+        case _ if stdoutError =>
+          System.err.println(
+            "[parqueteer] error: output stream write error (disk full or broken pipe)"
+          )
+          1
         case Right(_) => 0
         case Left(error) =>
           reportError("Error", globalOptions)(error)

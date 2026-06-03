@@ -198,8 +198,19 @@ private[repositories] object ParquetRecordDecoder {
               CellValue.F64(group.getDouble(i, 0))
             case (PrimitiveTypeName.BOOLEAN, _) =>
               CellValue.Bool(group.getBoolean(i, 0))
-            case (PrimitiveTypeName.BINARY, _) =>
+            // Only STRING/ENUM/JSON-annotated BINARY is valid UTF-8 text; raw BINARY
+            // must be returned as Bytes to avoid corrupting non-UTF-8 data on round-trip.
+            case (
+                  PrimitiveTypeName.BINARY,
+                  Some(
+                    _: LogicalTypeAnnotation.StringLogicalTypeAnnotation |
+                    _: LogicalTypeAnnotation.EnumLogicalTypeAnnotation |
+                    _: LogicalTypeAnnotation.JsonLogicalTypeAnnotation
+                  )
+                ) =>
               CellValue.Str(group.getBinary(i, 0).toStringUsingUTF8)
+            case (PrimitiveTypeName.BINARY, _) =>
+              CellValue.Bytes(group.getBinary(i, 0).getBytes)
             case _ => CellValue.Str(group.getValueToString(i, 0))
           }
         builder += name -> value
