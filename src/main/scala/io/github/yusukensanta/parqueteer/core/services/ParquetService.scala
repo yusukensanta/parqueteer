@@ -275,11 +275,12 @@ class ParquetService(
                 write(finalRow)
               } match {
               case scala.util.Failure(err) =>
-                throw new MergeStreamException(err match {
-                  case e: IllegalArgumentException =>
-                    ParqueteerError.ParseError("input", e.getMessage)
-                  case e => ParqueteerError.IOError(e)
-                })
+                throw new MergeStreamException(
+                  scala.util
+                    .Failure(err)
+                    .toParqueteerError
+                    .fold(identity, _ => ParqueteerError.IOError(err))
+                )
               case _ =>
             }
           }

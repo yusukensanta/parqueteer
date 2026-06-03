@@ -757,7 +757,7 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     result.isLeft shouldBe true
   }
 
-  it should "wrap IllegalArgumentException from streamContent as ParseError, not IOError" in {
+  it should "wrap IllegalArgumentException from streamContent as InvalidFormat, not IOError" in {
     val illegalArg = new IllegalArgumentException("bad column type")
     val repo = new FakeParquetRepository(streamResult = Failure(illegalArg))
     val service = new ParquetService(repo)
@@ -769,7 +769,7 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     )
     result.isLeft shouldBe true
     val err = result.left.toOption.get
-    err shouldBe a[ParqueteerError.ParseError]
+    err shouldBe a[ParqueteerError.InvalidFormat]
     err.userMessage should include("bad column type")
   }
 

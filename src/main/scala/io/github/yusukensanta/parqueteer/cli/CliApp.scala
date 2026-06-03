@@ -154,11 +154,15 @@ object CliApp {
           executeCommand(effectiveCmd, service, opts)
         } catch {
           case e: Exception =>
-            logger.error("Unexpected error", e)
-            System.err.println(
-              s"Error: ${CredentialRedactor.redact(e.getMessage)}"
+            logger.error(
+              s"Unexpected error: ${CredentialRedactor
+                  .redact(Option(e.getMessage).getOrElse(e.getClass.getName))}"
             )
-            if (config.globalOptions.verbose) e.printStackTrace()
+            System.err.println(
+              s"Error: ${CredentialRedactor.redact(Option(e.getMessage).getOrElse(e.getClass.getSimpleName))}"
+            )
+            if (config.globalOptions.verbose)
+              System.err.println(CredentialRedactor.redactThrowable(e))
             1
         }
     }

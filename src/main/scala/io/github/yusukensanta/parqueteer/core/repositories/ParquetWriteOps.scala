@@ -10,6 +10,9 @@ import org.apache.parquet.schema.MessageType
 import org.apache.parquet.example.data.Group
 
 private[repositories] object ParquetWriteOps {
+  private val logger = org.slf4j.LoggerFactory.getLogger(getClass)
+  private val decimalWarnedOnce =
+    new java.util.concurrent.atomic.AtomicBoolean(false)
 
   def writeRowToGroup(
       group: Group,
@@ -35,7 +38,14 @@ private[repositories] object ParquetWriteOps {
           case CellValue.Str(s)  => group.add(fieldIndex, s)
           case CellValue.Date(d) => group.add(fieldIndex, d.toEpochDay.toInt)
           case CellValue.Ts(i)   => group.add(fieldIndex, i.toEpochMilli)
-          case CellValue.Dec(bd) => group.add(fieldIndex, bd.toDouble)
+          case CellValue.Dec(bd) =>
+            if (decimalWarnedOnce.compareAndSet(false, true))
+              logger.warn(
+                "Writing DECIMAL as DOUBLE — precision may be lost for values " +
+                  "with more than 15 significant digits. Future parqueteer versions " +
+                  "will write native Parquet DECIMAL encoding."
+              )
+            group.add(fieldIndex, bd.toDouble)
           case CellValue.Bytes(b) =>
             group.add(fieldIndex, Binary.fromConstantByteArray(b))
           case CellValue.Null => ()
