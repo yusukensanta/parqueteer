@@ -52,7 +52,7 @@ object ShellCompletions {
       |    write)
       |      case "$prev" in
       |        --compression|-c) COMPREPLY=($(compgen -W "$compressions" -- "$cur")) ; return ;;
-      |        --input-format) COMPREPLY=($(compgen -W "json csv" -- "$cur")) ; return ;;
+      |        --input-format) COMPREPLY=($(compgen -W "json ndjson csv ltsv" -- "$cur")) ; return ;;
       |        --row-group-size) return ;;
       |        *) COMPREPLY=($(compgen -W "--input-format --compression --row-group-size --dry-run" -- "$cur"))
       |           COMPREPLY+=($(compgen -f -- "$cur")) ; return ;;
@@ -147,7 +147,7 @@ object ShellCompletions {
       |            ':parquet file:_files -g "*.parquet"' ;;
       |        write)
       |          _arguments \
-      |            '--input-format[Input format]:format:(json csv)' \
+      |            '--input-format[Input format]:format:(json ndjson csv ltsv)' \
       |            '(-c --compression)'{-c,--compression}'[Compression]:type:('"${compressions[*]}"')' \
       |            '--row-group-size[Row group size]:size' \
       |            '--dry-run[Preview only]' \
@@ -207,7 +207,7 @@ object ShellCompletions {
       |complete -c parqueteer -n '__fish_seen_subcommand_from info' -l format -f -a 'table json' -d 'Output format'
       |
       |# write
-      |complete -c parqueteer -n '__fish_seen_subcommand_from write' -l input-format   -f -a 'json csv' -d 'Input file format'
+      |complete -c parqueteer -n '__fish_seen_subcommand_from write' -l input-format   -f -a 'json ndjson csv ltsv' -d 'Input file format'
       |complete -c parqueteer -n '__fish_seen_subcommand_from write' -l compression    -s c -f -a 'none snappy gzip lzo brotli lz4 zstd' -d 'Compression type'
       |complete -c parqueteer -n '__fish_seen_subcommand_from write' -l row-group-size -d 'Row group size'
       |complete -c parqueteer -n '__fish_seen_subcommand_from write' -l dry-run        -f -d 'Preview only'
