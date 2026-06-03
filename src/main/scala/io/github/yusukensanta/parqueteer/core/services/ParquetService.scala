@@ -250,6 +250,18 @@ class ParquetService(
       writeConfig: WriteConfig,
       onProgress: (Int, Int, String) => Unit
   ): Either[ParqueteerError, Long] = {
+    val nestedFields = mergedFields.filter(f =>
+      f.dataType.startsWith("STRUCT") || f.dataType
+        .startsWith("MAP") || f.dataType.startsWith("LIST")
+    )
+    if (nestedFields.nonEmpty)
+      return Left(
+        ParqueteerError.InvalidFormat(
+          "merge",
+          s"Cannot merge files containing nested columns: ${nestedFields.map(_.name).mkString(", ")}. " +
+            "Flatten STRUCT/MAP/LIST columns before merging."
+        )
+      )
     val explicitSchema = ParquetSchema(
       columns = mergedFields.map { f =>
         ColumnInfo(

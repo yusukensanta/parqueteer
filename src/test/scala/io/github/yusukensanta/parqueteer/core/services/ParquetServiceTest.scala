@@ -875,6 +875,90 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     bCol.get.isOptional shouldBe true
   }
 
+  // ── mergeFiles logical-type annotation preservation ──────────────────────
+  it should "preserve DATE type through schema merge (not degrade to INT32)" in {
+    var capturedSchema: Option[ParquetSchema] = None
+    val repo = new FakeParquetRepository(
+      schemaFieldsResult =
+        Success(List(FieldSummary("dob", "DATE", isOptional = true)))
+    ) {
+      override def writeContentStream(
+          location: StorageLocation,
+          schema: ParquetSchema,
+          config: WriteConfig
+      )(
+          feed: (Map[String, CellValue] => Unit) => Unit
+      ): scala.util.Try[Long] = {
+        capturedSchema = Some(schema)
+        super.writeContentStream(location, schema, config)(feed)
+      }
+    }
+    val service = new ParquetService(repo)
+    val result = service.mergeFiles(
+      List("/tmp/a.parquet", "/tmp/b.parquet"),
+      "/tmp/out.parquet",
+      WriteConfig(),
+      SchemaMode.Strict
+    )
+    result.isRight shouldBe true
+    capturedSchema.get.columns
+      .find(_.name == "dob")
+      .get
+      .dataType shouldBe "DATE"
+  }
+
+  it should "preserve STRING type through schema merge (not degrade to BINARY)" in {
+    var capturedSchema: Option[ParquetSchema] = None
+    val repo = new FakeParquetRepository(
+      schemaFieldsResult =
+        Success(List(FieldSummary("name", "STRING", isOptional = true)))
+    ) {
+      override def writeContentStream(
+          location: StorageLocation,
+          schema: ParquetSchema,
+          config: WriteConfig
+      )(
+          feed: (Map[String, CellValue] => Unit) => Unit
+      ): scala.util.Try[Long] = {
+        capturedSchema = Some(schema)
+        super.writeContentStream(location, schema, config)(feed)
+      }
+    }
+    val service = new ParquetService(repo)
+    val result = service.mergeFiles(
+      List("/tmp/a.parquet", "/tmp/b.parquet"),
+      "/tmp/out.parquet",
+      WriteConfig(),
+      SchemaMode.Strict
+    )
+    result.isRight shouldBe true
+    capturedSchema.get.columns
+      .find(_.name == "name")
+      .get
+      .dataType shouldBe "STRING"
+  }
+
+  it should "reject merge when files contain STRUCT columns" in {
+    val repo = new FakeParquetRepository(
+      schemaFieldsResult = Success(
+        List(
+          FieldSummary("id", "INT64", isOptional = false),
+          FieldSummary("nested", "STRUCT<a:INT32,b:INT32>", isOptional = true)
+        )
+      )
+    )
+    val service = new ParquetService(repo)
+    val result = service.mergeFiles(
+      List("/tmp/a.parquet", "/tmp/b.parquet"),
+      "/tmp/out.parquet",
+      WriteConfig(),
+      SchemaMode.Strict
+    )
+    result.isLeft shouldBe true
+    result.left.get.userMessage should include("nested")
+    result.left.get.userMessage should include("STRUCT")
+  }
+
   // ── mergeFiles compression propagation ───────────────────────────────────
   it should "pass WriteConfig compressionType to schema in writeContentStream" in {
     var capturedSchema: Option[ParquetSchema] = None

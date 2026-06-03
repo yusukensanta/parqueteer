@@ -649,15 +649,39 @@ class HadoopParquetRepository(
         val (schema, _) = getFooter(path, hadoopConfig)
         schema.getFields.asScala.toList.map { field =>
           val typeName =
-            if (field.isPrimitive)
-              field.asPrimitiveType().getPrimitiveTypeName.name()
-            else groupTypeCanonical(field.asGroupType())
+            if (field.isPrimitive) {
+              val pf = field.asPrimitiveType()
+              logicalTypeName(
+                pf.getPrimitiveTypeName,
+                pf.getLogicalTypeAnnotation
+              )
+            } else groupTypeCanonical(field.asGroupType())
           val optional =
             field.getRepetition == org.apache.parquet.schema.Type.Repetition.OPTIONAL
           FieldSummary(field.getName, typeName, optional)
         }
       }
     }
+
+  private def logicalTypeName(
+      primitive: org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName,
+      annotation: org.apache.parquet.schema.LogicalTypeAnnotation
+  ): String = {
+    import org.apache.parquet.schema.LogicalTypeAnnotation
+    if (annotation == null) primitive.name()
+    else
+      annotation match {
+        case _: LogicalTypeAnnotation.DateLogicalTypeAnnotation => "DATE"
+        case ts: LogicalTypeAnnotation.TimestampLogicalTypeAnnotation =>
+          if (ts.getUnit == LogicalTypeAnnotation.TimeUnit.MICROS)
+            "TIMESTAMP_MICROS"
+          else "TIMESTAMP_MILLIS"
+        case _: LogicalTypeAnnotation.StringLogicalTypeAnnotation => "STRING"
+        case _: LogicalTypeAnnotation.EnumLogicalTypeAnnotation   => "STRING"
+        case _: LogicalTypeAnnotation.JsonLogicalTypeAnnotation   => "STRING"
+        case _ => primitive.name()
+      }
+  }
 
   def deleteFile(location: StorageLocation): Try[Unit] =
     setupHadoopConfiguration(location).flatMap { hadoopConfig =>
