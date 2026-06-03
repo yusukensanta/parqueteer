@@ -214,6 +214,17 @@ class ParquetSchemaBuilderTest extends AnyFlatSpec with Matchers {
     ]
   }
 
+  it should "build a TIMESTAMP_MICROS field as INT64 with MICROS timestamp annotation" in {
+    val mt = ParquetSchemaBuilder.buildMessageType(
+      schema(columnInfo("ts_us", "TIMESTAMP_MICROS"))
+    )
+    val field = fieldByName(mt, "ts_us")
+    field.getPrimitiveTypeName shouldBe PrimitiveTypeName.INT64
+    val ann = field.getLogicalTypeAnnotation
+      .asInstanceOf[LogicalTypeAnnotation.TimestampLogicalTypeAnnotation]
+    ann.getUnit shouldBe LogicalTypeAnnotation.TimeUnit.MICROS
+  }
+
   it should "build a BINARY field with string logical type for STRING data type" in {
     val mt = ParquetSchemaBuilder.buildMessageType(
       schema(columnInfo("name", "STRING"))
