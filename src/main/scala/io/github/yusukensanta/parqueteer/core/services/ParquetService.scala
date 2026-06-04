@@ -165,12 +165,26 @@ class ParquetService(
             val thisSet = s.map(f => (f.name, f.dataType, f.isOptional)).toSet
             val missing = firstSet -- thisSet
             val extra = thisSet -- firstSet
+            val missingNames = missing.map(_._1)
+            val extraNames = extra.map(_._1)
+            val changedNames = missingNames.intersect(extraNames)
+            val onlyMissingNames = missingNames -- changedNames
+            val onlyExtraNames = extraNames -- changedNames
+            val fmt = (t: String, o: Boolean) => if (o) s"$t?" else t
+            val changedDetails = changedNames.toList.sorted.map { name =>
+              val (_, ft, fo) = missing.find(_._1 == name).get
+              val (_, tt, to) = extra.find(_._1 == name).get
+              s"$name (${fmt(ft, fo)} → ${fmt(tt, to)})"
+            }
             val diffMsg = List(
-              if (missing.nonEmpty)
-                s"missing: ${missing.map(_._1).toList.sorted.mkString(", ")}"
+              if (changedNames.nonEmpty)
+                s"type/nullability changed: ${changedDetails.mkString(", ")}"
               else "",
-              if (extra.nonEmpty)
-                s"extra: ${extra.map(_._1).toList.sorted.mkString(", ")}"
+              if (onlyMissingNames.nonEmpty)
+                s"missing: ${onlyMissingNames.toList.sorted.mkString(", ")}"
+              else "",
+              if (onlyExtraNames.nonEmpty)
+                s"extra: ${onlyExtraNames.toList.sorted.mkString(", ")}"
               else ""
             ).filter(_.nonEmpty).mkString("; ")
             Left(
@@ -322,6 +336,59 @@ class ParquetService(
       case other => other.toParqueteerError
     }
   }
+
+  /** Stream parquet → parquet conversion without loading the entire file into
+    * memory. Reads the source schema, opens a streaming writer for the output,
+    * and feeds rows one at a time. Deletes partial output on failure.
+    */
+  def convertParquetFile(
+      inputPath: String,
+      outputPath: String,
+      conversionConfig: ConversionConfig
+  ): Either[ParqueteerError, Long] =
+    for {
+      inputLocation <- parseLocation(inputPath)
+      outputLocation <- parseLocation(outputPath)
+      schemaFields <- repository
+        .readSchemaFields(ParquetFile(inputLocation))
+        .toParqueteerError
+      explicitSchema = ParquetSchema(
+        columns = schemaFields.map { f =>
+          ColumnInfo(
+            f.name,
+            f.dataType,
+            f.isOptional,
+            1,
+            0,
+            conversionConfig.writeConfig.compressionType.codecName
+          )
+        },
+        rowGroupCount = 1L,
+        totalRowCount = 0L
+      )
+      writeResult = repository.writeContentStream(
+        outputLocation,
+        explicitSchema,
+        conversionConfig.writeConfig
+      ) { write =>
+        repository
+          .streamContent(
+            ParquetFile(inputLocation),
+            ReadConfig(maxRows = conversionConfig.maxRows)
+          )(write)
+          .get
+      }
+      count <- writeResult match {
+        case scala.util.Failure(ex) =>
+          repository.deleteFile(outputLocation).failed.foreach { delErr =>
+            logger.warn(
+              s"Failed to delete partial output at ${outputLocation.path}: ${delErr.getMessage}"
+            )
+          }
+          scala.util.Failure(ex).toParqueteerError
+        case scala.util.Success(n) => Right(n)
+      }
+    } yield count
 
   def getStats(path: String): Either[ParqueteerError, FileStats] =
     for {

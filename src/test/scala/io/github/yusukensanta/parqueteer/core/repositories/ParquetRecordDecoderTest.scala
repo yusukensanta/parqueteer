@@ -404,4 +404,115 @@ class ParquetRecordDecoderTest extends AnyFlatSpec with Matchers {
     val result = ParquetRecordDecoder.decodeGroup(group, schema)
     result.keys.toList shouldBe List("z", "a", "m")
   }
+
+  // ── buildTemporalTransformer / applyTemporalTransformer ───────────────────
+
+  "ParquetRecordDecoder.buildTemporalTransformer" should "return empty map for schema with no temporal annotations" in {
+    val schema = MessageTypeParser.parseMessageType(
+      "message root { required int32 age; required binary name (UTF8); }"
+    )
+    ParquetRecordDecoder.buildTemporalTransformer(schema) shouldBe Map.empty
+  }
+
+  it should "return DATE transformer for DATE-annotated INT32 column" in {
+    val schema = MessageTypeParser.parseMessageType(
+      "message root { optional int32 dob (DATE); }"
+    )
+    val transformer = ParquetRecordDecoder.buildTemporalTransformer(schema)
+    transformer.keySet shouldBe Set("dob")
+    transformer("dob")(CellValue.I32(0)) shouldBe CellValue.Date(
+      java.time.LocalDate.of(1970, 1, 1)
+    )
+  }
+
+  it should "return MILLIS transformer for TIMESTAMP_MILLIS INT64 column" in {
+    val schema = MessageTypeParser.parseMessageType(
+      "message root { optional int64 ts (TIMESTAMP_MILLIS); }"
+    )
+    val transformer = ParquetRecordDecoder.buildTemporalTransformer(schema)
+    transformer.keySet shouldBe Set("ts")
+    transformer("ts")(CellValue.I64(0L)) shouldBe CellValue.Ts(
+      java.time.Instant.EPOCH
+    )
+  }
+
+  it should "return MICROS transformer for TIMESTAMP_MICROS INT64 column" in {
+    val schema = MessageTypeParser.parseMessageType(
+      "message root { optional int64 ts (TIMESTAMP_MICROS); }"
+    )
+    val transformer = ParquetRecordDecoder.buildTemporalTransformer(schema)
+    transformer.keySet shouldBe Set("ts")
+    val micros = 1_000_000L
+    transformer("ts")(CellValue.I64(micros)) shouldBe CellValue.Ts(
+      java.time.Instant.ofEpochSecond(1L)
+    )
+  }
+
+  it should "include all temporal columns in the transformer map" in {
+    val schema = MessageTypeParser.parseMessageType(
+      """message root {
+        |  optional int32 d (DATE);
+        |  optional int64 ts_ms (TIMESTAMP_MILLIS);
+        |  optional int64 ts_us (TIMESTAMP_MICROS);
+        |  optional int64 plain_id;
+        |}""".stripMargin
+    )
+    val transformer = ParquetRecordDecoder.buildTemporalTransformer(schema)
+    transformer.keySet shouldBe Set("d", "ts_ms", "ts_us")
+  }
+
+  "ParquetRecordDecoder.applyTemporalTransformer" should "return row unchanged when transformer is empty" in {
+    val row = Map[String, CellValue]("age" -> CellValue.I32(30))
+    ParquetRecordDecoder.applyTemporalTransformer(
+      row,
+      Map.empty
+    ) shouldBe row
+  }
+
+  it should "transform matching fields and leave others unchanged" in {
+    val schema = MessageTypeParser.parseMessageType(
+      "message root { optional int32 dob (DATE); optional int64 id; }"
+    )
+    val transformer = ParquetRecordDecoder.buildTemporalTransformer(schema)
+    val row = Map[String, CellValue](
+      "dob" -> CellValue.I32(0),
+      "id" -> CellValue.I64(42L)
+    )
+    val result = ParquetRecordDecoder.applyTemporalTransformer(row, transformer)
+    result("dob") shouldBe CellValue.Date(java.time.LocalDate.of(1970, 1, 1))
+    result("id") shouldBe CellValue.I64(42L)
+  }
+
+  it should "leave a field unchanged when value type does not match the transformer expectation" in {
+    val schema = MessageTypeParser.parseMessageType(
+      "message root { optional int32 dob (DATE); }"
+    )
+    val transformer = ParquetRecordDecoder.buildTemporalTransformer(schema)
+    val row =
+      Map[String, CellValue]("dob" -> CellValue.Str("already-processed"))
+    val result = ParquetRecordDecoder.applyTemporalTransformer(row, transformer)
+    result("dob") shouldBe CellValue.Str("already-processed")
+  }
+
+  it should "produce the same result as postProcessTemporalFields" in {
+    val schema = MessageTypeParser.parseMessageType(
+      """message root {
+        |  optional int32 d (DATE);
+        |  optional int64 ts (TIMESTAMP_MILLIS);
+        |  optional int64 id;
+        |}""".stripMargin
+    )
+    val row = Map[String, CellValue](
+      "d" -> CellValue.I32(18_262),
+      "ts" -> CellValue.I64(1_704_067_200_000L),
+      "id" -> CellValue.I64(99L)
+    )
+    val viaTransformer = ParquetRecordDecoder.applyTemporalTransformer(
+      row,
+      ParquetRecordDecoder.buildTemporalTransformer(schema)
+    )
+    val viaLegacy =
+      ParquetRecordDecoder.postProcessTemporalFields(row, schema)
+    viaTransformer shouldBe viaLegacy
+  }
 }

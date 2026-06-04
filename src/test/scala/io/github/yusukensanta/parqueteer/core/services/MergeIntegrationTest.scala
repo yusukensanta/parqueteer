@@ -249,6 +249,70 @@ class MergeIntegrationTest extends AnyFlatSpec with Matchers {
     result.left.toOption.get.userMessage should include("Schema mismatch")
   }
 
+  it should "include 'type/nullability changed' detail when column exists in both files but with different type" taggedAs MergeIntegrationTest in {
+    val schemaInt32 = Types
+      .buildMessage()
+      .addField(
+        Types
+          .primitive(PrimitiveTypeName.INT32, Repetition.REQUIRED)
+          .named("id")
+      )
+      .named("msg")
+    val schemaInt64 = Types
+      .buildMessage()
+      .addField(
+        Types
+          .primitive(PrimitiveTypeName.INT64, Repetition.REQUIRED)
+          .named("id")
+      )
+      .named("msg")
+
+    val in1 = writeTempWithSchema(schemaInt32)
+    val in2 = writeTempWithSchema(schemaInt64)
+    val out = tempFile().getAbsolutePath
+
+    val result =
+      service.mergeFiles(List(in1, in2), out, WriteConfig(), SchemaMode.Strict)
+    result.isLeft shouldBe true
+    val msg = result.left.toOption.get.userMessage
+    msg should include("Schema mismatch")
+    msg should include("type/nullability changed")
+    msg should include("id")
+    msg should not include "missing:"
+    msg should not include "extra:"
+  }
+
+  it should "include 'type/nullability changed' detail when column exists in both files but with different nullability" taggedAs MergeIntegrationTest in {
+    val schemaOptional = Types
+      .buildMessage()
+      .addField(
+        Types
+          .primitive(PrimitiveTypeName.INT64, Repetition.OPTIONAL)
+          .named("id")
+      )
+      .named("msg")
+    val schemaRequired = Types
+      .buildMessage()
+      .addField(
+        Types
+          .primitive(PrimitiveTypeName.INT64, Repetition.REQUIRED)
+          .named("id")
+      )
+      .named("msg")
+
+    val in1 = writeTempWithSchema(schemaOptional)
+    val in2 = writeTempWithSchema(schemaRequired)
+    val out = tempFile().getAbsolutePath
+
+    val result =
+      service.mergeFiles(List(in1, in2), out, WriteConfig(), SchemaMode.Strict)
+    result.isLeft shouldBe true
+    val msg = result.left.toOption.get.userMessage
+    msg should include("Schema mismatch")
+    msg should include("type/nullability changed")
+    msg should include("id")
+  }
+
   // ── Union mode ──────────────────────────────────────────────────────────
 
   it should "merge files with different schemas in union mode" taggedAs MergeIntegrationTest in {

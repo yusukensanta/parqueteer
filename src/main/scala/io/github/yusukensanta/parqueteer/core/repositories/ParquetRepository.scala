@@ -68,10 +68,24 @@ class HadoopParquetRepository(
     scala.collection.concurrent.TrieMap.empty[String, Configuration]
 
   // Caches (MessageType, blocks) per file path for the lifetime of this repository instance.
-  // Safe because ParquetRepository is created once per CLI invocation.
-  private val footerCache =
-    scala.collection.concurrent.TrieMap
-      .empty[String, (MessageType, List[BlockMetaData])]
+  // Bounded LRU: evicts the eldest entry when size exceeds FooterCacheMaxSize so
+  // large multi-file merges don't grow the cache unboundedly.
+  private val footerCache
+      : java.util.Map[String, (MessageType, List[BlockMetaData])] =
+    java.util.Collections.synchronizedMap(
+      new java.util.LinkedHashMap[String, (MessageType, List[BlockMetaData])](
+        16,
+        0.75f,
+        false
+      ) {
+        override def removeEldestEntry(
+            eldest: java.util.Map.Entry[
+              String,
+              (MessageType, List[BlockMetaData])
+            ]
+        ): Boolean = size() > FooterCacheMaxSize
+      }
+    )
 
   private val metadataConverter =
     new org.apache.parquet.format.converter.ParquetMetadataConverter()
@@ -178,21 +192,19 @@ class HadoopParquetRepository(
   private val FooterCacheMaxSize = 1024
 
   // Cache-aware footer fetch: 0 cloud ops on hit, 1 stat + 1 stream on miss.
-  // Bounded to FooterCacheMaxSize entries; evicts (clears all) when full to
-  // prevent unbounded growth during large multi-file merge operations.
+  // LRU eviction is handled by the LinkedHashMap's removeEldestEntry override.
   private def getFooter(
       path: HadoopPath,
       conf: Configuration
   ): (MessageType, List[BlockMetaData]) = {
     val key = path.toString
-    footerCache.get(key) match {
+    Option(footerCache.get(key)) match {
       case Some(cached) => cached
       case None =>
         val footerBytes = readFooterBytes(HadoopInputFile.fromPath(path, conf))
         val meta = parseFooter(footerBytes)
         val entry =
           (meta.getFileMetaData.getSchema, meta.getBlocks.asScala.toList)
-        if (footerCache.size >= FooterCacheMaxSize) footerCache.clear()
         footerCache.put(key, entry)
         entry
     }
@@ -220,17 +232,19 @@ class HadoopParquetRepository(
             val path4s = Parquet4sPath(file.location.path)
             val rawBinaryFields =
               ParquetRecordDecoder.rawBinaryFieldsFor(fileSchema)
+            val temporalTransformer =
+              ParquetRecordDecoder.buildTemporalTransformer(fileSchema)
             Using.resource(
               openParquetReader(path4s, hadoopConfig, config, fileSchema)
             ) { reader =>
               applyMaxRows(reader, config.maxRows)
                 .map(r =>
-                  ParquetRecordDecoder.postProcessTemporalFields(
+                  ParquetRecordDecoder.applyTemporalTransformer(
                     ParquetRecordDecoder.convertRecordToMapWithSchema(
                       r,
                       rawBinaryFields
                     ),
-                    fileSchema
+                    temporalTransformer
                   )
                 )
                 .toList
@@ -273,6 +287,8 @@ class HadoopParquetRepository(
         val (fileSchema, _) = getFooter(hadoopPath, hadoopConfig)
         val rawBinaryFields =
           ParquetRecordDecoder.rawBinaryFieldsFor(fileSchema)
+        val temporalTransformer =
+          ParquetRecordDecoder.buildTemporalTransformer(fileSchema)
         Using.resource(
           openParquetReader(path4s, hadoopConfig, config, fileSchema)
         ) { source =>
@@ -280,10 +296,10 @@ class HadoopParquetRepository(
           var count = 0L
           iter.foreach { record =>
             process(
-              ParquetRecordDecoder.postProcessTemporalFields(
+              ParquetRecordDecoder.applyTemporalTransformer(
                 ParquetRecordDecoder
                   .convertRecordToMapWithSchema(record, rawBinaryFields),
-                fileSchema
+                temporalTransformer
               )
             )
             count += 1

@@ -104,48 +104,70 @@ private[repositories] object ParquetRecordDecoder {
   ): Map[String, CellValue] =
     convertRecordToMapWithSchema(record, rawBinaryFieldsFor(schema))
 
+  /** Pre-compute a per-column transformer from the schema. Call once per file
+    * and pass to applyTemporalTransformer for each row to avoid O(N×K) map
+    * rebuilds (K = temporal column count, N = row count).
+    */
+  def buildTemporalTransformer(
+      schema: MessageType
+  ): Map[String, CellValue => CellValue] =
+    schema.getFields.asScala
+      .filter(_.isPrimitive)
+      .flatMap { field =>
+        val pt = field.asPrimitiveType()
+        val name = field.getName
+        Option(pt.getLogicalTypeAnnotation).flatMap {
+          case _: LogicalTypeAnnotation.DateLogicalTypeAnnotation =>
+            Some(
+              name -> ((v: CellValue) =>
+                v match {
+                  case CellValue.I32(i) =>
+                    CellValue.Date(java.time.LocalDate.ofEpochDay(i.toLong))
+                  case other => other
+                }
+              )
+            )
+          case ts: LogicalTypeAnnotation.TimestampLogicalTypeAnnotation
+              if ts.getUnit == LogicalTypeAnnotation.TimeUnit.MILLIS =>
+            Some(
+              name -> ((v: CellValue) =>
+                v match {
+                  case CellValue.I64(l) =>
+                    CellValue.Ts(java.time.Instant.ofEpochMilli(l))
+                  case other => other
+                }
+              )
+            )
+          case ts: LogicalTypeAnnotation.TimestampLogicalTypeAnnotation
+              if ts.getUnit == LogicalTypeAnnotation.TimeUnit.MICROS =>
+            Some(
+              name -> ((v: CellValue) =>
+                v match {
+                  case CellValue.I64(l) =>
+                    CellValue.Ts(
+                      java.time.Instant.EPOCH.plus(l, ChronoUnit.MICROS)
+                    )
+                  case other => other
+                }
+              )
+            )
+          case _ => None
+        }
+      }
+      .toMap
+
+  def applyTemporalTransformer(
+      row: Map[String, CellValue],
+      transformer: Map[String, CellValue => CellValue]
+  ): Map[String, CellValue] =
+    if (transformer.isEmpty) row
+    else row.map { case (k, v) => k -> transformer.get(k).fold(v)(_(v)) }
+
   def postProcessTemporalFields(
       row: Map[String, CellValue],
       schema: MessageType
   ): Map[String, CellValue] =
-    schema.getFields.asScala.foldLeft(row) { (acc, field) =>
-      if (!field.isPrimitive) acc
-      else {
-        val pt = field.asPrimitiveType()
-        val name = field.getName
-        Option(pt.getLogicalTypeAnnotation) match {
-          case Some(_: LogicalTypeAnnotation.DateLogicalTypeAnnotation) =>
-            replaceTyped[CellValue.I32](acc, name)(i =>
-              CellValue.Date(java.time.LocalDate.ofEpochDay(i.i.toLong))
-            )
-          case Some(ts: LogicalTypeAnnotation.TimestampLogicalTypeAnnotation)
-              if ts.getUnit == LogicalTypeAnnotation.TimeUnit.MILLIS =>
-            replaceTyped[CellValue.I64](acc, name)(l =>
-              CellValue.Ts(java.time.Instant.ofEpochMilli(l.l))
-            )
-          case Some(ts: LogicalTypeAnnotation.TimestampLogicalTypeAnnotation)
-              if ts.getUnit == LogicalTypeAnnotation.TimeUnit.MICROS =>
-            replaceTyped[CellValue.I64](acc, name)(l =>
-              CellValue.Ts(java.time.Instant.EPOCH.plus(l.l, ChronoUnit.MICROS))
-            )
-          case _ => acc
-        }
-      }
-    }
-
-  /** If `row(name)` exists and matches the expected variant, replace it with
-    * `f(matched)`; otherwise return the row unchanged.
-    */
-  private inline def replaceTyped[T <: CellValue](
-      row: Map[String, CellValue],
-      name: String
-  )(
-      f: T => CellValue
-  )(using ct: scala.reflect.ClassTag[T]): Map[String, CellValue] =
-    row.get(name) match {
-      case Some(ct(t)) => row + (name -> f(t))
-      case _           => row
-    }
+    applyTemporalTransformer(row, buildTemporalTransformer(schema))
 
   def decodePageStore(
       pageStore: PageReadStore,
