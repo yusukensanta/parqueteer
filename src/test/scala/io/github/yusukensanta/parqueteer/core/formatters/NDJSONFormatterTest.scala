@@ -53,6 +53,18 @@ class NDJSONFormatterTest extends AnyFlatSpec with Matchers {
     formatter.formatContent(empty, None) shouldBe ""
   }
 
+  it should "terminate each line with a newline for safe stream concatenation" in {
+    val result = formatter.formatContent(content, None)
+    result should endWith("\n")
+    result.split("\n", -1).init.foreach { line =>
+      parse(line) match {
+        case Right(_) => succeed
+        case Left(e) =>
+          fail(s"Non-empty line between newlines is not valid JSON: $line — $e")
+      }
+    }
+  }
+
   "NDJSONFormatter.formatSchema" should "produce one JSON object per column" in {
     val schema = ParquetSchema(
       columns = List(

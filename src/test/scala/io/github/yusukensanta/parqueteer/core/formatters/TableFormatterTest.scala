@@ -135,6 +135,16 @@ class TableFormatterTest extends AnyFlatSpec with Matchers {
     result should include("No")
   }
 
+  it should "place Name header before Type before Optional in the header row" in {
+    val result = formatter.formatSchema(sampleSchema)
+    val headerLine =
+      result.split("\n").find(l => l.contains("Name") && l.contains("Type"))
+    headerLine shouldBe defined
+    val line = headerLine.get
+    line.indexOf("Name") should be < line.indexOf("Type")
+    line.indexOf("Type") should be < line.indexOf("Optional")
+  }
+
   "TableFormatter.formatMetadata" should "show file size in human-readable form" in {
     val result = formatter.formatMetadata(sampleMetadata)
     result should include("1.5 KB")

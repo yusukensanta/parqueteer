@@ -13,31 +13,27 @@ class NDJSONFormatter extends OutputFormatter {
       content: FileContent,
       schema: Option[ParquetSchema]
   ): String = {
-    content.rows
-      .map { row =>
-        val fields =
-          row.map { case (k, v) =>
-            k -> io.github.yusukensanta.parqueteer.core.util.JsonEncoder
-              .encode(v)
-          }
-        Json.obj(fields.toSeq*).noSpaces
-      }
-      .mkString("\n")
+    content.rows.map { row =>
+      val fields =
+        row.map { case (k, v) =>
+          k -> io.github.yusukensanta.parqueteer.core.util.JsonEncoder
+            .encode(v)
+        }
+      Json.obj(fields.toSeq*).noSpaces + "\n"
+    }.mkString
   }
 
   override def formatSchema(schema: ParquetSchema): String = {
-    schema.columns
-      .map { col =>
-        Json
-          .obj(
-            "name" -> Json.fromString(col.name),
-            "type" -> Json.fromString(col.dataType),
-            "optional" -> Json.fromBoolean(col.isOptional),
-            "compression" -> Json.fromString(col.compressionType)
-          )
-          .noSpaces
-      }
-      .mkString("\n")
+    schema.columns.map { col =>
+      Json
+        .obj(
+          "name" -> Json.fromString(col.name),
+          "type" -> Json.fromString(col.dataType),
+          "optional" -> Json.fromBoolean(col.isOptional),
+          "compression" -> Json.fromString(col.compressionType)
+        )
+        .noSpaces + "\n"
+    }.mkString
   }
 
   override def formatMetadata(metadata: FileMetadata): String = {

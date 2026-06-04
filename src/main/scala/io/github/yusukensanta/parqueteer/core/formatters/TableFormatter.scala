@@ -84,18 +84,13 @@ class TableFormatter extends OutputFormatter {
 
     // Create table for column information
     val headers = List("Name", "Type", "Optional", "Compression")
-    val widths = Map(
-      "Name" -> 30,
-      "Type" -> 15,
-      "Optional" -> 10,
-      "Compression" -> 15
-    )
+    val columnWidths = List(30, 15, 10, 15)
 
-    sb.append(drawTopBorder(widths.values.toList))
+    sb.append(drawTopBorder(columnWidths))
     sb.append("\n")
-    sb.append(drawRow(headers, widths.values.toList))
+    sb.append(drawRow(headers, columnWidths))
     sb.append("\n")
-    sb.append(drawSeparator(widths.values.toList))
+    sb.append(drawSeparator(columnWidths))
     sb.append("\n")
 
     schema.columns.foreach { col =>
@@ -105,11 +100,11 @@ class TableFormatter extends OutputFormatter {
         if (col.isOptional) "Yes" else "No",
         col.compressionType
       )
-      sb.append(drawRow(row, widths.values.toList))
+      sb.append(drawRow(row, columnWidths))
       sb.append("\n")
     }
 
-    sb.append(drawBottomBorder(widths.values.toList))
+    sb.append(drawBottomBorder(columnWidths))
 
     sb.toString
   }
