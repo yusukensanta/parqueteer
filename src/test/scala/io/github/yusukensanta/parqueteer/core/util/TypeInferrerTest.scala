@@ -40,6 +40,11 @@ class TypeInferrerTest
     result shouldBe a[CellValue.Ts]
   }
 
+  it should "treat space-delimited datetime as UTC" in {
+    TypeInferrer.inferCsvValue("2024-01-15 12:30:00") shouldBe
+      CellValue.Ts(java.time.Instant.parse("2024-01-15T12:30:00Z"))
+  }
+
   it should "infer decimal string as Double" in {
     TypeInferrer.inferCsvValue("3.14") shouldBe CellValue.F64(3.14)
     TypeInferrer.inferCsvValue("-2.5") shouldBe CellValue.F64(-2.5)

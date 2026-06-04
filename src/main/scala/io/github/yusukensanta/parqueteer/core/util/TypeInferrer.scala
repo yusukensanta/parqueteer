@@ -2,9 +2,11 @@ package io.github.yusukensanta.parqueteer.core.util
 
 import io.github.yusukensanta.parqueteer.core.models.CellValue
 import java.time.{Instant, LocalDate, LocalDateTime, ZoneOffset}
+import java.util.concurrent.atomic.AtomicBoolean
 import scala.util.Try
 
 object TypeInferrer {
+  private val spaceTsWarnOnce = new AtomicBoolean(false)
 
   private val IntPattern = raw"-?\d+".r.pattern
   private val DecimalPattern = raw"-?\d+\.\d+".r.pattern
@@ -58,7 +60,13 @@ object TypeInferrer {
   private def tryTimestamp(s: String): Try[Instant] =
     Try(Instant.parse(s))
       .orElse(Try(LocalDateTime.parse(s).toInstant(ZoneOffset.UTC)))
-      .orElse(
-        Try(LocalDateTime.parse(s.replace(" ", "T")).toInstant(ZoneOffset.UTC))
-      )
+      .orElse(Try {
+        val inst =
+          LocalDateTime.parse(s.replace(" ", "T")).toInstant(ZoneOffset.UTC)
+        if (spaceTsWarnOnce.compareAndSet(false, true))
+          Console.err.println(
+            s"[parqueteer] warning: space-delimited datetime '$s' treated as UTC; use ISO-8601 ('T' separator) for unambiguous timestamps"
+          )
+        inst
+      })
 }

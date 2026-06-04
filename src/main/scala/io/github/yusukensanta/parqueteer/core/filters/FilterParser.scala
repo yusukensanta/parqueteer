@@ -389,10 +389,15 @@ private class FilterParserImpl(schema: Option[MessageType]) {
           else FilterApi.notEq(colRef, nullLit)
 
         schema
-          .flatMap(resolveColumnType(_, col))
-          .getOrElse(
-            PrimitiveTypeName.BINARY
-          ) match {
+          .flatMap { s =>
+            val resolved = resolveColumnType(s, col)
+            if (resolved.isEmpty)
+              Console.err.println(
+                s"[parqueteer] warning: IS NULL predicate on column '$col' not found in schema; defaulting to BINARY"
+              )
+            resolved
+          }
+          .getOrElse(PrimitiveTypeName.BINARY) match {
           case PrimitiveTypeName.INT32 =>
             nullEq(
               FilterApi.intColumn(col),

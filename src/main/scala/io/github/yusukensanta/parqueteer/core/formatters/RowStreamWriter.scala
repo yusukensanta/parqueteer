@@ -32,8 +32,10 @@ object RowStreamWriter {
   private class NDJSONRowStreamWriter(out: PrintStream)
       extends RowStreamWriter {
     // NDJSON spec requires LF line endings; println emits CRLF on Windows.
-    override def writeRow(row: Map[String, CellValue]): Unit =
-      out.print(rowToJson(row) + "\n")
+    override def writeRow(row: Map[String, CellValue]): Unit = {
+      out.print(rowToJson(row))
+      out.print('\n')
+    }
   }
 
   private class JSONRowStreamWriter(out: PrintStream) extends RowStreamWriter {
@@ -149,8 +151,10 @@ object RowStreamWriter {
   private class LTSVRowStreamWriter(out: PrintStream) extends RowStreamWriter {
     private val fmt = new LTSVFormatter()
     // LTSV spec requires LF line endings; println emits CRLF on Windows.
-    override def writeRow(row: Map[String, CellValue]): Unit =
-      out.print(fmt.rowToLtsv(row) + "\n")
+    override def writeRow(row: Map[String, CellValue]): Unit = {
+      out.print(fmt.rowToLtsv(row))
+      out.print('\n')
+    }
   }
 
   private class MarkdownRowStreamWriter(out: PrintStream)
