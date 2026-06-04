@@ -606,12 +606,9 @@ object CliApp {
           conversionConfig
         )
       case ("parquet", "parquet") =>
-        convertParquetToParquet(
-          service,
-          inputPath,
-          outputPath,
-          conversionConfig
-        )
+        service
+          .convertParquetFile(inputPath, outputPath, conversionConfig)
+          .map(_ => ())
       case (ext @ ("json" | "ndjson" | "csv" | "ltsv"), "parquet") =>
         service
           .readDataFile(inputPath, ext)
@@ -680,22 +677,6 @@ object CliApp {
           ps.close()
           if (failed) scala.util.Try(outFile.delete(swallowIOExceptions = true))
         }
-      }
-
-  /** parquet → parquet: read everything then re-write with the target
-    * compression / maxRows.
-    */
-  private def convertParquetToParquet(
-      service: ParquetService,
-      inputPath: String,
-      outputPath: String,
-      conversionConfig: ConversionConfig
-  ): Either[ParqueteerError, Unit] =
-    service
-      .readFile(inputPath, ReadConfig(maxRows = conversionConfig.maxRows))
-      .flatMap { file =>
-        val data = file.content.map(_.rows).getOrElse(List.empty)
-        service.writeFile(outputPath, data, conversionConfig.writeConfig)
       }
 
   private def executeMerge(
