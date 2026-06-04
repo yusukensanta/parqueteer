@@ -8,6 +8,7 @@ import io.github.yusukensanta.parqueteer.core.models.{
 import org.apache.parquet.hadoop.metadata.CompressionCodecName
 import org.apache.parquet.io.api.Binary
 import org.apache.parquet.schema.{LogicalTypeAnnotation, MessageType}
+import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
 import org.apache.parquet.example.data.Group
 
 private[repositories] object ParquetWriteOps {
@@ -30,22 +31,24 @@ private[repositories] object ParquetWriteOps {
                 s"Column '$key' in input row not found in schema. The schema was inferred from the first batch of rows — all rows must contain a consistent set of columns."
               )
           }
+        val fieldType = schema.getType(fieldIndex).asPrimitiveType()
+        val isBinaryField =
+          fieldType.getPrimitiveTypeName == PrimitiveTypeName.BINARY
         value match {
-          case CellValue.I32(i)  => group.add(fieldIndex, i)
-          case CellValue.I64(l)  => group.add(fieldIndex, l)
-          case CellValue.F64(d)  => group.add(fieldIndex, d)
-          case CellValue.F32(f)  => group.add(fieldIndex, f)
-          case CellValue.Bool(b) => group.add(fieldIndex, b)
-          case CellValue.Str(s)  => group.add(fieldIndex, s)
+          case CellValue.Str(s) => group.add(fieldIndex, s)
+          case CellValue.Null   => ()
+          case CellValue.Bytes(b) =>
+            group.add(fieldIndex, Binary.fromConstantByteArray(b))
+          case _ if isBinaryField => group.add(fieldIndex, value.display)
+          case CellValue.I32(i)   => group.add(fieldIndex, i)
+          case CellValue.I64(l)   => group.add(fieldIndex, l)
+          case CellValue.F64(d)   => group.add(fieldIndex, d)
+          case CellValue.F32(f)   => group.add(fieldIndex, f)
+          case CellValue.Bool(b)  => group.add(fieldIndex, b)
           case CellValue.Date(d) =>
             group.add(fieldIndex, Math.toIntExact(d.toEpochDay))
           case CellValue.Ts(i) =>
-            val isMicros = Option(
-              schema
-                .getType(fieldIndex)
-                .asPrimitiveType()
-                .getLogicalTypeAnnotation
-            ).exists {
+            val isMicros = Option(fieldType.getLogicalTypeAnnotation).exists {
               case ts: LogicalTypeAnnotation.TimestampLogicalTypeAnnotation =>
                 ts.getUnit == LogicalTypeAnnotation.TimeUnit.MICROS
               case _ => false
@@ -62,9 +65,6 @@ private[repositories] object ParquetWriteOps {
                   "will write native Parquet DECIMAL encoding."
               )
             group.add(fieldIndex, bd.toDouble)
-          case CellValue.Bytes(b) =>
-            group.add(fieldIndex, Binary.fromConstantByteArray(b))
-          case CellValue.Null => ()
         }
       }
     }

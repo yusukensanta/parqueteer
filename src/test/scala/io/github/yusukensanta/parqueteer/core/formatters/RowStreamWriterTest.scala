@@ -107,6 +107,15 @@ class RowStreamWriterTest extends AnyFlatSpec with Matchers {
     out.trim shouldBe "[]"
   }
 
+  it should "emit nothing from begin() alone (deferred open bracket)" in {
+    val out = capture { ps =>
+      val w = RowStreamWriter(OutputFormat.JSON, ps)
+      w.begin()
+      // no rows written, no end() — simulates a streamRead failure before any row
+    }
+    out shouldBe ""
+  }
+
   // ── CSV ──────────────────────────────────────────────────────────────────────
 
   "RowStreamWriter CSV" should "emit header then data rows" in {

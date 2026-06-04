@@ -11,7 +11,7 @@ import software.amazon.awssdk.auth.credentials.{
   ProfileCredentialsProvider,
   InstanceProfileCredentialsProvider
 }
-import scala.util.{Try, Success, Failure}
+import scala.util.{Try, Success, Failure, Using}
 
 private object S3Tuning {
   val MaxConnections = "100"
@@ -151,49 +151,53 @@ class S3CredentialManager(profile: Option[String] = None)
   }
 
   private def tryDefaultCredentialsProvider()
-      : Try[(String, String, Option[String])] = {
+      : Try[(String, String, Option[String])] =
     Try {
-      val provider = DefaultCredentialsProvider.create()
-      val credentials = provider.resolveCredentials()
-
-      val sessionToken = credentials match {
-        case sessionCreds: AwsSessionCredentials =>
-          Some(sessionCreds.sessionToken())
-        case _ => None
+      Using.resource(DefaultCredentialsProvider.create()) { provider =>
+        val credentials = provider.resolveCredentials()
+        val sessionToken = credentials match {
+          case sessionCreds: AwsSessionCredentials =>
+            Some(sessionCreds.sessionToken())
+          case _ => None
+        }
+        (credentials.accessKeyId(), credentials.secretAccessKey(), sessionToken)
       }
-
-      (credentials.accessKeyId(), credentials.secretAccessKey(), sessionToken)
     }
-  }
 
   private[cloud] def tryInstanceProfile()
-      : Try[(String, String, Option[String])] = {
+      : Try[(String, String, Option[String])] =
     Try {
-      val provider = InstanceProfileCredentialsProvider.create()
-      val credentials = provider.resolveCredentials()
-      val sessionToken = credentials match {
-        case sessionCreds: AwsSessionCredentials =>
-          Some(sessionCreds.sessionToken())
-        case _ => None
+      Using.resource(InstanceProfileCredentialsProvider.create()) { provider =>
+        val credentials = provider.resolveCredentials()
+        val sessionToken = credentials match {
+          case sessionCreds: AwsSessionCredentials =>
+            Some(sessionCreds.sessionToken())
+          case _ => None
+        }
+        (credentials.accessKeyId(), credentials.secretAccessKey(), sessionToken)
       }
-      (credentials.accessKeyId(), credentials.secretAccessKey(), sessionToken)
     }
-  }
 
   private def tryProfile(
       explicitProfile: Option[String]
   ): Try[(String, String, Option[String])] = {
+    val profileName = explicitProfile
+      .orElse(sys.env.get("AWS_PROFILE"))
+      .getOrElse("default")
     Try {
-      val profileName = explicitProfile
-        .orElse(sys.env.get("AWS_PROFILE"))
-        .getOrElse("default")
-      val provider = ProfileCredentialsProvider.create(profileName)
-      val credentials = provider.resolveCredentials()
-      val sessionToken = credentials match {
-        case s: AwsSessionCredentials => Some(s.sessionToken())
-        case _                        => None
+      Using.resource(ProfileCredentialsProvider.create(profileName)) {
+        provider =>
+          val credentials = provider.resolveCredentials()
+          val sessionToken = credentials match {
+            case s: AwsSessionCredentials => Some(s.sessionToken())
+            case _                        => None
+          }
+          (
+            credentials.accessKeyId(),
+            credentials.secretAccessKey(),
+            sessionToken
+          )
       }
-      (credentials.accessKeyId(), credentials.secretAccessKey(), sessionToken)
     }
   }
 }

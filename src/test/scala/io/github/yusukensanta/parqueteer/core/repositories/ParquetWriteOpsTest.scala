@@ -337,4 +337,19 @@ class ParquetWriteOpsTest extends AnyFlatSpec with Matchers {
     group.getString("name", 0) shouldBe "Bob"
     group.getDouble("score", 0) shouldBe 7.5 +- 1e-9
   }
+
+  it should "coerce Date to its display string when schema field is BINARY (type widening)" in {
+    val mt = schema("message root { required binary col (STRING); }")
+    val group = new SimpleGroupFactory(mt).newGroup()
+    val d = java.time.LocalDate.of(2024, 1, 15)
+    ParquetWriteOps.writeRowToGroup(group, Map("col" -> CellValue.Date(d)), mt)
+    group.getBinary("col", 0).toStringUsingUTF8 shouldBe d.toString
+  }
+
+  it should "coerce Long to its display string when schema field is BINARY (type widening)" in {
+    val mt = schema("message root { required binary col (STRING); }")
+    val group = new SimpleGroupFactory(mt).newGroup()
+    ParquetWriteOps.writeRowToGroup(group, Map("col" -> CellValue.I64(42L)), mt)
+    group.getBinary("col", 0).toStringUsingUTF8 shouldBe "42"
+  }
 }
