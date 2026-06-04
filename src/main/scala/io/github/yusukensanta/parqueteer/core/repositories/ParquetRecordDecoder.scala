@@ -57,13 +57,12 @@ private[repositories] object ParquetRecordDecoder {
       .map { case (key, value) => key -> decodeValue(value) }
       .to(scala.collection.immutable.ListMap)
 
-  // Schema-aware variant: unannotated BINARY fields are decoded as Bytes, not Str.
-  // Mirrors the decodeGroup logic used by the parallel read path.
-  def convertRecordToMapWithSchema(
-      record: RowParquetRecord,
-      schema: MessageType
-  ): Map[String, CellValue] = {
-    val rawBinaryFields: Set[String] = schema.getFields.asScala.collect {
+  /** Pre-compute which BINARY columns carry raw bytes (no string annotation).
+    * Call once per file/schema and pass to convertRecordToMapWithSchema to
+    * avoid rebuilding this Set for every row.
+    */
+  def rawBinaryFieldsFor(schema: MessageType): Set[String] =
+    schema.getFields.asScala.collect {
       case f
           if f.isPrimitive &&
             f.asPrimitiveType().getPrimitiveTypeName ==
@@ -79,6 +78,13 @@ private[repositories] object ParquetRecordDecoder {
             }) =>
         f.getName
     }.toSet
+
+  // Schema-aware variant: unannotated BINARY fields are decoded as Bytes, not Str.
+  // Mirrors the decodeGroup logic used by the parallel read path.
+  def convertRecordToMapWithSchema(
+      record: RowParquetRecord,
+      rawBinaryFields: Set[String]
+  ): Map[String, CellValue] =
     record.iterator
       .map { case (key, value) =>
         val cell =
@@ -91,7 +97,12 @@ private[repositories] object ParquetRecordDecoder {
         key -> cell
       }
       .to(scala.collection.immutable.ListMap)
-  }
+
+  def convertRecordToMapWithSchema(
+      record: RowParquetRecord,
+      schema: MessageType
+  ): Map[String, CellValue] =
+    convertRecordToMapWithSchema(record, rawBinaryFieldsFor(schema))
 
   def postProcessTemporalFields(
       row: Map[String, CellValue],

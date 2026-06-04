@@ -7,7 +7,7 @@ import io.github.yusukensanta.parqueteer.core.models.{
 }
 import org.apache.parquet.hadoop.metadata.CompressionCodecName
 import org.apache.parquet.io.api.Binary
-import org.apache.parquet.schema.MessageType
+import org.apache.parquet.schema.{LogicalTypeAnnotation, MessageType}
 import org.apache.parquet.example.data.Group
 
 private[repositories] object ParquetWriteOps {
@@ -39,7 +39,21 @@ private[repositories] object ParquetWriteOps {
           case CellValue.Str(s)  => group.add(fieldIndex, s)
           case CellValue.Date(d) =>
             group.add(fieldIndex, Math.toIntExact(d.toEpochDay))
-          case CellValue.Ts(i) => group.add(fieldIndex, i.toEpochMilli)
+          case CellValue.Ts(i) =>
+            val isMicros = Option(
+              schema
+                .getType(fieldIndex)
+                .asPrimitiveType()
+                .getLogicalTypeAnnotation
+            ).exists {
+              case ts: LogicalTypeAnnotation.TimestampLogicalTypeAnnotation =>
+                ts.getUnit == LogicalTypeAnnotation.TimeUnit.MICROS
+              case _ => false
+            }
+            val encoded =
+              if (isMicros) i.getEpochSecond * 1_000_000L + i.getNano / 1000L
+              else i.toEpochMilli
+            group.add(fieldIndex, encoded)
           case CellValue.Dec(bd) =>
             if (decimalWarnedOnce.compareAndSet(false, true))
               logger.warn(
