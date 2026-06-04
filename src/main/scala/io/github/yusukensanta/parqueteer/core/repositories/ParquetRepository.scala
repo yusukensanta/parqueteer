@@ -461,8 +461,9 @@ class HadoopParquetRepository(
     setupHadoopConfiguration(file.location).flatMap { hadoopConfig =>
       Try {
         val path = new HadoopPath(file.location.path)
-        val fs = FileSystem.get(path.toUri, hadoopConfig)
-        val fileStatus = fs.getFileStatus(path)
+        val fileStatus = Using.resource(
+          FileSystem.newInstance(path.toUri, hadoopConfig)
+        )(_.getFileStatus(path))
         val inputFile = HadoopInputFile.fromStatus(fileStatus, hadoopConfig)
         val footerBytes = readFooterBytes(inputFile)
         val (version, createdBy) = parseRawMeta(footerBytes)
@@ -705,9 +706,10 @@ class HadoopParquetRepository(
     setupHadoopConfiguration(location).flatMap { hadoopConfig =>
       Try {
         val path = new HadoopPath(location.path)
-        val fs = FileSystem.get(path.toUri, hadoopConfig)
-        if (!fs.delete(path, false) && fs.exists(path))
-          throw new java.io.IOException(s"Failed to delete ${location.path}")
+        Using.resource(FileSystem.newInstance(path.toUri, hadoopConfig)) { fs =>
+          if (!fs.delete(path, false) && fs.exists(path))
+            throw new java.io.IOException(s"Failed to delete ${location.path}")
+        }
       }
     }
 

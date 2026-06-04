@@ -304,4 +304,10 @@ class FilterParserTest extends AnyFlatSpec with Matchers {
     result shouldBe a[Right[?, ?]]
     result.exists(_ ne Filter.noopFilter) shouldBe true
   }
+
+  it should "succeed for IS NULL on column not present in schema (defaults to BINARY)" in {
+    val s = schema("age" -> PrimitiveTypeName.INT32)
+    val result = FilterParser.parseWithSchema("unknown_col IS NULL", s)
+    result shouldBe a[Right[?, ?]]
+  }
 }
