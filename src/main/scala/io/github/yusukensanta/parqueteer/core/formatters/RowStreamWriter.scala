@@ -40,14 +40,18 @@ object RowStreamWriter {
 
   private class JSONRowStreamWriter(out: PrintStream) extends RowStreamWriter {
     private var first = true
-    private var started = false
-    override def begin(): Unit = { out.print("["); started = true }
+    private var begun = false
+    // Defer writing `[` until the first row so a failed read produces no stdout
+    // output rather than a stray `[` before the error on stderr.
+    override def begin(): Unit = begun = true
     override def writeRow(row: Map[String, CellValue]): Unit = {
-      if (!first) out.print(",")
+      if (first) { out.print("["); first = false }
+      else out.print(",")
       out.print(rowToJson(row))
-      first = false
     }
-    override def end(): Unit = if (started) out.println("]")
+    override def end(): Unit =
+      if (!first) out.println("]")
+      else if (begun) out.println("[]")
   }
 
   private class CSVRowStreamWriter(out: PrintStream) extends RowStreamWriter {
