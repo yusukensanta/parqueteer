@@ -196,7 +196,37 @@ class ParquetWriteOpsTest extends AnyFlatSpec with Matchers {
     group.getInteger("dob", 0) shouldBe date.toEpochDay.toInt
   }
 
-  it should "write an Instant field as INT64 epoch millis" in {
+  it should "write an Instant field as INT64 epoch millis for TIMESTAMP_MILLIS schema" in {
+    val mt = schema(
+      "message root { required int64 created_at (TIMESTAMP_MILLIS); }"
+    )
+    val group = new SimpleGroupFactory(mt).newGroup()
+    val instant = java.time.Instant.parse("2024-01-01T00:00:00Z")
+    ParquetWriteOps.writeRowToGroup(
+      group,
+      Map("created_at" -> CellValue.Ts(instant)),
+      mt
+    )
+    group.getLong("created_at", 0) shouldBe instant.toEpochMilli
+  }
+
+  it should "write an Instant field as INT64 epoch micros for TIMESTAMP_MICROS schema" in {
+    val mt = schema(
+      "message root { required int64 created_at (TIMESTAMP_MICROS); }"
+    )
+    val group = new SimpleGroupFactory(mt).newGroup()
+    val instant = java.time.Instant.parse("2024-06-15T12:34:56.789012Z")
+    ParquetWriteOps.writeRowToGroup(
+      group,
+      Map("created_at" -> CellValue.Ts(instant)),
+      mt
+    )
+    val expectedMicros =
+      instant.getEpochSecond * 1_000_000L + instant.getNano / 1000L
+    group.getLong("created_at", 0) shouldBe expectedMicros
+  }
+
+  it should "write an Instant to unannotated INT64 as epoch millis" in {
     val mt = schema("message root { required int64 created_at; }")
     val group = new SimpleGroupFactory(mt).newGroup()
     val instant = java.time.Instant.parse("2024-01-01T00:00:00Z")

@@ -218,6 +218,8 @@ class HadoopParquetRepository(
             readParallel(hadoopPath, hadoopConfig, config)
           else {
             val path4s = Parquet4sPath(file.location.path)
+            val rawBinaryFields =
+              ParquetRecordDecoder.rawBinaryFieldsFor(fileSchema)
             Using.resource(
               openParquetReader(path4s, hadoopConfig, config, fileSchema)
             ) { reader =>
@@ -226,7 +228,7 @@ class HadoopParquetRepository(
                   ParquetRecordDecoder.postProcessTemporalFields(
                     ParquetRecordDecoder.convertRecordToMapWithSchema(
                       r,
-                      fileSchema
+                      rawBinaryFields
                     ),
                     fileSchema
                   )
@@ -269,6 +271,8 @@ class HadoopParquetRepository(
         val path4s = Parquet4sPath(file.location.path)
         val hadoopPath = new HadoopPath(file.location.path)
         val (fileSchema, _) = getFooter(hadoopPath, hadoopConfig)
+        val rawBinaryFields =
+          ParquetRecordDecoder.rawBinaryFieldsFor(fileSchema)
         Using.resource(
           openParquetReader(path4s, hadoopConfig, config, fileSchema)
         ) { source =>
@@ -278,7 +282,7 @@ class HadoopParquetRepository(
             process(
               ParquetRecordDecoder.postProcessTemporalFields(
                 ParquetRecordDecoder
-                  .convertRecordToMapWithSchema(record, fileSchema),
+                  .convertRecordToMapWithSchema(record, rawBinaryFields),
                 fileSchema
               )
             )
