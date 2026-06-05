@@ -212,17 +212,18 @@ private class FilterParserImpl(schema: Option[MessageType]) {
       case Token.Id(name) =>
         advance()
         var parts = List(name)
-        while (peek == Token.Dot) {
+        var err: Option[String] = None
+        while (peek == Token.Dot && err.isEmpty) {
           advance()
           peek match {
             case Token.Id(n) => advance(); parts = parts :+ n
             case other =>
-              return Left(
+              err = Some(
                 s"Filter parse error: expected identifier after '.', got '$other'"
               )
           }
         }
-        Right(parts.mkString("."))
+        err.toLeft(parts.mkString("."))
       case other =>
         Left(s"Filter parse error: expected column name, got '$other'")
     }
@@ -260,28 +261,32 @@ private class FilterParserImpl(schema: Option[MessageType]) {
   private def parseIn(col: String): Either[String, Filter] = {
     advance() // consume IN
     if (peek != Token.LParen)
-      return Left(
-        s"Filter parse error: expected '(' after IN, got '$peek'"
-      )
-    advance()
-    val vals = scala.collection.mutable.ListBuffer.empty[FilterValue]
-    parseValue() match {
-      case Left(e)  => return Left(e)
-      case Right(v) => vals += v
-    }
-    while (peek == Token.Comma) {
+      Left(s"Filter parse error: expected '(' after IN, got '$peek'")
+    else {
       advance()
+      val vals = scala.collection.mutable.ListBuffer.empty[FilterValue]
+      var err: Option[String] = None
       parseValue() match {
-        case Left(e)  => return Left(e)
+        case Left(e)  => err = Some(e)
         case Right(v) => vals += v
       }
+      while (err.isEmpty && peek == Token.Comma) {
+        advance()
+        parseValue() match {
+          case Left(e)  => err = Some(e)
+          case Right(v) => vals += v
+        }
+      }
+      err match {
+        case Some(e) => Left(e)
+        case None =>
+          if (peek != Token.RParen)
+            Left(
+              s"Filter parse error: expected ')' after IN list, got '$peek'"
+            )
+          else { advance(); buildIn(col, vals.toList) }
+      }
     }
-    if (peek != Token.RParen)
-      return Left(
-        s"Filter parse error: expected ')' after IN list, got '$peek'"
-      )
-    advance()
-    buildIn(col, vals.toList)
   }
 
   private def parseIsNull(col: String): Either[String, Filter] = {
