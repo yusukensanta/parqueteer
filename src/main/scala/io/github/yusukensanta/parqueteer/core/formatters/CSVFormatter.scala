@@ -8,6 +8,8 @@ import io.github.yusukensanta.parqueteer.core.models.{
 }
 
 object CSVFormatter {
+  private[formatters] val Newline = "\r\n"
+
   private[formatters] def escapeField(field: String): String = {
     // CWE-1236: prefix formula-trigger chars. Also check first non-whitespace char
     // because spreadsheets trim leading spaces before formula evaluation.
@@ -37,7 +39,7 @@ object CSVFormatter {
 class CSVFormatter extends OutputFormatter {
 
   private val Delimiter = ","
-  private val Newline = "\r\n"
+  private val Newline = CSVFormatter.Newline
 
   override def formatContent(
       content: FileContent,
