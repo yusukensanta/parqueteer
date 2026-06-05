@@ -9,10 +9,12 @@ import io.github.yusukensanta.parqueteer.core.models.{
 
 object CSVFormatter {
   private[formatters] def escapeField(field: String): String = {
-    // CWE-1236: prefix formula-trigger chars to prevent spreadsheet formula execution
+    // CWE-1236: prefix formula-trigger chars. Also check first non-whitespace char
+    // because spreadsheets trim leading spaces before formula evaluation.
+    val firstSig = field.dropWhile(c => c <= ' ')
     val sanitized =
       if (
-        field.nonEmpty && (field.charAt(0) match {
+        firstSig.nonEmpty && (firstSig.charAt(0) match {
           case '=' | '+' | '-' | '@' | '\t' | '\r' => true
           case _                                   => false
         })

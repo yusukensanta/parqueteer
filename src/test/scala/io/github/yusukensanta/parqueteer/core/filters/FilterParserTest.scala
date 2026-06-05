@@ -6,6 +6,7 @@ import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
 import org.apache.parquet.schema.Type.Repetition
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import scala.jdk.CollectionConverters._
 
 class FilterParserTest extends AnyFlatSpec with Matchers {
 
@@ -325,6 +326,28 @@ class FilterParserTest extends AnyFlatSpec with Matchers {
   it should "succeed for IS NULL on column not present in schema (defaults to BINARY)" in {
     val s = schema("age" -> PrimitiveTypeName.INT32)
     val result = FilterParser.parseWithSchema("unknown_col IS NULL", s)
+    result shouldBe a[Right[?, ?]]
+  }
+
+  it should "not resolve wrong column type when a dotted path segment is missing" in {
+    // Schema has root-level 'c' (INT64) but no 'a.b' group — resolveColumnType
+    // previously reset to the root schema when 'b' was not found under 'a',
+    // then matched 'c' at the root, returning INT64 instead of defaulting to BINARY.
+    val fields = List(
+      org.apache.parquet.schema.Types
+        .required(PrimitiveTypeName.INT32)
+        .named("a"),
+      org.apache.parquet.schema.Types
+        .required(PrimitiveTypeName.INT64)
+        .named("c")
+    )
+    val s = new org.apache.parquet.schema.MessageType(
+      "test",
+      fields.asJava
+    )
+    // 'a.b.c' — 'a' is a primitive (not a group), so the path is invalid.
+    // Should succeed (defaults to BINARY) rather than crashing or returning INT64.
+    val result = FilterParser.parseWithSchema("a.b.c IS NULL", s)
     result shouldBe a[Right[?, ?]]
   }
 }
