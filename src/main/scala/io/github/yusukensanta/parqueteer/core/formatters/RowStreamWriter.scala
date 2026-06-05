@@ -64,7 +64,11 @@ object RowStreamWriter {
         row.keysIterator.foreach(seen += _)
         columns = seen.toList
         columnsSet = columns.toSet
-        out.print(columns.map(CSVFormatter.escapeField).mkString(",") + "\r\n")
+        out.print(
+          columns
+            .map(CSVFormatter.escapeField)
+            .mkString(",") + CSVFormatter.Newline
+        )
       } else if (!warnedUnseen) {
         val unseen = row.keySet -- columnsSet
         if (unseen.nonEmpty) {
@@ -77,7 +81,7 @@ object RowStreamWriter {
       out.print(
         columns
           .map(c => CSVFormatter.escapeField(row.get(c).fold("")(_.display)))
-          .mkString(",") + "\r\n"
+          .mkString(",") + CSVFormatter.Newline
       )
     }
   }

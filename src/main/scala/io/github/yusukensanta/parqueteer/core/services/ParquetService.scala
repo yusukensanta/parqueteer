@@ -153,48 +153,50 @@ class ParquetService(
       schemaMode: SchemaMode
   ): Either[ParqueteerError, List[FieldSummary]] = schemaMode match {
     case SchemaMode.Strict =>
-      if (schemas.isEmpty) return Right(Nil)
-      val first = schemas.head
-      val firstSet = first.map(f => (f.name, f.dataType, f.isOptional)).toSet
-      schemas.zipWithIndex
-        .collectFirst {
-          case (s, i)
-              if s
-                .map(f => (f.name, f.dataType, f.isOptional))
-                .toSet != firstSet =>
-            val thisSet = s.map(f => (f.name, f.dataType, f.isOptional)).toSet
-            val missing = firstSet -- thisSet
-            val extra = thisSet -- firstSet
-            val missingNames = missing.map(_._1)
-            val extraNames = extra.map(_._1)
-            val changedNames = missingNames.intersect(extraNames)
-            val onlyMissingNames = missingNames -- changedNames
-            val onlyExtraNames = extraNames -- changedNames
-            val fmt = (t: String, o: Boolean) => if (o) s"$t?" else t
-            val changedDetails = changedNames.toList.sorted.map { name =>
-              val (_, ft, fo) = missing.find(_._1 == name).get
-              val (_, tt, to) = extra.find(_._1 == name).get
-              s"$name (${fmt(ft, fo)} → ${fmt(tt, to)})"
-            }
-            val diffMsg = List(
-              if (changedNames.nonEmpty)
-                s"type/nullability changed: ${changedDetails.mkString(", ")}"
-              else "",
-              if (onlyMissingNames.nonEmpty)
-                s"missing: ${onlyMissingNames.toList.sorted.mkString(", ")}"
-              else "",
-              if (onlyExtraNames.nonEmpty)
-                s"extra: ${onlyExtraNames.toList.sorted.mkString(", ")}"
-              else ""
-            ).filter(_.nonEmpty).mkString("; ")
-            Left(
-              ParqueteerError.InvalidFormat(
-                inputPaths(i),
-                s"Schema mismatch at file '${inputPaths(i)}' ($diffMsg). Use --schema-mode union to allow schema differences."
+      if (schemas.isEmpty) Right(Nil)
+      else {
+        val first = schemas.head
+        val firstSet = first.map(f => (f.name, f.dataType, f.isOptional)).toSet
+        schemas.zipWithIndex
+          .collectFirst {
+            case (s, i)
+                if s
+                  .map(f => (f.name, f.dataType, f.isOptional))
+                  .toSet != firstSet =>
+              val thisSet = s.map(f => (f.name, f.dataType, f.isOptional)).toSet
+              val missing = firstSet -- thisSet
+              val extra = thisSet -- firstSet
+              val missingNames = missing.map(_._1)
+              val extraNames = extra.map(_._1)
+              val changedNames = missingNames.intersect(extraNames)
+              val onlyMissingNames = missingNames -- changedNames
+              val onlyExtraNames = extraNames -- changedNames
+              val fmt = (t: String, o: Boolean) => if (o) s"$t?" else t
+              val changedDetails = changedNames.toList.sorted.map { name =>
+                val (_, ft, fo) = missing.find(_._1 == name).get
+                val (_, tt, to) = extra.find(_._1 == name).get
+                s"$name (${fmt(ft, fo)} → ${fmt(tt, to)})"
+              }
+              val diffMsg = List(
+                if (changedNames.nonEmpty)
+                  s"type/nullability changed: ${changedDetails.mkString(", ")}"
+                else "",
+                if (onlyMissingNames.nonEmpty)
+                  s"missing: ${onlyMissingNames.toList.sorted.mkString(", ")}"
+                else "",
+                if (onlyExtraNames.nonEmpty)
+                  s"extra: ${onlyExtraNames.toList.sorted.mkString(", ")}"
+                else ""
+              ).filter(_.nonEmpty).mkString("; ")
+              Left(
+                ParqueteerError.InvalidFormat(
+                  inputPaths(i),
+                  s"Schema mismatch at file '${inputPaths(i)}' ($diffMsg). Use --schema-mode union to allow schema differences."
+                )
               )
-            )
-        }
-        .getOrElse(Right(first))
+          }
+          .getOrElse(Right(first))
+      }
 
     case SchemaMode.Union =>
       // (dataType, requiredInAllInputsSoFar)

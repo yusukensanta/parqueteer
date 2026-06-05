@@ -24,6 +24,9 @@ private object S3Tuning {
 
 class S3CredentialManager(profile: Option[String] = None)
     extends CloudCredentialManager {
+  private lazy val cachedDefaultProvider = DefaultCredentialsProvider.create()
+  private lazy val cachedInstanceProfileProvider =
+    InstanceProfileCredentialsProvider.create()
   override def configureHadoop(
       location: StorageLocation
   ): Try[Configuration] = {
@@ -153,29 +156,25 @@ class S3CredentialManager(profile: Option[String] = None)
   private def tryDefaultCredentialsProvider()
       : Try[(String, String, Option[String])] =
     Try {
-      Using.resource(DefaultCredentialsProvider.create()) { provider =>
-        val credentials = provider.resolveCredentials()
-        val sessionToken = credentials match {
-          case sessionCreds: AwsSessionCredentials =>
-            Some(sessionCreds.sessionToken())
-          case _ => None
-        }
-        (credentials.accessKeyId(), credentials.secretAccessKey(), sessionToken)
+      val credentials = cachedDefaultProvider.resolveCredentials()
+      val sessionToken = credentials match {
+        case sessionCreds: AwsSessionCredentials =>
+          Some(sessionCreds.sessionToken())
+        case _ => None
       }
+      (credentials.accessKeyId(), credentials.secretAccessKey(), sessionToken)
     }
 
   private[cloud] def tryInstanceProfile()
       : Try[(String, String, Option[String])] =
     Try {
-      Using.resource(InstanceProfileCredentialsProvider.create()) { provider =>
-        val credentials = provider.resolveCredentials()
-        val sessionToken = credentials match {
-          case sessionCreds: AwsSessionCredentials =>
-            Some(sessionCreds.sessionToken())
-          case _ => None
-        }
-        (credentials.accessKeyId(), credentials.secretAccessKey(), sessionToken)
+      val credentials = cachedInstanceProfileProvider.resolveCredentials()
+      val sessionToken = credentials match {
+        case sessionCreds: AwsSessionCredentials =>
+          Some(sessionCreds.sessionToken())
+        case _ => None
       }
+      (credentials.accessKeyId(), credentials.secretAccessKey(), sessionToken)
     }
 
   private def tryProfile(
