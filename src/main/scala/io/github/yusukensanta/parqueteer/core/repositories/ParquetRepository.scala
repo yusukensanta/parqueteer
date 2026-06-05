@@ -252,7 +252,10 @@ class HadoopParquetRepository(
             }
           }
         val isPartial =
-          config.maxRows.exists(limit => rows.size.toLong >= limit) &&
+          if (config.filter.isDefined)
+            config.maxRows.exists(limit => rows.size.toLong >= limit)
+          else
+            config.maxRows.exists(limit => rows.size.toLong >= limit) &&
             rows.size.toLong < totalRows
         FileContent(rows = rows, totalRows = totalRows, isPartial = isPartial)
       }
@@ -529,15 +532,13 @@ class HadoopParquetRepository(
           .withValidation(true)
           .build()
 
-        try {
+        Using.resource(writer) { w =>
           val factory = new SimpleGroupFactory(parquetSchema)
           data.foreach { row =>
             val group = factory.newGroup()
             ParquetWriteOps.writeRowToGroup(group, row, parquetSchema)
-            writer.write(group)
+            w.write(group)
           }
-        } finally {
-          writer.close()
         }
       }
     }
@@ -905,9 +906,11 @@ class HadoopParquetRepository(
           case None => Success(new Configuration())
         }
         result.foreach { cfg =>
-          if (hadoopConfigCache.size >= HadoopConfigCacheMaxSize)
-            hadoopConfigCache.clear()
-          hadoopConfigCache.put(key, cfg)
+          hadoopConfigCache.synchronized {
+            if (hadoopConfigCache.size >= HadoopConfigCacheMaxSize)
+              hadoopConfigCache.clear()
+            hadoopConfigCache.put(key, cfg)
+          }
         }
         result.map(new Configuration(_))
     }

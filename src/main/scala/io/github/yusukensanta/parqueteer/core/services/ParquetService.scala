@@ -535,14 +535,15 @@ class ParquetService(
   private def readNdjsonFile(
       path: String,
       maxRows: Option[Long]
-  ): Try[List[Map[String, CellValue]]] = Try {
-    import better.files._
-    val iter =
-      File(path).lineIterator(using java.nio.charset.StandardCharsets.UTF_8)
-    parseNdjsonLines(
-      maxRows.fold(iter)(n => iter.take(math.min(n, Int.MaxValue.toLong).toInt))
-    )
-  }
+  ): Try[List[Map[String, CellValue]]] =
+    Using(scala.io.Source.fromFile(path, "UTF-8")) { source =>
+      val iter = source.getLines()
+      parseNdjsonLines(
+        maxRows.fold(iter)(n =>
+          iter.take(math.min(n, Int.MaxValue.toLong).toInt)
+        )
+      )
+    }
 
   private def readCsvFile(path: String): Try[List[Map[String, CellValue]]] =
     Try {
@@ -558,10 +559,8 @@ class ParquetService(
       path: String,
       maxRows: Option[Long]
   ): Try[List[Map[String, CellValue]]] =
-    Try {
-      import better.files._
-      val iter =
-        File(path).lineIterator(using java.nio.charset.StandardCharsets.UTF_8)
+    Using(scala.io.Source.fromFile(path, "UTF-8")) { source =>
+      val iter = source.getLines()
       io.github.yusukensanta.parqueteer.core.util.LTSVParser
         .parseLines(
           maxRows.fold(iter)(n =>
