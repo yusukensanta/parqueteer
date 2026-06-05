@@ -310,4 +310,34 @@ class RowStreamWriterTest extends AnyFlatSpec with Matchers {
     val header = out.split("\r?\n").head
     header shouldBe "\"a,b\",normal"
   }
+
+  // ── CWE-1236 formula injection protection (streaming CSV path) ───────────────
+
+  it should "prefix '=' values with apostrophe to prevent formula injection" in {
+    val row = Map("x" -> CellValue.Str("=SUM(A1:A10)"))
+    val out = run(OutputFormat.CSV, List(row))
+    val dataLine = out.split("\r?\n").last
+    dataLine shouldBe "'=SUM(A1:A10)"
+  }
+
+  it should "prefix '+' values with apostrophe to prevent formula injection" in {
+    val row = Map("x" -> CellValue.Str("+cmd|' /C calc'!A0"))
+    val out = run(OutputFormat.CSV, List(row))
+    val dataLine = out.split("\r?\n").last
+    dataLine shouldBe "'+cmd|' /C calc'!A0"
+  }
+
+  it should "prefix '@' values with apostrophe to prevent formula injection" in {
+    val row = Map("x" -> CellValue.Str("@SUM(1+1)"))
+    val out = run(OutputFormat.CSV, List(row))
+    val dataLine = out.split("\r?\n").last
+    dataLine shouldBe "'@SUM(1+1)"
+  }
+
+  it should "not modify values that do not start with formula-trigger chars" in {
+    val row = Map("x" -> CellValue.Str("hello world"))
+    val out = run(OutputFormat.CSV, List(row))
+    val dataLine = out.split("\r?\n").last
+    dataLine shouldBe "hello world"
+  }
 }

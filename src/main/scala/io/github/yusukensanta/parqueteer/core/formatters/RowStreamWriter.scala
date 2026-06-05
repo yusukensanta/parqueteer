@@ -58,21 +58,13 @@ object RowStreamWriter {
     private var columns: List[String] = Nil
     private var columnsSet: Set[String] = Set.empty
     private var warnedUnseen = false
-    private def escape(s: String): String = {
-      if (
-        s.contains(",") || s.contains("\"") || s.contains("\n") || s
-          .contains("\r")
-      )
-        "\"" + s.replace("\"", "\"\"") + "\""
-      else s
-    }
     override def writeRow(row: Map[String, CellValue]): Unit = {
       if (columns.isEmpty) {
         val seen = scala.collection.mutable.LinkedHashSet.empty[String]
         row.keysIterator.foreach(seen += _)
         columns = seen.toList
         columnsSet = columns.toSet
-        out.print(columns.map(escape).mkString(",") + "\r\n")
+        out.print(columns.map(CSVFormatter.escapeField).mkString(",") + "\r\n")
       } else if (!warnedUnseen) {
         val unseen = row.keySet -- columnsSet
         if (unseen.nonEmpty) {
@@ -84,7 +76,7 @@ object RowStreamWriter {
       }
       out.print(
         columns
-          .map(c => escape(row.get(c).fold("")(_.display)))
+          .map(c => CSVFormatter.escapeField(row.get(c).fold("")(_.display)))
           .mkString(",") + "\r\n"
       )
     }

@@ -7,10 +7,34 @@ import io.github.yusukensanta.parqueteer.core.models.{
   FileMetadata
 }
 
+object CSVFormatter {
+  private[formatters] def escapeField(field: String): String = {
+    // CWE-1236: prefix formula-trigger chars to prevent spreadsheet formula execution
+    val sanitized =
+      if (
+        field.nonEmpty && (field.charAt(0) match {
+          case '=' | '+' | '-' | '@' | '\t' | '\r' => true
+          case _                                   => false
+        })
+      ) "'" + field
+      else field
+
+    val needsQuoting = sanitized.contains(",") ||
+      sanitized.contains("\"") ||
+      sanitized.contains("\n") ||
+      sanitized.contains("\r")
+
+    if (needsQuoting) {
+      "\"" + sanitized.replace("\"", "\"\"") + "\""
+    } else {
+      sanitized
+    }
+  }
+}
+
 class CSVFormatter extends OutputFormatter {
 
   private val Delimiter = ","
-  private val Quote = "\""
   private val Newline = "\r\n"
 
   override def formatContent(
@@ -89,30 +113,6 @@ class CSVFormatter extends OutputFormatter {
   }
 
   private def formatRow(values: List[String]): String = {
-    values.map(escapeField).mkString(Delimiter)
-  }
-
-  private def escapeField(field: String): String = {
-    // CWE-1236: prefix formula-trigger chars to prevent spreadsheet formula execution
-    val sanitized =
-      if (
-        field.nonEmpty && (field.charAt(0) match {
-          case '=' | '+' | '-' | '@' | '\t' | '\r' => true
-          case _                                   => false
-        })
-      ) "'" + field
-      else field
-
-    val needsQuoting = sanitized.contains(Delimiter) ||
-      sanitized.contains(Quote) ||
-      sanitized.contains("\n") ||
-      sanitized.contains("\r")
-
-    if (needsQuoting) {
-      val escaped = sanitized.replace(Quote, Quote + Quote)
-      Quote + escaped + Quote
-    } else {
-      sanitized
-    }
+    values.map(CSVFormatter.escapeField).mkString(Delimiter)
   }
 }

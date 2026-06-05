@@ -638,49 +638,60 @@ object CliApp {
       outFormat: OutputFormat,
       conversionConfig: ConversionConfig
   ): Either[ParqueteerError, Unit] =
-    scala.util
-      .Try {
-        import better.files._
-        val outFile = File(outputPath).createIfNotExists(createParents = true)
-        (outFile, new java.io.PrintStream(outFile.newOutputStream))
-      }
-      .toEither
-      .left
-      .map(ParqueteerError.IOError.apply)
-      .flatMap { case (outFile, ps) =>
-        val writer = RowStreamWriter(outFormat, ps)
-        var failed = false
-        try {
-          writer.begin()
-          val result = service
-            .streamRead(
-              inputPath,
-              ReadConfig(maxRows = conversionConfig.maxRows)
-            )(writer.writeRow)
-          // Swallow writer.end() failures — they must not mask the real read result.
-          scala.util.Try(writer.end()).failed.foreach { ex =>
-            System.err.println(
-              s"[parqueteer] warning: error flushing output: ${ex.getMessage}"
-            )
-          }
-          // PrintStream swallows I/O exceptions; checkError() surfaces disk-full / broken-pipe.
-          val writeError = ps.checkError()
-          failed = result.isLeft || writeError
-          if (writeError && result.isRight)
-            Left(
-              ParqueteerError.IOError(
-                new java.io.IOException(
-                  "Output stream write error (disk full or broken pipe)"
+    if (cloudUriPattern.findFirstIn(outputPath).isDefined)
+      Left(
+        ParqueteerError.InvalidFormat(
+          outputPath,
+          s"Cloud URI output is not supported for text conversion (parquet → ${FileExtension
+              .of(outputPath)}). " +
+            "Convert to a local file first, then upload separately."
+        )
+      )
+    else
+      scala.util
+        .Try {
+          import better.files._
+          val outFile = File(outputPath).createIfNotExists(createParents = true)
+          (outFile, new java.io.PrintStream(outFile.newOutputStream))
+        }
+        .toEither
+        .left
+        .map(ParqueteerError.IOError.apply)
+        .flatMap { case (outFile, ps) =>
+          val writer = RowStreamWriter(outFormat, ps)
+          var failed = false
+          try {
+            writer.begin()
+            val result = service
+              .streamRead(
+                inputPath,
+                ReadConfig(maxRows = conversionConfig.maxRows)
+              )(writer.writeRow)
+            // Swallow writer.end() failures — they must not mask the real read result.
+            scala.util.Try(writer.end()).failed.foreach { ex =>
+              System.err.println(
+                s"[parqueteer] warning: error flushing output: ${ex.getMessage}"
+              )
+            }
+            // PrintStream swallows I/O exceptions; checkError() surfaces disk-full / broken-pipe.
+            val writeError = ps.checkError()
+            failed = result.isLeft || writeError
+            if (writeError && result.isRight)
+              Left(
+                ParqueteerError.IOError(
+                  new java.io.IOException(
+                    "Output stream write error (disk full or broken pipe)"
+                  )
                 )
               )
-            )
-          else
-            result.map(_ => ())
-        } finally {
-          ps.close()
-          if (failed) scala.util.Try(outFile.delete(swallowIOExceptions = true))
+            else
+              result.map(_ => ())
+          } finally {
+            ps.close()
+            if (failed)
+              scala.util.Try(outFile.delete(swallowIOExceptions = true))
+          }
         }
-      }
 
   private def executeMerge(
       service: ParquetService,
