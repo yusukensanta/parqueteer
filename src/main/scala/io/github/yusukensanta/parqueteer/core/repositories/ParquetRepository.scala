@@ -471,7 +471,6 @@ class HadoopParquetRepository(
         val meta = parseFooter(footerBytes)
         val blocks = meta.getBlocks.asScala.toList
         val msgSchema = meta.getFileMetaData.getSchema
-        footerCache.put(path.toString, (msgSchema, blocks))
         val ratio = calculateCompressionRatio(blocks)
         val parsedSchema = buildParquetSchema(msgSchema, blocks)
         val metadata = FileMetadata(
@@ -484,6 +483,7 @@ class HadoopParquetRepository(
           version = version,
           createdBy = Some(createdBy)
         )
+        footerCache.put(path.toString, (msgSchema, blocks))
         (parsedSchema, metadata)
       }
     }

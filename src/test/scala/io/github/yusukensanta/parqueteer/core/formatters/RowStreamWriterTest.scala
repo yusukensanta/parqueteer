@@ -340,4 +340,18 @@ class RowStreamWriterTest extends AnyFlatSpec with Matchers {
     val dataLine = out.split("\r?\n").last
     dataLine shouldBe "hello world"
   }
+
+  it should "prefix values with leading whitespace before '=' with apostrophe (H5 bypass)" in {
+    val row = Map("x" -> CellValue.Str(" =SUM(A1:A10)"))
+    val out = run(OutputFormat.CSV, List(row))
+    val dataLine = out.split("\r?\n").last
+    dataLine shouldBe "' =SUM(A1:A10)"
+  }
+
+  it should "not prefix ordinary whitespace-only values" in {
+    val row = Map("x" -> CellValue.Str("  hello"))
+    val out = run(OutputFormat.CSV, List(row))
+    val dataLine = out.split("\r?\n").last
+    dataLine shouldBe "  hello"
+  }
 }

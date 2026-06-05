@@ -445,7 +445,9 @@ class ParquetService(
       rows: List[Map[String, CellValue]],
       maxRows: Option[Long]
   ): List[Map[String, CellValue]] =
-    maxRows.fold(rows)(limit => rows.take(limit.toInt))
+    maxRows.fold(rows)(limit =>
+      rows.take(math.min(limit, Int.MaxValue.toLong).toInt)
+    )
 
   private[services] def readFromStdin(
       inputFormat: String,
@@ -537,7 +539,9 @@ class ParquetService(
     import better.files._
     val iter =
       File(path).lineIterator(using java.nio.charset.StandardCharsets.UTF_8)
-    parseNdjsonLines(maxRows.fold(iter)(n => iter.take(n.toInt)))
+    parseNdjsonLines(
+      maxRows.fold(iter)(n => iter.take(math.min(n, Int.MaxValue.toLong).toInt))
+    )
   }
 
   private def readCsvFile(path: String): Try[List[Map[String, CellValue]]] =
@@ -559,7 +563,11 @@ class ParquetService(
       val iter =
         File(path).lineIterator(using java.nio.charset.StandardCharsets.UTF_8)
       io.github.yusukensanta.parqueteer.core.util.LTSVParser
-        .parseLines(maxRows.fold(iter)(n => iter.take(n.toInt)))
+        .parseLines(
+          maxRows.fold(iter)(n =>
+            iter.take(math.min(n, Int.MaxValue.toLong).toInt)
+          )
+        )
         .toList
     }
 

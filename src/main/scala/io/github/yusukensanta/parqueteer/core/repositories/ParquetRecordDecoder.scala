@@ -212,6 +212,12 @@ private[repositories] object ParquetRecordDecoder {
         builder += schema.getType(i).getName -> CellValue.Null
       } else if (schema.getType(i).isPrimitive) {
         val name = schema.getType(i).getName
+        val repCount = group.getFieldRepetitionCount(i)
+        if (repCount > 1 && warnedVariants.add(s"repeated:$name"))
+          logger.warn(
+            s"Column '$name' has $repCount repeated values — only the first is returned. " +
+              "Repeated primitive fields are not yet fully supported."
+          )
         val fieldType = schema.getType(i).asPrimitiveType()
         val logicalType = Option(fieldType.getLogicalTypeAnnotation)
         val value: CellValue =

@@ -434,19 +434,20 @@ private class FilterParserImpl(schema: Option[MessageType]) {
   private def resolveColumnType(
       messageType: MessageType,
       column: String
-  ): Option[PrimitiveTypeName] =
-    Try {
-      val parts = column.split("\\.").toList
-      parts
-        .foldLeft[Option[org.apache.parquet.schema.Type]](None) {
-          (groupOpt, part) =>
-            val group = groupOpt
-              .map(_.asGroupType())
-              .getOrElse(messageType.asGroupType())
-            group.getFields.asScala.find(_.getName == part)
-        }
-        .collect {
-          case f if f.isPrimitive => f.asPrimitiveType().getPrimitiveTypeName
-        }
-    }.getOrElse(None)
+  ): Option[PrimitiveTypeName] = Try {
+    val parts = column.split("\\.")
+    var current: Option[org.apache.parquet.schema.Type] = None
+    var idx = 0
+    var found = true
+    while (idx < parts.length && found) {
+      val group =
+        current.map(_.asGroupType()).getOrElse(messageType.asGroupType())
+      current = group.getFields.asScala.find(_.getName == parts(idx))
+      found = current.isDefined
+      idx += 1
+    }
+    current.collect {
+      case f if f.isPrimitive => f.asPrimitiveType().getPrimitiveTypeName
+    }
+  }.getOrElse(None)
 }
