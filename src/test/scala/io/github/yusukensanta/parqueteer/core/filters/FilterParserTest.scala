@@ -283,6 +283,29 @@ class FilterParserTest extends AnyFlatSpec with Matchers {
     FilterParser.parse("42") shouldBe a[Left[?, ?]]
   }
 
+  // ── Negative literal tokenization (H6) ───────────────────────────────────────
+  // '-' is only treated as unary minus when the previous token allows it.
+
+  it should "parse negative literal after operator" in {
+    val result = FilterParser.parse("price = -5")
+    result shouldBe a[Right[?, ?]]
+  }
+
+  it should "parse negative literal after BETWEEN keyword" in {
+    val result = FilterParser.parse("score BETWEEN -10 AND 10")
+    result shouldBe a[Right[?, ?]]
+  }
+
+  it should "parse negative literal as first token in parenthesized group" in {
+    val result = FilterParser.parse("(score = -1) AND active = true")
+    result shouldBe a[Right[?, ?]]
+  }
+
+  it should "return Left when '-' appears after a literal (subtract operator not supported)" in {
+    val result = FilterParser.parse("col >= 10-5")
+    result shouldBe a[Left[?, ?]]
+  }
+
   // ── parseWithSchema ────────────────────────────────────────────────────────
   "FilterParser.parseWithSchema" should "succeed for INT32 column with integer value" in {
     val s = schema("age" -> PrimitiveTypeName.INT32)

@@ -289,19 +289,39 @@ class ParquetWriteOpsTest extends AnyFlatSpec with Matchers {
     ex.getMessage should include("schema")
   }
 
-  it should "throw ArithmeticException for extreme Date epoch day that overflows Int" in {
+  it should "throw IllegalArgumentException with column name for extreme Date epoch day that overflows Int" in {
     val mt = MessageTypeParser.parseMessageType(
       "message root { required int32 d (DATE); }"
     )
     val group = new SimpleGroupFactory(mt).newGroup()
     val extremeDate = java.time.LocalDate.of(999999999, 1, 1)
-    an[ArithmeticException] should be thrownBy {
+    val ex = intercept[IllegalArgumentException] {
       ParquetWriteOps.writeRowToGroup(
         group,
         Map("d" -> CellValue.Date(extremeDate)),
         mt
       )
     }
+    ex.getMessage should include("column 'd'")
+    ex.getMessage should include("overflow")
+  }
+
+  it should "throw IllegalArgumentException with column name for Instant that overflows INT64 microseconds" in {
+    val mt = MessageTypeParser.parseMessageType(
+      "message root { required int64 ts (TIMESTAMP_MICROS); }"
+    )
+    val group = new SimpleGroupFactory(mt).newGroup()
+    val farFutureInstant =
+      java.time.Instant.ofEpochSecond(Long.MaxValue / 1_000_000L + 1)
+    val ex = intercept[IllegalArgumentException] {
+      ParquetWriteOps.writeRowToGroup(
+        group,
+        Map("ts" -> CellValue.Ts(farFutureInstant)),
+        mt
+      )
+    }
+    ex.getMessage should include("column 'ts'")
+    ex.getMessage should include("overflow")
   }
 
   it should "write multiple known fields in a single group" in {

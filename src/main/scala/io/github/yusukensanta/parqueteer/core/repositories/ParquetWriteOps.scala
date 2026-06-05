@@ -46,15 +46,36 @@ private[repositories] object ParquetWriteOps {
           case CellValue.F32(f)   => group.add(fieldIndex, f)
           case CellValue.Bool(b)  => group.add(fieldIndex, b)
           case CellValue.Date(d) =>
-            group.add(fieldIndex, Math.toIntExact(d.toEpochDay))
+            val fieldName = schema.getType(fieldIndex).getName
+            val asInt =
+              try Math.toIntExact(d.toEpochDay)
+              catch {
+                case _: ArithmeticException =>
+                  throw new IllegalArgumentException(
+                    s"Date value '$d' for column '$fieldName' overflows INT32 epoch-day range (~year 5,881,580 max)"
+                  )
+              }
+            group.add(fieldIndex, asInt)
           case CellValue.Ts(i) =>
             val isMicros = Option(fieldType.getLogicalTypeAnnotation).exists {
               case ts: LogicalTypeAnnotation.TimestampLogicalTypeAnnotation =>
                 ts.getUnit == LogicalTypeAnnotation.TimeUnit.MICROS
               case _ => false
             }
+            val fieldName = schema.getType(fieldIndex).getName
             val encoded =
-              if (isMicros) i.getEpochSecond * 1_000_000L + i.getNano / 1000L
+              if (isMicros)
+                try
+                  Math.addExact(
+                    Math.multiplyExact(i.getEpochSecond, 1_000_000L),
+                    i.getNano / 1000L
+                  )
+                catch {
+                  case _: ArithmeticException =>
+                    throw new IllegalArgumentException(
+                      s"Timestamp value '$i' for column '$fieldName' overflows INT64 microsecond range"
+                    )
+                }
               else i.toEpochMilli
             group.add(fieldIndex, encoded)
           case CellValue.Dec(bd) =>

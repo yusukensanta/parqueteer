@@ -918,7 +918,7 @@ object CliApp {
     error.exitCode
   }
 
-  private val cloudUriPattern = "^[a-z][a-z0-9+\\-.]*://".r
+  private val cloudUriPattern = "^(s3a?|gs|abfss?|wasbs?)://".r
 
   private def checkOutputWritable(
       outputPath: String

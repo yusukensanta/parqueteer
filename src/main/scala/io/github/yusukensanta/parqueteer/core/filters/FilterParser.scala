@@ -94,7 +94,12 @@ private class FilterParserImpl(schema: Option[MessageType]) {
             buf += Token.Kw(word.toUpperCase)
           else buf += Token.Id(word)
         case c
-            if c.isDigit || (c == '-' && i + 1 < n && input(i + 1).isDigit) =>
+            if c.isDigit || (c == '-' && i + 1 < n && input(i + 1).isDigit &&
+              buf.lastOption.forall {
+                case _: Token.Op | _: Token.Kw | Token.LParen | Token.Comma =>
+                  true
+                case _ => false
+              }) =>
           val start = i
           if (c == '-') i += 1
           while (i < n && input(i).isDigit) i += 1
