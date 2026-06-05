@@ -414,20 +414,25 @@ class ParquetService(
   def readDataFile(
       path: String,
       inputFormat: String,
-      stdin: java.io.InputStream = System.in
+      stdin: java.io.InputStream = System.in,
+      maxRows: Option[Long] = None
   ): Either[ParqueteerError, List[Map[String, CellValue]]] =
     if (path == "-")
-      readFromStdin(inputFormat, stdin).toParqueteerError
+      readFromStdin(inputFormat, stdin)
+        .map(applyMaxRowsLimit(_, maxRows))
+        .toParqueteerError
     else
       inputFormat.toLowerCase match {
         case "json" =>
-          readJsonFile(path).toParqueteerError
+          readJsonFile(path)
+            .map(applyMaxRowsLimit(_, maxRows))
+            .toParqueteerError
         case "ndjson" =>
-          readNdjsonFile(path).toParqueteerError
+          readNdjsonFile(path, maxRows).toParqueteerError
         case "csv" =>
-          readCsvFile(path).toParqueteerError
+          readCsvFile(path).map(applyMaxRowsLimit(_, maxRows)).toParqueteerError
         case "ltsv" =>
-          readLtsvFile(path).toParqueteerError
+          readLtsvFile(path, maxRows).toParqueteerError
         case fmt =>
           Left(
             ParqueteerError.IOError(
@@ -435,6 +440,12 @@ class ParquetService(
             )
           )
       }
+
+  private def applyMaxRowsLimit(
+      rows: List[Map[String, CellValue]],
+      maxRows: Option[Long]
+  ): List[Map[String, CellValue]] =
+    maxRows.fold(rows)(limit => rows.take(limit.toInt))
 
   private[services] def readFromStdin(
       inputFormat: String,
@@ -520,12 +531,13 @@ class ParquetService(
   }
 
   private def readNdjsonFile(
-      path: String
+      path: String,
+      maxRows: Option[Long]
   ): Try[List[Map[String, CellValue]]] = Try {
     import better.files._
-    parseNdjsonLines(
+    val iter =
       File(path).lineIterator(using java.nio.charset.StandardCharsets.UTF_8)
-    )
+    parseNdjsonLines(maxRows.fold(iter)(n => iter.take(n.toInt)))
   }
 
   private def readCsvFile(path: String): Try[List[Map[String, CellValue]]] =
@@ -538,13 +550,16 @@ class ParquetService(
       )
     }
 
-  private def readLtsvFile(path: String): Try[List[Map[String, CellValue]]] =
+  private def readLtsvFile(
+      path: String,
+      maxRows: Option[Long]
+  ): Try[List[Map[String, CellValue]]] =
     Try {
       import better.files._
+      val iter =
+        File(path).lineIterator(using java.nio.charset.StandardCharsets.UTF_8)
       io.github.yusukensanta.parqueteer.core.util.LTSVParser
-        .parseLines(
-          File(path).lineIterator(using java.nio.charset.StandardCharsets.UTF_8)
-        )
+        .parseLines(maxRows.fold(iter)(n => iter.take(n.toInt)))
         .toList
     }
 

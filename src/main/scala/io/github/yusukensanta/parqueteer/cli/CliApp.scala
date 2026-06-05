@@ -442,20 +442,23 @@ object CliApp {
         return reportError("Failed to write file", globalOptions)(err)
       case Right(_) =>
     }
-    service.readDataFile(inputPath, formatStr) match {
-      case Left(error) =>
-        reportError("Failed to read input file", globalOptions)(error)
-      case Right(inputData) =>
-        if (dryRun) {
-          val columns =
-            inputData.headOption.map(_.keys.toList).getOrElse(Nil)
+    if (dryRun) {
+      service.readDataFile(inputPath, formatStr, maxRows = Some(1L)) match {
+        case Left(error) =>
+          reportError("Failed to read input file", globalOptions)(error)
+        case Right(rows) =>
+          val columns = rows.headOption.map(_.keys.toList).getOrElse(Nil)
           println(s"Dry run: would write $outputPath")
           println(s"  Input:       $inputPath ($formatStr)")
-          println(s"  Rows:        ${inputData.size}")
           println(s"  Columns:     ${columns.mkString(", ")}")
           println(s"  Compression: ${compression.toString.toLowerCase}")
           0
-        } else {
+      }
+    } else {
+      service.readDataFile(inputPath, formatStr) match {
+        case Left(error) =>
+          reportError("Failed to read input file", globalOptions)(error)
+        case Right(inputData) =>
           service.writeFile(outputPath, inputData, writeConfig) match {
             case Right(_) =>
               if (showStatus(globalOptions))
@@ -464,7 +467,7 @@ object CliApp {
             case Left(error) =>
               reportError("Failed to write file", globalOptions)(error)
           }
-        }
+      }
     }
   }
 

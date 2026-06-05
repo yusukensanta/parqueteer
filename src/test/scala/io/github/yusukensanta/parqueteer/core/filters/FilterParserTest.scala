@@ -193,6 +193,23 @@ class FilterParserTest extends AnyFlatSpec with Matchers {
     result.left.toOption.get.message should include("same type")
   }
 
+  it should "return Left when '(' is missing after IN" in {
+    val result = FilterParser.parse("id IN 1, 2")
+    result.isLeft shouldBe true
+    result.left.toOption.get.message should include("expected '('")
+  }
+
+  it should "return Left when ')' is missing after IN list" in {
+    val result = FilterParser.parse("id IN (1, 2")
+    result.isLeft shouldBe true
+    result.left.toOption.get.message should include("expected ')'")
+  }
+
+  it should "return Left for invalid value in IN list" in {
+    val result = FilterParser.parse("id IN (1, , 3)")
+    result.isLeft shouldBe true
+  }
+
   // ── IS NULL / IS NOT NULL ─────────────────────────────────────────────────
   "FilterParser IS NULL" should "parse IS NULL" in {
     val result = FilterParser.parse("email IS NULL")

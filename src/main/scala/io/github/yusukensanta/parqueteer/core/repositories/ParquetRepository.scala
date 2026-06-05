@@ -64,6 +64,7 @@ class HadoopParquetRepository(
     profile: Option[String] = None,
     region: Option[String] = None
 ) extends ParquetRepository {
+  private val HadoopConfigCacheMaxSize = 64
   private val hadoopConfigCache =
     scala.collection.concurrent.TrieMap.empty[String, Configuration]
 
@@ -903,7 +904,11 @@ class HadoopParquetRepository(
             }
           case None => Success(new Configuration())
         }
-        result.foreach(cfg => hadoopConfigCache.put(key, cfg))
+        result.foreach { cfg =>
+          if (hadoopConfigCache.size >= HadoopConfigCacheMaxSize)
+            hadoopConfigCache.clear()
+          hadoopConfigCache.put(key, cfg)
+        }
         result.map(new Configuration(_))
     }
   }
