@@ -15,61 +15,60 @@ class TableFormatter extends OutputFormatter {
   override def formatContent(
       content: FileContent,
       schema: Option[ParquetSchema]
-  ): String = {
-    if (content.rows.isEmpty) {
-      return "No data to display"
-    }
-
-    val (rows, effectiveContent) =
-      if (content.rows.size > MaxTableRows) {
-        Console.err.println(
-          s"[parqueteer] warning: ${content.rows.size} rows exceeds table limit ($MaxTableRows). " +
-            s"Showing first $MaxTableRows rows. Use --limit N to cap output, or --format json for large datasets."
-        )
-        val truncated = content.rows.take(MaxTableRows)
-        (truncated, content.copy(rows = truncated, isPartial = true))
-      } else {
-        (content.rows, content)
-      }
-    val columns = extractColumns(rows, schema)
-
-    // Pre-format all cell values once: calculateColumnWidths and drawRow both
-    // need the formatted string, so computing it twice per cell is wasteful.
-    val fmtRows = rows.map(row =>
-      columns.map(col => row.get(col).map(formatValue).getOrElse("null"))
-    )
-    val columnWidths = {
-      val ws = columns.map(c => displayWidth(c)).toArray
-      fmtRows.foreach(vs =>
-        vs.zipWithIndex.foreach { case (s, i) =>
-          val w = displayWidth(s)
-          if (w > ws(i)) ws(i) = w
+  ): String =
+    if (content.rows.isEmpty) "No data to display"
+    else {
+      val (rows, effectiveContent) =
+        if (content.rows.size > MaxTableRows) {
+          Console.err.println(
+            s"[parqueteer] warning: ${content.rows.size} rows exceeds table limit ($MaxTableRows). " +
+              s"Showing first $MaxTableRows rows. Use --limit N to cap output, or --format json for large datasets."
+          )
+          val truncated = content.rows.take(MaxTableRows)
+          (truncated, content.copy(rows = truncated, isPartial = true))
+        } else {
+          (content.rows, content)
         }
+      val columns = extractColumns(rows, schema)
+
+      // Pre-format all cell values once: calculateColumnWidths and drawRow both
+      // need the formatted string, so computing it twice per cell is wasteful.
+      val fmtRows = rows.map(row =>
+        columns.map(col => row.get(col).map(formatValue).getOrElse("null"))
       )
-      ws.map(w => math.max(MinColumnWidth, math.min(MaxColumnWidth, w))).toList
-    }
-    val sb = new StringBuilder()
+      val columnWidths = {
+        val ws = columns.map(c => displayWidth(c)).toArray
+        fmtRows.foreach(vs =>
+          vs.zipWithIndex.foreach { case (s, i) =>
+            val w = displayWidth(s)
+            if (w > ws(i)) ws(i) = w
+          }
+        )
+        ws.map(w => math.max(MinColumnWidth, math.min(MaxColumnWidth, w)))
+          .toList
+      }
+      val sb = new StringBuilder()
 
-    sb.append(drawTopBorder(columnWidths))
-    sb.append("\n")
-
-    sb.append(drawRow(columns, columnWidths))
-    sb.append("\n")
-
-    sb.append(drawSeparator(columnWidths))
-    sb.append("\n")
-
-    fmtRows.foreach { vs =>
-      sb.append(drawRow(vs, columnWidths))
+      sb.append(drawTopBorder(columnWidths))
       sb.append("\n")
+
+      sb.append(drawRow(columns, columnWidths))
+      sb.append("\n")
+
+      sb.append(drawSeparator(columnWidths))
+      sb.append("\n")
+
+      fmtRows.foreach { vs =>
+        sb.append(drawRow(vs, columnWidths))
+        sb.append("\n")
+      }
+
+      sb.append(drawBottomBorder(columnWidths))
+      sb.append("\n")
+
+      sb.append(drawSummary(effectiveContent))
+      sb.toString
     }
-
-    sb.append(drawBottomBorder(columnWidths))
-    sb.append("\n")
-
-    sb.append(drawSummary(effectiveContent))
-    sb.toString
-  }
 
   override def formatSchema(schema: ParquetSchema): String = {
     val sb = new StringBuilder()

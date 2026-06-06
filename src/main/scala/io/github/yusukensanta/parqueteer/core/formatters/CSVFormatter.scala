@@ -44,32 +44,30 @@ class CSVFormatter extends OutputFormatter {
   override def formatContent(
       content: FileContent,
       schema: Option[ParquetSchema]
-  ): String = {
-    if (content.rows.isEmpty) {
-      return ""
-    }
+  ): String =
+    if (content.rows.isEmpty) ""
+    else {
+      val rows = content.rows
+      val columns = extractColumns(rows, schema)
 
-    val rows = content.rows
-    val columns = extractColumns(rows, schema)
+      val sb = new StringBuilder()
 
-    val sb = new StringBuilder()
-
-    sb.append(formatRow(columns))
-    sb.append(Newline)
-
-    rows.foreach { row =>
-      val values = columns.map { col =>
-        row.get(col) match {
-          case None | Some(CellValue.Null) => ""
-          case Some(v)                     => v.display
-        }
-      }
-      sb.append(formatRow(values))
+      sb.append(formatRow(columns))
       sb.append(Newline)
-    }
 
-    sb.toString
-  }
+      rows.foreach { row =>
+        val values = columns.map { col =>
+          row.get(col) match {
+            case None | Some(CellValue.Null) => ""
+            case Some(v)                     => v.display
+          }
+        }
+        sb.append(formatRow(values))
+        sb.append(Newline)
+      }
+
+      sb.toString
+    }
 
   override def formatSchema(schema: ParquetSchema): String = {
     val headers = List("Column Name", "Data Type", "Optional", "Compression")

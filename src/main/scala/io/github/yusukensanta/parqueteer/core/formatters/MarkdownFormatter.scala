@@ -12,34 +12,34 @@ class MarkdownFormatter extends OutputFormatter {
   override def formatContent(
       content: FileContent,
       schema: Option[ParquetSchema]
-  ): String = {
-    if (content.rows.isEmpty) return "No data to display"
+  ): String =
+    if (content.rows.isEmpty) "No data to display"
+    else {
+      val columns = extractColumns(content.rows, schema)
+      val sb = new StringBuilder()
 
-    val columns = extractColumns(content.rows, schema)
-    val sb = new StringBuilder()
+      sb.append("| ")
+        .append(columns.map(escapeCell).mkString(" | "))
+        .append(" |\n")
+      sb.append("| ")
+        .append(columns.map(_ => "---").mkString(" | "))
+        .append(" |\n")
 
-    sb.append("| ")
-      .append(columns.map(escapeCell).mkString(" | "))
-      .append(" |\n")
-    sb.append("| ")
-      .append(columns.map(_ => "---").mkString(" | "))
-      .append(" |\n")
+      content.rows.foreach { row =>
+        val values =
+          columns.map(col => escapeCell(row.get(col).fold("")(_.display)))
+        sb.append("| ").append(values.mkString(" | ")).append(" |\n")
+      }
 
-    content.rows.foreach { row =>
-      val values =
-        columns.map(col => escapeCell(row.get(col).fold("")(_.display)))
-      sb.append("| ").append(values.mkString(" | ")).append(" |\n")
+      if (content.isPartial)
+        sb.append(
+          s"\n_${content.totalRows} rows total (showing first ${content.rows.size})_\n"
+        )
+      else
+        sb.append(s"\n_${content.rows.size} rows_\n")
+
+      sb.toString
     }
-
-    if (content.isPartial)
-      sb.append(
-        s"\n_${content.totalRows} rows total (showing first ${content.rows.size})_\n"
-      )
-    else
-      sb.append(s"\n_${content.rows.size} rows_\n")
-
-    sb.toString
-  }
 
   override def formatSchema(schema: ParquetSchema): String = {
     val sb = new StringBuilder()
