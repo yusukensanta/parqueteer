@@ -64,13 +64,10 @@ private[cli] object CliOutputFormatter {
       f"${"#"}%5s ${"Rows"}%12s ${"Compressed"}%14s ${"Uncompressed"}%14s"
     val sep = "-" * header.length
     val rows = rowGroups.map { rg =>
-      f"${rg.index}%5d ${rg.rowCount}%12d ${formatBytes(rg.compressedBytes)}%14s ${formatBytes(rg.uncompressedBytes)}%14s"
+      f"${rg.index}%5d ${rg.rowCount}%12d ${formatBytesForDisplay(rg.compressedBytes)}%14s ${formatBytesForDisplay(rg.uncompressedBytes)}%14s"
     }
     (header :: sep :: rows).mkString("\n")
   }
-
-  private def formatBytes(bytes: Long): String =
-    io.github.yusukensanta.parqueteer.core.util.ByteFormatter.format(bytes)
 
   def formatSchemaJson(file: ParquetFile): String =
     file.schema.fold(Json.obj().spaces2) { s =>
