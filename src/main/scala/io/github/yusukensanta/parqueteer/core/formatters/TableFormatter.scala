@@ -217,22 +217,24 @@ class TableFormatter extends OutputFormatter {
     w
   }
 
-  private def isWideCodePoint(cp: Int): Boolean = {
-    import Character.UnicodeBlock
-    val b = UnicodeBlock.of(cp)
-    b == UnicodeBlock.CJK_UNIFIED_IDEOGRAPHS ||
-    b == UnicodeBlock.CJK_UNIFIED_IDEOGRAPHS_EXTENSION_A ||
-    b == UnicodeBlock.CJK_UNIFIED_IDEOGRAPHS_EXTENSION_B ||
-    b == UnicodeBlock.CJK_COMPATIBILITY_IDEOGRAPHS ||
-    b == UnicodeBlock.HIRAGANA ||
-    b == UnicodeBlock.KATAKANA ||
-    b == UnicodeBlock.KATAKANA_PHONETIC_EXTENSIONS ||
-    b == UnicodeBlock.HANGUL_SYLLABLES ||
-    b == UnicodeBlock.HANGUL_JAMO ||
-    b == UnicodeBlock.HANGUL_COMPATIBILITY_JAMO ||
-    (cp >= 0xff01 && cp <= 0xff60) || // fullwidth ASCII & punctuation
-    (cp >= 0xffe0 && cp <= 0xffe6) // fullwidth symbols
-  }
+  private def isWideCodePoint(cp: Int): Boolean =
+    // Unicode East Asian Width W (Wide) and F (Fullwidth) — renders as 2 terminal columns.
+    // Ranges derived from Unicode EAW property data (ucd/EastAsianWidth.txt).
+    (cp >= 0x1100 && cp <= 0x115f) || // Hangul Jamo
+      (cp >= 0x2e80 && cp <= 0x303f) || // CJK Radicals, Kangxi, CJK Symbols+Punct (。、《【〇　)
+      (cp >= 0x3040 && cp <= 0x33ff) || // Hiragana, Katakana, Bopomofo, Enclosed CJK, CJK Compat
+      (cp >= 0x3400 && cp <= 0x4dbf) || // CJK Extension A
+      (cp >= 0x4e00 && cp <= 0x9fff) || // CJK Unified Ideographs
+      (cp >= 0xa000 && cp <= 0xa4cf) || // Yi Syllables + Radicals
+      (cp >= 0xa960 && cp <= 0xa97f) || // Hangul Jamo Extended-A
+      (cp >= 0xac00 && cp <= 0xd7af) || // Hangul Syllables
+      (cp >= 0xf900 && cp <= 0xfaff) || // CJK Compatibility Ideographs
+      (cp >= 0xfe10 && cp <= 0xfe6f) || // Vertical Forms, CJK Compat Forms, Small Form Variants
+      (cp >= 0xff00 && cp <= 0xff60) || // Fullwidth Latin & ASCII
+      (cp >= 0xffe0 && cp <= 0xffe6) || // Fullwidth symbols
+      (cp >= 0x1b000 && cp <= 0x1b16f) || // Kana Supplement, Kana Extended-A, Small Kana Extension
+      (cp >= 0x20000 && cp <= 0x2fffd) || // CJK Extensions B–F (supplementary planes)
+      (cp >= 0x30000 && cp <= 0x3fffd) // CJK Extensions G+ (supplementary planes)
 
   private[formatters] def drawSummary(content: FileContent): String = {
     val displayed = content.rows.size
