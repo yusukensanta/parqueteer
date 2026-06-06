@@ -13,7 +13,7 @@ class LTSVFormatter extends OutputFormatter {
       content: FileContent,
       schema: Option[ParquetSchema]
   ): String =
-    content.rows.map(rowToLtsv).mkString("\n")
+    content.rows.map(rowToLtsv).map(_ + "\n").mkString
 
   override def formatSchema(schema: ParquetSchema): String =
     schema.columns

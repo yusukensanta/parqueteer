@@ -39,7 +39,7 @@ class LTSVFormatterTest extends AnyFlatSpec with Matchers {
       rows = List(Map("x" -> CellValue.Null)),
       totalRows = 1L
     )
-    fmt.formatContent(content, None) shouldBe "x:null"
+    fmt.formatContent(content, None) shouldBe "x:null\n"
   }
 
   it should "sanitize label chars illegal in LTSV" in {
@@ -59,7 +59,7 @@ class LTSVFormatterTest extends AnyFlatSpec with Matchers {
     )
     val line = fmt.formatContent(content, None)
     line should not include "\t\t"
-    line shouldBe "k:a b"
+    line shouldBe "k:a b\n"
   }
 
   it should "replace newlines in values with spaces" in {
@@ -67,7 +67,7 @@ class LTSVFormatterTest extends AnyFlatSpec with Matchers {
       rows = List(Map("k" -> CellValue.Str("line1\nline2"))),
       totalRows = 1L
     )
-    fmt.formatContent(content, None) shouldBe "k:line1 line2"
+    fmt.formatContent(content, None) shouldBe "k:line1 line2\n"
   }
 
   it should "round-trip with LTSVParser for simple string values" in {
@@ -108,5 +108,19 @@ class LTSVFormatterTest extends AnyFlatSpec with Matchers {
     val lines = fmt.formatContent(content, None).split("\n")
     lines should have length 1
     lines(0) should not startWith "#"
+  }
+
+  it should "end with a newline (POSIX text file convention)" in {
+    val content = FileContent(
+      rows =
+        List(Map("a" -> CellValue.Str("1")), Map("a" -> CellValue.Str("2"))),
+      totalRows = 2L
+    )
+    fmt.formatContent(content, None) should endWith("\n")
+  }
+
+  it should "produce empty string for empty rows" in {
+    val content = FileContent(rows = Nil, totalRows = 0L)
+    fmt.formatContent(content, None) shouldBe ""
   }
 }

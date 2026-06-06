@@ -151,6 +151,19 @@ private[repositories] object ParquetRecordDecoder {
                 }
               )
             )
+          case ts: LogicalTypeAnnotation.TimestampLogicalTypeAnnotation
+              if ts.getUnit == LogicalTypeAnnotation.TimeUnit.NANOS =>
+            Some(
+              name -> ((v: CellValue) =>
+                v match {
+                  case CellValue.I64(l) =>
+                    CellValue.Ts(
+                      java.time.Instant.EPOCH.plus(l, ChronoUnit.NANOS)
+                    )
+                  case other => other
+                }
+              )
+            )
           case _ => None
         }
       }
@@ -265,6 +278,14 @@ private[repositories] object ParquetRecordDecoder {
               CellValue.Ts(
                 java.time.Instant.EPOCH
                   .plus(group.getLong(i, 0), ChronoUnit.MICROS)
+              )
+            case (
+                  PrimitiveTypeName.INT64,
+                  Some(ts: LogicalTypeAnnotation.TimestampLogicalTypeAnnotation)
+                ) if ts.getUnit == LogicalTypeAnnotation.TimeUnit.NANOS =>
+              CellValue.Ts(
+                java.time.Instant.EPOCH
+                  .plus(group.getLong(i, 0), ChronoUnit.NANOS)
               )
             case (PrimitiveTypeName.INT32, _) =>
               CellValue.I32(group.getInteger(i, 0))

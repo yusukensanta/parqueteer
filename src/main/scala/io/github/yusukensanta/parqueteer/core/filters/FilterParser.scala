@@ -352,12 +352,28 @@ private class FilterParserImpl(schema: Option[MessageType]) {
       high: NumericValue
   ): Either[String, Filter] = {
     val c = Col(col)
-    Right((low, high) match {
-      case (l: Long, h: Long)     => (c >= l) && (c <= h)
-      case (l: Double, h: Double) => (c >= l) && (c <= h)
-      case (l: Long, h: Double)   => (c >= l.toDouble) && (c <= h)
-      case (l: Double, h: Long)   => (c >= l) && (c <= h.toDouble)
-    })
+    (low, high) match {
+      case (l: Long, h: Long) if l > h =>
+        Left(
+          s"Filter parse error: BETWEEN range is empty ($l > $h). Write 'col BETWEEN $h AND $l' for the [$h, $l] range."
+        )
+      case (l: Double, h: Double) if l > h =>
+        Left(
+          s"Filter parse error: BETWEEN range is empty ($l > $h)."
+        )
+      case (l: Long, h: Double) if l.toDouble > h =>
+        Left(
+          s"Filter parse error: BETWEEN range is empty ($l > $h)."
+        )
+      case (l: Double, h: Long) if l > h.toDouble =>
+        Left(
+          s"Filter parse error: BETWEEN range is empty ($l > $h)."
+        )
+      case (l: Long, h: Long)     => Right((c >= l) && (c <= h))
+      case (l: Double, h: Double) => Right((c >= l) && (c <= h))
+      case (l: Long, h: Double)   => Right((c >= l.toDouble) && (c <= h))
+      case (l: Double, h: Long)   => Right((c >= l) && (c <= h.toDouble))
+    }
   }
 
   private def buildIn(
@@ -368,10 +384,13 @@ private class FilterParserImpl(schema: Option[MessageType]) {
     val strings = values.collect { case s: String => s }
     val longs = values.collect { case l: Long => l }
     val doubles = values.collect { case d: Double => d }
+    val booleans = values.collect { case b: Boolean => b }
 
     if (strings.length == values.length) Right(c.in(strings))
     else if (longs.length == values.length) Right(c.in(longs))
     else if (doubles.length == values.length) Right(c.in(doubles))
+    else if (booleans.length == values.length)
+      Right(booleans.distinct.map(b => c === b).reduce(_ || _))
     else if (longs.length + doubles.length == values.length) {
       val asDoubles = values.collect {
         case l: Long   => l.toDouble
@@ -380,7 +399,7 @@ private class FilterParserImpl(schema: Option[MessageType]) {
       Right(c.in(asDoubles))
     } else
       Left(
-        "IN list must contain values of the same type (all strings or all numbers)"
+        "IN list must contain values of the same type (all strings, all numbers, or all booleans)"
       )
   }
 

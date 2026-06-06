@@ -373,4 +373,44 @@ class FilterParserTest extends AnyFlatSpec with Matchers {
     val result = FilterParser.parseWithSchema("a.b.c IS NULL", s)
     result shouldBe a[Right[?, ?]]
   }
+
+  // ── BETWEEN reverse-bounds validation ─────────────────────────────────────
+  "FilterParser BETWEEN" should "return Left when low > high (integer)" in {
+    FilterParser.parse("age BETWEEN 100 AND 10") match {
+      case Left(err) => err.message should include("BETWEEN range is empty")
+      case Right(_)  => fail("Expected Left for reversed BETWEEN bounds")
+    }
+  }
+
+  it should "return Left when low > high (double)" in {
+    FilterParser.parse("score BETWEEN 9.9 AND 1.0") match {
+      case Left(err) => err.message should include("BETWEEN range is empty")
+      case Right(_)  => fail("Expected Left for reversed BETWEEN bounds")
+    }
+  }
+
+  it should "return Left when low > high (mixed long/double)" in {
+    FilterParser.parse("price BETWEEN 100 AND 9.5") match {
+      case Left(err) => err.message should include("BETWEEN range is empty")
+      case Right(_)  => fail("Expected Left for reversed BETWEEN bounds")
+    }
+  }
+
+  // ── IN boolean values ──────────────────────────────────────────────────────
+  "FilterParser IN" should "parse a single boolean in IN list" in {
+    val result = FilterParser.parse("active IN (true)")
+    result shouldBe a[Right[?, ?]]
+    result.exists(_ ne Filter.noopFilter) shouldBe true
+  }
+
+  it should "parse both boolean values in IN list" in {
+    val result = FilterParser.parse("active IN (true, false)")
+    result shouldBe a[Right[?, ?]]
+    result.exists(_ ne Filter.noopFilter) shouldBe true
+  }
+
+  it should "return Left for mixed boolean and numeric IN list" in {
+    val result = FilterParser.parse("col IN (true, 1)")
+    result shouldBe a[Left[?, ?]]
+  }
 }

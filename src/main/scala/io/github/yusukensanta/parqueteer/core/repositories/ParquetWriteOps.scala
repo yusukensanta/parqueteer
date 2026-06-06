@@ -39,12 +39,16 @@ private[repositories] object ParquetWriteOps {
           case CellValue.Null   => ()
           case CellValue.Bytes(b) =>
             group.add(fieldIndex, Binary.fromConstantByteArray(b))
-          case _ if isBinaryField => group.add(fieldIndex, value.display)
-          case CellValue.I32(i)   => group.add(fieldIndex, i)
-          case CellValue.I64(l)   => group.add(fieldIndex, l)
-          case CellValue.F64(d)   => group.add(fieldIndex, d)
-          case CellValue.F32(f)   => group.add(fieldIndex, f)
-          case CellValue.Bool(b)  => group.add(fieldIndex, b)
+          case _ if isBinaryField =>
+            logger.warn(
+              s"Coercing ${value.getClass.getSimpleName} to string for BINARY column '$key' — schema type mismatch."
+            )
+            group.add(fieldIndex, value.display)
+          case CellValue.I32(i)  => group.add(fieldIndex, i)
+          case CellValue.I64(l)  => group.add(fieldIndex, l)
+          case CellValue.F64(d)  => group.add(fieldIndex, d)
+          case CellValue.F32(f)  => group.add(fieldIndex, f)
+          case CellValue.Bool(b) => group.add(fieldIndex, b)
           case CellValue.Date(d) =>
             val fieldName = schema.getType(fieldIndex).getName
             val asInt =
