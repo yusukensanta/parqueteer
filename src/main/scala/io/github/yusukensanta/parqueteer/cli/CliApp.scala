@@ -105,6 +105,7 @@ object CliApp {
     "schema",
     "schema diff",
     "stats",
+    "count",
     "config",
     "completions"
   )
@@ -272,6 +273,9 @@ object CliApp {
 
       case StatsCommand(filePath, format) =>
         executeStats(service, filePath, format, globalOptions)
+
+      case CountCommand(filePath, format) =>
+        executeCount(service, filePath, format, globalOptions)
 
       case MergeCommand(inputPaths, outputPath, compression, schemaMode) =>
         executeMerge(
@@ -789,6 +793,28 @@ object CliApp {
         0
       case Left(error) =>
         reportError("Failed to get stats", globalOptions)(error)
+    }
+  }
+
+  private def executeCount(
+      service: ParquetService,
+      filePath: String,
+      format: OutputFormat,
+      globalOptions: GlobalOptions
+  ): Int = {
+    service.getFileInfo(filePath) match {
+      case Right(file) =>
+        if (!globalOptions.quiet) {
+          val count = file.schema.fold(0L)(_.totalRowCount)
+          format match {
+            case OutputFormat.JSON =>
+              println(CliOutputFormatter.formatCountJson(count))
+            case _ => println(count)
+          }
+        }
+        0
+      case Left(error) =>
+        reportError("Failed to count rows", globalOptions)(error)
     }
   }
 

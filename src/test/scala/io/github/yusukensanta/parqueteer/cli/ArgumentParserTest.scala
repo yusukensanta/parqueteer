@@ -493,4 +493,41 @@ class ArgumentParserTest extends AnyFlatSpec with Matchers {
     )
     result shouldBe None
   }
+
+  it should "parse count command correctly" in {
+    val result = OParser.parse(
+      ArgumentParser.parser,
+      Array("count", "/local/file.parquet"),
+      ArgumentParser.Config()
+    )
+    result shouldBe defined
+    result.get.command.get shouldBe a[CountCommand]
+    result.get.command.get
+      .asInstanceOf[CountCommand]
+      .filePath shouldBe "/local/file.parquet"
+    result.get.command.get
+      .asInstanceOf[CountCommand]
+      .format shouldBe OutputFormat.Table
+  }
+
+  it should "parse count command with --format json" in {
+    val result = OParser.parse(
+      ArgumentParser.parser,
+      Array("count", "/local/file.parquet", "--format", "json"),
+      ArgumentParser.Config()
+    )
+    result shouldBe defined
+    result.get.command.get
+      .asInstanceOf[CountCommand]
+      .format shouldBe OutputFormat.JSON
+  }
+
+  it should "reject invalid format for count command" in {
+    val result = OParser.parse(
+      ArgumentParser.parser,
+      Array("count", "a.parquet", "--format", "csv"),
+      ArgumentParser.Config()
+    )
+    result shouldBe None
+  }
 }

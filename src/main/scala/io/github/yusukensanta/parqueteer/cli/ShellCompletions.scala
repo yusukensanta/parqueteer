@@ -10,7 +10,7 @@ object ShellCompletions {
       |  local cur prev words cword
       |  _init_completion || return
       |
-      |  local commands="read info write validate convert merge schema stats config completions"
+      |  local commands="read info write validate convert merge schema stats count config completions"
       |  local formats="table json csv pretty markdown ndjson ltsv"
       |  local compressions="none snappy gzip lzo brotli lz4 zstd"
       |
@@ -44,6 +44,12 @@ object ShellCompletions {
       |          esac ;;
       |      esac ;;
       |    stats)
+      |      case "$prev" in
+      |        --format) COMPREPLY=($(compgen -W "table json" -- "$cur")) ; return ;;
+      |        *) COMPREPLY=($(compgen -W "--format" -- "$cur"))
+      |           COMPREPLY+=($(compgen -f -X '!*.parquet' -- "$cur")) ; return ;;
+      |      esac ;;
+      |    count)
       |      case "$prev" in
       |        --format) COMPREPLY=($(compgen -W "table json" -- "$cur")) ; return ;;
       |        *) COMPREPLY=($(compgen -W "--format" -- "$cur"))
@@ -94,6 +100,7 @@ object ShellCompletions {
       |    'merge:Combine multiple parquet files into one'
       |    'schema:Column structure (names, types, nullability, compression)'
       |    'stats:Column statistics (min, max, null count)'
+      |    'count:Print total row count from footer (no data scan)'
       |    'config:Show or validate configuration'
       |    'completions:Generate shell completion scripts'
       |  )
@@ -146,6 +153,10 @@ object ShellCompletions {
       |          _arguments \
       |            '--format[Output format]:format:(table json)' \
       |            ':parquet file:_files -g "*.parquet"' ;;
+      |        count)
+      |          _arguments \
+      |            '--format[Output format]:format:(table json)' \
+      |            ':parquet file:_files -g "*.parquet"' ;;
       |        write)
       |          _arguments \
       |            '--input-format[Input format]:format:(json ndjson csv ltsv)' \
@@ -187,6 +198,7 @@ object ShellCompletions {
       |complete -c parqueteer -n '__fish_use_subcommand' -f -a merge       -d 'Combine multiple parquet files into one'
       |complete -c parqueteer -n '__fish_use_subcommand' -f -a schema      -d 'Column structure (names, types, nullability, compression)'
       |complete -c parqueteer -n '__fish_use_subcommand' -f -a stats       -d 'Column statistics (min, max, null count)'
+      |complete -c parqueteer -n '__fish_use_subcommand' -f -a count       -d 'Print total row count from footer (no data scan)'
       |complete -c parqueteer -n '__fish_use_subcommand' -f -a config      -d 'Show or validate configuration'
       |complete -c parqueteer -n '__fish_use_subcommand' -f -a completions -d 'Generate shell completion scripts'
       |
@@ -226,6 +238,9 @@ object ShellCompletions {
       |
       |# stats
       |complete -c parqueteer -n '__fish_seen_subcommand_from stats' -l format -f -a 'table json' -d 'Output format'
+      |
+      |# count
+      |complete -c parqueteer -n '__fish_seen_subcommand_from count' -l format -f -a 'table json' -d 'Output format'
       |
       |# config
       |complete -c parqueteer -n '__fish_seen_subcommand_from config' -l validate -f -d 'Validate configuration'

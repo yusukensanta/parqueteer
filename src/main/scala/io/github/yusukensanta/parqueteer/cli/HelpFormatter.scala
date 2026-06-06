@@ -12,6 +12,7 @@ object HelpFormatter {
     case "schema diff" => Some(schemaDiffHelp())
     case "merge"       => Some(mergeHelp())
     case "stats"       => Some(statsHelp())
+    case "count"       => Some(countHelp())
     case "completions" => Some(completionsHelp())
     case "config"      => Some(configHelp())
     case _             => None
@@ -217,6 +218,25 @@ object HelpFormatter {
        |  parqueteer stats data.parquet --format json
        |""".stripMargin
 
+  private def countHelp(): String =
+    s"""parqueteer count - Print total row count from footer metadata (no data scan)
+       |
+       |USAGE:
+       |  parqueteer count [OPTIONS] <file>
+       |
+       |ARGUMENTS:
+       |  <file>    Path to parquet file (local, s3://, gs://, abfss://)
+       |
+       |OPTIONS:
+       |      --format <fmt>   Output format: table (plain integer), json (default: table)
+       |  -h, --help           Show this help message
+       |
+       |EXAMPLES:
+       |  parqueteer count data.parquet
+       |  parqueteer count data.parquet --format json
+       |  [ $$(parqueteer count data.parquet) -gt 0 ] && echo "non-empty"
+       |""".stripMargin
+
   private def completionsHelp(): String =
     s"""parqueteer completions - Generate shell completion scripts
        |
@@ -261,6 +281,7 @@ object HelpFormatter {
        |  schema           Column structure (names, types, nullability, compression)
        |  schema diff      Compare column structures of two parquet files
        |  stats            Column statistics (min, max, null count) from row group metadata
+       |  count            Total row count from footer metadata (no data scan)
        |
        |DATA COMMANDS:
        |  read             Display parquet file content

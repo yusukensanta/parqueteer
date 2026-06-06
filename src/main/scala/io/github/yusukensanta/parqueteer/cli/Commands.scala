@@ -89,6 +89,11 @@ case class StatsCommand(
     format: OutputFormat = OutputFormat.Table
 ) extends Command
 
+case class CountCommand(
+    filePath: String,
+    format: OutputFormat = OutputFormat.Table
+) extends Command
+
 case class CompletionsCommand(shell: String) extends Command
 
 enum ColorMode:
