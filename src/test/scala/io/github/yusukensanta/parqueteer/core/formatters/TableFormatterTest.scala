@@ -313,4 +313,76 @@ class TableFormatterTest extends AnyFlatSpec with Matchers {
   it should "return string unchanged when it fits within maxWidth" in {
     formatter.truncate("hi", 10) shouldBe "hi"
   }
+
+  // ── East Asian Width (EAW) displayWidth tests ──────────────────────────────
+  "TableFormatter.displayWidth" should "count CJK ideographs as width 2" in {
+    formatter.displayWidth("中文") shouldBe 4
+    formatter.displayWidth("字") shouldBe 2
+  }
+
+  it should "count Katakana as width 2" in {
+    formatter.displayWidth("アイウ") shouldBe 6
+  }
+
+  it should "count Hiragana as width 2" in {
+    formatter.displayWidth("あいう") shouldBe 6
+  }
+
+  it should "count Hangul as width 2" in {
+    formatter.displayWidth("한국") shouldBe 4
+  }
+
+  it should "count CJK punctuation as width 2 (U+3000–U+303F)" in {
+    formatter.displayWidth("。") shouldBe 2 // U+3002 IDEOGRAPHIC FULL STOP
+    formatter.displayWidth("、") shouldBe 2 // U+3001 IDEOGRAPHIC COMMA
+    formatter.displayWidth("《") shouldBe 2 // U+300A LEFT DOUBLE ANGLE BRACKET
+    formatter.displayWidth(
+      "【"
+    ) shouldBe 2 // U+3010 LEFT BLACK LENTICULAR BRACKET
+    formatter.displayWidth("　") shouldBe 2 // U+3000 IDEOGRAPHIC SPACE
+  }
+
+  it should "count fullwidth Latin as width 2" in {
+    formatter.displayWidth("Ａ") shouldBe 2 // U+FF21
+    formatter.displayWidth("！") shouldBe 2 // U+FF01
+  }
+
+  it should "count halfwidth Katakana as width 1" in {
+    formatter.displayWidth(
+      "ｱｲ"
+    ) shouldBe 2 // U+FF71, U+FF72 — halfwidth = 1 each
+  }
+
+  it should "count ASCII as width 1" in {
+    formatter.displayWidth("hello") shouldBe 5
+  }
+
+  it should "handle mixed ASCII and CJK correctly" in {
+    formatter.displayWidth("Hi中") shouldBe 4 // 1+1+2
+    formatter.displayWidth("名前:Alice") shouldBe 10 // 2+2+1+1+1+1+1+1
+  }
+
+  it should "pad rows correctly so borders align with CJK content" in {
+    val content = FileContent(
+      rows = List(
+        Map("名前" -> CellValue.Str("山田"), "age" -> CellValue.I64(30L)),
+        Map("名前" -> CellValue.Str("Alice"), "age" -> CellValue.I64(25L))
+      ),
+      totalRows = 2L
+    )
+    val result = formatter.formatContent(content, None)
+    // Table border/data lines must all be the same display width; summary line excluded.
+    val tableLines = result
+      .split("\n")
+      .toList
+      .filter(l =>
+        l.startsWith("┌") || l.startsWith("│") || l.startsWith("├") || l
+          .startsWith("└")
+      )
+    tableLines should not be empty
+    val widths = tableLines.map(formatter.displayWidth)
+    withClue(s"Table lines have unequal widths: $widths\n$result") {
+      widths.distinct should have size 1
+    }
+  }
 }
