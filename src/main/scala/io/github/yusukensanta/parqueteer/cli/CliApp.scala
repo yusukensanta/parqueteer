@@ -304,7 +304,7 @@ object CliApp {
       globalOptions: GlobalOptions
   ): Int = {
     val effectiveParallelism =
-      if (filter.nonEmpty && parallelism > 1) {
+      if (filter.isDefined && parallelism > 1) {
         if (!globalOptions.quiet)
           System.err.println(
             "Warning: --filter disables parallel mode; falling back to sequential read."
@@ -675,7 +675,7 @@ object CliApp {
         .map(ParqueteerError.IOError.apply)
         .flatMap { case (outFile, ps) =>
           val writer = RowStreamWriter(outFormat, ps)
-          var failed = false
+          var failed = true
           try {
             writer.begin()
             val result = service

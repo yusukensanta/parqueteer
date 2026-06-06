@@ -44,14 +44,15 @@ class ParquetService(
       schemaAndMeta <- repository
         .readFileInfo(file)
         .toParqueteerError
-      (schema, metadata, _) = schemaAndMeta
+      (schema, metadata, rowGroups) = schemaAndMeta
       content <- repository
         .readContent(file, readConfig)
         .toParqueteerError
     } yield file.copy(
       content = Some(content),
       schema = Some(schema),
-      metadata = Some(metadata)
+      metadata = Some(metadata),
+      rowGroups = rowGroups
     )
 
   def streamRead(

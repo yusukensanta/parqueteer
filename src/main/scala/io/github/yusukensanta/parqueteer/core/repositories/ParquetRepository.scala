@@ -523,6 +523,37 @@ class HadoopParquetRepository(
   def readMetadata(file: ParquetFile): Try[FileMetadata] =
     readFileInfo(file).map { case (_, meta, _) => meta }
 
+  private def buildWriter(
+      parquetSchema: MessageType,
+      location: StorageLocation,
+      hadoopConfig: Configuration,
+      config: WriteConfig
+  ): org.apache.parquet.hadoop.ParquetWriter[
+    org.apache.parquet.example.data.Group
+  ] = {
+    import org.apache.parquet.hadoop.example.ExampleParquetWriter
+
+    location match {
+      case LocalPath(p) =>
+        val parent = java.nio.file.Paths.get(p).getParent
+        if (parent != null) java.nio.file.Files.createDirectories(parent)
+      case _ =>
+    }
+
+    ExampleParquetWriter
+      .builder(new HadoopPath(location.path))
+      .withType(parquetSchema)
+      .withConf(hadoopConfig)
+      .withCompressionCodec(
+        ParquetWriteOps.convertCompressionType(config.compressionType)
+      )
+      .withRowGroupSize(config.rowGroupSize)
+      .withPageSize(config.pageSize)
+      .withDictionaryEncoding(config.enableDictionary)
+      .withValidation(true)
+      .build()
+  }
+
   def writeContent(
       location: StorageLocation,
       data: List[Map[String, CellValue]],
@@ -531,36 +562,16 @@ class HadoopParquetRepository(
   ): Try[Unit] = {
     setupHadoopConfiguration(location).flatMap { hadoopConfig =>
       Try {
-        import org.apache.parquet.hadoop.example.ExampleParquetWriter
         import org.apache.parquet.example.data.simple.SimpleGroupFactory
-        import org.apache.hadoop.fs.{Path => HadoopPath}
 
         val parquetSchema = schema match {
           case Some(ps) => ParquetSchemaBuilder.buildMessageType(ps)
           case None     => ParquetSchemaBuilder.inferSchemaFromData(data)
         }
 
-        location match {
-          case LocalPath(p) =>
-            val parent = java.nio.file.Paths.get(p).getParent
-            if (parent != null) java.nio.file.Files.createDirectories(parent)
-          case _ =>
-        }
-
-        val writer = ExampleParquetWriter
-          .builder(new HadoopPath(location.path))
-          .withType(parquetSchema)
-          .withConf(hadoopConfig)
-          .withCompressionCodec(
-            ParquetWriteOps.convertCompressionType(config.compressionType)
-          )
-          .withRowGroupSize(config.rowGroupSize)
-          .withPageSize(config.pageSize)
-          .withDictionaryEncoding(config.enableDictionary)
-          .withValidation(true)
-          .build()
-
-        Using.resource(writer) { w =>
+        Using.resource(
+          buildWriter(parquetSchema, location, hadoopConfig, config)
+        ) { w =>
           val factory = new SimpleGroupFactory(parquetSchema)
           data.foreach { row =>
             val group = factory.newGroup()
@@ -579,44 +590,23 @@ class HadoopParquetRepository(
   )(feed: (Map[String, CellValue] => Unit) => Unit): Try[Long] = {
     setupHadoopConfiguration(location).flatMap { hadoopConfig =>
       Try {
-        import org.apache.parquet.hadoop.example.ExampleParquetWriter
         import org.apache.parquet.example.data.simple.SimpleGroupFactory
-        import org.apache.hadoop.fs.{Path => HadoopPath}
 
         val parquetSchema = ParquetSchemaBuilder.buildMessageType(schema)
-
-        location match {
-          case LocalPath(p) =>
-            val parent = java.nio.file.Paths.get(p).getParent
-            if (parent != null) java.nio.file.Files.createDirectories(parent)
-          case _ =>
-        }
-
-        val writer = ExampleParquetWriter
-          .builder(new HadoopPath(location.path))
-          .withType(parquetSchema)
-          .withConf(hadoopConfig)
-          .withCompressionCodec(
-            ParquetWriteOps.convertCompressionType(config.compressionType)
-          )
-          .withRowGroupSize(config.rowGroupSize)
-          .withPageSize(config.pageSize)
-          .withDictionaryEncoding(config.enableDictionary)
-          .withValidation(true)
-          .build()
 
         var count = 0L
         val factory = new SimpleGroupFactory(parquetSchema)
         // Using preserves the feed exception as primary and adds close failure as suppressed,
         // preventing writer.close() from masking the original MergeStreamException.
         scala.util
-          .Using(writer) { w =>
-            feed { row =>
-              val group = factory.newGroup()
-              ParquetWriteOps.writeRowToGroup(group, row, parquetSchema)
-              w.write(group)
-              count += 1
-            }
+          .Using(buildWriter(parquetSchema, location, hadoopConfig, config)) {
+            w =>
+              feed { row =>
+                val group = factory.newGroup()
+                ParquetWriteOps.writeRowToGroup(group, row, parquetSchema)
+                w.write(group)
+                count += 1
+              }
           }
           .get
         count
