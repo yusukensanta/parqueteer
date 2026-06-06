@@ -197,16 +197,36 @@ class CliOutputFormatterTest extends AnyFlatSpec with Matchers {
   it should "include rowGroupDetails when verbose=true and rowGroups present" in {
     val meta = makeMetadata()
     val rgs = List(
-      RowGroupInfo(0, rowCount = 1000L, compressedBytes = 4096L, uncompressedBytes = 8192L),
-      RowGroupInfo(1, rowCount = 500L, compressedBytes = 2048L, uncompressedBytes = 4096L)
+      RowGroupInfo(
+        0,
+        rowCount = 1000L,
+        compressedBytes = 4096L,
+        uncompressedBytes = 8192L
+      ),
+      RowGroupInfo(
+        1,
+        rowCount = 500L,
+        compressedBytes = 2048L,
+        uncompressedBytes = 4096L
+      )
     )
-    val file = ParquetFile(location = localFile(), metadata = Some(meta), rowGroups = rgs)
+    val file = ParquetFile(
+      location = localFile(),
+      metadata = Some(meta),
+      rowGroups = rgs
+    )
     val result = CliOutputFormatter.formatInfoJson(file, verbose = true)
     val json = parse(result).toOption.get.asObject.get
     val arr = json("rowGroupDetails").get.asArray.get
     arr.length shouldBe 2
     arr(0).asObject.get("rowCount").get.asNumber.get.toLong.get shouldBe 1000L
-    arr(1).asObject.get("compressedBytes").get.asNumber.get.toLong.get shouldBe 2048L
+    arr(1).asObject
+      .get("compressedBytes")
+      .get
+      .asNumber
+      .get
+      .toLong
+      .get shouldBe 2048L
   }
 
   // ─── formatRowGroupsTable ────────────────────────────────────────────────────
