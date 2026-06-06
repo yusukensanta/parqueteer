@@ -98,9 +98,9 @@ lazy val root = (project in file("."))
       val scalatestVersion = "3.2.20"
       val scalamockVersion = "7.5.5"
       val scalatestScalacheckVersion = "3.2.18.0"
-      val awsSdkVersion = "2.44.12"
+      val awsSdkVersion = "2.46.4"
       val googleCloudStorageVersion = "2.68.0"
-      val azureStorageVersion = "12.30.0"
+      val azureStorageVersion = "12.34.0"
       val azureIdentityVersion = "1.16.2"
       val hadoopVersion = "3.5.0"
       val gcsConnectorVersion = "hadoop3-2.2.28"
@@ -179,11 +179,12 @@ lazy val root = (project in file("."))
         "org.scalatestplus" %% "scalacheck-1-17" % scalatestScalacheckVersion % Test
       )
     },
-    // Force Netty to 4.1.129.Final across all modules (pinned; free of CVE-2025-67735 CRLF injection).
-    // CVE-2024-47535 fixed 4.1.115.Final; CVE-2025-55163 fixed 4.1.124.Final; CVE-2025-67735 fixed 4.1.129.Final.
+    // Force Netty to 4.1.135.Final across all modules (pinned; free of all known CVEs).
+    // CVE-2024-47535 fixed 4.1.115.Final; CVE-2025-55163 fixed 4.1.124.Final; CVE-2025-67735 fixed 4.1.129.Final;
+    // CVE-2026-33870+33871 fixed 4.1.132.Final; CVE-2026-48043+47691 fixed 4.1.135.Final.
     // Prior override covered only 7 of 19 modules; 12 modules resolved at mixed 4.1.112-4.1.133.
     dependencyOverrides ++= {
-      val nettyVersion = "4.1.129.Final"
+      val nettyVersion = "4.1.135.Final"
       Seq(
         "io.netty" % "netty-common"                       % nettyVersion,
         "io.netty" % "netty-buffer"                       % nettyVersion,
@@ -206,7 +207,7 @@ lazy val root = (project in file("."))
         "io.netty" % "netty-resolver-dns-native-macos"    % nettyVersion,
         // Transitive CVE patches
         "org.xerial.snappy" % "snappy-java"     % "1.1.10.8", // CVE-2023-43642 + CVE-2023-34455; 1.1.10.8 is current clean release
-        "com.nimbusds"      % "nimbus-jose-jwt" % "10.4",     // CVE-2025-53864 — deeply nested JSON DoS (fixed >=10.0.2; 10.4 is current)
+        "com.nimbusds"      % "nimbus-jose-jwt" % "10.9.1",   // CVE-2025-53864 — deeply nested JSON DoS (fixed >=10.0.2; 10.9.1 is current)
         "net.minidev"       % "json-smart"      % "2.6.0",    // CVE-2024-57699 — nested JSON stack exhaustion DoS (nimbus transitive)
         // GHSA-72hv-8253-57qq (async parser DoS) fixed in jackson-core 2.18.6;
         // pin all three Jackson artifacts together to prevent version skew.
