@@ -172,6 +172,9 @@ private[cli] object CliOutputFormatter {
       .spaces2
   }
 
+  def formatCountJson(count: Long): String =
+    Json.obj("count" -> Json.fromLong(count)).spaces2
+
   def formatBytesForDisplay(bytes: Long): String =
     io.github.yusukensanta.parqueteer.core.util.ByteFormatter.format(bytes)
 }

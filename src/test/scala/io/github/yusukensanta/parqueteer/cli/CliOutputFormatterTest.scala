@@ -524,4 +524,18 @@ class CliOutputFormatterTest extends AnyFlatSpec with Matchers {
     val result = CliOutputFormatter.formatSchemaDiffJson(diff)
     parse(result).isRight shouldBe true
   }
+
+  // ─── formatCountJson ─────────────────────────────────────────────────────────
+
+  "CliOutputFormatter.formatCountJson" should "emit count field as integer" in {
+    val result = CliOutputFormatter.formatCountJson(42L)
+    val obj = parse(result).toOption.get.asObject.get
+    obj("count").get.asNumber.get.toLong.get shouldBe 42L
+  }
+
+  it should "handle zero rows" in {
+    val result = CliOutputFormatter.formatCountJson(0L)
+    val obj = parse(result).toOption.get.asObject.get
+    obj("count").get.asNumber.get.toLong.get shouldBe 0L
+  }
 }

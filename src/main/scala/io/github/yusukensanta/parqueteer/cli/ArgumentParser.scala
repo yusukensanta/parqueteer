@@ -471,6 +471,27 @@ object ArgumentParser {
             )
             .text("Output format: table, json (default: table)")
         ),
+      cmd("count")
+        .text(
+          "Print the total row count from footer metadata (no data scan)"
+        )
+        .children(
+          arg[String]("<file>")
+            .required()
+            .action((x, c) => c.copy(command = Some(CountCommand(x))))
+            .text("Path to parquet file"),
+          opt[String]("format")
+            .action((x, c) =>
+              updateCmd[CountCommand](c, _.copy(format = parseOutputFormat(x)))
+            )
+            .validate(x =>
+              if (List("table", "json").contains(x.toLowerCase)) success
+              else failure(s"Invalid format: $x. Use table or json")
+            )
+            .text(
+              "Output format: table (plain integer) or json (default: table)"
+            )
+        ),
       cmd("completions")
         .text("Generate shell completion scripts")
         .children(
