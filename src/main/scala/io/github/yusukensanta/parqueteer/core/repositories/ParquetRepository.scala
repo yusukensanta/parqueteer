@@ -67,6 +67,7 @@ class HadoopParquetRepository(
     region: Option[String] = None
 ) extends ParquetRepository {
   private val HadoopConfigCacheMaxSize = 64
+  private val FooterCacheMaxSize = 1024
   private val hadoopConfigCache =
     scala.collection.concurrent.TrieMap.empty[String, Configuration]
 
@@ -200,8 +201,6 @@ class HadoopParquetRepository(
       totalRowCount = blocks.map(_.getRowCount).sum
     )
   }
-
-  private val FooterCacheMaxSize = 1024
 
   // Cache-aware footer fetch: 0 cloud ops on hit, 1 stat + 1 stream on miss.
   // LRU eviction is handled by the LinkedHashMap's removeEldestEntry override.
@@ -955,30 +954,22 @@ class HadoopParquetRepository(
     }
   }
 
-  /** Calculate compression ratio from row group metadata Ratio =
-    * uncompressed_size / compressed_size Higher ratio means better compression
-    */
   private def calculateCompressionRatio(
       rowGroups: List[BlockMetaData]
-  ): Option[Double] = {
-    if (rowGroups.isEmpty) return None
-
-    val (totalUncompressed, totalCompressed) = rowGroups.foldLeft((0L, 0L)) {
-      case ((uncompressed, compressed), rowGroup) =>
-        val rgUncompressed = rowGroup.getTotalByteSize
-        val rgCompressed = rowGroup.getColumns.asScala
-          .map(_.getTotalSize)
-          .sum
-
-        (uncompressed + rgUncompressed, compressed + rgCompressed)
+  ): Option[Double] =
+    if (rowGroups.isEmpty) None
+    else {
+      val (totalUncompressed, totalCompressed) = rowGroups.foldLeft((0L, 0L)) {
+        case ((uncompressed, compressed), rowGroup) =>
+          (
+            uncompressed + rowGroup.getTotalByteSize,
+            compressed + rowGroup.getColumns.asScala.map(_.getTotalSize).sum
+          )
+      }
+      Option.when(totalCompressed > 0)(
+        totalUncompressed.toDouble / totalCompressed.toDouble
+      )
     }
-
-    if (totalCompressed > 0) {
-      Some(totalUncompressed.toDouble / totalCompressed.toDouble)
-    } else {
-      None
-    }
-  }
 
   private def groupTypeCanonical(
       gt: org.apache.parquet.schema.GroupType

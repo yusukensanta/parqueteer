@@ -41,7 +41,6 @@ class ParquetService(
         .getOrElse(Right(()))
       location <- parseLocation(path)
       file = ParquetFile(location)
-      // readFileInfo: ONE stat + ONE footer download covers both schema and metadata
       schemaAndMeta <- repository
         .readFileInfo(file)
         .toParqueteerError
@@ -77,7 +76,6 @@ class ParquetService(
     for {
       location <- parseLocation(path)
       file = ParquetFile(location)
-      // readFileInfo: ONE stat + ONE footer download instead of separate readSchema + readMetadata
       result <- repository
         .readFileInfo(file)
         .toParqueteerError
@@ -258,6 +256,15 @@ class ParquetService(
   private class MergeStreamException(val error: ParqueteerError)
       extends RuntimeException(error.userMessage, null, true, false)
 
+  private def deletePartialOutput(outputLocation: StorageLocation): Unit =
+    repository.deleteFile(outputLocation) match {
+      case scala.util.Failure(delErr) =>
+        logger.warn(
+          s"Failed to delete partial output at ${outputLocation.path}: ${delErr.getMessage}. Partial file may remain."
+        )
+      case _ =>
+    }
+
   /** Stream rows from each input file into a single output writer. On the first
     * read failure throws a sentinel exception through the writer so the partial
     * output is deleted before returning the real error. Returns the count of
@@ -323,22 +330,12 @@ class ParquetService(
           }
       }
 
-    def deletePartial(): Unit =
-      repository.deleteFile(outputLocation) match {
-        case scala.util.Failure(delErr) =>
-          logger.warn(
-            s"Failed to delete partial output at ${outputLocation.path}: ${delErr.getMessage}. Partial file may remain."
-          )
-        case _ =>
-      }
-
     writeResult match {
       case scala.util.Failure(ex: MergeStreamException) =>
-        deletePartial()
+        deletePartialOutput(outputLocation)
         Left(ex.error)
       case scala.util.Failure(ex) =>
-        // Generic write failure (e.g., disk full, schema error) — also clean up
-        deletePartial()
+        deletePartialOutput(outputLocation)
         scala.util.Failure(ex).toParqueteerError
       case other => other.toParqueteerError
     }
@@ -395,18 +392,10 @@ class ParquetService(
       }
       count <- writeResult match {
         case scala.util.Failure(ex: MergeStreamException) =>
-          repository.deleteFile(outputLocation).failed.foreach { delErr =>
-            logger.warn(
-              s"Failed to delete partial output at ${outputLocation.path}: ${delErr.getMessage}"
-            )
-          }
+          deletePartialOutput(outputLocation)
           Left(ex.error)
         case scala.util.Failure(ex) =>
-          repository.deleteFile(outputLocation).failed.foreach { delErr =>
-            logger.warn(
-              s"Failed to delete partial output at ${outputLocation.path}: ${delErr.getMessage}"
-            )
-          }
+          deletePartialOutput(outputLocation)
           scala.util.Failure(ex).toParqueteerError
         case scala.util.Success(n) => Right(n)
       }
