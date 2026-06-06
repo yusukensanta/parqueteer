@@ -492,8 +492,12 @@ class ArgumentParserTest extends AnyFlatSpec with Matchers {
     )
     result shouldBe defined
     result.get.command.get shouldBe a[CountCommand]
-    result.get.command.get.asInstanceOf[CountCommand].filePath shouldBe "/local/file.parquet"
-    result.get.command.get.asInstanceOf[CountCommand].format shouldBe OutputFormat.Table
+    result.get.command.get
+      .asInstanceOf[CountCommand]
+      .filePath shouldBe "/local/file.parquet"
+    result.get.command.get
+      .asInstanceOf[CountCommand]
+      .format shouldBe OutputFormat.Table
   }
 
   it should "parse count command with --format json" in {
@@ -503,7 +507,9 @@ class ArgumentParserTest extends AnyFlatSpec with Matchers {
       ArgumentParser.Config()
     )
     result shouldBe defined
-    result.get.command.get.asInstanceOf[CountCommand].format shouldBe OutputFormat.JSON
+    result.get.command.get
+      .asInstanceOf[CountCommand]
+      .format shouldBe OutputFormat.JSON
   }
 
   it should "reject invalid format for count command" in {
