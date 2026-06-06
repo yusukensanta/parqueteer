@@ -172,10 +172,11 @@ class ParquetService(
               val onlyMissingNames = missingNames -- changedNames
               val onlyExtraNames = extraNames -- changedNames
               val fmt = (t: String, o: Boolean) => if (o) s"$t?" else t
-              val changedDetails = changedNames.toList.sorted.map { name =>
-                val (_, ft, fo) = missing.find(_._1 == name).get
-                val (_, tt, to) = extra.find(_._1 == name).get
-                s"$name (${fmt(ft, fo)} → ${fmt(tt, to)})"
+              val changedDetails = changedNames.toList.sorted.flatMap { name =>
+                for {
+                  (_, ft, fo) <- missing.find(_._1 == name)
+                  (_, tt, to) <- extra.find(_._1 == name)
+                } yield s"$name (${fmt(ft, fo)} → ${fmt(tt, to)})"
               }
               val diffMsg = List(
                 if (changedNames.nonEmpty)
@@ -284,7 +285,7 @@ class ParquetService(
           f.name,
           f.dataType,
           f.isOptional,
-          1,
+          if (f.isOptional) 1 else 0,
           0,
           writeConfig.compressionType.codecName
         )
@@ -360,7 +361,7 @@ class ParquetService(
             f.name,
             f.dataType,
             f.isOptional,
-            1,
+            if (f.isOptional) 1 else 0,
             0,
             conversionConfig.writeConfig.compressionType.codecName
           )
@@ -377,10 +378,25 @@ class ParquetService(
           .streamContent(
             ParquetFile(inputLocation),
             ReadConfig(maxRows = conversionConfig.maxRows)
-          )(write)
-          .get
+          )(write) match {
+          case scala.util.Failure(err) =>
+            throw new MergeStreamException(
+              scala.util
+                .Failure(err)
+                .toParqueteerError
+                .fold(identity, _ => ParqueteerError.IOError(err))
+            )
+          case _ =>
+        }
       }
       count <- writeResult match {
+        case scala.util.Failure(ex: MergeStreamException) =>
+          repository.deleteFile(outputLocation).failed.foreach { delErr =>
+            logger.warn(
+              s"Failed to delete partial output at ${outputLocation.path}: ${delErr.getMessage}"
+            )
+          }
+          Left(ex.error)
         case scala.util.Failure(ex) =>
           repository.deleteFile(outputLocation).failed.foreach { delErr =>
             logger.warn(

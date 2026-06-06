@@ -131,9 +131,12 @@ class HadoopParquetRepository(
         .wrap(tail, 0, 4)
         .order(java.nio.ByteOrder.LITTLE_ENDIAN)
         .getInt
-      if (footerLen <= 0 || footerLen > fileLen - 8)
+      val MaxFooterBytes = 256 * 1024 * 1024
+      if (
+        footerLen <= 0 || footerLen > fileLen - 8 || footerLen > MaxFooterBytes
+      )
         throw new java.io.IOException(
-          s"Invalid Parquet footer length: $footerLen (file length: $fileLen)"
+          s"Invalid Parquet footer length: $footerLen (file length: $fileLen, max: ${MaxFooterBytes}B)"
         )
       stream.seek(fileLen - 8 - footerLen)
       val footerBytes = new Array[Byte](footerLen)
@@ -350,7 +353,7 @@ class HadoopParquetRepository(
       implicit val ec: ExecutionContextExecutorService =
         ExecutionContext.fromExecutorService(rawEc)
       val requestedNames =
-        requestedSchema.getFields.asScala.map(_.getName).toSet
+        requestedSchema.getColumns.asScala.map(_.getPath.mkString(".")).toSet
       val futures = selectedBlocks.map { block =>
         Future {
           val colChunks = block.getColumns.asScala.toList
@@ -694,9 +697,11 @@ class HadoopParquetRepository(
       annotation match {
         case _: LogicalTypeAnnotation.DateLogicalTypeAnnotation => "DATE"
         case ts: LogicalTypeAnnotation.TimestampLogicalTypeAnnotation =>
-          if (ts.getUnit == LogicalTypeAnnotation.TimeUnit.MICROS)
-            "TIMESTAMP_MICROS"
-          else "TIMESTAMP_MILLIS"
+          ts.getUnit match {
+            case LogicalTypeAnnotation.TimeUnit.MICROS => "TIMESTAMP_MICROS"
+            case LogicalTypeAnnotation.TimeUnit.NANOS  => "TIMESTAMP_NANOS"
+            case _                                     => "TIMESTAMP_MILLIS"
+          }
         case _: LogicalTypeAnnotation.StringLogicalTypeAnnotation => "STRING"
         case _: LogicalTypeAnnotation.EnumLogicalTypeAnnotation   => "STRING"
         case _: LogicalTypeAnnotation.JsonLogicalTypeAnnotation   => "STRING"
@@ -788,17 +793,25 @@ class HadoopParquetRepository(
         )
 
       case ts: LogicalTypeAnnotation.TimestampLogicalTypeAnnotation =>
-        val isMicros = ts.getUnit == LogicalTypeAnnotation.TimeUnit.MICROS
         def rawToInstant(raw: String): String = {
           val v = raw.toLong
-          if (isMicros)
-            java.time.Instant
-              .ofEpochSecond(
-                Math.floorDiv(v, 1_000_000L),
-                Math.floorMod(v, 1_000_000L) * 1000L
-              )
-              .toString
-          else java.time.Instant.ofEpochMilli(v).toString
+          ts.getUnit match {
+            case LogicalTypeAnnotation.TimeUnit.MICROS =>
+              java.time.Instant
+                .ofEpochSecond(
+                  Math.floorDiv(v, 1_000_000L),
+                  Math.floorMod(v, 1_000_000L) * 1000L
+                )
+                .toString
+            case LogicalTypeAnnotation.TimeUnit.NANOS =>
+              java.time.Instant
+                .ofEpochSecond(
+                  Math.floorDiv(v, 1_000_000_000L),
+                  Math.floorMod(v, 1_000_000_000L)
+                )
+                .toString
+            case _ => java.time.Instant.ofEpochMilli(v).toString
+          }
         }
         val (mn, mx) = numericMinMax[Long](
           withValues,
