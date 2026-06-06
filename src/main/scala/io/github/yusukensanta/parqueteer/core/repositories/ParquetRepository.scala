@@ -36,7 +36,9 @@ trait ParquetRepository {
       config: ReadConfig
   )(process: Map[String, CellValue] => Unit): Try[Long]
   def readSchema(file: ParquetFile): Try[ParquetSchema]
-  def readFileInfo(file: ParquetFile): Try[(ParquetSchema, FileMetadata)]
+  def readFileInfo(
+      file: ParquetFile
+  ): Try[(ParquetSchema, FileMetadata, List[RowGroupInfo])]
   def readMetadata(file: ParquetFile): Try[FileMetadata]
   def writeContent(
       location: StorageLocation,
@@ -466,7 +468,7 @@ class HadoopParquetRepository(
 
   def readFileInfo(
       file: ParquetFile
-  ): Try[(ParquetSchema, FileMetadata)] = {
+  ): Try[(ParquetSchema, FileMetadata, List[RowGroupInfo])] = {
     setupHadoopConfiguration(file.location).flatMap { hadoopConfig =>
       Try {
         val path = new HadoopPath(file.location.path)
@@ -501,14 +503,22 @@ class HadoopParquetRepository(
           compressionType = codec,
           avgRowGroupSizeBytes = avgRGSize
         )
+        val rowGroups = blocks.zipWithIndex.map { case (block, idx) =>
+          RowGroupInfo(
+            index = idx,
+            rowCount = block.getRowCount,
+            compressedBytes = block.getColumns.asScala.map(_.getTotalSize).sum,
+            uncompressedBytes = block.getTotalByteSize
+          )
+        }
         footerCache.put(path.toString, (msgSchema, blocks))
-        (parsedSchema, metadata)
+        (parsedSchema, metadata, rowGroups)
       }
     }
   }
 
   def readMetadata(file: ParquetFile): Try[FileMetadata] =
-    readFileInfo(file).map(_._2)
+    readFileInfo(file).map { case (_, meta, _) => meta }
 
   def writeContent(
       location: StorageLocation,

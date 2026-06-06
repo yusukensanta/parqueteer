@@ -219,8 +219,8 @@ object CliApp {
           globalOptions
         )
 
-      case InfoCommand(filePath, format) =>
-        executeInfo(service, filePath, format, globalOptions)
+      case InfoCommand(filePath, format, verbose) =>
+        executeInfo(service, filePath, format, verbose, globalOptions)
 
       case WriteCommand(
             inputPath,
@@ -399,6 +399,7 @@ object CliApp {
       service: ParquetService,
       filePath: String,
       format: OutputFormat,
+      verbose: Boolean,
       globalOptions: GlobalOptions
   ): Int = {
     service.getFileInfo(filePath) match {
@@ -406,7 +407,7 @@ object CliApp {
         if (!globalOptions.quiet) {
           format match {
             case OutputFormat.JSON =>
-              println(CliOutputFormatter.formatInfoJson(file))
+              println(CliOutputFormatter.formatInfoJson(file, verbose))
             case _ =>
               val metaOut = file.metadata match {
                 case Some(metadata) =>
@@ -418,7 +419,13 @@ object CliApp {
                   s"Row Groups:  ${s.rowGroupCount}\n" +
                   s"Columns:     ${s.columns.size}"
               }
-              println(metaOut + schemaOut)
+              val verboseOut =
+                if (verbose && file.rowGroups.nonEmpty)
+                  "\n\n" + CliOutputFormatter.formatRowGroupsTable(
+                    file.rowGroups
+                  )
+                else ""
+              println(metaOut + schemaOut + verboseOut)
           }
         }
         0
