@@ -53,11 +53,13 @@ object HelpFormatter {
        |
        |OPTIONS:
        |      --format <fmt>   Output format: table, json (default: table)
+       |      --verbose        Show per-row-group breakdown (index, rows, compressed/uncompressed bytes)
        |  -h, --help           Show this help message
        |
        |EXAMPLES:
        |  parqueteer info data.parquet
-       |  parqueteer info data.parquet --format json
+       |  parqueteer info data.parquet --verbose
+       |  parqueteer info data.parquet --format json --verbose
        |  parqueteer info s3://bucket/data.parquet
        |""".stripMargin
 

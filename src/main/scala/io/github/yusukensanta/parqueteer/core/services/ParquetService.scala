@@ -45,7 +45,7 @@ class ParquetService(
       schemaAndMeta <- repository
         .readFileInfo(file)
         .toParqueteerError
-      (schema, metadata) = schemaAndMeta
+      (schema, metadata, _) = schemaAndMeta
       content <- repository
         .readContent(file, readConfig)
         .toParqueteerError
@@ -78,11 +78,15 @@ class ParquetService(
       location <- parseLocation(path)
       file = ParquetFile(location)
       // readFileInfo: ONE stat + ONE footer download instead of separate readSchema + readMetadata
-      schemaAndMeta <- repository
+      result <- repository
         .readFileInfo(file)
         .toParqueteerError
-      (schema, metadata) = schemaAndMeta
-    } yield file.copy(schema = Some(schema), metadata = Some(metadata))
+      (schema, metadata, rowGroups) = result
+    } yield file.copy(
+      schema = Some(schema),
+      metadata = Some(metadata),
+      rowGroups = rowGroups
+    )
 
   def mergeFiles(
       inputPaths: List[String],

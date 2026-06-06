@@ -20,8 +20,8 @@ class SchemaDiffTest extends AnyFlatSpec with Matchers {
       Success(metadata)
     override def readFileInfo(
         file: ParquetFile
-    ): Try[(ParquetSchema, FileMetadata)] =
-      for { s <- readSchema(file); m <- readMetadata(file) } yield (s, m)
+    ): Try[(ParquetSchema, FileMetadata, List[RowGroupInfo])] =
+      for { s <- readSchema(file); m <- readMetadata(file) } yield (s, m, Nil)
     override def readContent(
         file: ParquetFile,
         config: ReadConfig

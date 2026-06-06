@@ -25,7 +25,7 @@ object ShellCompletions {
       |    info)
       |      case "$prev" in
       |        --format) COMPREPLY=($(compgen -W "table json" -- "$cur")) ; return ;;
-      |        *) COMPREPLY=($(compgen -W "--format" -- "$cur"))
+      |        *) COMPREPLY=($(compgen -W "--format --verbose" -- "$cur"))
       |           COMPREPLY+=($(compgen -f -X '!*.parquet' -- "$cur")) ; return ;;
       |      esac ;;
       |    schema)
@@ -127,6 +127,7 @@ object ShellCompletions {
       |        info)
       |          _arguments \
       |            '--format[Output format]:format:(table json)' \
+      |            '--verbose[Show per-row-group breakdown]' \
       |            ':parquet file:_files -g "*.parquet"' ;;
       |        schema)
       |          case ${words[3]} in
@@ -204,7 +205,8 @@ object ShellCompletions {
       |complete -c parqueteer -n '__fish_seen_subcommand_from read' -l stream   -f -d 'Stream mode'
       |
       |# info
-      |complete -c parqueteer -n '__fish_seen_subcommand_from info' -l format -f -a 'table json' -d 'Output format'
+      |complete -c parqueteer -n '__fish_seen_subcommand_from info' -l format  -f -a 'table json' -d 'Output format'
+      |complete -c parqueteer -n '__fish_seen_subcommand_from info' -l verbose -f -d 'Show per-row-group breakdown'
       |
       |# write
       |complete -c parqueteer -n '__fish_seen_subcommand_from write' -l input-format   -f -a 'json ndjson csv ltsv' -d 'Input file format'

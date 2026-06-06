@@ -181,7 +181,12 @@ object ArgumentParser {
               if (List("table", "json").contains(x.toLowerCase)) success
               else failure(s"Invalid format: $x. Use table or json")
             )
-            .text("Output format: table, json (default: table)")
+            .text("Output format: table, json (default: table)"),
+          opt[Unit]("verbose")
+            .action((_, c) => updateCmd[InfoCommand](c, _.copy(verbose = true)))
+            .text(
+              "Show per-row-group breakdown (index, rows, compressed/uncompressed bytes)"
+            )
         ),
       cmd("write")
         .text("Create parquet file from input data")

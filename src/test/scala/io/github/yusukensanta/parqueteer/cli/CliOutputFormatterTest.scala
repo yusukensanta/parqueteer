@@ -9,6 +9,7 @@ import io.github.yusukensanta.parqueteer.core.models.{
   LocalPath,
   ParquetFile,
   ParquetSchema,
+  RowGroupInfo,
   SchemaDiff
 }
 import io.circe.parser.parse
@@ -183,6 +184,52 @@ class CliOutputFormatterTest extends AnyFlatSpec with Matchers {
     json("modifiedAt").get.isNull shouldBe true
     json("compressionRatio").get.isNull shouldBe true
     json("createdBy").get.isNull shouldBe true
+  }
+
+  it should "omit rowGroupDetails when verbose=false" in {
+    val meta = makeMetadata()
+    val file = makeParquetFile(metadata = Some(meta))
+    val result = CliOutputFormatter.formatInfoJson(file, verbose = false)
+    val json = parse(result).toOption.get.asObject.get
+    json.contains("rowGroupDetails") shouldBe false
+  }
+
+  it should "include rowGroupDetails when verbose=true and rowGroups present" in {
+    val meta = makeMetadata()
+    val rgs = List(
+      RowGroupInfo(0, rowCount = 1000L, compressedBytes = 4096L, uncompressedBytes = 8192L),
+      RowGroupInfo(1, rowCount = 500L, compressedBytes = 2048L, uncompressedBytes = 4096L)
+    )
+    val file = ParquetFile(location = localFile(), metadata = Some(meta), rowGroups = rgs)
+    val result = CliOutputFormatter.formatInfoJson(file, verbose = true)
+    val json = parse(result).toOption.get.asObject.get
+    val arr = json("rowGroupDetails").get.asArray.get
+    arr.length shouldBe 2
+    arr(0).asObject.get("rowCount").get.asNumber.get.toLong.get shouldBe 1000L
+    arr(1).asObject.get("compressedBytes").get.asNumber.get.toLong.get shouldBe 2048L
+  }
+
+  // ─── formatRowGroupsTable ────────────────────────────────────────────────────
+
+  "CliOutputFormatter.formatRowGroupsTable" should "include header with # and Rows columns" in {
+    val rgs = List(RowGroupInfo(0, 1000L, 4096L, 8192L))
+    val result = CliOutputFormatter.formatRowGroupsTable(rgs)
+    result should include("#")
+    result should include("Rows")
+    result should include("Compressed")
+    result should include("Uncompressed")
+  }
+
+  it should "render each row group with index and counts" in {
+    val rgs = List(
+      RowGroupInfo(0, 1000L, 4096L, 8192L),
+      RowGroupInfo(1, 500L, 2048L, 4096L)
+    )
+    val result = CliOutputFormatter.formatRowGroupsTable(rgs)
+    result should include("0")
+    result should include("1000")
+    result should include("1")
+    result should include("500")
   }
 
   // ─── formatSchemaJson ───────────────────────────────────────────────────────

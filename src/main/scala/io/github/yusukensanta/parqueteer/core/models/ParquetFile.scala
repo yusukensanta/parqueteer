@@ -7,7 +7,15 @@ case class ParquetFile(
     location: StorageLocation,
     schema: Option[ParquetSchema] = None,
     metadata: Option[FileMetadata] = None,
-    content: Option[FileContent] = None
+    content: Option[FileContent] = None,
+    rowGroups: List[RowGroupInfo] = Nil
+)
+
+case class RowGroupInfo(
+    index: Int,
+    rowCount: Long,
+    compressedBytes: Long,
+    uncompressedBytes: Long
 )
 
 case class ParquetSchema(

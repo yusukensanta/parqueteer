@@ -59,6 +59,16 @@ class ArgumentParserTest extends AnyFlatSpec with Matchers {
       .format shouldBe OutputFormat.JSON
   }
 
+  it should "parse info --verbose flag" in {
+    val result = OParser.parse(
+      ArgumentParser.parser,
+      Array("info", "/local/file.parquet", "--verbose"),
+      ArgumentParser.Config()
+    )
+    result shouldBe defined
+    result.get.command.get.asInstanceOf[InfoCommand].verbose shouldBe true
+  }
+
   it should "reject --schema flag on info (removed)" in {
     val args = Array("info", "/local/file.parquet", "--schema")
     val result =

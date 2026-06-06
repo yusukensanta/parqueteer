@@ -4,43 +4,73 @@ import io.github.yusukensanta.parqueteer.core.models.{
   ColumnInfo,
   FileStats,
   ParquetFile,
+  RowGroupInfo,
   SchemaDiff
 }
 import io.circe.Json
 
 private[cli] object CliOutputFormatter {
 
-  def formatInfoJson(file: ParquetFile): String =
+  def formatInfoJson(file: ParquetFile, verbose: Boolean = false): String =
     file.metadata.fold(Json.obj().spaces2) { m =>
-      Json
-        .obj(
-          "fileSize" -> Json.fromLong(m.fileSize),
-          "compressionType" -> m.compressionType
-            .fold(Json.Null)(Json.fromString),
-          "rows" -> file.schema.fold(Json.Null)(s =>
-            Json.fromLong(s.totalRowCount)
-          ),
-          "rowGroups" -> file.schema.fold(Json.Null)(s =>
-            Json.fromLong(s.rowGroupCount)
-          ),
-          "columns" -> file.schema.fold(Json.Null)(s =>
-            Json.fromInt(s.columns.size)
-          ),
-          "createdAt" -> m.createdAt.fold(Json.Null)(t =>
-            Json.fromString(t.toString)
-          ),
-          "modifiedAt" -> m.modifiedAt.fold(Json.Null)(t =>
-            Json.fromString(t.toString)
-          ),
-          "compressionRatio" -> m.compressionRatio
-            .fold(Json.Null)(Json.fromDoubleOrNull),
-          "avgRowGroupSizeBytes" -> m.avgRowGroupSizeBytes
-            .fold(Json.Null)(Json.fromLong),
-          "version" -> Json.fromString(m.version),
-          "createdBy" -> m.createdBy.fold(Json.Null)(Json.fromString)
-        )
-        .spaces2
+      val base = Json.obj(
+        "fileSize" -> Json.fromLong(m.fileSize),
+        "compressionType" -> m.compressionType
+          .fold(Json.Null)(Json.fromString),
+        "rows" -> file.schema.fold(Json.Null)(s =>
+          Json.fromLong(s.totalRowCount)
+        ),
+        "rowGroups" -> file.schema.fold(Json.Null)(s =>
+          Json.fromLong(s.rowGroupCount)
+        ),
+        "columns" -> file.schema.fold(Json.Null)(s =>
+          Json.fromInt(s.columns.size)
+        ),
+        "createdAt" -> m.createdAt.fold(Json.Null)(t =>
+          Json.fromString(t.toString)
+        ),
+        "modifiedAt" -> m.modifiedAt.fold(Json.Null)(t =>
+          Json.fromString(t.toString)
+        ),
+        "compressionRatio" -> m.compressionRatio
+          .fold(Json.Null)(Json.fromDoubleOrNull),
+        "avgRowGroupSizeBytes" -> m.avgRowGroupSizeBytes
+          .fold(Json.Null)(Json.fromLong),
+        "version" -> Json.fromString(m.version),
+        "createdBy" -> m.createdBy.fold(Json.Null)(Json.fromString)
+      )
+      if (verbose && file.rowGroups.nonEmpty)
+        base
+          .deepMerge(
+            Json.obj(
+              "rowGroupDetails" -> Json.fromValues(
+                file.rowGroups.map { rg =>
+                  Json.obj(
+                    "index" -> Json.fromInt(rg.index),
+                    "rowCount" -> Json.fromLong(rg.rowCount),
+                    "compressedBytes" -> Json.fromLong(rg.compressedBytes),
+                    "uncompressedBytes" -> Json.fromLong(rg.uncompressedBytes)
+                  )
+                }
+              )
+            )
+          )
+          .spaces2
+      else base.spaces2
     }
+
+  def formatRowGroupsTable(rowGroups: List[RowGroupInfo]): String = {
+    val header =
+      f"${"#"}%5s ${"Rows"}%12s ${"Compressed"}%14s ${"Uncompressed"}%14s"
+    val sep = "-" * header.length
+    val rows = rowGroups.map { rg =>
+      f"${rg.index}%5d ${rg.rowCount}%12d ${formatBytes(rg.compressedBytes)}%14s ${formatBytes(rg.uncompressedBytes)}%14s"
+    }
+    (header :: sep :: rows).mkString("\n")
+  }
+
+  private def formatBytes(bytes: Long): String =
+    io.github.yusukensanta.parqueteer.core.util.ByteFormatter.format(bytes)
 
   def formatSchemaJson(file: ParquetFile): String =
     file.schema.fold(Json.obj().spaces2) { s =>

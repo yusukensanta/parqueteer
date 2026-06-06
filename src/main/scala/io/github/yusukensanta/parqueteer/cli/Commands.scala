@@ -37,7 +37,8 @@ case class ReadCommand(
 
 case class InfoCommand(
     filePath: String,
-    format: OutputFormat = OutputFormat.Table
+    format: OutputFormat = OutputFormat.Table,
+    verbose: Boolean = false
 ) extends Command
 
 case class WriteCommand(
