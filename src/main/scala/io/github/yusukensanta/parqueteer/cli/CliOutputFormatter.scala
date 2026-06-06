@@ -15,15 +15,27 @@ private[cli] object CliOutputFormatter {
       Json
         .obj(
           "fileSize" -> Json.fromLong(m.fileSize),
+          "compressionType" -> m.compressionType
+            .fold(Json.Null)(Json.fromString),
+          "rows" -> file.schema.fold(Json.Null)(s =>
+            Json.fromLong(s.totalRowCount)
+          ),
+          "rowGroups" -> file.schema.fold(Json.Null)(s =>
+            Json.fromLong(s.rowGroupCount)
+          ),
+          "columns" -> file.schema.fold(Json.Null)(s =>
+            Json.fromInt(s.columns.size)
+          ),
           "createdAt" -> m.createdAt.fold(Json.Null)(t =>
             Json.fromString(t.toString)
           ),
           "modifiedAt" -> m.modifiedAt.fold(Json.Null)(t =>
             Json.fromString(t.toString)
           ),
-          "compressionRatio" -> m.compressionRatio.fold(Json.Null)(
-            Json.fromDoubleOrNull
-          ),
+          "compressionRatio" -> m.compressionRatio
+            .fold(Json.Null)(Json.fromDoubleOrNull),
+          "avgRowGroupSizeBytes" -> m.avgRowGroupSizeBytes
+            .fold(Json.Null)(Json.fromLong),
           "version" -> Json.fromString(m.version),
           "createdBy" -> m.createdBy.fold(Json.Null)(Json.fromString)
         )
@@ -40,8 +52,7 @@ private[cli] object CliOutputFormatter {
             Json.obj(
               "name" -> Json.fromString(c.name),
               "dataType" -> Json.fromString(c.dataType),
-              "optional" -> Json.fromBoolean(c.isOptional),
-              "compressionType" -> Json.fromString(c.compressionType)
+              "optional" -> Json.fromBoolean(c.isOptional)
             )
           })
         )
@@ -54,15 +65,18 @@ private[cli] object CliOutputFormatter {
       s"Stats: ${stats.totalRows} rows, ${stats.rowGroupCount} row groups\n\n"
     )
     val header =
-      f"${"Column"}%-30s ${"Type"}%-15s ${"Nulls"}%10s ${"Min"}%-20s ${"Max"}%-20s"
+      f"${"Column"}%-30s ${"Type"}%-18s ${"Nulls"}%10s ${"Null%"}%7s ${"Min"}%-20s ${"Max"}%-20s"
     sb.append(header + "\n")
     sb.append("-" * header.length + "\n")
     stats.columns.foreach { col =>
       val nulls = if (col.nullCount < 0) "n/a" else col.nullCount.toString
+      val nullPct =
+        if (col.nullCount < 0 || stats.totalRows == 0) "n/a"
+        else f"${col.nullCount.toDouble / stats.totalRows * 100}%.1f%%"
       val min = col.minValue.getOrElse("n/a")
       val max = col.maxValue.getOrElse("n/a")
       sb.append(
-        f"${col.name}%-30s ${col.dataType}%-15s ${nulls}%10s ${min}%-20s ${max}%-20s\n"
+        f"${col.name}%-30s ${col.dataType}%-18s ${nulls}%10s ${nullPct}%7s ${min}%-20s ${max}%-20s\n"
       )
     }
     sb.toString.stripTrailing()
@@ -74,11 +88,18 @@ private[cli] object CliOutputFormatter {
         "totalRows" -> Json.fromLong(stats.totalRows),
         "rowGroupCount" -> Json.fromLong(stats.rowGroupCount),
         "columns" -> Json.fromValues(stats.columns.map { col =>
+          val nullPct =
+            if (col.nullCount < 0 || stats.totalRows == 0) Json.Null
+            else
+              Json.fromDoubleOrNull(
+                col.nullCount.toDouble / stats.totalRows * 100
+              )
           Json.obj(
             "name" -> Json.fromString(col.name),
             "dataType" -> Json.fromString(col.dataType),
             "nullCount" -> (if (col.nullCount < 0) Json.Null
                             else Json.fromLong(col.nullCount)),
+            "nullPercent" -> nullPct,
             "minValue" -> col.minValue.fold(Json.Null)(Json.fromString),
             "maxValue" -> col.maxValue.fold(Json.Null)(Json.fromString)
           )

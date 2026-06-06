@@ -176,11 +176,13 @@ class HadoopParquetRepository(
       .getOrElse(Map.empty[String, String])
     val columns = msgSchema.getColumns.asScala.map { col =>
       val colPath = col.getPath.mkString(".")
+      val pt = col.getPrimitiveType
       ColumnInfo(
         name = colPath,
-        dataType = col.getPrimitiveType.getPrimitiveTypeName.name(),
+        dataType =
+          logicalTypeName(pt.getPrimitiveTypeName, pt.getLogicalTypeAnnotation),
         isOptional =
-          col.getPrimitiveType.getRepetition == org.apache.parquet.schema.Type.Repetition.OPTIONAL,
+          pt.getRepetition == org.apache.parquet.schema.Type.Repetition.OPTIONAL,
         maxDefinitionLevel = col.getMaxDefinitionLevel,
         maxRepetitionLevel = col.getMaxRepetitionLevel,
         compressionType = compressionMap.getOrElse(colPath, "UNKNOWN")
@@ -479,6 +481,14 @@ class HadoopParquetRepository(
         val msgSchema = meta.getFileMetaData.getSchema
         val ratio = calculateCompressionRatio(blocks)
         val parsedSchema = buildParquetSchema(msgSchema, blocks)
+        val codecs = parsedSchema.columns.map(_.compressionType).distinct
+        val codec =
+          if (codecs.isEmpty) None
+          else if (codecs.size == 1) Some(codecs.head)
+          else Some("MIXED")
+        val avgRGSize =
+          if (blocks.isEmpty) None
+          else Some(blocks.map(_.getTotalByteSize).sum / blocks.size)
         val metadata = FileMetadata(
           fileSize = fileStatus.getLen,
           createdAt = None,
@@ -487,7 +497,9 @@ class HadoopParquetRepository(
           ),
           compressionRatio = ratio,
           version = version,
-          createdBy = Some(createdBy)
+          createdBy = Some(createdBy),
+          compressionType = codec,
+          avgRowGroupSizeBytes = avgRGSize
         )
         footerCache.put(path.toString, (msgSchema, blocks))
         (parsedSchema, metadata)
@@ -729,8 +741,10 @@ class HadoopParquetRepository(
 
         val columns = schema.getColumns.asScala.toList.map { colDescriptor =>
           val colPath = colDescriptor.getPath.mkString(".")
-          val typeName = colDescriptor.getPrimitiveType.getPrimitiveTypeName
-          val dataType = typeName.name()
+          val pt = colDescriptor.getPrimitiveType
+          val typeName = pt.getPrimitiveTypeName
+          val logicalType = pt.getLogicalTypeAnnotation
+          val dataType = logicalTypeName(typeName, logicalType)
 
           val chunkStats = blocks
             .flatMap { block =>
@@ -747,8 +761,6 @@ class HadoopParquetRepository(
 
           val withValues =
             chunkStats.filter(s => !s.isEmpty && s.hasNonNullValue)
-          val logicalType =
-            colDescriptor.getPrimitiveType.getLogicalTypeAnnotation
           val (minVal, maxVal) =
             computeTypedMinMax(withValues, typeName, logicalType)
 

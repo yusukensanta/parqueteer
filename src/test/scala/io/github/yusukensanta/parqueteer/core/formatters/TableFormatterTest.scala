@@ -41,7 +41,8 @@ class TableFormatterTest extends AnyFlatSpec with Matchers {
     modifiedAt = None,
     compressionRatio = Some(0.75),
     version = "2.0",
-    createdBy = Some("parqueteer")
+    createdBy = Some("parqueteer"),
+    compressionType = Some("SNAPPY")
   )
 
   "TableFormatter.formatContent" should "include column headers" in {
@@ -124,9 +125,11 @@ class TableFormatterTest extends AnyFlatSpec with Matchers {
     result should include("age")
   }
 
-  it should "include compression type" in {
+  it should "not include compression type in schema table" in {
     val result = formatter.formatSchema(sampleSchema)
-    result should include("SNAPPY")
+    // Compression is file-level info, shown in `info` not `schema`
+    result should not include "Compression"
+    result should not include "SNAPPY"
   }
 
   it should "show Yes for optional columns and No for required columns" in {
@@ -163,6 +166,17 @@ class TableFormatterTest extends AnyFlatSpec with Matchers {
   it should "include createdAt timestamp" in {
     val result = formatter.formatMetadata(sampleMetadata)
     result should include("2024-01-01")
+  }
+
+  it should "show compression codec when present" in {
+    val result = formatter.formatMetadata(sampleMetadata)
+    result should include("Compression:")
+    result should include("SNAPPY")
+  }
+
+  it should "omit compression line when compressionType is None" in {
+    val noCodec = sampleMetadata.copy(compressionType = None)
+    formatter.formatMetadata(noCodec) should not include "Compression:"
   }
 
   "TableFormatter.formatValue" should "format Double NaN as NaN" in {
