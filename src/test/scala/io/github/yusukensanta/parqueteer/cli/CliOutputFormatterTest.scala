@@ -221,12 +221,22 @@ class CliOutputFormatterTest extends AnyFlatSpec with Matchers {
   }
 
   it should "include encodings array in each column" in {
-    val col = makeColumnInfo("id", "INT64", encodings = List("PLAIN", "RLE_DICTIONARY"))
+    val col =
+      makeColumnInfo("id", "INT64", encodings = List("PLAIN", "RLE_DICTIONARY"))
     val schema = makeSchema(List(col))
     val file = makeParquetFile(schema = Some(schema))
     val result = CliOutputFormatter.formatSchemaJson(file)
-    val c0 = parse(result).toOption.get.asObject.get("columns").get.asArray.get(0).asObject.get
-    c0("encodings").get.asArray.get.map(_.asString.get) shouldBe List("PLAIN", "RLE_DICTIONARY")
+    val c0 = parse(result).toOption.get.asObject
+      .get("columns")
+      .get
+      .asArray
+      .get(0)
+      .asObject
+      .get
+    c0("encodings").get.asArray.get.map(_.asString.get) shouldBe List(
+      "PLAIN",
+      "RLE_DICTIONARY"
+    )
   }
 
   it should "handle multiple columns" in {
