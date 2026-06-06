@@ -61,14 +61,13 @@ private[repositories] object ParquetWriteOps {
               }
             group.add(fieldIndex, asInt)
           case CellValue.Ts(i) =>
-            val isMicros = Option(fieldType.getLogicalTypeAnnotation).exists {
+            val timeUnit = Option(fieldType.getLogicalTypeAnnotation).collect {
               case ts: LogicalTypeAnnotation.TimestampLogicalTypeAnnotation =>
-                ts.getUnit == LogicalTypeAnnotation.TimeUnit.MICROS
-              case _ => false
+                ts.getUnit
             }
             val fieldName = schema.getType(fieldIndex).getName
-            val encoded =
-              if (isMicros)
+            val encoded = timeUnit match {
+              case Some(LogicalTypeAnnotation.TimeUnit.MICROS) =>
                 try
                   Math.addExact(
                     Math.multiplyExact(i.getEpochSecond, 1_000_000L),
@@ -80,7 +79,20 @@ private[repositories] object ParquetWriteOps {
                       s"Timestamp value '$i' for column '$fieldName' overflows INT64 microsecond range"
                     )
                 }
-              else i.toEpochMilli
+              case Some(LogicalTypeAnnotation.TimeUnit.NANOS) =>
+                try
+                  Math.addExact(
+                    Math.multiplyExact(i.getEpochSecond, 1_000_000_000L),
+                    i.getNano.toLong
+                  )
+                catch {
+                  case _: ArithmeticException =>
+                    throw new IllegalArgumentException(
+                      s"Timestamp value '$i' for column '$fieldName' overflows INT64 nanosecond range"
+                    )
+                }
+              case _ => i.toEpochMilli
+            }
             group.add(fieldIndex, encoded)
           case CellValue.Dec(bd) =>
             if (decimalWarnedOnce.compareAndSet(false, true))

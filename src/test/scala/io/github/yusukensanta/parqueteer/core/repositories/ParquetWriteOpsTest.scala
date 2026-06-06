@@ -226,6 +226,22 @@ class ParquetWriteOpsTest extends AnyFlatSpec with Matchers {
     group.getLong("created_at", 0) shouldBe expectedMicros
   }
 
+  it should "write an Instant field as INT64 epoch nanos for TIMESTAMP_NANOS schema" in {
+    val mt = schema(
+      "message root { required int64 ts_ns (TIMESTAMP(NANOS,true)); }"
+    )
+    val group = new SimpleGroupFactory(mt).newGroup()
+    val instant = java.time.Instant.parse("2024-06-15T12:34:56.123456789Z")
+    ParquetWriteOps.writeRowToGroup(
+      group,
+      Map("ts_ns" -> CellValue.Ts(instant)),
+      mt
+    )
+    val expectedNanos =
+      instant.getEpochSecond * 1_000_000_000L + instant.getNano.toLong
+    group.getLong("ts_ns", 0) shouldBe expectedNanos
+  }
+
   it should "write an Instant to unannotated INT64 as epoch millis" in {
     val mt = schema("message root { required int64 created_at; }")
     val group = new SimpleGroupFactory(mt).newGroup()
