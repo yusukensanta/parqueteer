@@ -31,7 +31,9 @@ case class FileMetadata(
     modifiedAt: Option[Instant],
     compressionRatio: Option[Double],
     version: String,
-    createdBy: Option[String]
+    createdBy: Option[String],
+    compressionType: Option[String] = None,
+    avgRowGroupSizeBytes: Option[Long] = None
 )
 
 case class FileContent(

@@ -214,7 +214,7 @@ class CliOutputFormatterTest extends AnyFlatSpec with Matchers {
     c0("name").get.asString.get shouldBe "id"
     c0("dataType").get.asString.get shouldBe "INT64"
     c0("optional").get.asBoolean.get shouldBe false
-    c0("compressionType").get.asString.get shouldBe "SNAPPY"
+    c0.contains("compressionType") shouldBe false
   }
 
   it should "handle multiple columns" in {

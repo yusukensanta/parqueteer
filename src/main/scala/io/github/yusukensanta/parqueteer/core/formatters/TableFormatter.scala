@@ -82,9 +82,8 @@ class TableFormatter extends OutputFormatter {
 
     sb.append("Columns:\n")
 
-    // Create table for column information
-    val headers = List("Name", "Type", "Optional", "Compression")
-    val columnWidths = List(30, 15, 10, 15)
+    val headers = List("Name", "Type", "Optional")
+    val columnWidths = List(30, 15, 10)
 
     sb.append(drawTopBorder(columnWidths))
     sb.append("\n")
@@ -97,8 +96,7 @@ class TableFormatter extends OutputFormatter {
       val row = List(
         truncate(col.name, 30),
         col.dataType,
-        if (col.isOptional) "Yes" else "No",
-        col.compressionType
+        if (col.isOptional) "Yes" else "No"
       )
       sb.append(drawRow(row, columnWidths))
       sb.append("\n")
@@ -129,11 +127,19 @@ class TableFormatter extends OutputFormatter {
     sb.append(s"Parquet Version: ${metadata.version}\n")
 
     metadata.createdBy.foreach { creator =>
-      sb.append(s"Created By: $creator\n")
+      sb.append(s"Created By:      $creator\n")
+    }
+
+    metadata.compressionType.foreach { codec =>
+      sb.append(s"Compression:     $codec\n")
     }
 
     metadata.compressionRatio.foreach { ratio =>
       sb.append(f"Compression Ratio: ${ratio}%.2f\n")
+    }
+
+    metadata.avgRowGroupSizeBytes.foreach { sz =>
+      sb.append(s"Avg Row Group:   ${formatBytes(sz)}\n")
     }
 
     sb.toString

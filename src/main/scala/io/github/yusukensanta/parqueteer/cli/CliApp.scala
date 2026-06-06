@@ -408,12 +408,17 @@ object CliApp {
             case OutputFormat.JSON =>
               println(CliOutputFormatter.formatInfoJson(file))
             case _ =>
-              val output = file.metadata match {
+              val metaOut = file.metadata match {
                 case Some(metadata) =>
                   new TableFormatter().formatMetadata(metadata)
                 case None => "No metadata information available"
               }
-              println(output)
+              val schemaOut = file.schema.fold("") { s =>
+                s"\nRows:        ${s.totalRowCount}\n" +
+                  s"Row Groups:  ${s.rowGroupCount}\n" +
+                  s"Columns:     ${s.columns.size}"
+              }
+              println(metaOut + schemaOut)
           }
         }
         0
