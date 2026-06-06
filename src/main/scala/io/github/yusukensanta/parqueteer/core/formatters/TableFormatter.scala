@@ -82,8 +82,13 @@ class TableFormatter extends OutputFormatter {
 
     sb.append("Columns:\n")
 
-    val headers = List("Name", "Type", "Optional")
-    val columnWidths = List(30, 15, 10)
+    val hasEncodings = schema.columns.exists(_.encodings.nonEmpty)
+    val headers =
+      if (hasEncodings) List("Name", "Type", "Optional", "Encoding")
+      else List("Name", "Type", "Optional")
+    val columnWidths =
+      if (hasEncodings) List(30, 15, 10, 30)
+      else List(30, 15, 10)
 
     sb.append(drawTopBorder(columnWidths))
     sb.append("\n")
@@ -93,11 +98,20 @@ class TableFormatter extends OutputFormatter {
     sb.append("\n")
 
     schema.columns.foreach { col =>
-      val row = List(
-        truncate(col.name, 30),
-        col.dataType,
-        if (col.isOptional) "Yes" else "No"
-      )
+      val row =
+        if (hasEncodings)
+          List(
+            truncate(col.name, 30),
+            col.dataType,
+            if (col.isOptional) "Yes" else "No",
+            col.encodings.mkString(",")
+          )
+        else
+          List(
+            truncate(col.name, 30),
+            col.dataType,
+            if (col.isOptional) "Yes" else "No"
+          )
       sb.append(drawRow(row, columnWidths))
       sb.append("\n")
     }

@@ -22,7 +22,8 @@ case class ColumnInfo(
     isOptional: Boolean,
     maxDefinitionLevel: Int,
     maxRepetitionLevel: Int,
-    compressionType: String
+    compressionType: String,
+    encodings: List[String] = Nil
 )
 
 case class FileMetadata(

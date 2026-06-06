@@ -33,7 +33,8 @@ class CliOutputFormatterTest extends AnyFlatSpec with Matchers {
       name: String,
       dataType: String,
       isOptional: Boolean = false,
-      compressionType: String = "SNAPPY"
+      compressionType: String = "SNAPPY",
+      encodings: List[String] = Nil
   ): ColumnInfo =
     ColumnInfo(
       name = name,
@@ -41,7 +42,8 @@ class CliOutputFormatterTest extends AnyFlatSpec with Matchers {
       isOptional = isOptional,
       maxDefinitionLevel = if (isOptional) 1 else 0,
       maxRepetitionLevel = 0,
-      compressionType = compressionType
+      compressionType = compressionType,
+      encodings = encodings
     )
 
   private def makeSchema(
@@ -215,6 +217,16 @@ class CliOutputFormatterTest extends AnyFlatSpec with Matchers {
     c0("dataType").get.asString.get shouldBe "INT64"
     c0("optional").get.asBoolean.get shouldBe false
     c0.contains("compressionType") shouldBe false
+    c0("encodings").get.asArray.get shouldBe empty
+  }
+
+  it should "include encodings array in each column" in {
+    val col = makeColumnInfo("id", "INT64", encodings = List("PLAIN", "RLE_DICTIONARY"))
+    val schema = makeSchema(List(col))
+    val file = makeParquetFile(schema = Some(schema))
+    val result = CliOutputFormatter.formatSchemaJson(file)
+    val c0 = parse(result).toOption.get.asObject.get("columns").get.asArray.get(0).asObject.get
+    c0("encodings").get.asArray.get.map(_.asString.get) shouldBe List("PLAIN", "RLE_DICTIONARY")
   }
 
   it should "handle multiple columns" in {

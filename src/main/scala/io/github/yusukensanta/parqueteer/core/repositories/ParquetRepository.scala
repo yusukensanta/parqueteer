@@ -167,16 +167,17 @@ class HadoopParquetRepository(
       msgSchema: MessageType,
       blocks: List[BlockMetaData]
   ): ParquetSchema = {
-    val compressionMap = blocks.headOption
+    val chunkMap = blocks.headOption
       .map(
         _.getColumns.asScala
-          .map(c => c.getPath.toDotString -> c.getCodec.name())
+          .map(c => c.getPath.toDotString -> c)
           .toMap
       )
-      .getOrElse(Map.empty[String, String])
+      .getOrElse(Map.empty)
     val columns = msgSchema.getColumns.asScala.map { col =>
       val colPath = col.getPath.mkString(".")
       val pt = col.getPrimitiveType
+      val chunk = chunkMap.get(colPath)
       ColumnInfo(
         name = colPath,
         dataType =
@@ -185,7 +186,10 @@ class HadoopParquetRepository(
           pt.getRepetition == org.apache.parquet.schema.Type.Repetition.OPTIONAL,
         maxDefinitionLevel = col.getMaxDefinitionLevel,
         maxRepetitionLevel = col.getMaxRepetitionLevel,
-        compressionType = compressionMap.getOrElse(colPath, "UNKNOWN")
+        compressionType = chunk.map(_.getCodec.name()).getOrElse("UNKNOWN"),
+        encodings = chunk
+          .map(_.getEncodings.asScala.map(_.name()).toList.sorted.distinct)
+          .getOrElse(Nil)
       )
     }.toList
     ParquetSchema(

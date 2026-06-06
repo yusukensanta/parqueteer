@@ -148,6 +148,33 @@ class TableFormatterTest extends AnyFlatSpec with Matchers {
     line.indexOf("Type") should be < line.indexOf("Optional")
   }
 
+  it should "not show Encoding column when all encodings are empty" in {
+    val result = formatter.formatSchema(sampleSchema)
+    result should not include "Encoding"
+  }
+
+  it should "show Encoding column when any column has encodings" in {
+    val schema = ParquetSchema(
+      columns = List(
+        ColumnInfo(
+          "id",
+          "INT64",
+          isOptional = false,
+          1,
+          0,
+          "SNAPPY",
+          List("PLAIN", "RLE_DICTIONARY")
+        )
+      ),
+      rowGroupCount = 1L,
+      totalRowCount = 10L
+    )
+    val result = formatter.formatSchema(schema)
+    result should include("Encoding")
+    result should include("PLAIN")
+    result should include("RLE_DICTIONARY")
+  }
+
   "TableFormatter.formatMetadata" should "show file size in human-readable form" in {
     val result = formatter.formatMetadata(sampleMetadata)
     result should include("1.5 KB")
