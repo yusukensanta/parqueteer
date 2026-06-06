@@ -283,61 +283,63 @@ class ParquetService(
         .startsWith("MAP") || f.dataType.startsWith("LIST")
     )
     if (nestedFields.nonEmpty)
-      return Left(
+      Left(
         ParqueteerError.InvalidFormat(
           "merge",
           s"Cannot merge files containing nested columns: ${nestedFields.map(_.name).mkString(", ")}. " +
             "Flatten STRUCT/MAP/LIST columns before merging."
         )
       )
-    val explicitSchema = ParquetSchema(
-      columns = mergedFields.map { f =>
-        ColumnInfo(
-          f.name,
-          f.dataType,
-          f.isOptional,
-          if (f.isOptional) 1 else 0,
-          0,
-          writeConfig.compressionType.codecName
-        )
-      },
-      rowGroupCount = 1L,
-      totalRowCount = 0L
-    )
-    val writeResult = repository
-      .writeContentStream(outputLocation, explicitSchema, writeConfig) {
-        write =>
-          inputLocations.zipWithIndex.foreach { case (loc, i) =>
-            onProgress(i + 1, inputLocations.size, inputPaths(i))
-            repository
-              .streamContent(ParquetFile(loc), ReadConfig()) { row =>
-                val finalRow = scala.collection.immutable.ListMap.from(
-                  mergedFields.map(f =>
-                    f.name -> row.getOrElse(f.name, CellValue.Null)
+    else {
+      val explicitSchema = ParquetSchema(
+        columns = mergedFields.map { f =>
+          ColumnInfo(
+            f.name,
+            f.dataType,
+            f.isOptional,
+            if (f.isOptional) 1 else 0,
+            0,
+            writeConfig.compressionType.codecName
+          )
+        },
+        rowGroupCount = 1L,
+        totalRowCount = 0L
+      )
+      val writeResult = repository
+        .writeContentStream(outputLocation, explicitSchema, writeConfig) {
+          write =>
+            inputLocations.zipWithIndex.foreach { case (loc, i) =>
+              onProgress(i + 1, inputLocations.size, inputPaths(i))
+              repository
+                .streamContent(ParquetFile(loc), ReadConfig()) { row =>
+                  val finalRow = scala.collection.immutable.ListMap.from(
+                    mergedFields.map(f =>
+                      f.name -> row.getOrElse(f.name, CellValue.Null)
+                    )
                   )
-                )
-                write(finalRow)
-              } match {
-              case scala.util.Failure(err) =>
-                throw new MergeStreamException(
-                  scala.util
-                    .Failure(err)
-                    .toParqueteerError
-                    .fold(identity, _ => ParqueteerError.IOError(err))
-                )
-              case _ =>
+                  write(finalRow)
+                } match {
+                case scala.util.Failure(err) =>
+                  throw new MergeStreamException(
+                    scala.util
+                      .Failure(err)
+                      .toParqueteerError
+                      .fold(identity, _ => ParqueteerError.IOError(err))
+                  )
+                case _ =>
+              }
             }
-          }
-      }
+        }
 
-    writeResult match {
-      case scala.util.Failure(ex: MergeStreamException) =>
-        deletePartialOutput(outputLocation)
-        Left(ex.error)
-      case scala.util.Failure(ex) =>
-        deletePartialOutput(outputLocation)
-        scala.util.Failure(ex).toParqueteerError
-      case other => other.toParqueteerError
+      writeResult match {
+        case scala.util.Failure(ex: MergeStreamException) =>
+          deletePartialOutput(outputLocation)
+          Left(ex.error)
+        case scala.util.Failure(ex) =>
+          deletePartialOutput(outputLocation)
+          scala.util.Failure(ex).toParqueteerError
+        case other => other.toParqueteerError
+      }
     }
   }
 

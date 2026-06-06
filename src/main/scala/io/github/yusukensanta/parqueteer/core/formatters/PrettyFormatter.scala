@@ -25,108 +25,103 @@ class PrettyFormatter(useColors: Boolean = sys.env.get("NO_COLOR").isEmpty)
   override def formatContent(
       content: FileContent,
       schema: Option[ParquetSchema]
-  ): String = {
-    if (!useColors)
-      return tableFormatter.formatContent(content, schema)
+  ): String =
+    if (!useColors) tableFormatter.formatContent(content, schema)
+    else if (content.rows.isEmpty) colorize("No data to display", Yellow)
+    else {
+      val rows = content.rows
+      val columns = extractColumns(rows, schema)
+      val columnWidths = tableFormatter.calculateColumnWidths(columns, rows)
 
-    if (content.rows.isEmpty)
-      return colorize("No data to display", Yellow)
-
-    val rows = content.rows
-    val columns = extractColumns(rows, schema)
-    val columnWidths = tableFormatter.calculateColumnWidths(columns, rows)
-
-    val sb = new StringBuilder()
-    sb.append(colorize(tableFormatter.drawTopBorder(columnWidths), Dim))
-    sb.append("\n")
-    sb.append(drawColoredHeaderRow(columns, columnWidths))
-    sb.append("\n")
-    sb.append(colorize(tableFormatter.drawSeparator(columnWidths), Dim))
-    sb.append("\n")
-    rows.foreach { row =>
-      sb.append(drawColoredDataRow(row, columns, columnWidths))
+      val sb = new StringBuilder()
+      sb.append(colorize(tableFormatter.drawTopBorder(columnWidths), Dim))
       sb.append("\n")
-    }
-    sb.append(colorize(tableFormatter.drawBottomBorder(columnWidths), Dim))
-    sb.append("\n")
-    sb.append(colorize(tableFormatter.drawSummary(content), Green))
-    sb.toString
-  }
-
-  override def formatSchema(schema: ParquetSchema): String = {
-    if (!useColors) {
-      return tableFormatter.formatSchema(schema)
-    }
-
-    val sb = new StringBuilder()
-
-    sb.append(colorize("Schema Information", Bold + Cyan))
-    sb.append("\n")
-    sb.append(colorize("==================", Dim))
-    sb.append("\n\n")
-
-    sb.append(
-      s"Total Columns: ${colorize(schema.columns.size.toString, Yellow)}\n"
-    )
-    sb.append(
-      s"Row Groups: ${colorize(schema.rowGroupCount.toString, Yellow)}\n"
-    )
-    sb.append(
-      s"Total Rows: ${colorize(schema.totalRowCount.toString, Yellow)}\n\n"
-    )
-
-    sb.append(colorize("Columns:", Bold))
-    sb.append("\n\n")
-
-    schema.columns.foreach { col =>
-      sb.append(s"  ${colorize(col.name, Cyan)}\n")
-      sb.append(s"    Type: ${colorizeType(col.dataType)}\n")
-      sb.append(s"    Optional: ${
-          if (col.isOptional) colorize("Yes", Green) else colorize("No", Red)
-        }\n")
-      sb.append(s"    Compression: ${colorize(col.compressionType, Yellow)}\n")
+      sb.append(drawColoredHeaderRow(columns, columnWidths))
       sb.append("\n")
+      sb.append(colorize(tableFormatter.drawSeparator(columnWidths), Dim))
+      sb.append("\n")
+      rows.foreach { row =>
+        sb.append(drawColoredDataRow(row, columns, columnWidths))
+        sb.append("\n")
+      }
+      sb.append(colorize(tableFormatter.drawBottomBorder(columnWidths), Dim))
+      sb.append("\n")
+      sb.append(colorize(tableFormatter.drawSummary(content), Green))
+      sb.toString
     }
 
-    sb.toString
-  }
+  override def formatSchema(schema: ParquetSchema): String =
+    if (!useColors) tableFormatter.formatSchema(schema)
+    else {
+      val sb = new StringBuilder()
 
-  override def formatMetadata(metadata: FileMetadata): String = {
-    if (!useColors) {
-      return tableFormatter.formatMetadata(metadata)
+      sb.append(colorize("Schema Information", Bold + Cyan))
+      sb.append("\n")
+      sb.append(colorize("==================", Dim))
+      sb.append("\n\n")
+
+      sb.append(
+        s"Total Columns: ${colorize(schema.columns.size.toString, Yellow)}\n"
+      )
+      sb.append(
+        s"Row Groups: ${colorize(schema.rowGroupCount.toString, Yellow)}\n"
+      )
+      sb.append(
+        s"Total Rows: ${colorize(schema.totalRowCount.toString, Yellow)}\n\n"
+      )
+
+      sb.append(colorize("Columns:", Bold))
+      sb.append("\n\n")
+
+      schema.columns.foreach { col =>
+        sb.append(s"  ${colorize(col.name, Cyan)}\n")
+        sb.append(s"    Type: ${colorizeType(col.dataType)}\n")
+        sb.append(s"    Optional: ${
+            if (col.isOptional) colorize("Yes", Green) else colorize("No", Red)
+          }\n")
+        sb.append(
+          s"    Compression: ${colorize(col.compressionType, Yellow)}\n"
+        )
+        sb.append("\n")
+      }
+
+      sb.toString
     }
 
-    val sb = new StringBuilder()
+  override def formatMetadata(metadata: FileMetadata): String =
+    if (!useColors) tableFormatter.formatMetadata(metadata)
+    else {
+      val sb = new StringBuilder()
 
-    sb.append(colorize("File Metadata", Bold + Cyan))
-    sb.append("\n")
-    sb.append(colorize("=============", Dim))
-    sb.append("\n\n")
+      sb.append(colorize("File Metadata", Bold + Cyan))
+      sb.append("\n")
+      sb.append(colorize("=============", Dim))
+      sb.append("\n\n")
 
-    sb.append(
-      s"File Size: ${colorize(tableFormatter.formatBytes(metadata.fileSize), Yellow)}\n"
-    )
+      sb.append(
+        s"File Size: ${colorize(tableFormatter.formatBytes(metadata.fileSize), Yellow)}\n"
+      )
 
-    metadata.createdAt.foreach { created =>
-      sb.append(s"Created: ${colorize(created.toString, Cyan)}\n")
+      metadata.createdAt.foreach { created =>
+        sb.append(s"Created: ${colorize(created.toString, Cyan)}\n")
+      }
+
+      metadata.modifiedAt.foreach { modified =>
+        sb.append(s"Modified: ${colorize(modified.toString, Cyan)}\n")
+      }
+
+      sb.append(s"Version: ${colorize(metadata.version, Yellow)}\n")
+
+      metadata.createdBy.foreach { creator =>
+        sb.append(s"Created By: ${colorize(creator, Cyan)}\n")
+      }
+
+      metadata.compressionRatio.foreach { ratio =>
+        sb.append(s"Compression Ratio: ${colorize(f"${ratio}%.2f", Yellow)}\n")
+      }
+
+      sb.toString
     }
-
-    metadata.modifiedAt.foreach { modified =>
-      sb.append(s"Modified: ${colorize(modified.toString, Cyan)}\n")
-    }
-
-    sb.append(s"Version: ${colorize(metadata.version, Yellow)}\n")
-
-    metadata.createdBy.foreach { creator =>
-      sb.append(s"Created By: ${colorize(creator, Cyan)}\n")
-    }
-
-    metadata.compressionRatio.foreach { ratio =>
-      sb.append(s"Compression Ratio: ${colorize(f"${ratio}%.2f", Yellow)}\n")
-    }
-
-    sb.toString
-  }
 
   private def colorize(text: String, color: String): String = {
     if (useColors) s"$color$text$Reset"
