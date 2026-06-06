@@ -82,7 +82,8 @@ private[cli] object CliOutputFormatter {
             Json.obj(
               "name" -> Json.fromString(c.name),
               "dataType" -> Json.fromString(c.dataType),
-              "optional" -> Json.fromBoolean(c.isOptional)
+              "optional" -> Json.fromBoolean(c.isOptional),
+              "encodings" -> Json.fromValues(c.encodings.map(Json.fromString))
             )
           })
         )
