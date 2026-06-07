@@ -221,8 +221,9 @@ private[repositories] object ParquetRecordDecoder {
         if (warnedVariants.add(s"nested:$name"))
           logger.warn(
             s"Column '$name' is a nested group type — nested types are not yet " +
-              "supported and will be omitted. Upgrade parqueteer to add explicit support."
+              "supported; emitting Null. Upgrade parqueteer to add explicit support."
           )
+        builder += name -> CellValue.Null
       } else if (
         group.getFieldRepetitionCount(i) == 0 && schema.getType(i).isPrimitive
       ) {
