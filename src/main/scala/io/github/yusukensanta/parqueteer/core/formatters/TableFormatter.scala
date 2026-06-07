@@ -204,8 +204,8 @@ class TableFormatter extends OutputFormatter {
 
   private[formatters] def truncate(str: String, maxWidth: Int): String = {
     if (maxWidth <= 0) return ""
+    if (displayWidth(str) <= maxWidth) return str
     if (maxWidth <= 3) return ".".repeat(maxWidth)
-    if (displayWidth(str) <= maxWidth) str
     else {
       val sb = new java.lang.StringBuilder
       var w = 0
