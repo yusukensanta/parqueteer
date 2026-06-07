@@ -139,7 +139,7 @@ class GCSCredentialManager extends CloudCredentialManager {
       )
   }
 
-  private def tryWellKnownLocation(): Try[String] = {
+  private def tryWellKnownLocation(): Try[String] = Try {
     val homeDir = sys.props
       .get("user.home")
       .getOrElse(throw new RuntimeException("Cannot determine home directory"))
@@ -151,15 +151,11 @@ class GCSCredentialManager extends CloudCredentialManager {
       "application_default_credentials.json"
     )
 
-    if (Files.exists(wellKnownPath)) {
-      Success(wellKnownPath.toString)
-    } else {
-      Failure(
-        new RuntimeException(
-          s"No credentials found at well-known location: $wellKnownPath"
-        )
+    if (Files.exists(wellKnownPath)) wellKnownPath.toString
+    else
+      throw new RuntimeException(
+        s"No credentials found at well-known location: $wellKnownPath"
       )
-    }
   }
 
 }

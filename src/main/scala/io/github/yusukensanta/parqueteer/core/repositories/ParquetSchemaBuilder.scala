@@ -114,6 +114,8 @@ private[repositories] object ParquetSchemaBuilder {
         (PrimitiveTypeName.INT64, Some(timestampMillisAnnotation))
       case "TIMESTAMP_MICROS" =>
         (PrimitiveTypeName.INT64, Some(timestampMicrosAnnotation))
+      case "TIMESTAMP_NANOS" =>
+        (PrimitiveTypeName.INT64, Some(timestampNanosAnnotation))
       case "STRING" => (PrimitiveTypeName.BINARY, Some(stringAnnotation))
       case "BINARY" => (PrimitiveTypeName.BINARY, None)
       case "INT96" =>
@@ -152,6 +154,12 @@ private[repositories] object ParquetSchemaBuilder {
     LogicalTypeAnnotation.timestampType(
       true,
       LogicalTypeAnnotation.TimeUnit.MICROS
+    )
+
+  private def timestampNanosAnnotation: LogicalTypeAnnotation =
+    LogicalTypeAnnotation.timestampType(
+      true,
+      LogicalTypeAnnotation.TimeUnit.NANOS
     )
 
   private def stringAnnotation: LogicalTypeAnnotation =
