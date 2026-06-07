@@ -62,6 +62,7 @@ object CsvParser {
         case '"' if !inQuote && current.isEmpty =>
           inQuote = true
         case '"' if !inQuote =>
+          postQuote = false
           current.append('"')
         case '"' if inQuote && i + 1 < n && content(i + 1) == '"' =>
           current.append('"'); i += 1

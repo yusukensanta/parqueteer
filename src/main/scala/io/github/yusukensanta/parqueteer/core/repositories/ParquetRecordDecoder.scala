@@ -29,6 +29,16 @@ private[repositories] object ParquetRecordDecoder {
   private val warnedVariants =
     java.util.concurrent.ConcurrentHashMap.newKeySet[String]()
 
+  private def epochPlusSafe(l: Long, unit: ChronoUnit): CellValue =
+    try CellValue.Ts(java.time.Instant.EPOCH.plus(l, unit))
+    catch {
+      case _: ArithmeticException | _: java.time.DateTimeException =>
+        logger.warn(
+          s"Timestamp value $l $unit overflows Instant range — falling back to raw INT64"
+        )
+        CellValue.I64(l)
+    }
+
   def decodeValue(value: Value): CellValue = value match {
     case NullValue           => CellValue.Null
     case BooleanValue(b)     => CellValue.Bool(b)
@@ -143,11 +153,8 @@ private[repositories] object ParquetRecordDecoder {
             Some(
               name -> ((v: CellValue) =>
                 v match {
-                  case CellValue.I64(l) =>
-                    CellValue.Ts(
-                      java.time.Instant.EPOCH.plus(l, ChronoUnit.MICROS)
-                    )
-                  case other => other
+                  case CellValue.I64(l) => epochPlusSafe(l, ChronoUnit.MICROS)
+                  case other            => other
                 }
               )
             )
@@ -156,11 +163,8 @@ private[repositories] object ParquetRecordDecoder {
             Some(
               name -> ((v: CellValue) =>
                 v match {
-                  case CellValue.I64(l) =>
-                    CellValue.Ts(
-                      java.time.Instant.EPOCH.plus(l, ChronoUnit.NANOS)
-                    )
-                  case other => other
+                  case CellValue.I64(l) => epochPlusSafe(l, ChronoUnit.NANOS)
+                  case other            => other
                 }
               )
             )
@@ -275,18 +279,12 @@ private[repositories] object ParquetRecordDecoder {
                   PrimitiveTypeName.INT64,
                   Some(ts: LogicalTypeAnnotation.TimestampLogicalTypeAnnotation)
                 ) if ts.getUnit == LogicalTypeAnnotation.TimeUnit.MICROS =>
-              CellValue.Ts(
-                java.time.Instant.EPOCH
-                  .plus(group.getLong(i, 0), ChronoUnit.MICROS)
-              )
+              epochPlusSafe(group.getLong(i, 0), ChronoUnit.MICROS)
             case (
                   PrimitiveTypeName.INT64,
                   Some(ts: LogicalTypeAnnotation.TimestampLogicalTypeAnnotation)
                 ) if ts.getUnit == LogicalTypeAnnotation.TimeUnit.NANOS =>
-              CellValue.Ts(
-                java.time.Instant.EPOCH
-                  .plus(group.getLong(i, 0), ChronoUnit.NANOS)
-              )
+              epochPlusSafe(group.getLong(i, 0), ChronoUnit.NANOS)
             case (PrimitiveTypeName.INT32, _) =>
               CellValue.I32(group.getInteger(i, 0))
             case (PrimitiveTypeName.INT64, _) =>
