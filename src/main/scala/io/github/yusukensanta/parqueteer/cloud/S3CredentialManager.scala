@@ -22,11 +22,24 @@ private object S3Tuning {
   val MultipartThreshold = "100m"
 }
 
+// Process-wide singletons so background IMDS refresh threads are shared and
+// closed exactly once on JVM exit (same pattern as Hadoop FileSystem.closeAll).
+private object S3CredentialProviders {
+  lazy val default: DefaultCredentialsProvider =
+    DefaultCredentialsProvider.create()
+  lazy val instanceProfile: InstanceProfileCredentialsProvider =
+    InstanceProfileCredentialsProvider.create()
+
+  Runtime.getRuntime.addShutdownHook(new Thread(() => {
+    try default.close()
+    catch { case _: Exception => () }
+    try instanceProfile.close()
+    catch { case _: Exception => () }
+  }))
+}
+
 class S3CredentialManager(profile: Option[String] = None)
     extends CloudCredentialManager {
-  private lazy val cachedDefaultProvider = DefaultCredentialsProvider.create()
-  private lazy val cachedInstanceProfileProvider =
-    InstanceProfileCredentialsProvider.create()
   override def configureHadoop(
       location: StorageLocation
   ): Try[Configuration] = {
@@ -156,7 +169,7 @@ class S3CredentialManager(profile: Option[String] = None)
   private def tryDefaultCredentialsProvider()
       : Try[(String, String, Option[String])] =
     Try {
-      val credentials = cachedDefaultProvider.resolveCredentials()
+      val credentials = S3CredentialProviders.default.resolveCredentials()
       val sessionToken = credentials match {
         case sessionCreds: AwsSessionCredentials =>
           Some(sessionCreds.sessionToken())
@@ -168,7 +181,8 @@ class S3CredentialManager(profile: Option[String] = None)
   private[cloud] def tryInstanceProfile()
       : Try[(String, String, Option[String])] =
     Try {
-      val credentials = cachedInstanceProfileProvider.resolveCredentials()
+      val credentials =
+        S3CredentialProviders.instanceProfile.resolveCredentials()
       val sessionToken = credentials match {
         case sessionCreds: AwsSessionCredentials =>
           Some(sessionCreds.sessionToken())
