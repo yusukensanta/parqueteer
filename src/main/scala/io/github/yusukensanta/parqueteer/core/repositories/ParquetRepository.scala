@@ -68,8 +68,18 @@ class HadoopParquetRepository(
 ) extends ParquetRepository {
   private val HadoopConfigCacheMaxSize = 64
   private val FooterCacheMaxSize = 1024
-  private val hadoopConfigCache =
-    scala.collection.concurrent.TrieMap.empty[String, Configuration]
+  private val hadoopConfigCache: java.util.Map[String, Configuration] =
+    java.util.Collections.synchronizedMap(
+      new java.util.LinkedHashMap[String, Configuration](
+        16,
+        0.75f,
+        true
+      ) {
+        override def removeEldestEntry(
+            eldest: java.util.Map.Entry[String, Configuration]
+        ): Boolean = size() > HadoopConfigCacheMaxSize
+      }
+    )
 
   // Caches (MessageType, blocks) per file path for the lifetime of this repository instance.
   // Bounded LRU: evicts the eldest entry when size exceeds FooterCacheMaxSize so
@@ -644,22 +654,28 @@ class HadoopParquetRepository(
                   if (blocks.isEmpty) issues += "File has no row groups"
 
                   val indicesToCheck = spotCheckIndices(blocks.size, deep)
+                  var readerBroken = false
                   blocks.zipWithIndex.foreach { case (block, index) =>
                     if (block.getRowCount <= 0)
                       issues += s"Row group $index has invalid row count: ${block.getRowCount}"
-                    if (indicesToCheck.contains(index)) {
-                      Try(r.readNextRowGroup()) match {
-                        case scala.util.Failure(ex) =>
-                          issues += s"Row group $index data is corrupt or truncated: ${ex.getMessage}"
-                        case scala.util.Success(null) =>
-                          issues += s"Row group $index returned no data (file may be truncated)"
-                        case _ =>
-                      }
-                    } else {
-                      Try(r.skipNextRowGroup()) match {
-                        case scala.util.Failure(ex) =>
-                          issues += s"Row group $index could not be skipped: ${ex.getMessage}"
-                        case _ =>
+                    if (!readerBroken) {
+                      if (indicesToCheck.contains(index)) {
+                        Try(r.readNextRowGroup()) match {
+                          case scala.util.Failure(ex) =>
+                            issues += s"Row group $index data is corrupt or truncated: ${ex.getMessage}"
+                            readerBroken = true
+                          case scala.util.Success(null) =>
+                            issues += s"Row group $index returned no data (file may be truncated)"
+                            readerBroken = true
+                          case _ =>
+                        }
+                      } else {
+                        Try(r.skipNextRowGroup()) match {
+                          case scala.util.Failure(ex) =>
+                            issues += s"Row group $index could not be skipped: ${ex.getMessage}"
+                            readerBroken = true
+                          case _ =>
+                        }
                       }
                     }
                   }
@@ -909,7 +925,7 @@ class HadoopParquetRepository(
       location: StorageLocation
   ): Try[Configuration] = {
     val key = configCacheKey(location)
-    hadoopConfigCache.get(key) match {
+    Option(hadoopConfigCache.get(key)) match {
       case Some(cfg) => Success(new Configuration(cfg))
       case None =>
         val effectiveLocation = (location, region) match {
@@ -933,13 +949,7 @@ class HadoopParquetRepository(
             }
           case None => Success(new Configuration())
         }
-        result.foreach { cfg =>
-          hadoopConfigCache.synchronized {
-            if (hadoopConfigCache.size >= HadoopConfigCacheMaxSize)
-              hadoopConfigCache.clear()
-            hadoopConfigCache.put(key, cfg)
-          }
-        }
+        result.foreach(cfg => hadoopConfigCache.put(key, cfg))
         result.map(new Configuration(_))
     }
   }
