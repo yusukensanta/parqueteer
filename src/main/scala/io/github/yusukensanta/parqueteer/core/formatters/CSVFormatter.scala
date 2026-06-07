@@ -13,7 +13,7 @@ object CSVFormatter {
   private[formatters] def escapeField(field: String): String = {
     // CWE-1236: prefix formula-trigger chars. Also check first non-whitespace char
     // because spreadsheets trim leading spaces before formula evaluation.
-    val firstSig = field.dropWhile(c => c <= ' ')
+    val firstSig = field.dropWhile(_ == ' ')
     val sanitized =
       if (
         firstSig.nonEmpty && (firstSig.charAt(0) match {

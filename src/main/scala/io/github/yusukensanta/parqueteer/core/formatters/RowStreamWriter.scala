@@ -168,7 +168,8 @@ object RowStreamWriter {
     private var warnedUnseen = false
 
     private def escapeStr(s: String): String =
-      s.replace("|", "\\|")
+      s.replace("\\", "\\\\")
+        .replace("|", "\\|")
         .replace("\r\n", " ")
         .replace("\n", " ")
         .replace("\r", " ")

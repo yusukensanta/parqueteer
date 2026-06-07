@@ -216,19 +216,19 @@ private class FilterParserImpl(schema: Option[MessageType]) {
     peek match {
       case Token.Id(name) =>
         advance()
-        var parts = List(name)
+        val buf = scala.collection.mutable.ListBuffer(name)
         var err: Option[String] = None
         while (peek == Token.Dot && err.isEmpty) {
           advance()
           peek match {
-            case Token.Id(n) => advance(); parts = parts :+ n
+            case Token.Id(n) => advance(); buf += n
             case other =>
               err = Some(
                 s"Filter parse error: expected identifier after '.', got '$other'"
               )
           }
         }
-        err.toLeft(parts.mkString("."))
+        err.toLeft(buf.mkString("."))
       case other =>
         Left(s"Filter parse error: expected column name, got '$other'")
     }
