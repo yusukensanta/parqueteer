@@ -82,7 +82,7 @@ class HadoopParquetRepository(
     )
 
   // Caches (MessageType, blocks) per file path for the lifetime of this repository instance.
-  // Bounded LRU: evicts the eldest entry when size exceeds FooterCacheMaxSize so
+  // Bounded LRU: evicts the least-recently-used entry when size exceeds FooterCacheMaxSize so
   // large multi-file merges don't grow the cache unboundedly.
   private val footerCache
       : java.util.Map[String, (MessageType, List[BlockMetaData])] =
@@ -90,7 +90,7 @@ class HadoopParquetRepository(
       new java.util.LinkedHashMap[String, (MessageType, List[BlockMetaData])](
         16,
         0.75f,
-        false
+        true
       ) {
         override def removeEldestEntry(
             eldest: java.util.Map.Entry[
