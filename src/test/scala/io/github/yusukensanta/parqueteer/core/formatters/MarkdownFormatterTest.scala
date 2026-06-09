@@ -59,6 +59,13 @@ class MarkdownFormatterTest extends AnyFlatSpec with Matchers {
     result should include("a\\|b")
   }
 
+  it should "escape backslashes before pipes so a\\| cell renders correctly" in {
+    val row = List(Map("col" -> CellValue.Str("a\\|b")))
+    val result = formatter.formatContent(FileContent(row, 1L), None)
+    result should include("a\\\\\\|b")
+    result should not include "a\\|b|"
+  }
+
   it should "render Double NaN as NaN" in {
     val result =
       formatter.formatContent(
