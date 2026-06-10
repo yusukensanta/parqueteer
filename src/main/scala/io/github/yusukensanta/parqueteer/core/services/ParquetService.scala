@@ -552,11 +552,7 @@ class ParquetService(
   ): Try[List[Map[String, CellValue]]] =
     Using(scala.io.Source.fromFile(path, "UTF-8")) { source =>
       val iter = source.getLines()
-      parseNdjsonLines(
-        maxRows.fold(iter)(n =>
-          iter.take(math.min(n, Int.MaxValue.toLong).toInt)
-        )
-      )
+      parseNdjsonLines(maxRows.fold(iter)(iterTakeLong(iter, _)))
     }
 
   private def readCsvFile(path: String): Try[List[Map[String, CellValue]]] =
@@ -576,11 +572,7 @@ class ParquetService(
     Using(scala.io.Source.fromFile(path, "UTF-8")) { source =>
       val iter = source.getLines()
       io.github.yusukensanta.parqueteer.core.util.LTSVParser
-        .parseLines(
-          maxRows.fold(iter)(n =>
-            iter.take(math.min(n, Int.MaxValue.toLong).toInt)
-          )
-        )
+        .parseLines(maxRows.fold(iter)(iterTakeLong(iter, _)))
         .toList
     }
 
@@ -684,5 +676,12 @@ class ParquetService(
       content: String
   ): List[Map[String, CellValue]] =
     io.github.yusukensanta.parqueteer.core.util.CsvParser.parse(content)
+
+  private def iterTakeLong[A](iter: Iterator[A], n: Long): Iterator[A] =
+    new Iterator[A] {
+      private var remaining = n
+      def hasNext: Boolean = remaining > 0 && iter.hasNext
+      def next(): A = { remaining -= 1; iter.next() }
+    }
 
 }
