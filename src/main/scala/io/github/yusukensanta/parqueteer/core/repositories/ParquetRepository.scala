@@ -890,12 +890,32 @@ class HadoopParquetRepository(
             { case n: java.lang.Integer => n.intValue() }
           )
           (mn.map(applyScale), mx.map(applyScale))
-        } else {
+        } else if (typeName == PrimitiveTypeName.INT64) {
           val (mn, mx) = numericMinMax[Long](
             withValues,
             { case n: java.lang.Long => n.longValue() }
           )
           (mn.map(applyScale), mx.map(applyScale))
+        } else {
+          // BINARY / FIXED_LEN_BYTE_ARRAY DECIMAL: stats carry two's-complement unscaled bytes
+          def fromBin(v: Any): Option[scala.math.BigDecimal] =
+            PartialFunction.condOpt(v) {
+              case bin: org.apache.parquet.io.api.Binary =>
+                scala.math.BigDecimal(
+                  new java.math.BigDecimal(
+                    new java.math.BigInteger(bin.getBytes),
+                    scale
+                  )
+                )
+            }
+          val mins =
+            withValues.flatMap(s => Option(s.genericGetMin()).flatMap(fromBin))
+          val maxs =
+            withValues.flatMap(s => Option(s.genericGetMax()).flatMap(fromBin))
+          (
+            mins.minOption.map(_.underlying.toPlainString),
+            maxs.maxOption.map(_.underlying.toPlainString)
+          )
         }
 
       case _ =>
