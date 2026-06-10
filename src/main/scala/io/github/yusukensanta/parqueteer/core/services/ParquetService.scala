@@ -591,9 +591,21 @@ class ParquetService(
       val n = j.asNumber.get
       val raw = j.noSpaces
       // A decimal point in the raw JSON representation signals explicit floating-point (1.0, 1.5).
+      // Exception: large integers written with a decimal point (e.g., 1.0e18) would silently
+      // lose precision when cast to F64 — redirect those to Dec/I64 instead.
       // No decimal point means integer or scientific-notation integer (1e10) — try Long first.
       if (raw.contains('.'))
-        CellValue.F64(n.toDouble)
+        n.toBigDecimal
+          .filter(bd =>
+            bd.underlying.stripTrailingZeros.scale <= 0 &&
+              bd.abs > BigDecimal(9007199254740992L)
+          )
+          .map(bd =>
+            n.toLong
+              .map(CellValue.I64.apply)
+              .getOrElse(CellValue.Dec(bd.setScale(0)))
+          )
+          .getOrElse(CellValue.F64(n.toDouble))
       else
         n.toLong
           .map(CellValue.I64.apply)
