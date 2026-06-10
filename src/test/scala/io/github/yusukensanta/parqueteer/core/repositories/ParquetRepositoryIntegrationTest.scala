@@ -910,4 +910,26 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
       java.time.Instant.parse("2024-05-22T00:00:00Z")
     )
   }
+
+  "HadoopParquetRepository.cacheStats" should "count footer cache hits and misses" taggedAs IntegrationTest in {
+    val freshRepo = new HadoopParquetRepository()
+    val loc = LocalPath(tempFile().getAbsolutePath)
+    freshRepo
+      .writeContent(loc, List(Map("x" -> CellValue.I64(1L))), None)
+      .get
+
+    val before = freshRepo.cacheStats()
+    before.footerHits shouldBe 0L
+    before.footerMisses shouldBe 0L
+
+    freshRepo.readContent(ParquetFile(loc), ReadConfig()).get
+    val afterFirst = freshRepo.cacheStats()
+    afterFirst.footerMisses shouldBe 1L
+    afterFirst.footerHits shouldBe 0L
+
+    freshRepo.readContent(ParquetFile(loc), ReadConfig()).get
+    val afterSecond = freshRepo.cacheStats()
+    afterSecond.footerHits shouldBe 1L
+    afterSecond.footerMisses shouldBe 1L
+  }
 }

@@ -60,6 +60,13 @@ trait ParquetRepository {
 object HadoopParquetRepository {
   private val shutdownHookRegistered =
     new java.util.concurrent.atomic.AtomicBoolean(false)
+
+  final case class CacheStats(
+      footerHits: Long,
+      footerMisses: Long,
+      configHits: Long,
+      configMisses: Long
+  )
 }
 
 class HadoopParquetRepository(
@@ -99,6 +106,23 @@ class HadoopParquetRepository(
             ]
         ): Boolean = size() > FooterCacheMaxSize
       }
+    )
+
+  private val footerCacheHits =
+    new java.util.concurrent.atomic.AtomicLong(0)
+  private val footerCacheMisses =
+    new java.util.concurrent.atomic.AtomicLong(0)
+  private val configCacheHits =
+    new java.util.concurrent.atomic.AtomicLong(0)
+  private val configCacheMisses =
+    new java.util.concurrent.atomic.AtomicLong(0)
+
+  def cacheStats(): HadoopParquetRepository.CacheStats =
+    HadoopParquetRepository.CacheStats(
+      footerHits = footerCacheHits.get(),
+      footerMisses = footerCacheMisses.get(),
+      configHits = configCacheHits.get(),
+      configMisses = configCacheMisses.get()
     )
 
   private val metadataConverter =
@@ -220,8 +244,11 @@ class HadoopParquetRepository(
   ): (MessageType, List[BlockMetaData]) = {
     val key = path.toString
     Option(footerCache.get(key)) match {
-      case Some(cached) => cached
+      case Some(cached) =>
+        footerCacheHits.incrementAndGet()
+        cached
       case None =>
+        footerCacheMisses.incrementAndGet()
         val footerBytes = readFooterBytes(HadoopInputFile.fromPath(path, conf))
         val meta = parseFooter(footerBytes)
         val entry =
@@ -926,8 +953,11 @@ class HadoopParquetRepository(
   ): Try[Configuration] = {
     val key = configCacheKey(location)
     Option(hadoopConfigCache.get(key)) match {
-      case Some(cfg) => Success(new Configuration(cfg))
+      case Some(cfg) =>
+        configCacheHits.incrementAndGet()
+        Success(new Configuration(cfg))
       case None =>
+        configCacheMisses.incrementAndGet()
         val effectiveLocation = (location, region) match {
           case (s3: S3Location, Some(r)) => s3.copy(region = Some(r))
           case _                         => location
