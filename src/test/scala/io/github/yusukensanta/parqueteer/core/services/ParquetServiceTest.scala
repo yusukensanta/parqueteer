@@ -463,6 +463,28 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     rows.head("n") shouldBe CellValue.I64(10000000000L)
   }
 
+  it should "preserve 1.0 as Double (small integer with decimal — no precision risk)" in {
+    val service = new ParquetService(new FakeParquetRepository())
+    val rows = service.parseJsonContent("""[{"x": 1.0}]""")
+    rows.head("x") shouldBe a[CellValue.F64]
+  }
+
+  it should "coerce large integer written with decimal point to I64 (avoids F64 precision loss)" in {
+    val service = new ParquetService(new FakeParquetRepository())
+    // 10000000000000001 > 2^53; written with decimal in JSON → previously lost the trailing 1
+    val rows = service.parseJsonContent("""[{"id": 1.0000000000000001e16}]""")
+    rows.head("id") shouldBe CellValue.I64(10000000000000001L)
+  }
+
+  it should "coerce huge decimal-point integer > Long.MaxValue to Dec" in {
+    val service = new ParquetService(new FakeParquetRepository())
+    // 1e20 > Long.MaxValue — must use Dec, not lose precision in F64
+    val rows = service.parseJsonContent("""[{"n": 1.0e20}]""")
+    rows.head("n") shouldBe CellValue.Dec(
+      scala.math.BigDecimal("100000000000000000000")
+    )
+  }
+
   it should "throw for non-array JSON" in {
     val service = new ParquetService(new FakeParquetRepository())
     an[IllegalArgumentException] should be thrownBy {
