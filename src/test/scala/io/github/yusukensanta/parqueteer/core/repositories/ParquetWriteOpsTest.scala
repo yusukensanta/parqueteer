@@ -388,4 +388,45 @@ class ParquetWriteOpsTest extends AnyFlatSpec with Matchers {
     ParquetWriteOps.writeRowToGroup(group, Map("col" -> CellValue.I64(42L)), mt)
     group.getBinary("col", 0).toStringUsingUTF8 shouldBe "42"
   }
+
+  it should "write CellValue.Dec to BINARY+DECIMAL column as big-endian unscaled bytes" in {
+    val mt = schema(
+      "message root { required binary price (DECIMAL(10,2)); }"
+    )
+    val group = new SimpleGroupFactory(mt).newGroup()
+    ParquetWriteOps.writeRowToGroup(
+      group,
+      Map("price" -> CellValue.Dec(BigDecimal("9.99"))),
+      mt
+    )
+    val bytes = group.getBinary("price", 0).getBytes
+    val unscaled = new java.math.BigInteger(bytes)
+    unscaled shouldBe java.math.BigInteger.valueOf(999L)
+  }
+
+  it should "write CellValue.Dec to INT32+DECIMAL column as scaled int" in {
+    val mt = schema(
+      "message root { required int32 price (DECIMAL(9,2)); }"
+    )
+    val group = new SimpleGroupFactory(mt).newGroup()
+    ParquetWriteOps.writeRowToGroup(
+      group,
+      Map("price" -> CellValue.Dec(BigDecimal("9.99"))),
+      mt
+    )
+    group.getInteger("price", 0) shouldBe 999
+  }
+
+  it should "write CellValue.Dec to INT64+DECIMAL column as scaled long" in {
+    val mt = schema(
+      "message root { required int64 amount (DECIMAL(18,4)); }"
+    )
+    val group = new SimpleGroupFactory(mt).newGroup()
+    ParquetWriteOps.writeRowToGroup(
+      group,
+      Map("amount" -> CellValue.Dec(BigDecimal("12345.6789"))),
+      mt
+    )
+    group.getLong("amount", 0) shouldBe 123456789L
+  }
 }

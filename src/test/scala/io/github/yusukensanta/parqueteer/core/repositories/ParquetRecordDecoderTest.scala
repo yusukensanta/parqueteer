@@ -396,6 +396,19 @@ class ParquetRecordDecoderTest extends AnyFlatSpec with Matchers {
     result("y") shouldBe CellValue.Null
   }
 
+  it should "decode BINARY+DECIMAL field as BigDecimal" in {
+    val schema = MessageTypeParser.parseMessageType(
+      "message root { required binary price (DECIMAL(10,2)); }"
+    )
+    val unscaled = java.math.BigInteger.valueOf(999L)
+    val bin = org.apache.parquet.io.api.Binary.fromConstantByteArray(
+      unscaled.toByteArray
+    )
+    val group = new SimpleGroupFactory(schema).newGroup().append("price", bin)
+    val result = ParquetRecordDecoder.decodeGroup(group, schema)
+    result("price") shouldBe CellValue.Dec(BigDecimal("9.99"))
+  }
+
   it should "preserve insertion order (schema field order) when emitting Null" in {
     val schema = MessageTypeParser.parseMessageType(
       "message root { optional int32 z; optional int32 a; optional int32 m; }"

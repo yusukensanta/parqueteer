@@ -39,6 +39,34 @@ private[repositories] object ParquetWriteOps {
           case CellValue.Null   => ()
           case CellValue.Bytes(b) =>
             group.add(fieldIndex, Binary.fromConstantByteArray(b))
+          case CellValue.Dec(bd) =>
+            Option(fieldType.getLogicalTypeAnnotation) match {
+              case Some(
+                    dec: LogicalTypeAnnotation.DecimalLogicalTypeAnnotation
+                  ) =>
+                val scale = dec.getScale
+                val scaled =
+                  bd.setScale(scale, scala.math.BigDecimal.RoundingMode.HALF_UP)
+                val unscaled = scaled.underlying().unscaledValue()
+                fieldType.getPrimitiveTypeName match {
+                  case PrimitiveTypeName.INT32 =>
+                    group.add(fieldIndex, unscaled.intValueExact())
+                  case PrimitiveTypeName.INT64 =>
+                    group.add(fieldIndex, unscaled.longValueExact())
+                  case _ =>
+                    group.add(
+                      fieldIndex,
+                      Binary.fromConstantByteArray(unscaled.toByteArray)
+                    )
+                }
+              case _ =>
+                if (decimalWarnedOnce.compareAndSet(false, true))
+                  logger.warn(
+                    "Writing DECIMAL to non-DECIMAL column as DOUBLE — precision may be lost " +
+                      "for values with more than 15 significant digits."
+                  )
+                group.add(fieldIndex, bd.toDouble)
+            }
           case _ if isBinaryField =>
             logger.warn(
               s"Coercing ${value.getClass.getSimpleName} to string for BINARY column '$key' — schema type mismatch."
@@ -94,14 +122,6 @@ private[repositories] object ParquetWriteOps {
               case _ => i.toEpochMilli
             }
             group.add(fieldIndex, encoded)
-          case CellValue.Dec(bd) =>
-            if (decimalWarnedOnce.compareAndSet(false, true))
-              logger.warn(
-                "Writing DECIMAL as DOUBLE — precision may be lost for values " +
-                  "with more than 15 significant digits. Future parqueteer versions " +
-                  "will write native Parquet DECIMAL encoding."
-              )
-            group.add(fieldIndex, bd.toDouble)
         }
       }
     }
