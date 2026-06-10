@@ -480,7 +480,9 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     val service = new ParquetService(new FakeParquetRepository())
     // 1e20 > Long.MaxValue — must use Dec, not lose precision in F64
     val rows = service.parseJsonContent("""[{"n": 1.0e20}]""")
-    rows.head("n") shouldBe CellValue.Dec(scala.math.BigDecimal("100000000000000000000"))
+    rows.head("n") shouldBe CellValue.Dec(
+      scala.math.BigDecimal("100000000000000000000")
+    )
   }
 
   it should "throw for non-array JSON" in {
