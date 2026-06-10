@@ -333,6 +333,26 @@ private[repositories] object ParquetRecordDecoder {
               CellValue.Str(group.getBinary(i, 0).toStringUsingUTF8)
             case (PrimitiveTypeName.BINARY, _) =>
               CellValue.Bytes(group.getBinary(i, 0).getBytes)
+            case (PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY, _) =>
+              CellValue.Bytes(group.getBinary(i, 0).getBytes)
+            case (PrimitiveTypeName.INT96, _) =>
+              // 12-byte layout (Spark/Hive convention): bytes 0-7 = nanos of day (int64 LE),
+              // bytes 8-11 = Julian day (int32 LE). Julian day 2440588 = 1970-01-01.
+              val bytes = group.getBinary(i, 0).getBytes
+              val buf =
+                java.nio.ByteBuffer
+                  .wrap(bytes)
+                  .order(java.nio.ByteOrder.LITTLE_ENDIAN)
+              val nanosOfDay = buf.getLong(0)
+              val julianDay = buf.getInt(8).toLong - 2440588L
+              val totalNanos =
+                try
+                  Math.addExact(
+                    Math.multiplyExact(julianDay, 86400_000_000_000L),
+                    nanosOfDay
+                  )
+                catch { case _: ArithmeticException => nanosOfDay }
+              epochPlusSafe(totalNanos, ChronoUnit.NANOS)
             case _ => CellValue.Str(group.getValueToString(i, 0))
           }
         builder += name -> value

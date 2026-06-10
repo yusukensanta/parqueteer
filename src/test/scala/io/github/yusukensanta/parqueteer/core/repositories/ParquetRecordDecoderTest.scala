@@ -507,6 +507,62 @@ class ParquetRecordDecoderTest extends AnyFlatSpec with Matchers {
     result("dob") shouldBe CellValue.Str("already-processed")
   }
 
+  // ── decodeGroup: INT96 and FIXED_LEN_BYTE_ARRAY ─────────────────────────
+
+  "ParquetRecordDecoder.decodeGroup" should "decode INT96 timestamp to CellValue.Ts" in {
+    val schema = MessageTypeParser.parseMessageType(
+      "message root { optional int96 ts; }"
+    )
+    // 2024-01-01T00:00:00Z: nanosOfDay=0, julianDay=2460311
+    // bytes 0-7: nanos (int64 LE) = 0; bytes 8-11: julian day (int32 LE)
+    val bytes = new Array[Byte](12)
+    val buf =
+      java.nio.ByteBuffer.wrap(bytes).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+    buf.putLong(0, 0L)
+    buf.putInt(8, 2460311)
+    val group = new SimpleGroupFactory(schema)
+      .newGroup()
+      .append("ts", Binary.fromConstantByteArray(bytes))
+    val result = ParquetRecordDecoder.decodeGroup(group, schema)
+    result("ts") shouldBe CellValue.Ts(
+      java.time.Instant.parse("2024-01-01T00:00:00Z")
+    )
+  }
+
+  it should "decode INT96 with non-zero nanoseconds within the day" in {
+    val schema = MessageTypeParser.parseMessageType(
+      "message root { optional int96 ts; }"
+    )
+    // 1970-01-01T00:00:01.500000000Z: julianDay=2440588 (epoch), nanosOfDay=1_500_000_000
+    val bytes = new Array[Byte](12)
+    val buf =
+      java.nio.ByteBuffer.wrap(bytes).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+    buf.putLong(0, 1_500_000_000L)
+    buf.putInt(8, 2440588)
+    val group = new SimpleGroupFactory(schema)
+      .newGroup()
+      .append("ts", Binary.fromConstantByteArray(bytes))
+    val result = ParquetRecordDecoder.decodeGroup(group, schema)
+    result("ts") shouldBe CellValue.Ts(
+      java.time.Instant.ofEpochSecond(1L, 500_000_000L)
+    )
+  }
+
+  it should "decode unannotated FIXED_LEN_BYTE_ARRAY field to CellValue.Bytes" in {
+    val schema = MessageTypeParser.parseMessageType(
+      "message root { optional fixed_len_byte_array(4) fba; }"
+    )
+    val bytes = Array[Byte](1, 2, 3, 4)
+    val group = new SimpleGroupFactory(schema)
+      .newGroup()
+      .append("fba", Binary.fromConstantByteArray(bytes))
+    val result = ParquetRecordDecoder.decodeGroup(group, schema)
+    result("fba") match {
+      case CellValue.Bytes(b) => b.toSeq shouldBe bytes.toSeq
+      case other              => fail(s"Expected CellValue.Bytes, got $other")
+    }
+  }
+
   it should "produce the same result as postProcessTemporalFields" in {
     val schema = MessageTypeParser.parseMessageType(
       """message root {
