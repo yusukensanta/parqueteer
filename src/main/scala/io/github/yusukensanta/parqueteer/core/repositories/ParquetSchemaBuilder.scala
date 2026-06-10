@@ -213,9 +213,11 @@ private[repositories] object ParquetSchemaBuilder {
     else if (a == TypeRank.Decimal && numericRanks(b)) TypeRank.Decimal
     else if (b == TypeRank.Decimal && numericRanks(a)) TypeRank.Decimal
     else if (integerRanks(a) && integerRanks(b))
-      if (a.ordinal >= b.ordinal) a else b
+      if (a == TypeRank.Long || b == TypeRank.Long) TypeRank.Long
+      else TypeRank.Int
     else if (floatRanks(a) && floatRanks(b))
-      if (a.ordinal >= b.ordinal) a else b
+      if (a == TypeRank.Double || b == TypeRank.Double) TypeRank.Double
+      else TypeRank.Float
     else if (numericRanks(a) && numericRanks(b))
       TypeRank.Double
     else TypeRank.String
