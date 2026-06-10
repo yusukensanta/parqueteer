@@ -128,6 +128,21 @@ private[repositories] object ParquetSchemaBuilder {
           "FIXED_LEN_BYTE_ARRAY requires a byte length and is not supported via the schema config. " +
             "Use BINARY for variable-length byte fields."
         )
+      case t if t.startsWith("DECIMAL") =>
+        val decimalPattern = """^DECIMAL\((\d+),\s*(\d+)\)$""".r
+        t match {
+          case decimalPattern(pStr, sStr) =>
+            val precision = pStr.toInt
+            val scale = sStr.trim.toInt
+            (
+              PrimitiveTypeName.BINARY,
+              Some(LogicalTypeAnnotation.decimalType(scale, precision))
+            )
+          case _ =>
+            throw new IllegalArgumentException(
+              s"Invalid DECIMAL syntax '$t'. Use DECIMAL(precision,scale) e.g. DECIMAL(10,2)"
+            )
+        }
       case t
           if t.startsWith("STRUCT") || t
             .startsWith("MAP") || t.startsWith("LIST") =>
@@ -137,7 +152,7 @@ private[repositories] object ParquetSchemaBuilder {
         )
       case other =>
         throw new IllegalArgumentException(
-          s"Unknown dataType '$other'. Supported: INT32, INT64, DOUBLE, FLOAT, BOOLEAN, DATE, TIMESTAMP, STRING, BINARY"
+          s"Unknown dataType '$other'. Supported: INT32, INT64, DOUBLE, FLOAT, BOOLEAN, DATE, TIMESTAMP, DECIMAL(p,s), STRING, BINARY"
         )
     }
 
@@ -162,34 +177,41 @@ private[repositories] object ParquetSchemaBuilder {
       LogicalTypeAnnotation.TimeUnit.NANOS
     )
 
+  private def decimalAnnotation: LogicalTypeAnnotation =
+    LogicalTypeAnnotation.decimalType(18, 38)
+
   private def stringAnnotation: LogicalTypeAnnotation =
     LogicalTypeAnnotation.stringType()
 
   /** Inferred CellValue type for schema-from-data. */
   private enum TypeRank:
-    case Int, Long, Float, Double, Boolean, Date, Timestamp, String
+    case Int, Long, Float, Double, Decimal, Boolean, Date, Timestamp, String
 
   private val integerRanks: Set[TypeRank] = Set(TypeRank.Int, TypeRank.Long)
   private val floatRanks: Set[TypeRank] = Set(TypeRank.Float, TypeRank.Double)
-  private val numericRanks: Set[TypeRank] = integerRanks | floatRanks
+  private val numericRanks: Set[TypeRank] =
+    integerRanks | floatRanks | Set(TypeRank.Decimal)
 
   private def typeRankForValue(v: CellValue): TypeRank = v match {
     case CellValue.I32(_)  => TypeRank.Int
     case CellValue.I64(_)  => TypeRank.Long
     case CellValue.F32(_)  => TypeRank.Float
     case CellValue.F64(_)  => TypeRank.Double
-    case CellValue.Dec(_)  => TypeRank.Double
+    case CellValue.Dec(_)  => TypeRank.Decimal
     case CellValue.Bool(_) => TypeRank.Boolean
     case CellValue.Date(_) => TypeRank.Date
     case CellValue.Ts(_)   => TypeRank.Timestamp
     case _                 => TypeRank.String
   }
 
-  /** Widen two numeric ranks losslessly. Integer+float cross-family always
-    * produces Double — Float cannot represent the full Long range.
+  /** Widen two numeric ranks losslessly. Decimal beats all other numeric types
+    * to avoid silent precision loss. Integer+float cross-family produces Double
+    * — Float cannot represent the full Long range.
     */
   private def widenTypeRanks(a: TypeRank, b: TypeRank): TypeRank =
     if (a == b) a
+    else if (a == TypeRank.Decimal && numericRanks(b)) TypeRank.Decimal
+    else if (b == TypeRank.Decimal && numericRanks(a)) TypeRank.Decimal
     else if (integerRanks(a) && integerRanks(b))
       if (a.ordinal >= b.ordinal) a else b
     else if (floatRanks(a) && floatRanks(b))
@@ -205,6 +227,7 @@ private[repositories] object ParquetSchemaBuilder {
     case TypeRank.Long    => (PrimitiveTypeName.INT64, None)
     case TypeRank.Float   => (PrimitiveTypeName.FLOAT, None)
     case TypeRank.Double  => (PrimitiveTypeName.DOUBLE, None)
+    case TypeRank.Decimal => (PrimitiveTypeName.BINARY, Some(decimalAnnotation))
     case TypeRank.Boolean => (PrimitiveTypeName.BOOLEAN, None)
     case TypeRank.Date    => (PrimitiveTypeName.INT32, Some(dateAnnotation))
     case TypeRank.Timestamp =>

@@ -386,11 +386,15 @@ class ParquetSchemaBuilderTest extends AnyFlatSpec with Matchers {
     field.getLogicalTypeAnnotation shouldBe LogicalTypeAnnotation.stringType()
   }
 
-  it should "infer DOUBLE for CellValue.Dec (numeric type, not STRING)" in {
+  it should "infer BINARY+DECIMAL for CellValue.Dec (not STRING or DOUBLE)" in {
     val data =
       List(Map[String, CellValue]("x" -> CellValue.Dec(BigDecimal(42))))
     val mt = ParquetSchemaBuilder.inferSchemaFromData(data)
-    fieldByName(mt, "x").getPrimitiveTypeName shouldBe PrimitiveTypeName.DOUBLE
+    val field = fieldByName(mt, "x")
+    field.getPrimitiveTypeName shouldBe PrimitiveTypeName.BINARY
+    field.getLogicalTypeAnnotation shouldBe a[
+      LogicalTypeAnnotation.DecimalLogicalTypeAnnotation
+    ]
   }
 
   it should "use OPTIONAL repetition for all inferred fields" in {
@@ -566,25 +570,71 @@ class ParquetSchemaBuilderTest extends AnyFlatSpec with Matchers {
     warnCount shouldBe 1
   }
 
-  it should "infer DOUBLE schema for Dec values (not STRING)" in {
-    import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
+  it should "infer BINARY+DECIMAL schema for Dec values (not STRING or DOUBLE)" in {
     val data = List(
       Map[String, CellValue]("price" -> CellValue.Dec(BigDecimal("9.99")))
     )
     val mt = ParquetSchemaBuilder.inferSchemaFromData(data)
-    val field = mt.getFields.get(0)
-    field.asPrimitiveType.getPrimitiveTypeName shouldBe PrimitiveTypeName.DOUBLE
+    val field = mt.getFields.get(0).asPrimitiveType
+    field.getPrimitiveTypeName shouldBe PrimitiveTypeName.BINARY
+    field.getLogicalTypeAnnotation shouldBe a[
+      LogicalTypeAnnotation.DecimalLogicalTypeAnnotation
+    ]
   }
 
-  it should "widen Dec and Int64 columns together to DOUBLE" in {
-    import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
+  it should "widen Dec and Int64 to BINARY+DECIMAL (Decimal beats integer rank)" in {
     val data = List(
       Map[String, CellValue]("n" -> CellValue.Dec(BigDecimal("1.5"))),
       Map[String, CellValue]("n" -> CellValue.I64(2L))
     )
     val mt = ParquetSchemaBuilder.inferSchemaFromData(data)
-    val field = mt.getFields.get(0)
-    field.asPrimitiveType.getPrimitiveTypeName shouldBe PrimitiveTypeName.DOUBLE
+    val field = mt.getFields.get(0).asPrimitiveType
+    field.getPrimitiveTypeName shouldBe PrimitiveTypeName.BINARY
+    field.getLogicalTypeAnnotation shouldBe a[
+      LogicalTypeAnnotation.DecimalLogicalTypeAnnotation
+    ]
+  }
+
+  it should "widen Dec and Float to BINARY+DECIMAL (Decimal beats float rank)" in {
+    val data = List(
+      Map[String, CellValue]("v" -> CellValue.F64(1.5)),
+      Map[String, CellValue]("v" -> CellValue.Dec(BigDecimal("9.99")))
+    )
+    val mt = ParquetSchemaBuilder.inferSchemaFromData(data)
+    val field = mt.getFields.get(0).asPrimitiveType
+    field.getPrimitiveTypeName shouldBe PrimitiveTypeName.BINARY
+    field.getLogicalTypeAnnotation shouldBe a[
+      LogicalTypeAnnotation.DecimalLogicalTypeAnnotation
+    ]
+  }
+
+  it should "fall back to BINARY (string) when Dec and Str appear in the same column" in {
+    val data = List(
+      Map[String, CellValue]("x" -> CellValue.Dec(BigDecimal("1.5"))),
+      Map[String, CellValue]("x" -> CellValue.Str("text"))
+    )
+    val mt = ParquetSchemaBuilder.inferSchemaFromData(data)
+    val field = mt.getFields.get(0).asPrimitiveType
+    field.getPrimitiveTypeName shouldBe PrimitiveTypeName.BINARY
+    field.getLogicalTypeAnnotation shouldBe LogicalTypeAnnotation.stringType()
+  }
+
+  it should "parse DECIMAL(p,s) in buildMessageType and produce BINARY+DECIMAL annotation" in {
+    val mt = ParquetSchemaBuilder.buildMessageType(
+      schema(columnInfo("price", "DECIMAL(10,2)"))
+    )
+    val field = fieldByName(mt, "price")
+    field.getPrimitiveTypeName shouldBe PrimitiveTypeName.BINARY
+    val ann = field.getLogicalTypeAnnotation
+      .asInstanceOf[LogicalTypeAnnotation.DecimalLogicalTypeAnnotation]
+    ann.getPrecision shouldBe 10
+    ann.getScale shouldBe 2
+  }
+
+  it should "throw on malformed DECIMAL syntax in buildMessageType" in {
+    an[IllegalArgumentException] should be thrownBy {
+      ParquetSchemaBuilder.buildMessageType(schema(columnInfo("x", "DECIMAL")))
+    }
   }
 
   it should "preserve source insertion order (not sort alphabetically)" in {
