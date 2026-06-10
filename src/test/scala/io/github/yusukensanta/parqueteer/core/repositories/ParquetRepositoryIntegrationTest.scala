@@ -747,6 +747,38 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
     idStats.maxValue.get shouldBe "200"
   }
 
+  it should "return min/max for BINARY-encoded DECIMAL columns" taggedAs IntegrationTest in {
+    val data = List(
+      Map[String, CellValue]("amount" -> CellValue.Dec(BigDecimal("123.45"))),
+      Map[String, CellValue]("amount" -> CellValue.Dec(BigDecimal("-9.99"))),
+      Map[String, CellValue]("amount" -> CellValue.Dec(BigDecimal("1000.00")))
+    )
+    val loc = LocalPath(tempFile().getAbsolutePath)
+    val schema = io.github.yusukensanta.parqueteer.core.models.ParquetSchema(
+      columns = List(
+        io.github.yusukensanta.parqueteer.core.models.ColumnInfo(
+          "amount",
+          "DECIMAL(10,2)",
+          isOptional = true,
+          maxDefinitionLevel = 1,
+          maxRepetitionLevel = 0,
+          compressionType = "SNAPPY"
+        )
+      ),
+      rowGroupCount = 1L,
+      totalRowCount = 3L
+    )
+    repo.writeContent(loc, data, Some(schema)).isSuccess shouldBe true
+
+    val result = repo.readStats(ParquetFile(loc))
+    result.isSuccess shouldBe true
+    val amountStats = result.get.columns.find(_.name == "amount").get
+    amountStats.minValue shouldBe defined
+    amountStats.maxValue shouldBe defined
+    amountStats.minValue.get shouldBe "-9.99"
+    amountStats.maxValue.get shouldBe "1000.00"
+  }
+
   // ── validateFile row-group integrity (#151) ──────────────────────────────
 
   it should "report issue for a file that cannot be opened as Parquet" taggedAs IntegrationTest in {
