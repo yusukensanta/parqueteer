@@ -55,18 +55,27 @@ trait ParquetRepository {
   def readSchemaFields(file: ParquetFile): Try[List[FieldSummary]]
   def deleteFile(location: StorageLocation): Try[Unit]
   def readStats(file: ParquetFile): Try[FileStats]
+  def cacheStats(): ParquetRepository.CacheStats =
+    ParquetRepository.CacheStats(0, 0, 0, 0)
 }
 
-object HadoopParquetRepository {
-  private val shutdownHookRegistered =
-    new java.util.concurrent.atomic.AtomicBoolean(false)
-
+object ParquetRepository {
   final case class CacheStats(
       footerHits: Long,
       footerMisses: Long,
       configHits: Long,
       configMisses: Long
   )
+}
+
+object HadoopParquetRepository {
+  private val shutdownHookRegistered =
+    new java.util.concurrent.atomic.AtomicBoolean(false)
+
+  // Keep type alias for source compatibility with code referencing HadoopParquetRepository.CacheStats
+  type CacheStats = ParquetRepository.CacheStats
+  val CacheStats: ParquetRepository.CacheStats.type =
+    ParquetRepository.CacheStats
 }
 
 class HadoopParquetRepository(
@@ -117,8 +126,8 @@ class HadoopParquetRepository(
   private val configCacheMisses =
     new java.util.concurrent.atomic.AtomicLong(0)
 
-  def cacheStats(): HadoopParquetRepository.CacheStats =
-    HadoopParquetRepository.CacheStats(
+  override def cacheStats(): ParquetRepository.CacheStats =
+    ParquetRepository.CacheStats(
       footerHits = footerCacheHits.get(),
       footerMisses = footerCacheMisses.get(),
       configHits = configCacheHits.get(),
