@@ -967,7 +967,9 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
 
   "HadoopParquetRepository.writeContent" should "infer schema from first 1000 rows only, not all rows" taggedAs IntegrationTest in {
     val loc = LocalPath(tempFile().getAbsolutePath)
-    // Rows 1..1000 have only "id". Row 1001 introduces "extra" — beyond the sample window.
+    // Rows 1..1000 have only "id". Row 1001 introduces "extra" — beyond the 1000-row sample window.
+    // Schema is inferred from rows 1-1000 only (no "extra" column), so row 1001 fails because
+    // "extra" is not in the inferred schema.
     val rows = (1 to 1000)
       .map(n => Map[String, CellValue]("id" -> CellValue.I64(n.toLong)))
       .toList
@@ -976,9 +978,8 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
       "extra" -> CellValue.Str("hello")
     )
     val allRows = rows :+ rowWithExtra
-    repository.writeContent(loc, allRows, None).get
-    val result = repository.readContent(ParquetFile(loc), ReadConfig()).get
-    result.rows.head.keySet should not contain "extra"
-    result.rows.forall(r => r.contains("id")) shouldBe true
+    val result = repo.writeContent(loc, allRows, None)
+    result.isFailure.shouldBe(true)
+    result.failed.get.getMessage.should(include("extra"))
   }
 }
