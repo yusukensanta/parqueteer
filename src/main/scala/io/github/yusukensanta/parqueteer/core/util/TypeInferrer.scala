@@ -31,7 +31,9 @@ object TypeInferrer {
         .map(CellValue.Ts.apply)
         .getOrElse(CellValue.Str(s))
     else if (DecimalPattern.matcher(s).matches())
-      Try(s.toDouble).map(CellValue.F64.apply).getOrElse(CellValue.Str(s))
+      Try(new java.math.BigDecimal(s))
+        .map(bd => CellValue.Dec(scala.math.BigDecimal(bd)))
+        .getOrElse(CellValue.Str(s))
     else if (IntPattern.matcher(s).matches())
       Try(s.toLong)
         .filter(

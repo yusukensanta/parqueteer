@@ -639,4 +639,45 @@ class ParquetRecordDecoderTest extends AnyFlatSpec with Matchers {
     val result = ParquetRecordDecoder.decodeGroup(group, schema)
     result("nums") shouldBe CellValue.Str("[1, 2, 3]")
   }
+
+  // ── buildTemporalTransformer (INT96) ──────────────────────────────────────
+
+  "ParquetRecordDecoder.buildTemporalTransformer" should "add a transformer for INT96 columns" in {
+    import org.apache.parquet.schema.{MessageType, PrimitiveType}
+    import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
+    import org.apache.parquet.schema.Type.Repetition
+    val schema = new MessageType(
+      "root",
+      new PrimitiveType(Repetition.OPTIONAL, PrimitiveTypeName.INT96, "ts")
+    )
+    val transformer = ParquetRecordDecoder.buildTemporalTransformer(schema)
+    transformer should contain key "ts"
+  }
+
+  it should "convert I64 epoch-millis to CellValue.Ts for INT96 columns" in {
+    import org.apache.parquet.schema.{MessageType, PrimitiveType}
+    import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
+    import org.apache.parquet.schema.Type.Repetition
+    val schema = new MessageType(
+      "root",
+      new PrimitiveType(Repetition.OPTIONAL, PrimitiveTypeName.INT96, "ts")
+    )
+    val epochMillis = 1_718_000_000_000L
+    val transformer = ParquetRecordDecoder.buildTemporalTransformer(schema)
+    val result = transformer("ts")(CellValue.I64(epochMillis))
+    result shouldBe CellValue.Ts(java.time.Instant.ofEpochMilli(epochMillis))
+  }
+
+  it should "pass non-I64 values through unchanged for INT96 columns" in {
+    import org.apache.parquet.schema.{MessageType, PrimitiveType}
+    import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
+    import org.apache.parquet.schema.Type.Repetition
+    val schema = new MessageType(
+      "root",
+      new PrimitiveType(Repetition.OPTIONAL, PrimitiveTypeName.INT96, "ts")
+    )
+    val transformer = ParquetRecordDecoder.buildTemporalTransformer(schema)
+    transformer("ts")(CellValue.Null) shouldBe CellValue.Null
+    transformer("ts")(CellValue.Str("x")) shouldBe CellValue.Str("x")
+  }
 }

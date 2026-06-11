@@ -41,7 +41,7 @@ class LTSVParserTest extends AnyFlatSpec with Matchers {
     val rows =
       LTSVParser.parse("flag:true\tscore:3.14\tdob:2024-01-15\tempty:\n")
     rows(0)("flag") shouldBe CellValue.Bool(true)
-    rows(0)("score") shouldBe CellValue.F64(3.14)
+    rows(0)("score") shouldBe CellValue.Dec(scala.math.BigDecimal("3.14"))
     rows(0)("dob") shouldBe CellValue.Date(java.time.LocalDate.of(2024, 1, 15))
     rows(0)("empty") shouldBe CellValue.Null
   }
