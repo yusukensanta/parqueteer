@@ -338,7 +338,7 @@ private[repositories] object ParquetRecordDecoder {
             case (PrimitiveTypeName.INT96, _) =>
               // 12-byte layout (Spark/Hive convention): bytes 0-7 = nanos of day (int64 LE),
               // bytes 8-11 = Julian day (int32 LE). Julian day 2440588 = 1970-01-01.
-              val bytes = group.getBinary(i, 0).getBytes
+              val bytes = group.getInt96(i, 0).getBytes
               val buf =
                 java.nio.ByteBuffer
                   .wrap(bytes)
