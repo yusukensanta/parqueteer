@@ -14,7 +14,7 @@ import com.github.mjakubowski84.parquet4s.{
   DecimalValue
 }
 import io.github.yusukensanta.parqueteer.core.models.CellValue
-import org.apache.parquet.schema.{MessageType, LogicalTypeAnnotation}
+import org.apache.parquet.schema.{MessageType, LogicalTypeAnnotation, GroupType}
 import java.time.temporal.ChronoUnit
 import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
 import org.apache.parquet.column.page.PageReadStore
@@ -206,6 +206,27 @@ private[repositories] object ParquetRecordDecoder {
     result.result()
   }
 
+  // Standard Parquet LIST layout: outer group (LIST) → repeated group (list) → element.
+  // Extracts all elements and returns CellValue.Str("[e1, e2, ...]").
+  private def decodeListField(
+      group: Group,
+      fieldIndex: Int,
+      listGroupType: GroupType
+  ): CellValue = {
+    val outerGroup = group.getGroup(fieldIndex, 0)
+    val elementCount = outerGroup.getFieldRepetitionCount(0)
+    if (elementCount == 0) return CellValue.Str("[]")
+    val repeatedType = listGroupType.getType(0).asGroupType()
+    val elemType = repeatedType.getType(0)
+    val elements = (0 until elementCount).map { j =>
+      val wrapper = outerGroup.getGroup(0, j)
+      if (wrapper.getFieldRepetitionCount(0) > 0 && elemType.isPrimitive)
+        wrapper.getValueToString(0, 0)
+      else "null"
+    }
+    CellValue.Str(elements.mkString("[", ", ", "]"))
+  }
+
   def decodeGroup(
       group: Group,
       schema: MessageType
@@ -218,12 +239,18 @@ private[repositories] object ParquetRecordDecoder {
         group.getFieldRepetitionCount(i) > 0 && !schema.getType(i).isPrimitive
       ) {
         val name = schema.getType(i).getName
-        if (warnedVariants.add(s"nested:$name"))
-          logger.warn(
-            s"Column '$name' is a nested group type — nested types are not yet " +
-              "supported; emitting Null. Upgrade parqueteer to add explicit support."
-          )
-        builder += name -> CellValue.Null
+        val groupType = schema.getType(i).asGroupType()
+        Option(groupType.getLogicalTypeAnnotation) match {
+          case Some(_: LogicalTypeAnnotation.ListLogicalTypeAnnotation) =>
+            builder += name -> decodeListField(group, i, groupType)
+          case _ =>
+            if (warnedVariants.add(s"nested:$name"))
+              logger.warn(
+                s"Column '$name' is a nested group type — nested types are not yet " +
+                  "supported; emitting Null. Upgrade parqueteer to add explicit support."
+              )
+            builder += name -> CellValue.Null
+        }
       } else if (
         group.getFieldRepetitionCount(i) == 0 && schema.getType(i).isPrimitive
       ) {

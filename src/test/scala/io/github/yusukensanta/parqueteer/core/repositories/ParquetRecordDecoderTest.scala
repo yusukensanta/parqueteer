@@ -584,4 +584,59 @@ class ParquetRecordDecoderTest extends AnyFlatSpec with Matchers {
       ParquetRecordDecoder.postProcessTemporalFields(row, schema)
     viaTransformer shouldBe viaLegacy
   }
+
+  // ── decodeGroup: LIST fields ──────────────────────────────────────────────
+
+  it should "decode a LIST<STRING> field as a bracketed string" in {
+    val schema = MessageTypeParser.parseMessageType(
+      """message root {
+        |  optional group tags (LIST) {
+        |    repeated group list {
+        |      optional binary element (STRING);
+        |    }
+        |  }
+        |}""".stripMargin
+    )
+    val group = new SimpleGroupFactory(schema).newGroup()
+    val listContainer = group.addGroup("tags")
+    listContainer.addGroup("list").append("element", Binary.fromString("hello"))
+    listContainer.addGroup("list").append("element", Binary.fromString("world"))
+    val result = ParquetRecordDecoder.decodeGroup(group, schema)
+    result("tags") shouldBe CellValue.Str("[hello, world]")
+  }
+
+  it should "decode an empty LIST field as []" in {
+    val schema = MessageTypeParser.parseMessageType(
+      """message root {
+        |  optional group tags (LIST) {
+        |    repeated group list {
+        |      optional binary element (STRING);
+        |    }
+        |  }
+        |}""".stripMargin
+    )
+    val group = new SimpleGroupFactory(schema).newGroup()
+    group.addGroup("tags") // outer list present but no elements
+    val result = ParquetRecordDecoder.decodeGroup(group, schema)
+    result("tags") shouldBe CellValue.Str("[]")
+  }
+
+  it should "decode a LIST<INT32> field as a bracketed string" in {
+    val schema = MessageTypeParser.parseMessageType(
+      """message root {
+        |  optional group nums (LIST) {
+        |    repeated group list {
+        |      optional int32 element;
+        |    }
+        |  }
+        |}""".stripMargin
+    )
+    val group = new SimpleGroupFactory(schema).newGroup()
+    val listContainer = group.addGroup("nums")
+    listContainer.addGroup("list").append("element", 1)
+    listContainer.addGroup("list").append("element", 2)
+    listContainer.addGroup("list").append("element", 3)
+    val result = ParquetRecordDecoder.decodeGroup(group, schema)
+    result("nums") shouldBe CellValue.Str("[1, 2, 3]")
+  }
 }
