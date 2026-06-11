@@ -84,6 +84,7 @@ class HadoopParquetRepository(
 ) extends ParquetRepository {
   private val HadoopConfigCacheMaxSize = 64
   private val FooterCacheMaxSize = 1024
+  private val SchemaInferenceSampleRows = 1000
   private val hadoopConfigCache: java.util.Map[String, Configuration] =
     java.util.Collections.synchronizedMap(
       new java.util.LinkedHashMap[String, Configuration](
@@ -612,7 +613,10 @@ class HadoopParquetRepository(
 
         val parquetSchema = schema match {
           case Some(ps) => ParquetSchemaBuilder.buildMessageType(ps)
-          case None     => ParquetSchemaBuilder.inferSchemaFromData(data)
+          case None =>
+            ParquetSchemaBuilder.inferSchemaFromData(
+              data.take(SchemaInferenceSampleRows)
+            )
         }
 
         Using.resource(
