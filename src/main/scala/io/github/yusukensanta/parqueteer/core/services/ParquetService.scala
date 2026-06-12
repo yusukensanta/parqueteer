@@ -266,6 +266,15 @@ class ParquetService(
       case _ =>
     }
 
+  // True when the writer never created the output file (pre-existence check),
+  // so we must NOT delete a file this operation didn't write.
+  private def isOutputAlreadyExistsError(ex: Throwable): Boolean =
+    ex.isInstanceOf[org.apache.hadoop.fs.FileAlreadyExistsException] ||
+      ex.isInstanceOf[java.nio.file.FileAlreadyExistsException] ||
+      Option(ex.getMessage).exists(m =>
+        m.contains("already exists") || m.contains("File already exists")
+      )
+
   /** Stream rows from each input file into a single output writer. On the first
     * read failure throws a sentinel exception through the writer so the partial
     * output is deleted before returning the real error. Returns the count of
@@ -340,6 +349,13 @@ class ParquetService(
         case scala.util.Failure(ex: MergeStreamException) =>
           deletePartialOutput(outputLocation)
           Left(ex.error)
+        case scala.util.Failure(ex) if isOutputAlreadyExistsError(ex) =>
+          Left(
+            ParqueteerError.InvalidFormat(
+              outputLocation.path,
+              s"Output file already exists: ${outputLocation.path}. Remove it first or choose a different output path."
+            )
+          )
         case scala.util.Failure(ex) =>
           deletePartialOutput(outputLocation)
           scala.util.Failure(ex).toParqueteerError
@@ -401,6 +417,13 @@ class ParquetService(
         case scala.util.Failure(ex: MergeStreamException) =>
           deletePartialOutput(outputLocation)
           Left(ex.error)
+        case scala.util.Failure(ex) if isOutputAlreadyExistsError(ex) =>
+          Left(
+            ParqueteerError.InvalidFormat(
+              outputLocation.path,
+              s"Output file already exists: ${outputLocation.path}. Remove it first or choose a different output path."
+            )
+          )
         case scala.util.Failure(ex) =>
           deletePartialOutput(outputLocation)
           scala.util.Failure(ex).toParqueteerError

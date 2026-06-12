@@ -278,7 +278,17 @@ private[repositories] object ParquetRecordDecoder {
         val groupType = schema.getType(i).asGroupType()
         Option(groupType.getLogicalTypeAnnotation) match {
           case Some(_: LogicalTypeAnnotation.ListLogicalTypeAnnotation) =>
-            builder += name -> decodeListField(group, i, groupType)
+            val listVal =
+              try decodeListField(group, i, groupType)
+              catch {
+                case ex: Exception =>
+                  if (warnedVariants.add(s"list-layout:$name"))
+                    logger.warn(
+                      s"Column '$name' has a non-standard LIST layout — emitting Null. Cause: ${ex.getMessage}"
+                    )
+                  CellValue.Null
+              }
+            builder += name -> listVal
           case _ =>
             if (warnedVariants.add(s"nested:$name"))
               logger.warn(

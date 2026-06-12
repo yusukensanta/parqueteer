@@ -1012,4 +1012,79 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
       "GZIP"
     )
   }
+
+  // ── C1: output-already-exists must not delete pre-existing file ───────────
+  "ParquetService.mergeFiles" should "return InvalidFormat and NOT delete when output already exists" in {
+    var deleteWasCalled = false
+    val alreadyExists =
+      new org.apache.hadoop.fs.FileAlreadyExistsException("/out.parquet")
+    val repo = new FakeParquetRepository(
+      writeResult = Failure(alreadyExists),
+      deleteResult = Failure(new RuntimeException("should not be called"))
+    ) {
+      override def deleteFile(location: StorageLocation): Try[Unit] = {
+        deleteWasCalled = true
+        Failure(new RuntimeException("should not be called"))
+      }
+    }
+    val service = new ParquetService(repo)
+    val result = service.mergeFiles(
+      List("/tmp/a.parquet", "/tmp/b.parquet"),
+      "/out.parquet",
+      WriteConfig(),
+      SchemaMode.Strict
+    )
+    result.isLeft shouldBe true
+    result.left.toOption.get shouldBe a[ParqueteerError.InvalidFormat]
+    result.left.toOption.get.userMessage should include("already exists")
+    deleteWasCalled shouldBe false
+  }
+
+  it should "return InvalidFormat and NOT delete on FileAlreadyExistsException (java.nio)" in {
+    var deleteWasCalled = false
+    val alreadyExists =
+      new java.nio.file.FileAlreadyExistsException("/out.parquet")
+    val repo = new FakeParquetRepository(
+      writeResult = Failure(alreadyExists)
+    ) {
+      override def deleteFile(location: StorageLocation): Try[Unit] = {
+        deleteWasCalled = true
+        Success(())
+      }
+    }
+    val service = new ParquetService(repo)
+    val result = service.mergeFiles(
+      List("/tmp/a.parquet", "/tmp/b.parquet"),
+      "/out.parquet",
+      WriteConfig(),
+      SchemaMode.Strict
+    )
+    result.isLeft shouldBe true
+    result.left.toOption.get.userMessage should include("already exists")
+    deleteWasCalled shouldBe false
+  }
+
+  "ParquetService.convertParquetFile" should "return InvalidFormat and NOT delete when output already exists" in {
+    var deleteWasCalled = false
+    val alreadyExists =
+      new org.apache.hadoop.fs.FileAlreadyExistsException("/out.parquet")
+    val repo = new FakeParquetRepository(
+      writeResult = Failure(alreadyExists)
+    ) {
+      override def deleteFile(location: StorageLocation): Try[Unit] = {
+        deleteWasCalled = true
+        Success(())
+      }
+    }
+    val service = new ParquetService(repo)
+    val result = service.convertParquetFile(
+      "/tmp/in.parquet",
+      "/out.parquet",
+      ConversionConfig()
+    )
+    result.isLeft shouldBe true
+    result.left.toOption.get shouldBe a[ParqueteerError.InvalidFormat]
+    result.left.toOption.get.userMessage should include("already exists")
+    deleteWasCalled shouldBe false
+  }
 }
