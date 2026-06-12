@@ -126,8 +126,8 @@ private[repositories] object ParquetRecordDecoder {
       .flatMap { field =>
         val pt = field.asPrimitiveType()
         val name = field.getName
-        Option(pt.getLogicalTypeAnnotation).flatMap {
-          case _: LogicalTypeAnnotation.DateLogicalTypeAnnotation =>
+        Option(pt.getLogicalTypeAnnotation) match {
+          case Some(_: LogicalTypeAnnotation.DateLogicalTypeAnnotation) =>
             Some(
               name -> ((v: CellValue) =>
                 v match {
@@ -137,7 +137,7 @@ private[repositories] object ParquetRecordDecoder {
                 }
               )
             )
-          case ts: LogicalTypeAnnotation.TimestampLogicalTypeAnnotation
+          case Some(ts: LogicalTypeAnnotation.TimestampLogicalTypeAnnotation)
               if ts.getUnit == LogicalTypeAnnotation.TimeUnit.MILLIS =>
             Some(
               name -> ((v: CellValue) =>
@@ -148,7 +148,7 @@ private[repositories] object ParquetRecordDecoder {
                 }
               )
             )
-          case ts: LogicalTypeAnnotation.TimestampLogicalTypeAnnotation
+          case Some(ts: LogicalTypeAnnotation.TimestampLogicalTypeAnnotation)
               if ts.getUnit == LogicalTypeAnnotation.TimeUnit.MICROS =>
             Some(
               name -> ((v: CellValue) =>
@@ -158,13 +158,24 @@ private[repositories] object ParquetRecordDecoder {
                 }
               )
             )
-          case ts: LogicalTypeAnnotation.TimestampLogicalTypeAnnotation
+          case Some(ts: LogicalTypeAnnotation.TimestampLogicalTypeAnnotation)
               if ts.getUnit == LogicalTypeAnnotation.TimeUnit.NANOS =>
             Some(
               name -> ((v: CellValue) =>
                 v match {
                   case CellValue.I64(l) => epochPlusSafe(l, ChronoUnit.NANOS)
                   case other            => other
+                }
+              )
+            )
+          case _ if pt.getPrimitiveTypeName == PrimitiveTypeName.INT96 =>
+            // INT96 has no LogicalTypeAnnotation; parquet4s decodes it as epoch-millis I64
+            Some(
+              name -> ((v: CellValue) =>
+                v match {
+                  case CellValue.I64(l) =>
+                    CellValue.Ts(java.time.Instant.ofEpochMilli(l))
+                  case other => other
                 }
               )
             )

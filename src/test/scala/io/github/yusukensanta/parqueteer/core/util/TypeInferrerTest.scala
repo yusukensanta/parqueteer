@@ -45,9 +45,16 @@ class TypeInferrerTest
       CellValue.Ts(java.time.Instant.parse("2024-01-15T12:30:00Z"))
   }
 
-  it should "infer decimal string as Double" in {
-    TypeInferrer.inferCsvValue("3.14") shouldBe CellValue.F64(3.14)
-    TypeInferrer.inferCsvValue("-2.5") shouldBe CellValue.F64(-2.5)
+  it should "infer decimal string as Dec (exact precision, not F64)" in {
+    TypeInferrer.inferCsvValue("3.14") shouldBe CellValue.Dec(
+      scala.math.BigDecimal("3.14")
+    )
+    TypeInferrer.inferCsvValue("-2.5") shouldBe CellValue.Dec(
+      scala.math.BigDecimal("-2.5")
+    )
+    TypeInferrer.inferCsvValue("1.0000000000000001") shouldBe CellValue.Dec(
+      scala.math.BigDecimal("1.0000000000000001")
+    )
   }
 
   it should "infer integer string as Long" in {
