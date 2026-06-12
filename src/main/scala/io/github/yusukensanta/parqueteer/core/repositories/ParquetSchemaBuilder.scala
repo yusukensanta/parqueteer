@@ -44,6 +44,8 @@ private[repositories] object ParquetSchemaBuilder {
   }
 
   // Helper to infer schema from data
+  private val MaxDecimalPrecision = 38
+
   def inferSchemaFromData(data: List[Map[String, CellValue]]): MessageType = {
     if (data.isEmpty)
       throw new IllegalArgumentException("Cannot infer schema from empty data")
@@ -52,6 +54,9 @@ private[repositories] object ParquetSchemaBuilder {
     // seenKeys tracks all keys (including null-only columns) for schema output.
     val seenKeys = scala.collection.mutable.LinkedHashSet.empty[String]
     val rankByKey = scala.collection.mutable.HashMap.empty[String, TypeRank]
+    // (maxScale, maxIntDigits) per decimal column, collected in same pass.
+    val decimalMetaByKey =
+      scala.collection.mutable.HashMap.empty[String, (Int, Int)]
     val warnedWiden = scala.collection.mutable.Set.empty[String]
     data.foreach { row =>
       row.foreach { case (k, v) =>
@@ -71,6 +76,16 @@ private[repositories] object ParquetSchemaBuilder {
               Some(widened)
             case None => Some(r)
           }
+          v match {
+            case CellValue.Dec(bd) =>
+              val scale = bd.scale.max(0)
+              val intDigits = (bd.precision - bd.scale).max(1)
+              decimalMetaByKey.updateWith(k) {
+                case Some((ms, mi)) => Some((ms.max(scale), mi.max(intDigits)))
+                case None           => Some((scale, intDigits))
+              }
+            case _ =>
+          }
         }
       }
     }
@@ -78,7 +93,23 @@ private[repositories] object ParquetSchemaBuilder {
     val builder = Types.buildMessage()
     seenKeys.toList.foreach { key =>
       val rank = rankByKey.getOrElse(key, TypeRank.String)
-      val (primitive, annotation) = rankToParquetType(rank)
+      val (primitive, annotation) =
+        if (rank == TypeRank.Decimal) {
+          val (maxScale, maxIntDigits) =
+            decimalMetaByKey.getOrElse(key, (18, 20))
+          val precision =
+            (maxScale + maxIntDigits).min(MaxDecimalPrecision).max(1)
+          val scale = maxScale.min(precision - 1).max(0)
+          if (maxScale + maxIntDigits > MaxDecimalPrecision)
+            Console.err.println(
+              s"[parqueteer] warning: column '$key' requires precision ${maxScale + maxIntDigits} " +
+                s"but Parquet DECIMAL max is $MaxDecimalPrecision — values may be truncated"
+            )
+          (
+            PrimitiveTypeName.BINARY,
+            Some(LogicalTypeAnnotation.decimalType(scale, precision))
+          )
+        } else rankToParquetType(rank)
       builder.addField(
         makeField(key, primitive, Type.Repetition.OPTIONAL, annotation)
       )

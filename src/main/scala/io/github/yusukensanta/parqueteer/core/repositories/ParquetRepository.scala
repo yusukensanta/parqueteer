@@ -964,6 +964,40 @@ class HadoopParquetRepository(
               { case n: java.lang.Double => n.doubleValue() },
               filter = v => !v.isNaN
             )
+          case PrimitiveTypeName.BOOLEAN =>
+            val mins = withValues.flatMap(s =>
+              Option(s.genericGetMin()).collect { case b: java.lang.Boolean =>
+                b.booleanValue()
+              }
+            )
+            val maxs = withValues.flatMap(s =>
+              Option(s.genericGetMax()).collect { case b: java.lang.Boolean =>
+                b.booleanValue()
+              }
+            )
+            (mins.minOption.map(_.toString), maxs.maxOption.map(_.toString))
+          case PrimitiveTypeName.INT96 =>
+            // Most writers (Spark, Hive) do not emit min/max stats for INT96.
+            // When stats are present, decode each 12-byte Binary using the same
+            // Julian-day layout as the read path and format as ISO-8601 UTC.
+            def decodeInt96Stat(v: Any): Option[String] = v match {
+              case b: org.apache.parquet.io.api.Binary if b.length() == 12 =>
+                ParquetRecordDecoder.decodeInt96Binary(b.getBytes) match {
+                  case CellValue.Ts(inst) => Some(inst.toString)
+                  case _                  => None
+                }
+              case _ => None
+            }
+            val minStrs =
+              withValues.flatMap(s =>
+                Option(s.genericGetMin()).flatMap(decodeInt96Stat)
+              )
+            val maxStrs =
+              withValues.flatMap(s =>
+                Option(s.genericGetMax()).flatMap(decodeInt96Stat)
+              )
+            // ISO-8601 UTC strings sort lexicographically == chronologically
+            (minStrs.minOption, maxStrs.maxOption)
           case _ =>
             val minVal = withValues
               .flatMap(s =>
