@@ -13,8 +13,8 @@ import org.apache.parquet.example.data.Group
 
 private[repositories] object ParquetWriteOps {
   private val logger = org.slf4j.LoggerFactory.getLogger(getClass)
-  private val decimalWarnedOnce =
-    new java.util.concurrent.atomic.AtomicBoolean(false)
+  private val decimalCoercionWarnedCols =
+    java.util.concurrent.ConcurrentHashMap.newKeySet[String]()
 
   def writeRowToGroup(
       group: Group,
@@ -60,9 +60,9 @@ private[repositories] object ParquetWriteOps {
                     )
                 }
               case _ =>
-                if (decimalWarnedOnce.compareAndSet(false, true))
+                if (decimalCoercionWarnedCols.add(key))
                   logger.warn(
-                    "Writing DECIMAL to non-DECIMAL column as DOUBLE — precision may be lost " +
+                    s"Writing DECIMAL to non-DECIMAL column '$key' as DOUBLE — precision may be lost " +
                       "for values with more than 15 significant digits."
                   )
                 group.add(fieldIndex, bd.toDouble)
