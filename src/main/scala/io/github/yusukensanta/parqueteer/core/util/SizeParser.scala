@@ -30,7 +30,12 @@ object SizeParser {
           throw new IllegalArgumentException(
             s"Fractional byte count '$sizeStr' is not valid — use a unit (e.g. 1.5KB) or a whole number of bytes"
           )
-        bytes.toLong
+        val result = bytes.toLong
+        if (result == 0L && BigDecimal(size) > 0)
+          throw new IllegalArgumentException(
+            s"Size '$sizeStr' rounds to zero bytes — use a larger value or a coarser unit"
+          )
+        result
       case _ =>
         throw new IllegalArgumentException(
           s"Invalid size format: $sizeStr. Expected format: <number>[unit] (e.g., 128MB, 128M, 1.5GB, 134217728)"

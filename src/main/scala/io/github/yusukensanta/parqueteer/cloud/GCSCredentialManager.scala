@@ -6,9 +6,7 @@ import io.github.yusukensanta.parqueteer.core.models.{
 }
 import org.apache.hadoop.conf.Configuration
 import org.slf4j.LoggerFactory
-import com.google.auth.oauth2.ServiceAccountCredentials
-import scala.util.{Try, Success, Failure, Using}
-import java.io.FileInputStream
+import scala.util.{Try, Success, Failure}
 import java.nio.file.{Files, Paths}
 
 private object GCSTuning {
@@ -113,15 +111,19 @@ class GCSCredentialManager extends CloudCredentialManager {
       )
     )
 
+  // Checks existence only; the GCS connector validates the file content on first
+  // I/O operation. Parsing and discarding credentials here would introduce a
+  // TOCTOU window and double-parse with no benefit.
   private def tryServiceAccountFile(): Try[String] = Try {
     val credPath = sys.env
       .get("GOOGLE_APPLICATION_CREDENTIALS")
       .getOrElse(
         throw new RuntimeException("GOOGLE_APPLICATION_CREDENTIALS not set")
       )
-    Using.resource(new FileInputStream(credPath)) { stream =>
-      ServiceAccountCredentials.fromStream(stream)
-    }
+    if (!Files.exists(Paths.get(credPath)))
+      throw new RuntimeException(
+        s"GOOGLE_APPLICATION_CREDENTIALS file not found: $credPath"
+      )
     credPath
   }
 
