@@ -467,8 +467,10 @@ class HadoopParquetRepository(
             throw t
         }
       config.maxRows match {
-        case Some(limit) => allRows.take(limit.min(Int.MaxValue).toInt)
-        case None        => allRows
+        case Some(limit) =>
+          if (limit >= allRows.size.toLong) allRows
+          else allRows.take(limit.toInt)
+        case None => allRows
       }
     } finally {
       rawEc.shutdown()
@@ -785,7 +787,16 @@ class HadoopParquetRepository(
         case _: LogicalTypeAnnotation.StringLogicalTypeAnnotation => "STRING"
         case _: LogicalTypeAnnotation.EnumLogicalTypeAnnotation   => "STRING"
         case _: LogicalTypeAnnotation.JsonLogicalTypeAnnotation   => "STRING"
-        case _ => primitive.name()
+        case dec: LogicalTypeAnnotation.DecimalLogicalTypeAnnotation =>
+          s"DECIMAL(${dec.getPrecision},${dec.getScale})"
+        case _ =>
+          primitive match {
+            case org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName.INT96 =>
+              "TIMESTAMP_MICROS"
+            case org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY =>
+              "BINARY"
+            case _ => primitive.name()
+          }
       }
   }
 

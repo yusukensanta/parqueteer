@@ -992,4 +992,109 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
     result.isFailure.shouldBe(true)
     result.failed.get.getMessage.should(include("extra"))
   }
+
+  // ── logicalTypeName round-trip: DECIMAL / INT96 / FIXED_LEN_BYTE_ARRAY ──
+
+  it should "readSchemaFields returns DECIMAL(p,s) for a BINARY-backed decimal column" taggedAs IntegrationTest in {
+    val data = List(
+      Map[String, CellValue]("price" -> CellValue.Dec(BigDecimal("9.99"))),
+      Map[String, CellValue]("price" -> CellValue.Dec(BigDecimal("100.00")))
+    )
+    val schema = ParquetSchema(
+      columns = List(
+        ColumnInfo(
+          "price",
+          "DECIMAL(10,2)",
+          isOptional = true,
+          1,
+          0,
+          "UNCOMPRESSED"
+        )
+      ),
+      rowGroupCount = 1L,
+      totalRowCount = 2L
+    )
+    val loc = LocalPath(tempFile().getAbsolutePath)
+    repo.writeContent(loc, data, Some(schema)).isSuccess shouldBe true
+
+    val fields = repo.readSchemaFields(ParquetFile(loc)).get
+    fields should have size 1
+    fields.head.name shouldBe "price"
+    fields.head.dataType shouldBe "DECIMAL(10,2)"
+  }
+
+  it should "readSchemaFields round-trips DECIMAL type so convert/merge schema stays intact" taggedAs IntegrationTest in {
+    val data = List(
+      Map[String, CellValue]("amount" -> CellValue.Dec(BigDecimal("1.50"))),
+      Map[String, CellValue]("amount" -> CellValue.Dec(BigDecimal("-3.00")))
+    )
+    val schema = ParquetSchema(
+      columns = List(
+        ColumnInfo(
+          "amount",
+          "DECIMAL(18,4)",
+          isOptional = true,
+          1,
+          0,
+          "UNCOMPRESSED"
+        )
+      ),
+      rowGroupCount = 1L,
+      totalRowCount = 2L
+    )
+    val srcLoc = LocalPath(tempFile().getAbsolutePath)
+    val dstLoc = LocalPath(tempFile().getAbsolutePath)
+    repo.writeContent(srcLoc, data, Some(schema)).isSuccess shouldBe true
+
+    val fields = repo.readSchemaFields(ParquetFile(srcLoc)).get
+    fields.head.dataType should startWith("DECIMAL(")
+
+    // Mirror what convert does: build ColumnInfo from FieldSummary and re-write.
+    val dstSchema = ParquetSchema(
+      columns = fields.map(f =>
+        ColumnInfo(
+          f.name,
+          f.dataType,
+          f.isOptional,
+          if (f.isOptional) 1 else 0,
+          0,
+          "UNCOMPRESSED"
+        )
+      ),
+      rowGroupCount = 1L,
+      totalRowCount = 2L
+    )
+    // Parallel path uses low-level decoder which supports BINARY-backed DECIMAL.
+    val rows = repo
+      .readContent(ParquetFile(srcLoc), ReadConfig(parallelism = 4))
+      .get
+      .rows
+    repo.writeContent(dstLoc, rows, Some(dstSchema)).isSuccess shouldBe true
+
+    val result = repo
+      .readContent(ParquetFile(dstLoc), ReadConfig(parallelism = 4))
+      .get
+      .rows
+    result should have size 2
+    result.map(_("amount")).toSet shouldBe Set(
+      CellValue.Dec(BigDecimal("1.5000")),
+      CellValue.Dec(BigDecimal("-3.0000"))
+    )
+  }
+
+  it should "parallel readContent with maxRows smaller than result set returns exactly maxRows rows" taggedAs IntegrationTest in {
+    val loc = LocalPath(tempFile().getAbsolutePath)
+    val rows = (1 to 20)
+      .map(i => Map[String, CellValue]("n" -> CellValue.I64(i.toLong)))
+      .toList
+    repo.writeContent(loc, rows, None).isSuccess shouldBe true
+
+    val result = repo
+      .readContent(
+        ParquetFile(loc),
+        ReadConfig(parallelism = 4, maxRows = Some(7L))
+      )
+      .get
+    result.rows should have size 7
+  }
 }
