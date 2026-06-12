@@ -89,16 +89,48 @@ private[repositories] object ParquetRecordDecoder {
         f.getName
     }.toSet
 
-  // Schema-aware variant: unannotated BINARY fields are decoded as Bytes, not Str.
-  // Mirrors the decodeGroup logic used by the parallel read path.
+  def int96FieldsFor(schema: MessageType): Set[String] =
+    schema.getFields.asScala.collect {
+      case f
+          if f.isPrimitive &&
+            f.asPrimitiveType()
+              .getPrimitiveTypeName == PrimitiveTypeName.INT96 =>
+        f.getName
+    }.toSet
+
+  // 12-byte Spark/Hive INT96 layout: bytes 0-7 = nanos of day (int64 LE), bytes 8-11 = Julian
+  // day (int32 LE). Julian day 2440588 = 1970-01-01. Shared by both sequential and parallel paths.
+  private[repositories] def decodeInt96Binary(bytes: Array[Byte]): CellValue = {
+    val buf =
+      java.nio.ByteBuffer.wrap(bytes).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+    val nanosOfDay = buf.getLong(0)
+    val julianDay = buf.getInt(8).toLong - 2440588L
+    val totalNanos =
+      try
+        Math.addExact(
+          Math.multiplyExact(julianDay, 86400_000_000_000L),
+          nanosOfDay
+        )
+      catch { case _: ArithmeticException => nanosOfDay }
+    epochPlusSafe(totalNanos, ChronoUnit.NANOS)
+  }
+
+  // Schema-aware variant: unannotated BINARY fields decoded as Bytes; INT96 fields decoded
+  // directly from raw bytes (parquet4s delivers INT96 as BinaryValue, not DateTimeValue).
   def convertRecordToMapWithSchema(
       record: RowParquetRecord,
-      rawBinaryFields: Set[String]
+      rawBinaryFields: Set[String],
+      int96Fields: Set[String] = Set.empty
   ): Map[String, CellValue] =
     record.iterator
       .map { case (key, value) =>
         val cell =
-          if (rawBinaryFields.contains(key))
+          if (int96Fields.contains(key))
+            value match {
+              case BinaryValue(bin) => decodeInt96Binary(bin.getBytes)
+              case _                => decodeValue(value)
+            }
+          else if (rawBinaryFields.contains(key))
             value match {
               case BinaryValue(bin) => CellValue.Bytes(bin.getBytes)
               case _                => decodeValue(value)
@@ -112,7 +144,11 @@ private[repositories] object ParquetRecordDecoder {
       record: RowParquetRecord,
       schema: MessageType
   ): Map[String, CellValue] =
-    convertRecordToMapWithSchema(record, rawBinaryFieldsFor(schema))
+    convertRecordToMapWithSchema(
+      record,
+      rawBinaryFieldsFor(schema),
+      int96FieldsFor(schema)
+    )
 
   /** Pre-compute a per-column transformer from the schema. Call once per file
     * and pass to applyTemporalTransformer for each row to avoid O(N×K) map
@@ -165,17 +201,6 @@ private[repositories] object ParquetRecordDecoder {
                 v match {
                   case CellValue.I64(l) => epochPlusSafe(l, ChronoUnit.NANOS)
                   case other            => other
-                }
-              )
-            )
-          case _ if pt.getPrimitiveTypeName == PrimitiveTypeName.INT96 =>
-            // INT96 has no LogicalTypeAnnotation; parquet4s decodes it as epoch-millis I64
-            Some(
-              name -> ((v: CellValue) =>
-                v match {
-                  case CellValue.I64(l) =>
-                    CellValue.Ts(java.time.Instant.ofEpochMilli(l))
-                  case other => other
                 }
               )
             )
@@ -374,23 +399,7 @@ private[repositories] object ParquetRecordDecoder {
             case (PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY, _) =>
               CellValue.Bytes(group.getBinary(i, 0).getBytes)
             case (PrimitiveTypeName.INT96, _) =>
-              // 12-byte layout (Spark/Hive convention): bytes 0-7 = nanos of day (int64 LE),
-              // bytes 8-11 = Julian day (int32 LE). Julian day 2440588 = 1970-01-01.
-              val bytes = group.getInt96(i, 0).getBytes
-              val buf =
-                java.nio.ByteBuffer
-                  .wrap(bytes)
-                  .order(java.nio.ByteOrder.LITTLE_ENDIAN)
-              val nanosOfDay = buf.getLong(0)
-              val julianDay = buf.getInt(8).toLong - 2440588L
-              val totalNanos =
-                try
-                  Math.addExact(
-                    Math.multiplyExact(julianDay, 86400_000_000_000L),
-                    nanosOfDay
-                  )
-                catch { case _: ArithmeticException => nanosOfDay }
-              epochPlusSafe(totalNanos, ChronoUnit.NANOS)
+              decodeInt96Binary(group.getInt96(i, 0).getBytes)
             case _ => CellValue.Str(group.getValueToString(i, 0))
           }
         builder += name -> value

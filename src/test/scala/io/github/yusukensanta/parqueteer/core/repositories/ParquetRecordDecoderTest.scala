@@ -640,35 +640,62 @@ class ParquetRecordDecoderTest extends AnyFlatSpec with Matchers {
     result("nums") shouldBe CellValue.Str("[1, 2, 3]")
   }
 
-  // ── buildTemporalTransformer (INT96) ──────────────────────────────────────
+  // ── INT96 decoding (shared helper + schema detection) ─────────────────────
 
-  "ParquetRecordDecoder.buildTemporalTransformer" should "add a transformer for INT96 columns" in {
-    import org.apache.parquet.schema.{MessageType, PrimitiveType}
-    import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
-    import org.apache.parquet.schema.Type.Repetition
-    val schema = new MessageType(
-      "root",
-      new PrimitiveType(Repetition.OPTIONAL, PrimitiveTypeName.INT96, "ts")
+  "ParquetRecordDecoder.decodeInt96Binary" should "decode INT96 bytes to CellValue.Ts with nanosecond precision" in {
+    // 2024-06-10T12:00:00Z: nanos-of-day = 12*3600*1e9, julian-day = 2440588 + epochDay
+    val epochDay = java.time.LocalDate.parse("2024-06-10").toEpochDay
+    val julianDay = (2440588L + epochDay).toInt
+    val nanosOfDay = 12L * 3600L * 1_000_000_000L // noon UTC
+    val buf =
+      java.nio.ByteBuffer.allocate(12).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+    buf.putLong(nanosOfDay)
+    buf.putInt(julianDay)
+    val result = ParquetRecordDecoder.decodeInt96Binary(buf.array())
+    result shouldBe CellValue.Ts(
+      java.time.Instant.parse("2024-06-10T12:00:00Z")
     )
-    val transformer = ParquetRecordDecoder.buildTemporalTransformer(schema)
-    transformer should contain key "ts"
   }
 
-  it should "convert I64 epoch-millis to CellValue.Ts for INT96 columns" in {
-    import org.apache.parquet.schema.{MessageType, PrimitiveType}
-    import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
-    import org.apache.parquet.schema.Type.Repetition
-    val schema = new MessageType(
-      "root",
-      new PrimitiveType(Repetition.OPTIONAL, PrimitiveTypeName.INT96, "ts")
+  it should "preserve sub-millisecond nanosecond precision" in {
+    val epochDay = java.time.LocalDate.parse("2024-06-10").toEpochDay
+    val julianDay = (2440588L + epochDay).toInt
+    val nanosOfDay =
+      12L * 3600L * 1_000_000_000L + 123_456_789L // noon + 123,456,789 ns
+    val buf =
+      java.nio.ByteBuffer.allocate(12).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+    buf.putLong(nanosOfDay)
+    buf.putInt(julianDay)
+    val result = ParquetRecordDecoder.decodeInt96Binary(buf.array())
+    result shouldBe CellValue.Ts(
+      java.time.Instant.parse("2024-06-10T12:00:00.123456789Z")
     )
-    val epochMillis = 1_718_000_000_000L
-    val transformer = ParquetRecordDecoder.buildTemporalTransformer(schema)
-    val result = transformer("ts")(CellValue.I64(epochMillis))
-    result shouldBe CellValue.Ts(java.time.Instant.ofEpochMilli(epochMillis))
   }
 
-  it should "pass non-I64 values through unchanged for INT96 columns" in {
+  "ParquetRecordDecoder.int96FieldsFor" should "return INT96 field names" in {
+    import org.apache.parquet.schema.{MessageType, PrimitiveType}
+    import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
+    import org.apache.parquet.schema.Type.Repetition
+    val schema = new MessageType(
+      "root",
+      new PrimitiveType(Repetition.OPTIONAL, PrimitiveTypeName.INT96, "ts"),
+      new PrimitiveType(Repetition.OPTIONAL, PrimitiveTypeName.BINARY, "name")
+    )
+    ParquetRecordDecoder.int96FieldsFor(schema) shouldBe Set("ts")
+  }
+
+  it should "return empty set when no INT96 fields present" in {
+    import org.apache.parquet.schema.{MessageType, PrimitiveType}
+    import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
+    import org.apache.parquet.schema.Type.Repetition
+    val schema = new MessageType(
+      "root",
+      new PrimitiveType(Repetition.REQUIRED, PrimitiveTypeName.INT64, "id")
+    )
+    ParquetRecordDecoder.int96FieldsFor(schema) shouldBe Set.empty
+  }
+
+  "ParquetRecordDecoder.buildTemporalTransformer" should "not include INT96 fields (decoded at convert time)" in {
     import org.apache.parquet.schema.{MessageType, PrimitiveType}
     import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
     import org.apache.parquet.schema.Type.Repetition
@@ -677,7 +704,6 @@ class ParquetRecordDecoderTest extends AnyFlatSpec with Matchers {
       new PrimitiveType(Repetition.OPTIONAL, PrimitiveTypeName.INT96, "ts")
     )
     val transformer = ParquetRecordDecoder.buildTemporalTransformer(schema)
-    transformer("ts")(CellValue.Null) shouldBe CellValue.Null
-    transformer("ts")(CellValue.Str("x")) shouldBe CellValue.Str("x")
+    transformer shouldNot contain key "ts"
   }
 }

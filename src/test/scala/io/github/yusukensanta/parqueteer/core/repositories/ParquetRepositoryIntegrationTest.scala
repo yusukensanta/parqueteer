@@ -191,6 +191,16 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
     result.get.isPartial shouldBe true
   }
 
+  it should "return zero rows for maxRows = Some(0L)" taggedAs IntegrationTest in {
+    val loc = LocalPath(tempFile().getAbsolutePath)
+    repo.writeContent(loc, sampleData, None).isSuccess shouldBe true
+
+    val result =
+      repo.readContent(ParquetFile(loc), ReadConfig(maxRows = Some(0L)))
+    result.isSuccess shouldBe true
+    result.get.rows shouldBe empty
+  }
+
   it should "return only requested columns (column projection)" taggedAs IntegrationTest in {
     val loc = LocalPath(tempFile().getAbsolutePath)
     repo.writeContent(loc, sampleData, None).isSuccess shouldBe true

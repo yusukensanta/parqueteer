@@ -290,6 +290,8 @@ class HadoopParquetRepository(
             val path4s = Parquet4sPath(file.location.path)
             val rawBinaryFields =
               ParquetRecordDecoder.rawBinaryFieldsFor(fileSchema)
+            val int96Fields =
+              ParquetRecordDecoder.int96FieldsFor(fileSchema)
             val temporalTransformer =
               ParquetRecordDecoder.buildTemporalTransformer(fileSchema)
             Using.resource(
@@ -300,7 +302,8 @@ class HadoopParquetRepository(
                   ParquetRecordDecoder.applyTemporalTransformer(
                     ParquetRecordDecoder.convertRecordToMapWithSchema(
                       r,
-                      rawBinaryFields
+                      rawBinaryFields,
+                      int96Fields
                     ),
                     temporalTransformer
                   )
@@ -348,6 +351,8 @@ class HadoopParquetRepository(
         val (fileSchema, _) = getFooter(hadoopPath, hadoopConfig)
         val rawBinaryFields =
           ParquetRecordDecoder.rawBinaryFieldsFor(fileSchema)
+        val int96Fields =
+          ParquetRecordDecoder.int96FieldsFor(fileSchema)
         val temporalTransformer =
           ParquetRecordDecoder.buildTemporalTransformer(fileSchema)
         Using.resource(
@@ -359,7 +364,11 @@ class HadoopParquetRepository(
             process(
               ParquetRecordDecoder.applyTemporalTransformer(
                 ParquetRecordDecoder
-                  .convertRecordToMapWithSchema(record, rawBinaryFields),
+                  .convertRecordToMapWithSchema(
+                    record,
+                    rawBinaryFields,
+                    int96Fields
+                  ),
                 temporalTransformer
               )
             )
