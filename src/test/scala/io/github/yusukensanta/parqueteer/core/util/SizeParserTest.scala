@@ -108,4 +108,17 @@ class SizeParserTest
     SizeParser.parse("0.5KB") shouldBe 512L
     SizeParser.parse("1.5KB") shouldBe 1536L
   }
+
+  it should "reject values that round to zero bytes (e.g. sub-byte fractions)" in {
+    an[IllegalArgumentException] should be thrownBy SizeParser.parse("0.0001KB")
+    an[IllegalArgumentException] should be thrownBy SizeParser.parse(
+      "0.0000001MB"
+    )
+  }
+
+  it should "accept zero explicitly (0 bytes)" in {
+    SizeParser.parse("0") shouldBe 0L
+    SizeParser.parse("0B") shouldBe 0L
+    SizeParser.parse("0KB") shouldBe 0L
+  }
 }

@@ -975,11 +975,10 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
     afterSecond.footerMisses shouldBe 1L
   }
 
-  "HadoopParquetRepository.writeContent" should "infer schema from first 1000 rows only, not all rows" taggedAs IntegrationTest in {
+  "HadoopParquetRepository.writeContent" should "infer schema from all rows (not just first 1000), so late-appearing columns are included" taggedAs IntegrationTest in {
     val loc = LocalPath(tempFile().getAbsolutePath)
-    // Rows 1..1000 have only "id". Row 1001 introduces "extra" — beyond the 1000-row sample window.
-    // Schema is inferred from rows 1-1000 only (no "extra" column), so row 1001 fails because
-    // "extra" is not in the inferred schema.
+    // Rows 1..1000 have only "id". Row 1001 introduces "extra".
+    // Schema is inferred from all rows, so "extra" is in the schema and the write succeeds.
     val rows = (1 to 1000)
       .map(n => Map[String, CellValue]("id" -> CellValue.I64(n.toLong)))
       .toList
@@ -989,8 +988,10 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
     )
     val allRows = rows :+ rowWithExtra
     val result = repo.writeContent(loc, allRows, None)
-    result.isFailure.shouldBe(true)
-    result.failed.get.getMessage.should(include("extra"))
+    result.isSuccess shouldBe true
+    val readBack = repo.readContent(ParquetFile(loc), ReadConfig()).get.rows
+    readBack should have size 1001
+    readBack.last.get("extra") shouldBe Some(CellValue.Str("hello"))
   }
 
   // ── logicalTypeName round-trip: DECIMAL / INT96 / FIXED_LEN_BYTE_ARRAY ──
