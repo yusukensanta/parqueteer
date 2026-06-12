@@ -142,4 +142,30 @@ class StorageLocationParserTest extends AnyFlatSpec with Matchers {
     StorageLocationParser.parse(original.path) shouldBe Right(original)
   }
 
+  // ── M4: extended Azure URI vocabulary ────────────────────────────────────
+  "StorageLocationParser" should "parse abfs:// (non-secure) as AzureLocation" in {
+    val result = StorageLocationParser.parse(
+      "abfs://mycontainer@myaccount.dfs.core.windows.net/data/file.parquet"
+    )
+    result shouldBe Right(
+      AzureLocation("myaccount", "mycontainer", "data/file.parquet")
+    )
+  }
+
+  it should "return a helpful error for wasb:// URIs" in {
+    val result = StorageLocationParser.parse(
+      "wasb://container@account.blob.core.windows.net/key"
+    )
+    result.isLeft shouldBe true
+    result.left.toOption.get should include("wasb")
+    result.left.toOption.get should include("abfss://")
+  }
+
+  it should "return a helpful error for wasbs:// URIs" in {
+    val result = StorageLocationParser.parse(
+      "wasbs://container@account.blob.core.windows.net/key"
+    )
+    result.isLeft shouldBe true
+    result.left.toOption.get should include("wasb")
+  }
 }

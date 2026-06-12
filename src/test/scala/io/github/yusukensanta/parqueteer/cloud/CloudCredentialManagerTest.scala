@@ -205,4 +205,53 @@ class CloudCredentialManagerTest extends AnyFlatSpec with Matchers {
     result.isFailure shouldBe true
     result.failed.get.getMessage should include("NullPointerException")
   }
+
+  // ── AzureCredentialManager per-account auth.type (H4) ────────────────────
+
+  "AzureCredentialManager" should "set per-account auth.type=OAuth for managed_identity (default)" in {
+    assume(
+      !sys.env.contains("AZURE_AUTH_METHOD") ||
+        sys.env("AZURE_AUTH_METHOD") == "managed_identity",
+      "Skipped: AZURE_AUTH_METHOD is not managed_identity"
+    )
+    val loc = AzureLocation("myaccount", "mycontainer", "path/to/file")
+    val result = new AzureCredentialManager().configureHadoop(loc)
+    result.isSuccess shouldBe true
+    val conf = result.get
+    conf.get(
+      "fs.azure.account.auth.type.myaccount.dfs.core.windows.net"
+    ) shouldBe "OAuth"
+  }
+
+  it should "set per-account auth.type=SharedKey for shared_key (not inherit global OAuth)" in {
+    assume(
+      sys.env.contains("AZURE_AUTH_METHOD") &&
+        sys.env("AZURE_AUTH_METHOD") == "shared_key" &&
+        sys.env.contains("AZURE_STORAGE_KEY"),
+      "Skipped: AZURE_AUTH_METHOD=shared_key and AZURE_STORAGE_KEY not set"
+    )
+    val loc = AzureLocation("myaccount", "mycontainer", "path/to/file")
+    val result = new AzureCredentialManager().configureHadoop(loc)
+    result.isSuccess shouldBe true
+    val conf = result.get
+    conf.get(
+      "fs.azure.account.auth.type.myaccount.dfs.core.windows.net"
+    ) shouldBe "SharedKey"
+  }
+
+  it should "set per-account auth.type=SAS for sas_token (not inherit global OAuth)" in {
+    assume(
+      sys.env.contains("AZURE_AUTH_METHOD") &&
+        sys.env("AZURE_AUTH_METHOD") == "sas_token" &&
+        sys.env.contains("AZURE_STORAGE_SAS_TOKEN"),
+      "Skipped: AZURE_AUTH_METHOD=sas_token and AZURE_STORAGE_SAS_TOKEN not set"
+    )
+    val loc = AzureLocation("myaccount", "mycontainer", "path/to/file")
+    val result = new AzureCredentialManager().configureHadoop(loc)
+    result.isSuccess shouldBe true
+    val conf = result.get
+    conf.get(
+      "fs.azure.account.auth.type.myaccount.dfs.core.windows.net"
+    ) shouldBe "SAS"
+  }
 }
