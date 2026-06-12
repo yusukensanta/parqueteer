@@ -127,6 +127,11 @@ class AzureCredentialManager extends CloudCredentialManager {
       .get("AZURE_STORAGE_KEY")
       .getOrElse(throw new RuntimeException("AZURE_STORAGE_KEY not set"))
 
+    // Explicit per-account auth type overrides the global OAuth default set above.
+    conf.set(
+      s"fs.azure.account.auth.type.${location.account}.dfs.core.windows.net",
+      "SharedKey"
+    )
     conf.set(
       s"fs.azure.account.key.${location.account}.dfs.core.windows.net",
       accountKey
@@ -141,6 +146,11 @@ class AzureCredentialManager extends CloudCredentialManager {
       .get("AZURE_STORAGE_SAS_TOKEN")
       .getOrElse(throw new RuntimeException("AZURE_STORAGE_SAS_TOKEN not set"))
 
+    // Explicit per-account auth type overrides the global OAuth default set above.
+    conf.set(
+      s"fs.azure.account.auth.type.${location.account}.dfs.core.windows.net",
+      "SAS"
+    )
     conf.set(
       s"fs.azure.sas.${location.container}.${location.account}.dfs.core.windows.net",
       sasToken

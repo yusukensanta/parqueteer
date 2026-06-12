@@ -35,8 +35,10 @@ case class AzureLocation(
 object StorageLocationParser {
   private val s3Pattern: Regex = """s3a?://([^/]+)/(.+)""".r
   private val gcsPattern: Regex = """gs://([^/]+)/(.+)""".r
+  // Matches both abfss:// (secure) and abfs:// (non-secure); both map to AzureLocation.
   private val azurePattern: Regex =
-    """abfss://([^@]+)@([^.]+)\.dfs\.core\.windows\.net/(.+)""".r
+    """abfss?://([^@]+)@([^.]+)\.dfs\.core\.windows\.net/(.+)""".r
+  private val wasbPattern: Regex = """wasbs?://.*""".r
 
   /** Parse a storage URL into the appropriate StorageLocation
     *
@@ -54,6 +56,10 @@ object StorageLocationParser {
       case azurePattern(container, account, path) =>
         // Regex captures (container, account, path), constructor expects (account, container, path)
         Right(AzureLocation(account, container, path))
+      case wasbPattern() =>
+        Left(
+          s"wasb:// and wasbs:// (Azure Blob Storage) are not supported. Use abfss:// for Azure Data Lake Storage Gen2."
+        )
       case typo if typo.matches("[a-zA-Z][a-zA-Z0-9+.\\-]*:/[^/].*") =>
         Left(
           s"Malformed URL '$typo'. Did you mean '${typo.replaceFirst(":/", "://")}'?"
