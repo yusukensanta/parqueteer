@@ -26,6 +26,10 @@ object SizeParser {
           throw new IllegalArgumentException(
             s"Size too large (exceeds Long.MaxValue): $sizeStr"
           )
+        if (multiplier == 1L && !bytes.isWhole)
+          throw new IllegalArgumentException(
+            s"Fractional byte count '$sizeStr' is not valid — use a unit (e.g. 1.5KB) or a whole number of bytes"
+          )
         bytes.toLong
       case _ =>
         throw new IllegalArgumentException(

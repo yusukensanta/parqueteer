@@ -78,6 +78,9 @@ object HadoopParquetRepository {
     ParquetRepository.CacheStats
 }
 
+// The Hadoop Configuration cache is keyed on storage location type + bucket/region.
+// It does not incorporate credential env vars (AWS_ACCESS_KEY_ID, etc.).
+// Callers that rotate credentials mid-process must create a new repository instance.
 class HadoopParquetRepository(
     profile: Option[String] = None,
     region: Option[String] = None
@@ -316,12 +319,10 @@ class HadoopParquetRepository(
                 .toList
             }
           }
+        val hitLimit = config.maxRows.exists(rows.size.toLong >= _)
         val isPartial =
-          if (config.filter.isDefined)
-            config.maxRows.exists(limit => rows.size.toLong >= limit)
-          else
-            config.maxRows.exists(limit => rows.size.toLong >= limit) &&
-            rows.size.toLong < totalRows
+          if (config.filter.isDefined) hitLimit
+          else hitLimit && rows.size.toLong < totalRows
         FileContent(rows = rows, totalRows = totalRows, isPartial = isPartial)
       }
       if (result.isFailure) footerCache.remove(cacheKey)
