@@ -151,7 +151,12 @@ class HadoopParquetRepository(
 
   // Close S3A/GCS/ABFS connection pools on JVM exit to prevent background thread leaks
   if (HadoopParquetRepository.shutdownHookRegistered.compareAndSet(false, true))
-    Runtime.getRuntime.addShutdownHook(new Thread(() => FileSystem.closeAll()))
+    Runtime.getRuntime.addShutdownHook(
+      new Thread(() =>
+        try FileSystem.closeAll()
+        catch { case _: Throwable => () }
+      )
+    )
 
   // ── Shared footer infrastructure ──────────────────────────────────────────
 
@@ -420,12 +425,12 @@ class HadoopParquetRepository(
       val futures = selectedBlocks.map { block =>
         Future {
           val colChunks = block.getColumns.asScala.toList
-          val relevantChunks = {
-            val projected = colChunks.filter(c =>
-              requestedNames.contains(c.getPath.toDotString)
-            )
-            if (projected.isEmpty) colChunks else projected
-          }
+          val relevantChunks =
+            if (requestedNames.isEmpty) colChunks
+            else
+              colChunks.filter(c =>
+                requestedNames.contains(c.getPath.toDotString)
+              )
           if (relevantChunks.isEmpty) List.empty[Map[String, CellValue]]
           else {
             val rangeStart = relevantChunks.map(_.getStartingPos).min
@@ -533,9 +538,7 @@ class HadoopParquetRepository(
     setupHadoopConfiguration(file.location).flatMap { hadoopConfig =>
       Try {
         val path = new HadoopPath(file.location.path)
-        val fileStatus = Using.resource(
-          FileSystem.newInstance(path.toUri, hadoopConfig)
-        )(_.getFileStatus(path))
+        val fileStatus = path.getFileSystem(hadoopConfig).getFileStatus(path)
         val inputFile = HadoopInputFile.fromStatus(fileStatus, hadoopConfig)
         val footerBytes = readFooterBytes(inputFile)
         val (version, createdBy) = parseRawMeta(footerBytes)
@@ -804,10 +807,9 @@ class HadoopParquetRepository(
     setupHadoopConfiguration(location).flatMap { hadoopConfig =>
       Try {
         val path = new HadoopPath(location.path)
-        Using.resource(FileSystem.newInstance(path.toUri, hadoopConfig)) { fs =>
-          if (!fs.delete(path, false) && fs.exists(path))
-            throw new java.io.IOException(s"Failed to delete ${location.path}")
-        }
+        val fs = path.getFileSystem(hadoopConfig)
+        if (!fs.delete(path, false) && fs.exists(path))
+          throw new java.io.IOException(s"Failed to delete ${location.path}")
       }
     }
 
