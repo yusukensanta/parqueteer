@@ -306,6 +306,7 @@ class ParquetService(
         rowGroupCount = 1L,
         totalRowCount = 0L
       )
+      val fieldNames = mergedFields.map(_.name).toArray
       val writeResult = repository
         .writeContentStream(outputLocation, explicitSchema, writeConfig) {
           write =>
@@ -313,12 +314,15 @@ class ParquetService(
               onProgress(i + 1, inputLocations.size, inputPaths(i))
               repository
                 .streamContent(ParquetFile(loc), ReadConfig()) { row =>
-                  val finalRow = scala.collection.immutable.ListMap.from(
-                    mergedFields.map(f =>
-                      f.name -> row.getOrElse(f.name, CellValue.Null)
-                    )
-                  )
-                  write(finalRow)
+                  val builder = scala.collection.immutable.ListMap
+                    .newBuilder[String, CellValue]
+                  var j = 0
+                  while (j < fieldNames.length) {
+                    val name = fieldNames(j)
+                    builder += name -> row.getOrElse(name, CellValue.Null)
+                    j += 1
+                  }
+                  write(builder.result())
                 } match {
                 case scala.util.Failure(err) =>
                   throw new MergeStreamException(
