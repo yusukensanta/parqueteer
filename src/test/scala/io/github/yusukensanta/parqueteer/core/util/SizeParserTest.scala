@@ -98,4 +98,14 @@ class SizeParserTest
       SizeParser.parse(ByteFormatter.format(n)) should be >= 0L
     }
   }
+
+  it should "reject fractional bytes (no unit or B unit)" in {
+    an[IllegalArgumentException] should be thrownBy SizeParser.parse("1.5")
+    an[IllegalArgumentException] should be thrownBy SizeParser.parse("1.5B")
+  }
+
+  it should "accept fractional values with non-byte units that produce whole bytes" in {
+    SizeParser.parse("0.5KB") shouldBe 512L
+    SizeParser.parse("1.5KB") shouldBe 1536L
+  }
 }

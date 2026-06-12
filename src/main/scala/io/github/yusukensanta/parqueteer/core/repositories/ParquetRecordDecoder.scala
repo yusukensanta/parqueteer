@@ -282,8 +282,9 @@ private[repositories] object ParquetRecordDecoder {
           case _ =>
             if (warnedVariants.add(s"nested:$name"))
               logger.warn(
-                s"Column '$name' is a nested group type — nested types are not yet " +
-                  "supported; emitting Null. Upgrade parqueteer to add explicit support."
+                s"Column '$name' is a nested group type (STRUCT/MAP) — emitting Null. " +
+                  "Nested columns are readable but not round-trippable: convert and merge will " +
+                  "reject files containing nested columns."
               )
             builder += name -> CellValue.Null
         }

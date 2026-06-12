@@ -127,4 +127,27 @@ class TypeInferrerTest
       TypeInferrer.inferCsvValue(s) shouldBe a[CellValue.I64]
     }
   }
+
+  "TypeInferrer.inferCsvValue" should "parse scientific notation as Decimal" in {
+    TypeInferrer.inferCsvValue("1.5e3") shouldBe CellValue.Dec(
+      BigDecimal("1.5e3")
+    )
+    TypeInferrer.inferCsvValue("1E10") shouldBe CellValue.Dec(
+      BigDecimal("1E10")
+    )
+    TypeInferrer.inferCsvValue("-3.14e-2") shouldBe CellValue.Dec(
+      BigDecimal("-3.14e-2")
+    )
+    TypeInferrer.inferCsvValue("2.5E+6") shouldBe CellValue.Dec(
+      BigDecimal("2.5E+6")
+    )
+  }
+
+  it should "still parse plain decimals and integers correctly after pattern extension" in {
+    TypeInferrer.inferCsvValue("3.14") shouldBe CellValue.Dec(
+      BigDecimal("3.14")
+    )
+    TypeInferrer.inferCsvValue("42") shouldBe CellValue.I64(42L)
+    TypeInferrer.inferCsvValue("-7") shouldBe CellValue.I64(-7L)
+  }
 }

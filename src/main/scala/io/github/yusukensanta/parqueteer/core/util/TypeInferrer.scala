@@ -9,7 +9,8 @@ object TypeInferrer {
   private val spaceTsWarnOnce = new AtomicBoolean(false)
 
   private val IntPattern = raw"-?\d+".r.pattern
-  private val DecimalPattern = raw"-?\d+\.\d+".r.pattern
+  private val DecimalPattern =
+    raw"-?\d+\.\d+([eE][+-]?\d+)?|-?\d+[eE][+-]?\d+".r.pattern
   private val DatePattern = raw"\d{4}-\d{2}-\d{2}".r.pattern
   private val TsPattern =
     raw"\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}.*".r.pattern
