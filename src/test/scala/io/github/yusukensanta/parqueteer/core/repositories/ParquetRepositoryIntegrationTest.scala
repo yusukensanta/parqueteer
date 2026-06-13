@@ -1098,4 +1098,96 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
       .get
     result.rows should have size 7
   }
+
+  // ── H-B: isPartial false-positive with filter + exact maxRows match ───────
+  it should "isPartial = false when filter matches exactly maxRows records (no more exist)" taggedAs IntegrationTest in {
+    val loc = LocalPath(tempFile().getAbsolutePath)
+    // 3 rows, 2 match name="Alice" or name="Bob"
+    repo.writeContent(loc, sampleData, None).isSuccess shouldBe true
+
+    val result = repo.readContent(
+      ParquetFile(loc),
+      // maxRows = 2 and exactly 2 rows match the filter → should NOT be partial
+      ReadConfig(
+        maxRows = Some(2L),
+        filter = Some("""name = "Alice" OR name = "Bob"""")
+      )
+    )
+    result.isSuccess shouldBe true
+    result.get.rows should have size 2
+    result.get.isPartial shouldBe false
+  }
+
+  it should "isPartial = true when filter matches more than maxRows records" taggedAs IntegrationTest in {
+    val loc = LocalPath(tempFile().getAbsolutePath)
+    repo.writeContent(loc, sampleData, None).isSuccess shouldBe true
+
+    val result = repo.readContent(
+      ParquetFile(loc),
+      // maxRows = 1 but 3 rows match (all rows) → should be partial
+      ReadConfig(maxRows = Some(1L), filter = Some("id > 0"))
+    )
+    result.isSuccess shouldBe true
+    result.get.rows should have size 1
+    result.get.isPartial shouldBe true
+  }
+
+  // ── M-A: null nested column always emitted as Null in parallel path ───────
+  it should "parallel readContent emits Null key for absent optional nested group column" taggedAs IntegrationTest in {
+    // Write a file with a nested (STRUCT) column using raw Parquet schema.
+    // The nested column is optional, so some rows can have it absent (repCount=0).
+    // decodeGroup must emit the key with Null rather than omitting it entirely.
+    import org.apache.parquet.schema.MessageTypeParser
+    import org.apache.parquet.example.data.simple.SimpleGroupFactory
+    import org.apache.parquet.hadoop.example.ExampleParquetWriter
+    import org.apache.hadoop.fs.{Path => HadoopPath}
+    import org.apache.hadoop.conf.Configuration
+
+    val loc = LocalPath(tempFile().getAbsolutePath)
+    val schema = MessageTypeParser.parseMessageType(
+      """message test {
+        |  required int64 id;
+        |  optional group info {
+        |    optional binary name (STRING);
+        |  }
+        |}""".stripMargin
+    )
+    val conf = new Configuration()
+    val factory = new SimpleGroupFactory(schema)
+
+    val writer = ExampleParquetWriter
+      .builder(new HadoopPath(loc.path))
+      .withType(schema)
+      .withConf(conf)
+      .build()
+
+    // Row 1: id=1, info present
+    val row1 = factory.newGroup()
+    row1.append("id", 1L)
+    val infoGroup = row1.addGroup("info")
+    infoGroup.append("name", "Alice")
+    writer.write(row1)
+
+    // Row 2: id=2, info absent (repCount=0 for "info")
+    val row2 = factory.newGroup()
+    row2.append("id", 2L)
+    writer.write(row2)
+
+    writer.close()
+
+    val result = repo
+      .readContent(ParquetFile(loc), ReadConfig(parallelism = 4))
+      .get
+    result.rows should have size 2
+
+    // Both rows must have the "info" key present (even if Null)
+    result.rows.foreach { row =>
+      row.keys should contain("id")
+      row.keys should contain("info")
+    }
+
+    result.rows
+      .find(_("id") == CellValue.I64(2L))
+      .get("info") shouldBe CellValue.Null
+  }
 }

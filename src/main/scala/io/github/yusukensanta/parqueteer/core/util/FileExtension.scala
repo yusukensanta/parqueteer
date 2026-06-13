@@ -9,7 +9,9 @@ object FileExtension {
     * present.
     */
   def of(path: String): String = {
-    val fn = path.split("/").last.split("\\?").head
+    // Strip query string before splitting on '/' to handle URIs like
+    // s3://bucket/file.parquet?prefix=a/b where '/' appears inside the query.
+    val fn = path.split("\\?").head.split("/").last
     val dot = fn.lastIndexOf('.')
     if (dot <= 0 || dot == fn.length - 1) "unknown"
     else fn.substring(dot + 1).toLowerCase

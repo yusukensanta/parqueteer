@@ -289,10 +289,10 @@ class HadoopParquetRepository(
         // deserialization, not at page-selection time, so parallel reads can't
         // short-circuit and the overhead exceeds any concurrency benefit.
         val useParallel = config.parallelism > 1 && config.filter.isEmpty
-        val rows =
+        val (rows, hasMoreAfterLimit) =
           if (useParallel)
             // getFooter above is already cached; readParallel reuses it
-            readParallel(hadoopPath, hadoopConfig, config)
+            (readParallel(hadoopPath, hadoopConfig, config), false)
           else {
             val path4s = Parquet4sPath(file.location.path)
             val rawBinaryFields =
@@ -304,23 +304,36 @@ class HadoopParquetRepository(
             Using.resource(
               openParquetReader(path4s, hadoopConfig, config, fileSchema)
             ) { reader =>
-              applyMaxRows(reader, config.maxRows)
-                .map(r =>
-                  ParquetRecordDecoder.applyTemporalTransformer(
-                    ParquetRecordDecoder.convertRecordToMapWithSchema(
-                      r,
-                      rawBinaryFields,
-                      int96Fields
-                    ),
-                    temporalTransformer
-                  )
+              // Hold a reference to the underlying iterator so we can peek after
+              // the take — reader is a ParquetIterable (Iterable), not an Iterator.
+              val baseIter = reader.iterator
+              val taken = applyMaxRows(
+                new IterableOnce[RowParquetRecord] {
+                  def iterator: Iterator[RowParquetRecord] = baseIter
+                },
+                config.maxRows
+              ).map(r =>
+                ParquetRecordDecoder.applyTemporalTransformer(
+                  ParquetRecordDecoder.convertRecordToMapWithSchema(
+                    r,
+                    rawBinaryFields,
+                    int96Fields
+                  ),
+                  temporalTransformer
                 )
-                .toList
+              ).toList
+              // Peek one more row to determine if more matching rows exist beyond the limit.
+              // Avoids false-positive isPartial when the filter matches exactly maxRows records.
+              val peek =
+                config.filter.isDefined &&
+                  config.maxRows.exists(taken.size.toLong >= _) &&
+                  scala.util.Try(baseIter.hasNext).getOrElse(false)
+              (taken, peek)
             }
           }
         val hitLimit = config.maxRows.exists(rows.size.toLong >= _)
         val isPartial =
-          if (config.filter.isDefined) hitLimit
+          if (config.filter.isDefined) hitLimit && hasMoreAfterLimit
           else hitLimit && rows.size.toLong < totalRows
         FileContent(rows = rows, totalRows = totalRows, isPartial = isPartial)
       }

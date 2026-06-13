@@ -414,6 +414,10 @@ private[repositories] object ParquetRecordDecoder {
             case _ => CellValue.Str(group.getValueToString(i, 0))
           }
         builder += name -> value
+      } else {
+        // repCount == 0 && !isPrimitive: null/absent nested field.
+        // Emit Null so the key is always present, matching the sequential path.
+        builder += schema.getType(i).getName -> CellValue.Null
       }
       i += 1
     }
