@@ -9,8 +9,9 @@ private[cli] object CredentialRedactor {
     "(?i)(aws_secret_access_key\\s*=\\s*)\\S+".r,
     "(?i)((?:\\?|&)sig=)[^&\\s]+".r,
     "(-----BEGIN [A-Z ]+-----)[\\s\\S]*?-----END [A-Z ]+-----".r,
-    // AWS access key ID prefixes: AKIA/ASIA (credentials), AROA/AIPA/ANPA/AGPA/AIDA (service principals)
-    "()\\bA(?:KIA|SIA|ROA|IPA|NPA|GPA|IDA)[A-Z0-9]{16}\\b".r,
+    // AWS access key ID prefixes only: AKIA (long-term), ASIA (session). Role/instance/service
+    // principal IDs (AROA, AIPA, ANPA, AGPA, AIDA) are public identifiers, not secrets.
+    "()\\bA(?:KIA|SIA)[A-Z0-9]{16}\\b".r,
     // Azure storage account key embedded in Hadoop config property value
     "(?i)(fs\\.azure\\.account\\.key\\.[^=\\s]+=?)\\S+".r
   )

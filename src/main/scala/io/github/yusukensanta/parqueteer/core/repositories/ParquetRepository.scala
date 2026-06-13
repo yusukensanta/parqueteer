@@ -1026,17 +1026,41 @@ class HadoopParquetRepository(
             // ISO-8601 UTC strings sort lexicographically == chronologically
             (minStrs.minOption, maxStrs.maxOption)
           case _ =>
-            val minVal = withValues
-              .flatMap(s =>
-                Option(s.genericGetMin()).map(v => formatStatVal(v, typeName))
+            if (
+              typeName == PrimitiveTypeName.BINARY ||
+              typeName == PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY
+            ) {
+              // Compare Binary objects byte-by-byte (not as UTF-8 strings) so the
+              // cross-row-group min/max is correct even for non-UTF-8 binary data.
+              implicit val binOrd: Ordering[org.apache.parquet.io.api.Binary] =
+                (a, b) => java.util.Arrays.compare(a.getBytes, b.getBytes)
+              val mins = withValues.flatMap(s =>
+                Option(s.genericGetMin()).collect {
+                  case b: org.apache.parquet.io.api.Binary => b
+                }
               )
-              .minOption
-            val maxVal = withValues
-              .flatMap(s =>
-                Option(s.genericGetMax()).map(v => formatStatVal(v, typeName))
+              val maxs = withValues.flatMap(s =>
+                Option(s.genericGetMax()).collect {
+                  case b: org.apache.parquet.io.api.Binary => b
+                }
               )
-              .maxOption
-            (minVal, maxVal)
+              (
+                mins.minOption.map(_.toStringUsingUTF8),
+                maxs.maxOption.map(_.toStringUsingUTF8)
+              )
+            } else {
+              val minVal = withValues
+                .flatMap(s =>
+                  Option(s.genericGetMin()).map(v => formatStatVal(v, typeName))
+                )
+                .minOption
+              val maxVal = withValues
+                .flatMap(s =>
+                  Option(s.genericGetMax()).map(v => formatStatVal(v, typeName))
+                )
+                .maxOption
+              (minVal, maxVal)
+            }
         }
     }
   }

@@ -128,7 +128,9 @@ object RowStreamWriter {
           val unseen = row.keySet -- columnsSet
           if (unseen.nonEmpty) {
             Console.err.println(
-              s"[parqueteer] warning: table writer dropping unseen column keys: ${unseen.mkString(", ")}"
+              s"[parqueteer] warning: table output drops columns first seen after the ${SampleSize}-row " +
+                s"sample window: ${unseen.toList.sorted.mkString(", ")}. " +
+                "Use --output-format ndjson to preserve all columns."
             )
             warnedUnseen = true
           }
@@ -204,7 +206,9 @@ object RowStreamWriter {
           val unseen = row.keySet -- columnsSet
           if (unseen.nonEmpty) {
             Console.err.println(
-              s"[parqueteer] warning: markdown writer dropping unseen column keys: ${unseen.mkString(", ")}"
+              s"[parqueteer] warning: markdown output drops columns first seen after the ${SampleSize}-row " +
+                s"sample window: ${unseen.toList.sorted.mkString(", ")}. " +
+                "Use --output-format ndjson to preserve all columns."
             )
             warnedUnseen = true
           }

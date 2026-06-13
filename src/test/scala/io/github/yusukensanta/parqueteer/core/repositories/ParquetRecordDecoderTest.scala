@@ -707,4 +707,28 @@ class ParquetRecordDecoderTest extends AnyFlatSpec with Matchers {
     val transformer = ParquetRecordDecoder.buildTemporalTransformer(schema)
     transformer shouldNot contain key "ts"
   }
+
+  // ── L-D: decodeInt96Binary overflow emits Null instead of wrong timestamp ──
+  "ParquetRecordDecoder.decodeInt96Binary" should "return Null when Julian-day arithmetic overflows" in {
+    // Craft a 12-byte INT96 with julianDay so large that julianDay * 86400e9 overflows Long.
+    // julianDay = Int.MaxValue gives a value far beyond Long range.
+    val buf =
+      java.nio.ByteBuffer.allocate(12).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+    buf.putLong(0, 0L) // nanosOfDay = 0
+    buf.putInt(
+      8,
+      Int.MaxValue
+    ) // Julian day = 2147483647 → overflow when * 86400e9
+    ParquetRecordDecoder.decodeInt96Binary(buf.array()) shouldBe CellValue.Null
+  }
+
+  it should "return a valid Timestamp for a normal Julian day (2023-01-01)" in {
+    // Julian day for 2023-01-01 = 2459945. Offset from epoch: 2459945 - 2440588 = 19357.
+    val julianDay2023 = 2459945
+    val buf =
+      java.nio.ByteBuffer.allocate(12).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+    buf.putLong(0, 0L) // midnight (nanosOfDay = 0)
+    buf.putInt(8, julianDay2023)
+    ParquetRecordDecoder.decodeInt96Binary(buf.array()) shouldBe a[CellValue.Ts]
+  }
 }
