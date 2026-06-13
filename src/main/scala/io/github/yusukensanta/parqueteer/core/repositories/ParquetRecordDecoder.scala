@@ -56,6 +56,12 @@ private[repositories] object ParquetRecordDecoder {
     // A repeated primitive field (no LIST annotation) arrives as a ListParquetRecord.
     // Take the first element to match the parallel decodeGroup path behaviour.
     case list: ListParquetRecord =>
+      val sz = list.size
+      if (sz > 1 && warnedVariants.add("ListParquetRecord.multivalue"))
+        logger.warn(
+          s"A repeated primitive field arrived as ListParquetRecord with $sz values — " +
+            "only the first element is returned. Repeated primitive fields are not yet fully supported."
+        )
       list.headOption.fold[CellValue](CellValue.Null)(decodeValue)
     case other =>
       val cls = other.getClass.getName

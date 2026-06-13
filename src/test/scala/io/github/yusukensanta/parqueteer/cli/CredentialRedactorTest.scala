@@ -50,6 +50,48 @@ class CredentialRedactorTest
     result shouldBe input
   }
 
+  // ── SSE-C key material ─────────────────────────────────────────────────────
+
+  it should "redact X-Amz-Server-Side-Encryption-Customer-Key (AES-256 key material)" in {
+    val input =
+      "X-Amz-Server-Side-Encryption-Customer-Key: x7ywu2GpvJD+2U7Vg9sP4nrAQlMoKzE+3BXYZ1234="
+    val result = CredentialRedactor.redact(input)
+    result should include(
+      "X-Amz-Server-Side-Encryption-Customer-Key: [REDACTED]"
+    )
+    result should not include "x7ywu2GpvJD"
+  }
+
+  it should "redact X-Amz-Server-Side-Encryption-Customer-Key-MD5" in {
+    val input =
+      "X-Amz-Server-Side-Encryption-Customer-Key-MD5: rL0Y20zC+Fzt72VPzMSk2A=="
+    val result = CredentialRedactor.redact(input)
+    result should include(
+      "X-Amz-Server-Side-Encryption-Customer-Key-MD5: [REDACTED]"
+    )
+    result should not include "rL0Y20zC"
+  }
+
+  it should "redact X-Amz-Copy-Source-Server-Side-Encryption-Customer-Key" in {
+    val input =
+      "X-Amz-Copy-Source-Server-Side-Encryption-Customer-Key: x7ywu2GpvJD+2U7Vg9sP4nrAQlMoKzE+3BXYZ1234="
+    val result = CredentialRedactor.redact(input)
+    result should include(
+      "X-Amz-Copy-Source-Server-Side-Encryption-Customer-Key: [REDACTED]"
+    )
+    result should not include "x7ywu2GpvJD"
+  }
+
+  it should "redact X-Amz-Copy-Source-Server-Side-Encryption-Customer-Key-MD5" in {
+    val input =
+      "X-Amz-Copy-Source-Server-Side-Encryption-Customer-Key-MD5: rL0Y20zC+Fzt72VPzMSk2A=="
+    val result = CredentialRedactor.redact(input)
+    result should include(
+      "X-Amz-Copy-Source-Server-Side-Encryption-Customer-Key-MD5: [REDACTED]"
+    )
+    result should not include "rL0Y20zC"
+  }
+
   it should "redact AWSAccessKeyId query parameter" in {
     val input = "AWSAccessKeyId=AKIAIOSFODNN7EXAMPLE&other=val"
     val result = CredentialRedactor.redact(input)

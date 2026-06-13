@@ -314,8 +314,10 @@ private class FilterParserImpl(schema: Option[MessageType]) {
 
     // Equality / inequality work for all value types — strings, numbers, bools.
     def equality(eq: Boolean): Filter = v match {
-      case s: String  => if (eq) c === s else c !== s
-      case l: Long    => if (eq) c === l else c !== l
+      case s: String => if (eq) c === s else c !== s
+      case l: Long =>
+        warnIfDecimalColumn(col, if (eq) "=" else "!=", l)
+        if (eq) c === l else c !== l
       case d: Double  => if (eq) c === d else c !== d
       case b: Boolean => if (eq) c === b else c !== b
     }
@@ -328,23 +330,7 @@ private class FilterParserImpl(schema: Option[MessageType]) {
         onDouble: Double => Filter
     ): Either[String, Filter] = v match {
       case l: Long =>
-        // Warn when the user compares a numeric literal against a DECIMAL column.
-        // The literal is treated as the unscaled integer — price > 100 on DECIMAL(10,2)
-        // means unscaled-value > 100, i.e., price > 1.00, not 100.00.
-        schema.foreach { s =>
-          if (
-            resolveLogicalAnnotation(s, col).exists {
-              case _: LogicalTypeAnnotation.DecimalLogicalTypeAnnotation => true
-              case _ => false
-            }
-          )
-            Console.err.println(
-              s"[parqueteer] warning: filter '$col $opName $l' applies the literal as an " +
-                s"unscaled DECIMAL integer — the effective comparison is against the unscaled " +
-                s"value, not the decimal representation. Use a quoted string (e.g. '$col $opName \"${BigDecimal(l)}\"') " +
-                s"to filter by decimal value."
-            )
-        }
+        warnIfDecimalColumn(col, opName, l)
         Right(onLong(l))
       case d: Double => Right(onDouble(d))
       case _ =>
@@ -379,18 +365,28 @@ private class FilterParserImpl(schema: Option[MessageType]) {
         Left(
           s"Filter parse error: BETWEEN range is empty ($l > $h)."
         )
-      case (l: Long, h: Double) if l.toDouble > h =>
+      case (l: Long, h: Double) if BigDecimal(l) > BigDecimal(h) =>
         Left(
           s"Filter parse error: BETWEEN range is empty ($l > $h)."
         )
-      case (l: Double, h: Long) if l > h.toDouble =>
+      case (l: Double, h: Long) if BigDecimal(l) > BigDecimal(h) =>
         Left(
           s"Filter parse error: BETWEEN range is empty ($l > $h)."
         )
       case (l: Long, h: Long)     => Right((c >= l) && (c <= h))
       case (l: Double, h: Double) => Right((c >= l) && (c <= h))
-      case (l: Long, h: Double)   => Right((c >= l.toDouble) && (c <= h))
-      case (l: Double, h: Long)   => Right((c >= l) && (c <= h.toDouble))
+      case (l: Long, h: Double) =>
+        if (l.toDouble.toLong != l)
+          Left(
+            s"Filter parse error: integer bound $l cannot be represented exactly as a Double — use consistent literal types (e.g. ${l.toDouble} AND $h)"
+          )
+        else Right((c >= l.toDouble) && (c <= h))
+      case (l: Double, h: Long) =>
+        if (h.toDouble.toLong != h)
+          Left(
+            s"Filter parse error: integer bound $h cannot be represented exactly as a Double — use consistent literal types (e.g. $l AND ${h.toDouble})"
+          )
+        else Right((c >= l) && (c <= h.toDouble))
     }
   }
 
@@ -410,11 +406,18 @@ private class FilterParserImpl(schema: Option[MessageType]) {
     else if (booleans.length == values.length)
       Right(booleans.distinct.map(b => c === b).reduce(_ || _))
     else if (longs.length + doubles.length == values.length) {
-      val asDoubles = values.collect {
-        case l: Long   => l.toDouble
-        case d: Double => d
+      val imprecise = longs.filter(l => l.toDouble.toLong != l)
+      if (imprecise.nonEmpty)
+        Left(
+          s"Filter parse error: IN list value(s) ${imprecise.mkString(", ")} cannot be represented exactly as Double — use consistent literal types"
+        )
+      else {
+        val asDoubles = values.collect {
+          case l: Long   => l.toDouble
+          case d: Double => d
+        }
+        Right(c.in(asDoubles))
       }
-      Right(c.in(asDoubles))
     } else
       Left(
         "IN list must contain values of the same type (all strings, all numbers, or all booleans)"
@@ -473,10 +476,11 @@ private class FilterParserImpl(schema: Option[MessageType]) {
       }
     }
 
-  private def resolveColumnType(
+  // Shared traversal: walk dotted column path through the schema, returning the leaf Type.
+  private def resolveField(
       messageType: MessageType,
       column: String
-  ): Option[PrimitiveTypeName] = Try {
+  ): Option[org.apache.parquet.schema.Type] = Try {
     val parts = column.split("\\.")
     var current: Option[org.apache.parquet.schema.Type] = None
     var idx = 0
@@ -488,26 +492,40 @@ private class FilterParserImpl(schema: Option[MessageType]) {
       found = current.isDefined
       idx += 1
     }
-    current.collect {
+    current
+  }.getOrElse(None)
+
+  private def resolveColumnType(
+      messageType: MessageType,
+      column: String
+  ): Option[PrimitiveTypeName] =
+    resolveField(messageType, column).collect {
       case f if f.isPrimitive => f.asPrimitiveType().getPrimitiveTypeName
     }
-  }.getOrElse(None)
 
   private def resolveLogicalAnnotation(
       messageType: MessageType,
       column: String
-  ): Option[LogicalTypeAnnotation] = Try {
-    val parts = column.split("\\.")
-    var current: Option[org.apache.parquet.schema.Type] = None
-    var idx = 0
-    var found = true
-    while (idx < parts.length && found) {
-      val group =
-        current.map(_.asGroupType()).getOrElse(messageType.asGroupType())
-      current = group.getFields.asScala.find(_.getName == parts(idx))
-      found = current.isDefined
-      idx += 1
+  ): Option[LogicalTypeAnnotation] =
+    resolveField(messageType, column).flatMap(f =>
+      Option(f.getLogicalTypeAnnotation)
+    )
+
+  // Emit a one-time warning when a Long literal filter is applied to a DECIMAL column.
+  // The literal is treated as the unscaled integer, not the decimal value.
+  private def warnIfDecimalColumn(col: String, opName: String, l: Long): Unit =
+    schema.foreach { s =>
+      if (
+        resolveLogicalAnnotation(s, col).exists {
+          case _: LogicalTypeAnnotation.DecimalLogicalTypeAnnotation => true
+          case _                                                     => false
+        }
+      )
+        Console.err.println(
+          s"[parqueteer] warning: filter '$col $opName $l' applies the literal as an " +
+            s"unscaled DECIMAL integer — the effective comparison is against the unscaled " +
+            s"value, not the decimal representation. Use a quoted string (e.g. '$col $opName \"${BigDecimal(l)}\"') " +
+            s"to filter by decimal value."
+        )
     }
-    current.flatMap(f => Option(f.getLogicalTypeAnnotation))
-  }.getOrElse(None)
 }

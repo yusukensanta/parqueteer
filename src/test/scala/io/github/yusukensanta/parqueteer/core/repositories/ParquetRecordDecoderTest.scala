@@ -751,4 +751,10 @@ class ParquetRecordDecoderTest extends AnyFlatSpec with Matchers {
     val outer = ListParquetRecord(inner)
     ParquetRecordDecoder.decodeValue(outer) shouldBe CellValue.I64(1000L)
   }
+
+  it should "still return first element when ListParquetRecord has multiple values (multi-value drop is expected)" in {
+    // The first element is returned regardless of list size; the logger emits a one-time warning.
+    val list = ListParquetRecord(IntValue(1), IntValue(2), IntValue(3))
+    ParquetRecordDecoder.decodeValue(list) shouldBe CellValue.I32(1)
+  }
 }

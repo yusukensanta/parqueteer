@@ -413,4 +413,67 @@ class FilterParserTest extends AnyFlatSpec with Matchers {
     val result = FilterParser.parse("col IN (true, 1)")
     result shouldBe a[Left[?, ?]]
   }
+
+  // ── DECIMAL warning for = and != (advisory, not an error) ─────────────────
+
+  it should "parse Long equality against a DECIMAL-annotated column (warning only, no error)" in {
+    val fields = List(
+      org.apache.parquet.schema.Types
+        .required(PrimitiveTypeName.INT64)
+        .as(org.apache.parquet.schema.LogicalTypeAnnotation.decimalType(2, 10))
+        .named("price")
+    )
+    val s = new org.apache.parquet.schema.MessageType("test", fields.asJava)
+    FilterParser.parseWithSchema("price = 100", s) shouldBe a[Right[?, ?]]
+  }
+
+  it should "parse Long inequality against a DECIMAL-annotated column (warning only, no error)" in {
+    val fields = List(
+      org.apache.parquet.schema.Types
+        .required(PrimitiveTypeName.INT64)
+        .as(org.apache.parquet.schema.LogicalTypeAnnotation.decimalType(2, 10))
+        .named("price")
+    )
+    val s = new org.apache.parquet.schema.MessageType("test", fields.asJava)
+    FilterParser.parseWithSchema("price != 500", s) shouldBe a[Right[?, ?]]
+  }
+
+  // ── BETWEEN Long/Double precision guard ────────────────────────────────────
+
+  it should "return Left when BETWEEN Long lower bound loses precision as Double" in {
+    // 9007199254740993 < 1e17 so range is not reversed; but 9007199254740993.toDouble loses precision
+    FilterParser.parse("id BETWEEN 9007199254740993 AND 1.0e17") match {
+      case Left(err) =>
+        err.message should include("cannot be represented exactly as a Double")
+      case Right(_) =>
+        fail("Expected Left for imprecise BETWEEN Long lower bound")
+    }
+  }
+
+  it should "return Left when BETWEEN Long upper bound loses precision as Double" in {
+    FilterParser.parse("id BETWEEN 1.5 AND 9007199254740993") match {
+      case Left(err) =>
+        err.message should include("cannot be represented exactly as a Double")
+      case Right(_) =>
+        fail("Expected Left for imprecise BETWEEN Long upper bound")
+    }
+  }
+
+  it should "parse BETWEEN mixed Long/Double when Long is exactly representable as Double" in {
+    FilterParser.parse("price BETWEEN 10 AND 99.9") shouldBe a[Right[?, ?]]
+  }
+
+  // ── IN list Long/Double precision guard ────────────────────────────────────
+
+  it should "return Left for mixed IN list where Long cannot be represented exactly as Double" in {
+    FilterParser.parse("id IN (9007199254740993, 1.5)") match {
+      case Left(err) =>
+        err.message should include("cannot be represented exactly as Double")
+      case Right(_) => fail("Expected Left for imprecise IN list Long value")
+    }
+  }
+
+  it should "accept mixed Long/Double IN list when all Long values are exactly representable" in {
+    FilterParser.parse("score IN (100, 99.5)") shouldBe a[Right[?, ?]]
+  }
 }
