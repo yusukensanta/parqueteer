@@ -239,7 +239,7 @@ class CloudCredentialManagerTest extends AnyFlatSpec with Matchers {
     ) shouldBe "SharedKey"
   }
 
-  it should "set per-account auth.type=SAS for sas_token (not inherit global OAuth)" in {
+  it should "set per-account auth.type=SAS and ABFS fixed-token key for sas_token" in {
     assume(
       sys.env.contains("AZURE_AUTH_METHOD") &&
         sys.env("AZURE_AUTH_METHOD") == "sas_token" &&
@@ -253,5 +253,12 @@ class CloudCredentialManagerTest extends AnyFlatSpec with Matchers {
     conf.get(
       "fs.azure.account.auth.type.myaccount.dfs.core.windows.net"
     ) shouldBe "SAS"
+    // ABFS FixedSASTokenProvider reads from fs.azure.sas.fixed.token.* — not the legacy WASB key.
+    conf.get(
+      "fs.azure.sas.fixed.token.mycontainer.myaccount.dfs.core.windows.net"
+    ) should not be null
+    conf.get(
+      "fs.azure.sas.mycontainer.myaccount.dfs.core.windows.net"
+    ) shouldBe null
   }
 }

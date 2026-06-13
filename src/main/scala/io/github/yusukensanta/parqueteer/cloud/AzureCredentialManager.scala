@@ -151,8 +151,10 @@ class AzureCredentialManager extends CloudCredentialManager {
       s"fs.azure.account.auth.type.${location.account}.dfs.core.windows.net",
       "SAS"
     )
+    // ABFS FixedSASTokenProvider reads the token from this key — NOT the legacy
+    // WASB form fs.azure.sas.<container>.<account>.dfs.core.windows.net.
     conf.set(
-      s"fs.azure.sas.${location.container}.${location.account}.dfs.core.windows.net",
+      s"fs.azure.sas.fixed.token.${location.container}.${location.account}.dfs.core.windows.net",
       sasToken
     )
   }

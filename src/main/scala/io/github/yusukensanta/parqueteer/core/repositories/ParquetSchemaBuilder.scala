@@ -208,6 +208,9 @@ private[repositories] object ParquetSchemaBuilder {
       LogicalTypeAnnotation.TimeUnit.NANOS
     )
 
+  // Used only to keep rankToParquetType exhaustive; callers handle TypeRank.Decimal
+  // inline (with per-column scale/precision) before invoking rankToParquetType.
+  // decimalType(scale=18, precision=38) — args are (scale, precision).
   private def decimalAnnotation: LogicalTypeAnnotation =
     LogicalTypeAnnotation.decimalType(18, 38)
 
