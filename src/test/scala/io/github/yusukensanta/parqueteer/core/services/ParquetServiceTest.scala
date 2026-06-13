@@ -485,6 +485,21 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     )
   }
 
+  it should "coerce large fractional number to Dec instead of F64 (avoids integer-part precision loss)" in {
+    val service = new ParquetService(new FakeParquetRepository())
+    // 12345678901234567.8 — integer part > 2^53; F64 would silently truncate the integer part.
+    val rows = service.parseJsonContent("""[{"price": 12345678901234567.8}]""")
+    rows.head("price") shouldBe CellValue.Dec(
+      scala.math.BigDecimal("12345678901234567.8")
+    )
+  }
+
+  it should "still use F64 for small fractional numbers (integer part fits in F64)" in {
+    val service = new ParquetService(new FakeParquetRepository())
+    val rows = service.parseJsonContent("""[{"ratio": 1.5}]""")
+    rows.head("ratio") shouldBe CellValue.F64(1.5)
+  }
+
   it should "throw for non-array JSON" in {
     val service = new ParquetService(new FakeParquetRepository())
     an[IllegalArgumentException] should be thrownBy {

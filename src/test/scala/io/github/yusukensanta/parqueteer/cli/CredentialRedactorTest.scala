@@ -16,11 +16,38 @@ class CredentialRedactorTest
     CredentialRedactor.redact(input) should not include "eyJhbGciOiJSUzI1NiJ9"
   }
 
-  it should "redact X-Amz-* header values" in {
+  it should "redact X-Amz-Security-Token header value" in {
     val input = "X-Amz-Security-Token: IQoJb3JpZ2luXsecrettoken"
     val result = CredentialRedactor.redact(input)
     result should include("X-Amz-Security-Token: [REDACTED]")
     result should not include "IQoJb3JpZ2luXsecrettoken"
+  }
+
+  it should "redact X-Amz-Credential header value" in {
+    val input =
+      "X-Amz-Credential: AKIAIOSFODNN7EXAMPLE/20230101/us-east-1/s3/aws4_request"
+    val result = CredentialRedactor.redact(input)
+    result should include("X-Amz-Credential: [REDACTED]")
+    result should not include "AKIAIOSFODNN7EXAMPLE"
+  }
+
+  it should "NOT redact non-secret X-Amz-Date header (debug info)" in {
+    val input = "X-Amz-Date: 20230101T120000Z"
+    val result = CredentialRedactor.redact(input)
+    // Date is non-secret: must NOT be redacted
+    result shouldBe input
+  }
+
+  it should "NOT redact non-secret X-Amz-SignedHeaders header (debug info)" in {
+    val input = "X-Amz-SignedHeaders: host;x-amz-content-sha256"
+    val result = CredentialRedactor.redact(input)
+    result shouldBe input
+  }
+
+  it should "NOT redact non-secret X-Amz-Algorithm header (debug info)" in {
+    val input = "X-Amz-Algorithm: AWS4-HMAC-SHA256"
+    val result = CredentialRedactor.redact(input)
+    result shouldBe input
   }
 
   it should "redact AWSAccessKeyId query parameter" in {

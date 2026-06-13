@@ -11,7 +11,8 @@ import com.github.mjakubowski84.parquet4s.{
   DoubleValue,
   BinaryValue,
   DateTimeValue,
-  DecimalValue
+  DecimalValue,
+  ListParquetRecord
 }
 import io.github.yusukensanta.parqueteer.core.models.CellValue
 import org.apache.parquet.schema.{MessageType, LogicalTypeAnnotation, GroupType}
@@ -52,6 +53,10 @@ private[repositories] object ParquetRecordDecoder {
       CellValue.Dec(
         scala.math.BigDecimal(new java.math.BigDecimal(bigInt, fmt.scale))
       )
+    // A repeated primitive field (no LIST annotation) arrives as a ListParquetRecord.
+    // Take the first element to match the parallel decodeGroup path behaviour.
+    case list: ListParquetRecord =>
+      list.headOption.fold[CellValue](CellValue.Null)(decodeValue)
     case other =>
       val cls = other.getClass.getName
       if (warnedVariants.add(cls))

@@ -14,6 +14,7 @@ import com.github.mjakubowski84.parquet4s.{
   BinaryValue,
   DateTimeValue,
   DecimalValue,
+  ListParquetRecord,
   TimestampFormat
 }
 import org.apache.parquet.io.api.Binary
@@ -730,5 +731,24 @@ class ParquetRecordDecoderTest extends AnyFlatSpec with Matchers {
     buf.putLong(0, 0L) // midnight (nanosOfDay = 0)
     buf.putInt(8, julianDay2023)
     ParquetRecordDecoder.decodeInt96Binary(buf.array()) shouldBe a[CellValue.Ts]
+  }
+
+  // ── M-parallel: ListParquetRecord alignment ──────────────────────────────
+
+  "ParquetRecordDecoder.decodeValue" should "take first element of ListParquetRecord (matches parallel decodeGroup behaviour)" in {
+    val list = ListParquetRecord(IntValue(42), IntValue(99))
+    ParquetRecordDecoder.decodeValue(list) shouldBe CellValue.I32(42)
+  }
+
+  it should "return Null for an empty ListParquetRecord" in {
+    ParquetRecordDecoder.decodeValue(
+      ListParquetRecord.Empty
+    ) shouldBe CellValue.Null
+  }
+
+  it should "recursively decode the first element of a nested ListParquetRecord" in {
+    val inner = ListParquetRecord(LongValue(1000L))
+    val outer = ListParquetRecord(inner)
+    ParquetRecordDecoder.decodeValue(outer) shouldBe CellValue.I64(1000L)
   }
 }

@@ -639,15 +639,21 @@ class ParquetService(
       // No decimal point means integer or scientific-notation integer (1e10) — try Long first.
       if (raw.contains('.'))
         n.toBigDecimal
-          .filter(bd =>
-            bd.underlying.stripTrailingZeros.scale <= 0 &&
-              bd.abs > BigDecimal(9007199254740992L)
-          )
-          .map(bd =>
-            n.toLong
-              .map(CellValue.I64.apply)
-              .getOrElse(CellValue.Dec(bd.setScale(0)))
-          )
+          .map { bd =>
+            val isWhole = bd.underlying.stripTrailingZeros.scale <= 0
+            val tooLargeForF64 = bd.abs > BigDecimal(9007199254740992L)
+            if (isWhole && tooLargeForF64)
+              // Large whole number with a decimal point (e.g. 1.0e18): keep as integer.
+              n.toLong
+                .map(CellValue.I64.apply)
+                .getOrElse(CellValue.Dec(bd.setScale(0)))
+            else if (!isWhole && tooLargeForF64)
+              // Large fractional number (e.g. 12345678901234567.8): F64 would lose
+              // precision in the integer part — preserve exact value as Decimal.
+              CellValue.Dec(bd)
+            else
+              CellValue.F64(n.toDouble)
+          }
           .getOrElse(CellValue.F64(n.toDouble))
       else
         n.toLong
