@@ -303,7 +303,7 @@ class ParquetRecordDecoderTest extends AnyFlatSpec with Matchers {
     result("maybe_field") shouldBe CellValue.Null
   }
 
-  it should "skip non-primitive (GROUP) field without throwing ClassCastException" in {
+  it should "emit Null for absent optional non-primitive (GROUP) field without throwing ClassCastException" in {
     val schema = MessageTypeParser.parseMessageType(
       """message root {
         |  required int32 id;
@@ -313,10 +313,11 @@ class ParquetRecordDecoderTest extends AnyFlatSpec with Matchers {
         |}""".stripMargin
     )
     val group = new SimpleGroupFactory(schema).newGroup().append("id", 1)
-    // Do not add any 'tags' sub-group — non-primitive field must be silently skipped
+    // Absent optional nested group must emit Null (not omit the key) so parallel
+    // and sequential read paths produce identical key sets.
     val result = ParquetRecordDecoder.decodeGroup(group, schema)
     result("id") shouldBe CellValue.I32(1)
-    result.contains("tags") shouldBe false
+    result("tags") shouldBe CellValue.Null
   }
 
   it should "convert negative TIMESTAMP_MICROS correctly (pre-epoch timestamp)" in {

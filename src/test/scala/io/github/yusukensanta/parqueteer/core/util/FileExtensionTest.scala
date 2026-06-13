@@ -48,4 +48,14 @@ class FileExtensionTest extends AnyFlatSpec with Matchers {
     FileExtension.of("file.") shouldBe "unknown"
     FileExtension.of("/path/to/file.") shouldBe "unknown"
   }
+
+  // ── L-A: query string containing '/' must not confuse the path splitter ──
+  it should "extract extension from a URI whose query string contains a slash" in {
+    FileExtension.of(
+      "s3://bucket/file.parquet?prefix=a/b"
+    ) shouldBe "parquet"
+    FileExtension.of(
+      "gs://bucket/path/data.csv?token=x/y/z"
+    ) shouldBe "csv"
+  }
 }
