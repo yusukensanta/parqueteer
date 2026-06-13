@@ -3,8 +3,9 @@ package io.github.yusukensanta.parqueteer.cli
 private[cli] object CredentialRedactor {
   private val patterns: Seq[scala.util.matching.Regex] = Seq(
     "(?i)(Authorization\\s*[:=]\\s*)\\S[^&\\n\\r]*".r,
-    // Only redact the secret X-Amz headers; Date/Algorithm/SignedHeaders are non-secret debug info.
-    "(?i)(X-Amz-(?:Security-Token|Credential|Signature)\\s*[:=]\\s*)\\S[^&\\n\\r]*".r,
+    // Redact secret X-Amz headers. Non-secret debug headers (Date, Algorithm, SignedHeaders)
+    // are intentionally excluded. SSE-C key material is included because it is an AES-256 secret.
+    "(?i)(X-Amz-(?:Security-Token|Credential|Signature|Server-Side-Encryption-Customer-Key(?:-MD5)?|Copy-Source-Server-Side-Encryption-Customer-Key(?:-MD5)?)\\s*[:=]\\s*)\\S[^&\\n\\r]*".r,
     "(?i)(AWSAccessKeyId=)[^&\\s]+".r,
     "(?i)(Signature=)[^&\\s]+".r,
     "(?i)(aws_secret_access_key\\s*=\\s*)\\S+".r,

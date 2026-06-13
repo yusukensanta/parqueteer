@@ -500,6 +500,20 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     rows.head("ratio") shouldBe CellValue.F64(1.5)
   }
 
+  it should "coerce scientific-notation whole number (1.5e2 = 150) to I64, not F64" in {
+    val service = new ParquetService(new FakeParquetRepository())
+    // 1.5e2 = 150: raw contains a dot so it enters the dot-branch, isWhole=true,
+    // tooLargeForF64=false — must prefer I64 not F64 to avoid a DOUBLE Parquet column.
+    val rows = service.parseJsonContent("""[{"n": 1.5e2}]""")
+    rows.head("n") shouldBe CellValue.I64(150L)
+  }
+
+  it should "coerce 1.0e3 (whole number, scientific with dot) to I64" in {
+    val service = new ParquetService(new FakeParquetRepository())
+    val rows = service.parseJsonContent("""[{"n": 1.0e3}]""")
+    rows.head("n") shouldBe CellValue.I64(1000L)
+  }
+
   it should "throw for non-array JSON" in {
     val service = new ParquetService(new FakeParquetRepository())
     an[IllegalArgumentException] should be thrownBy {

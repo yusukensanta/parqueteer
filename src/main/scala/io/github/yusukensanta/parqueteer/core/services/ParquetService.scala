@@ -502,9 +502,10 @@ class ParquetService(
       rows: List[Map[String, CellValue]],
       maxRows: Option[Long]
   ): List[Map[String, CellValue]] =
-    maxRows.fold(rows)(limit =>
-      rows.take(math.min(limit, Int.MaxValue.toLong).toInt)
-    )
+    maxRows.fold(rows) { limit =>
+      // rows.length is Int-bounded; if limit >= length we keep all rows, otherwise limit.toInt is safe.
+      if (limit >= rows.length.toLong) rows else rows.take(limit.toInt)
+    }
 
   private[services] def readFromStdin(
       inputFormat: String,
@@ -651,6 +652,13 @@ class ParquetService(
               // Large fractional number (e.g. 12345678901234567.8): F64 would lose
               // precision in the integer part — preserve exact value as Decimal.
               CellValue.Dec(bd)
+            else if (isWhole && (raw.contains('e') || raw.contains('E')))
+              // Whole number in scientific notation with a dot (e.g. 1.5e2 = 150):
+              // prefer I64 so the Parquet column is INT64 not DOUBLE.
+              // Plain floats like 1.0 (no exponent) keep F64 to preserve user intent.
+              n.toLong
+                .map(CellValue.I64.apply)
+                .getOrElse(CellValue.F64(n.toDouble))
             else
               CellValue.F64(n.toDouble)
           }
