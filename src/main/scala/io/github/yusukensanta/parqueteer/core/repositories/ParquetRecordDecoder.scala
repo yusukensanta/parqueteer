@@ -55,13 +55,8 @@ private[repositories] object ParquetRecordDecoder {
       )
     // A repeated primitive field (no LIST annotation) arrives as a ListParquetRecord.
     // Take the first element to match the parallel decodeGroup path behaviour.
+    // Warning is emitted from convertRecordToMap (which has column context); here just extract.
     case list: ListParquetRecord =>
-      val sz = list.size
-      if (sz > 1 && warnedVariants.add("ListParquetRecord.multivalue"))
-        logger.warn(
-          s"A repeated primitive field arrived as ListParquetRecord with $sz values — " +
-            "only the first element is returned. Repeated primitive fields are not yet fully supported."
-        )
       list.headOption.fold[CellValue](CellValue.Null)(decodeValue)
     case other =>
       val cls = other.getClass.getName
@@ -75,7 +70,20 @@ private[repositories] object ParquetRecordDecoder {
 
   def convertRecordToMap(record: RowParquetRecord): Map[String, CellValue] =
     record.iterator
-      .map { case (key, value) => key -> decodeValue(value) }
+      .map {
+        case (col, list: ListParquetRecord) =>
+          val sz = list.size
+          if (
+            sz > 1 && warnedVariants.add(s"ListParquetRecord.multivalue:$col")
+          )
+            logger.warn(
+              s"Column '$col': repeated primitive field arrived as ListParquetRecord with $sz " +
+                "values — only the first element is returned. Repeated primitive fields are " +
+                "not yet fully supported."
+            )
+          col -> list.headOption.fold[CellValue](CellValue.Null)(decodeValue)
+        case (col, value) => col -> decodeValue(value)
+      }
       .to(scala.collection.immutable.ListMap)
 
   /** Pre-compute which BINARY columns carry raw bytes (no string annotation).

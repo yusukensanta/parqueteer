@@ -652,14 +652,13 @@ class ParquetService(
               // Large fractional number (e.g. 12345678901234567.8): F64 would lose
               // precision in the integer part — preserve exact value as Decimal.
               CellValue.Dec(bd)
-            else if (isWhole && (raw.contains('e') || raw.contains('E')))
-              // Whole number in scientific notation with a dot (e.g. 1.5e2 = 150):
-              // prefer I64 so the Parquet column is INT64 not DOUBLE.
-              // Plain floats like 1.0 (no exponent) keep F64 to preserve user intent.
-              n.toLong
-                .map(CellValue.I64.apply)
-                .getOrElse(CellValue.F64(n.toDouble))
             else
+              // A decimal point signals floating-point user intent (1.0, 1.5, 1.5e2).
+              // Dot-notation numbers stay F64 regardless of the exponent so that
+              // mixed-column arrays ([1.5e2, 1.5]) don't produce I64+F64 mismatch
+              // when ParquetWriteOps writes a Long to a schema-widened DOUBLE field.
+              // Integer-valued scientific notation without a dot (e.g. 1e2) is handled
+              // by the non-dot branch below, which tries Long first.
               CellValue.F64(n.toDouble)
           }
           .getOrElse(CellValue.F64(n.toDouble))
