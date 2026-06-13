@@ -487,6 +487,7 @@ class HadoopParquetRepository(
       config.maxRows match {
         case Some(limit) =>
           if (limit >= allRows.size.toLong) allRows
+          // limit < allRows.size (an Int), so limit fits in Int — safe narrowing.
           else allRows.take(limit.toInt)
         case None => allRows
       }
@@ -1106,6 +1107,9 @@ class HadoopParquetRepository(
             }
           case None => Success(new Configuration())
         }
+        // INVARIANT: cached Configuration must never be mutated after this put.
+        // Callers always get a shallow copy (new Configuration(cfg)); mutating the
+        // cached original while another thread copies it is not thread-safe.
         result.foreach(cfg => hadoopConfigCache.put(key, cfg))
         result.map(new Configuration(_))
     }
