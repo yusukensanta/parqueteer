@@ -13,7 +13,14 @@ private[cli] object CredentialRedactor {
     // principal IDs (AROA, AIPA, ANPA, AGPA, AIDA) are public identifiers, not secrets.
     "()\\bA(?:KIA|SIA)[A-Z0-9]{16}\\b".r,
     // Azure storage account key embedded in Hadoop config property value
-    "(?i)(fs\\.azure\\.account\\.key\\.[^=\\s]+=?)\\S+".r
+    "(?i)(fs\\.azure\\.account\\.key\\.[^=\\s]+=?)\\S+".r,
+    // Azure OAuth client secret (ABFS service-principal config)
+    "(?i)(fs\\.azure\\.account\\.oauth2\\.client\\.secret\\.[^=\\s]+=?)\\S+".r,
+    // S3A secret key and session token (Hadoop S3A config)
+    "(?i)(fs\\.s3a\\.secret\\.key=?)\\S+".r,
+    "(?i)(fs\\.s3a\\.session\\.token=?)\\S+".r,
+    // Bearer JWT / OAuth2 token in log lines (e.g. "Bearer eyJ...")
+    "(Bearer\\s+)[A-Za-z0-9+/._-]{20,}".r
   )
 
   def redact(s: String): String = {

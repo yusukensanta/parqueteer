@@ -667,13 +667,18 @@ object CliApp {
       scala.util
         .Try {
           import better.files._
+          val preExisted = File(outputPath).exists
           val outFile = File(outputPath).createIfNotExists(createParents = true)
-          (outFile, new java.io.PrintStream(outFile.newOutputStream))
+          (
+            preExisted,
+            outFile,
+            new java.io.PrintStream(outFile.newOutputStream)
+          )
         }
         .toEither
         .left
         .map(ParqueteerError.IOError.apply)
-        .flatMap { case (outFile, ps) =>
+        .flatMap { case (preExisted, outFile, ps) =>
           val writer = RowStreamWriter(outFormat, ps)
           var failed = true
           try {
@@ -704,7 +709,9 @@ object CliApp {
               result.map(_ => ())
           } finally {
             ps.close()
-            if (failed)
+            // Only delete output on failure if the file was created by this run.
+            // If it pre-existed, deleting it is strictly worse than leaving the partial write.
+            if (failed && !preExisted)
               scala.util.Try(outFile.delete(swallowIOExceptions = true))
           }
         }

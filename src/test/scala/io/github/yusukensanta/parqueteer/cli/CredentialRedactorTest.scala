@@ -227,4 +227,37 @@ class CredentialRedactorTest
     val result = CredentialRedactor.redactThrowable(chain)
     result should not include "AKIAIOSFODNN7EXAMPLE"
   }
+
+  // ── M3: additional Hadoop cloud config secrets ────────────────────────────
+
+  it should "redact Azure OAuth2 client secret Hadoop property value" in {
+    val input =
+      "fs.azure.account.oauth2.client.secret.myaccount.dfs.core.windows.net=supersecretvalue"
+    val result = CredentialRedactor.redact(input)
+    result should not include "supersecretvalue"
+    result should include("[REDACTED]")
+  }
+
+  it should "redact S3A secret key Hadoop property value" in {
+    val input = "fs.s3a.secret.key=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+    val result = CredentialRedactor.redact(input)
+    result should not include "wJalrXUtnFEMI"
+    result should include("[REDACTED]")
+  }
+
+  it should "redact S3A session token Hadoop property value" in {
+    val input =
+      "fs.s3a.session.token=FwoGZXIvYXdzEJr//////////wEaDFkjsecrettoken"
+    val result = CredentialRedactor.redact(input)
+    result should not include "FwoGZXIvYXdzEJr"
+    result should include("[REDACTED]")
+  }
+
+  it should "redact bare Bearer JWT token in log lines" in {
+    val input =
+      "Sending request with Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.payload.sig"
+    val result = CredentialRedactor.redact(input)
+    result should not include "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9"
+    result should include("[REDACTED]")
+  }
 }

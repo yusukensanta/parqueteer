@@ -430,6 +430,9 @@ class HadoopParquetRepository(
       math.min(config.parallelism, math.max(1, selectedBlocks.size))
     val rawEc = Executors.newFixedThreadPool(threadCount)
 
+    // True once shutdownNow() has been called; in that case awaitTermination
+    // may take the full 30s waiting for threads to respond to interrupt — not a bug.
+    var forciblyShutdown = false
     try {
       implicit val ec: ExecutionContextExecutorService =
         ExecutionContext.fromExecutorService(rawEc)
@@ -444,8 +447,15 @@ class HadoopParquetRepository(
               colChunks.filter(c =>
                 requestedNames.contains(c.getPath.toDotString)
               )
-          if (relevantChunks.isEmpty) List.empty[Map[String, CellValue]]
-          else {
+          if (relevantChunks.isEmpty) {
+            // Row group predates the requested columns (intra-file schema evolution).
+            // Emit null-valued rows to match the sequential path: the schema declares
+            // the columns optional, so absent values are Null, not omitted rows.
+            val nullRow = requestedSchema.getColumns.asScala
+              .map(col => col.getPath.mkString(".") -> CellValue.Null)
+              .toMap
+            List.fill(block.getRowCount.toInt)(nullRow)
+          } else {
             val rangeStart = relevantChunks.map(_.getStartingPos).min
             val rangeEnd =
               relevantChunks.map(c => c.getStartingPos + c.getTotalSize).max
@@ -475,12 +485,14 @@ class HadoopParquetRepository(
         try Await.result(Future.sequence(futures), config.readTimeout).flatten
         catch {
           case _: java.util.concurrent.TimeoutException =>
+            forciblyShutdown = true
             ec.shutdownNow()
             throw new RuntimeException(
               s"parallel read timed out after ${config.readTimeout} — " +
                 "retry with --parallelism 1, or check network connectivity"
             )
           case t: Throwable =>
+            forciblyShutdown = true
             ec.shutdownNow()
             throw t
         }
@@ -493,7 +505,14 @@ class HadoopParquetRepository(
       }
     } finally {
       rawEc.shutdown()
-      if (!rawEc.awaitTermination(30, java.util.concurrent.TimeUnit.SECONDS))
+      // After shutdownNow() the pool may linger up to 30s draining interrupted tasks —
+      // that is expected; only warn when a graceful shutdown stalls unexpectedly.
+      if (
+        !forciblyShutdown && !rawEc.awaitTermination(
+          30,
+          java.util.concurrent.TimeUnit.SECONDS
+        )
+      )
         Console.err.println(
           "[parqueteer] warning: parallel read executor did not terminate within 30s — some cloud connections may remain open"
         )
