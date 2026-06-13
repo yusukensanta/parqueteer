@@ -4,7 +4,7 @@ import com.github.mjakubowski84.parquet4s.{Col, Filter, ValueCodecConfiguration}
 import io.github.yusukensanta.parqueteer.core.models.ParqueteerError
 import org.apache.parquet.filter2.predicate.{FilterApi, FilterPredicate}
 import org.apache.parquet.io.api.Binary
-import org.apache.parquet.schema.MessageType
+import org.apache.parquet.schema.{LogicalTypeAnnotation, MessageType}
 import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
 import scala.jdk.CollectionConverters._
 import scala.util.Try
@@ -327,7 +327,25 @@ private class FilterParserImpl(schema: Option[MessageType]) {
         onLong: Long => Filter,
         onDouble: Double => Filter
     ): Either[String, Filter] = v match {
-      case l: Long   => Right(onLong(l))
+      case l: Long =>
+        // Warn when the user compares a numeric literal against a DECIMAL column.
+        // The literal is treated as the unscaled integer — price > 100 on DECIMAL(10,2)
+        // means unscaled-value > 100, i.e., price > 1.00, not 100.00.
+        schema.foreach { s =>
+          if (
+            resolveLogicalAnnotation(s, col).exists {
+              case _: LogicalTypeAnnotation.DecimalLogicalTypeAnnotation => true
+              case _ => false
+            }
+          )
+            Console.err.println(
+              s"[parqueteer] warning: filter '$col $opName $l' applies the literal as an " +
+                s"unscaled DECIMAL integer — the effective comparison is against the unscaled " +
+                s"value, not the decimal representation. Use a quoted string (e.g. '$col $opName \"${BigDecimal(l)}\"') " +
+                s"to filter by decimal value."
+            )
+        }
+        Right(onLong(l))
       case d: Double => Right(onDouble(d))
       case _ =>
         Left(
@@ -473,5 +491,23 @@ private class FilterParserImpl(schema: Option[MessageType]) {
     current.collect {
       case f if f.isPrimitive => f.asPrimitiveType().getPrimitiveTypeName
     }
+  }.getOrElse(None)
+
+  private def resolveLogicalAnnotation(
+      messageType: MessageType,
+      column: String
+  ): Option[LogicalTypeAnnotation] = Try {
+    val parts = column.split("\\.")
+    var current: Option[org.apache.parquet.schema.Type] = None
+    var idx = 0
+    var found = true
+    while (idx < parts.length && found) {
+      val group =
+        current.map(_.asGroupType()).getOrElse(messageType.asGroupType())
+      current = group.getFields.asScala.find(_.getName == parts(idx))
+      found = current.isDefined
+      idx += 1
+    }
+    current.flatMap(f => Option(f.getLogicalTypeAnnotation))
   }.getOrElse(None)
 }
