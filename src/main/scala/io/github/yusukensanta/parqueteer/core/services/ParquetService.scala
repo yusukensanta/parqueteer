@@ -210,37 +210,53 @@ class ParquetService(
         .foldLeft[Either[ParqueteerError, Unit]](Right(())) {
           case (acc, (fields, fileIdx)) =>
             acc.flatMap { _ =>
-              val fieldMap = fields.view.map(f => f.name -> f).toMap
-              val conflicts = fields.collect {
-                case f if seen.get(f.name).exists(_._1 != f.dataType) =>
-                  s"'${f.name}' (${seen(f.name)._1} vs ${f.dataType})"
-              }
-              if (conflicts.nonEmpty)
+              val duplicates = fields
+                .groupBy(_.name)
+                .collect { case (n, fs) if fs.size > 1 => n }
+                .toList
+                .sorted
+              if (duplicates.nonEmpty)
                 Left(
                   ParqueteerError.InvalidFormat(
                     "merge",
-                    s"Type conflicts in union merge: ${conflicts.mkString(", ")}. " +
-                      "Cannot union-merge columns with incompatible types."
+                    s"File at index $fileIdx has duplicate column names: ${duplicates
+                        .mkString(", ")}. " +
+                      "Parquet files with duplicate column names cannot be merged."
                   )
                 )
               else {
-                // Fields already seen but absent from this schema → must become optional
-                seen.keys.filterNot(fieldMap.contains).foreach { name =>
-                  seen(name) = (seen(name)._1, false)
+                val fieldMap = fields.view.map(f => f.name -> f).toMap
+                val conflicts = fields.collect {
+                  case f if seen.get(f.name).exists(_._1 != f.dataType) =>
+                    s"'${f.name}' (${seen(f.name)._1} vs ${f.dataType})"
                 }
-                fields.foreach { f =>
-                  seen.get(f.name) match {
-                    case Some((dt, wasRequired)) =>
-                      seen(f.name) = (dt, wasRequired && !f.isOptional)
-                    case None =>
-                      // New field: required only if it appears in the first file AND is marked required.
-                      // A field first seen in a later file was absent from earlier files, so it must be optional.
-                      val isRequired = fileIdx == 0 && !f.isOptional
-                      seen(f.name) = (f.dataType, isRequired)
+                if (conflicts.nonEmpty)
+                  Left(
+                    ParqueteerError.InvalidFormat(
+                      "merge",
+                      s"Type conflicts in union merge: ${conflicts.mkString(", ")}. " +
+                        "Cannot union-merge columns with incompatible types."
+                    )
+                  )
+                else {
+                  // Fields already seen but absent from this schema → must become optional
+                  seen.keys.filterNot(fieldMap.contains).foreach { name =>
+                    seen(name) = (seen(name)._1, false)
                   }
+                  fields.foreach { f =>
+                    seen.get(f.name) match {
+                      case Some((dt, wasRequired)) =>
+                        seen(f.name) = (dt, wasRequired && !f.isOptional)
+                      case None =>
+                        // New field: required only if it appears in the first file AND is marked required.
+                        // A field first seen in a later file was absent from earlier files, so it must be optional.
+                        val isRequired = fileIdx == 0 && !f.isOptional
+                        seen(f.name) = (f.dataType, isRequired)
+                    }
+                  }
+                  Right(())
                 }
-                Right(())
-              }
+              } // end else (no duplicate names)
             }
         }
         .map(_ =>
@@ -309,7 +325,7 @@ class ParquetService(
             f.isOptional,
             if (f.isOptional) 1 else 0,
             0,
-            writeConfig.compressionType.codecName
+            "" // compression controlled by WriteConfig, not ColumnInfo
           )
         },
         rowGroupCount = 1L,
@@ -720,7 +736,11 @@ class ParquetService(
     new Iterator[A] {
       private var remaining = n
       def hasNext: Boolean = remaining > 0 && iter.hasNext
-      def next(): A = { remaining -= 1; iter.next() }
+      def next(): A = {
+        if (!hasNext) throw new NoSuchElementException("next on empty iterator")
+        remaining -= 1
+        iter.next()
+      }
     }
 
 }

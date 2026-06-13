@@ -107,12 +107,22 @@ private[repositories] object ParquetRecordDecoder {
     val julianDay = buf.getInt(8).toLong - 2440588L
     val totalNanos =
       try
-        Math.addExact(
-          Math.multiplyExact(julianDay, 86400_000_000_000L),
-          nanosOfDay
+        Some(
+          Math.addExact(
+            Math.multiplyExact(julianDay, 86400_000_000_000L),
+            nanosOfDay
+          )
         )
-      catch { case _: ArithmeticException => nanosOfDay }
-    epochPlusSafe(totalNanos, ChronoUnit.NANOS)
+      catch {
+        case _: ArithmeticException =>
+          logger.warn(
+            s"INT96 Julian-day arithmetic overflow (julianDay=$julianDay, nanosOfDay=$nanosOfDay) — emitting Null"
+          )
+          None
+      }
+    totalNanos.fold[CellValue](CellValue.Null)(
+      epochPlusSafe(_, ChronoUnit.NANOS)
+    )
   }
 
   // Schema-aware variant: unannotated BINARY fields decoded as Bytes; INT96 fields decoded

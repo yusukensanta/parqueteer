@@ -72,6 +72,17 @@ class CredentialRedactorTest
     CredentialRedactor.redact(input) shouldBe input
   }
 
+  // ── L-B: service principal IDs (AROA*, AIPA*, etc.) are public — not redacted ──
+  it should "NOT redact AWS IAM role/instance/service principal IDs (AROA/AIPA/ANPA/AGPA/AIDA)" in {
+    val roleId = "AROAIOSFODNN7EXAMPLE12"
+    val instanceProfileId = "AIPAIOSFODNN7EXAMPLE"
+    val input = s"role=$roleId, profile=$instanceProfileId"
+    val result = CredentialRedactor.redact(input)
+    result should include(roleId)
+    result should include(instanceProfileId)
+    result should not include "[REDACTED]"
+  }
+
   it should "redact multiple credentials in one string" in {
     val input =
       "Authorization: Bearer token123, AWSAccessKeyId=AKIAIOSFODNN7EXAMPLE&Signature=abc"

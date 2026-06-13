@@ -982,8 +982,10 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
   }
 
   // ── mergeFiles compression propagation ───────────────────────────────────
-  it should "pass WriteConfig compressionType to schema in writeContentStream" in {
-    var capturedSchema: Option[ParquetSchema] = None
+  // ColumnInfo.compressionType is read-path metadata; write compression comes from WriteConfig.
+  // The merge schema uses "" for compressionType (not the WriteConfig codec) to avoid coupling.
+  it should "set compressionType to empty string in merge schema (WriteConfig drives actual codec)" in {
+    var capturedConfig: Option[WriteConfig] = None
     val repo = new FakeParquetRepository(
       schemaFieldsResult =
         Success(List(FieldSummary("id", "INT64", isOptional = false)))
@@ -995,7 +997,7 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
       )(
           feed: (Map[String, CellValue] => Unit) => Unit
       ): scala.util.Try[Long] = {
-        capturedSchema = Some(schema)
+        capturedConfig = Some(config)
         super.writeContentStream(location, schema, config)(feed)
       }
     }
@@ -1007,10 +1009,9 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
       SchemaMode.Strict
     )
     result.isRight shouldBe true
-    capturedSchema shouldBe defined
-    capturedSchema.get.columns.map(_.compressionType).distinct shouldBe List(
-      "GZIP"
-    )
+    // Codec comes from WriteConfig, not ColumnInfo
+    capturedConfig shouldBe defined
+    capturedConfig.get.compressionType shouldBe CompressionType.Gzip
   }
 
   // ── C1: output-already-exists must not delete pre-existing file ───────────
@@ -1086,5 +1087,73 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     result.left.toOption.get shouldBe a[ParqueteerError.InvalidFormat]
     result.left.toOption.get.userMessage should include("already exists")
     deleteWasCalled shouldBe false
+  }
+
+  // ── M-D: duplicate column names in union merge ────────────────────────────
+  it should "return an error for union merge when a file has duplicate column names" in {
+    val repo = new FakeParquetRepository(
+      schemaFieldsResult = Success(Nil)
+    ) {
+      override def readSchemaFields(
+          file: ParquetFile
+      ): scala.util.Try[List[FieldSummary]] =
+        Success(
+          List(
+            FieldSummary("id", "INT64", isOptional = false),
+            FieldSummary("id", "INT64", isOptional = false) // duplicate
+          )
+        )
+    }
+    val service = new ParquetService(repo)
+    val result = service.mergeFiles(
+      List("/a.parquet", "/b.parquet"),
+      "/out.parquet",
+      WriteConfig(),
+      SchemaMode.Union
+    )
+    result.isLeft shouldBe true
+    result.left.toOption.get shouldBe a[ParqueteerError.InvalidFormat]
+    result.left.toOption.get.userMessage should include(
+      "duplicate column names"
+    )
+    result.left.toOption.get.userMessage should include("id")
+  }
+
+  // ── M-C: merge schema compressionType is empty (not from WriteConfig) ─────
+  it should "set compressionType to empty string in merge schema (not coupling to WriteConfig)" in {
+    val repo = new FakeParquetRepository(
+      schemaFieldsResult = Success(
+        List(FieldSummary("id", "INT64", isOptional = false))
+      )
+    )
+    var capturedSchema: Option[ParquetSchema] = None
+    val capturingRepo = new FakeParquetRepository(
+      schemaFieldsResult = Success(Nil)
+    ) {
+      override def readSchemaFields(
+          file: ParquetFile
+      ): scala.util.Try[List[FieldSummary]] = repo.readSchemaFields(file)
+      override def writeContentStream(
+          location: StorageLocation,
+          schema: ParquetSchema,
+          config: WriteConfig
+      )(
+          feed: (Map[String, CellValue] => Unit) => Unit
+      ): scala.util.Try[Long] = {
+        capturedSchema = Some(schema)
+        Success(0L)
+      }
+    }
+    val service = new ParquetService(capturingRepo)
+    service.mergeFiles(
+      List("/a.parquet", "/b.parquet"),
+      "/out.parquet",
+      WriteConfig(),
+      SchemaMode.Strict
+    )
+    capturedSchema shouldBe defined
+    capturedSchema.get.columns.foreach { col =>
+      col.compressionType shouldBe ""
+    }
   }
 }
