@@ -328,13 +328,53 @@ parqueteer read s3://bucket/data.parquet --profile my-profile
 ```
 
 **Google Cloud**:
+
+User credentials (recommended for local development):
 ```bash
-export GOOGLE_APPLICATION_CREDENTIALS=/path/to/key.json
+gcloud auth application-default login
+parqueteer read gs://bucket/data.parquet
 ```
 
-**Azure**:
+`gcloud auth application-default login` writes credentials to `~/.config/gcloud/application_default_credentials.json` and they are picked up automatically — no environment variable needed.
+
+Service account key file:
 ```bash
-export AZURE_STORAGE_CONNECTION_STRING="..."
+export GOOGLE_APPLICATION_CREDENTIALS=/path/to/key.json
+# or
+export GCP_SERVICE_ACCOUNT_KEY_FILE=/path/to/key.json
+parqueteer read gs://bucket/data.parquet
+```
+
+Optional: set project ID with `GCP_PROJECT_ID` or `GOOGLE_CLOUD_PROJECT`.
+
+**Azure**:
+
+Managed identity (default, no env vars required on Azure-hosted compute):
+```bash
+parqueteer read abfss://container@account.dfs.core.windows.net/data.parquet
+```
+
+Service principal:
+```bash
+export AZURE_AUTH_METHOD=service_principal
+export AZURE_CLIENT_ID=your-client-id
+export AZURE_CLIENT_SECRET=your-client-secret
+export AZURE_TENANT_ID=your-tenant-id
+parqueteer read abfss://container@account.dfs.core.windows.net/data.parquet
+```
+
+Shared key:
+```bash
+export AZURE_AUTH_METHOD=shared_key
+export AZURE_STORAGE_KEY=your-storage-key
+parqueteer read abfss://container@account.dfs.core.windows.net/data.parquet
+```
+
+SAS token:
+```bash
+export AZURE_AUTH_METHOD=sas_token
+export AZURE_STORAGE_SAS_TOKEN=your-sas-token
+parqueteer read abfss://container@account.dfs.core.windows.net/data.parquet
 ```
 
 ---
