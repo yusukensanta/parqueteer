@@ -533,36 +533,36 @@ private class FilterParserImpl(schema: Option[MessageType]) {
 
   // Emit a deduplicated warning (once per col+op per JVM) when a Long literal is applied
   // to a DECIMAL column. The literal is treated as the unscaled integer, not the decimal value.
+  // The dedup key is consumed only when a warning actually fires, so schema-less parse() calls
+  // (schema=None) do not pre-empt the advisory for later parseWithSchema() calls.
   private def warnIfDecimalColumn(col: String, opName: String, l: Long): Unit =
-    if (FilterParser.warnedDecimalFilters.add(s"$col:$opName"))
-      schema.foreach { s =>
-        if (
-          resolveLogicalAnnotation(s, col).exists {
-            case _: LogicalTypeAnnotation.DecimalLogicalTypeAnnotation => true
-            case _                                                     => false
-          }
+    schema.foreach { s =>
+      if (
+        resolveLogicalAnnotation(s, col).exists {
+          case _: LogicalTypeAnnotation.DecimalLogicalTypeAnnotation => true
+          case _                                                     => false
+        } && FilterParser.warnedDecimalFilters.add(s"$col:$opName")
+      )
+        FilterParser.logger.warn(
+          s"[parqueteer] filter '$col $opName $l' applies the literal as an unscaled DECIMAL " +
+            s"integer — effective comparison is against the unscaled value, not the decimal " +
+            s"representation. Use a quoted string (e.g. '$col $opName \"${BigDecimal(l)}\"') " +
+            s"to filter by decimal value."
         )
-          FilterParser.logger.warn(
-            s"[parqueteer] filter '$col $opName $l' applies the literal as an unscaled DECIMAL " +
-              s"integer — effective comparison is against the unscaled value, not the decimal " +
-              s"representation. Use a quoted string (e.g. '$col $opName \"${BigDecimal(l)}\"') " +
-              s"to filter by decimal value."
-          )
-      }
+    }
 
   private def warnIfDecimalColumnForIn(col: String): Unit =
-    if (FilterParser.warnedDecimalFilters.add(s"$col:IN"))
-      schema.foreach { s =>
-        if (
-          resolveLogicalAnnotation(s, col).exists {
-            case _: LogicalTypeAnnotation.DecimalLogicalTypeAnnotation => true
-            case _                                                     => false
-          }
+    schema.foreach { s =>
+      if (
+        resolveLogicalAnnotation(s, col).exists {
+          case _: LogicalTypeAnnotation.DecimalLogicalTypeAnnotation => true
+          case _                                                     => false
+        } && FilterParser.warnedDecimalFilters.add(s"$col:IN")
+      )
+        FilterParser.logger.warn(
+          s"[parqueteer] IN filter on '$col' applies Long literals as unscaled DECIMAL " +
+            s"integers — effective comparisons are against unscaled values, not decimal " +
+            s"representations. Use quoted string literals for decimal values."
         )
-          FilterParser.logger.warn(
-            s"[parqueteer] IN filter on '$col' applies Long literals as unscaled DECIMAL " +
-              s"integers — effective comparisons are against unscaled values, not decimal " +
-              s"representations. Use quoted string literals for decimal values."
-          )
-      }
+    }
 }
