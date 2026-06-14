@@ -72,8 +72,14 @@ private[repositories] object ParquetWriteOps {
               s"Coercing ${value.getClass.getSimpleName} to string for BINARY column '$key' — schema type mismatch."
             )
             group.add(fieldIndex, value.display)
-          case CellValue.I32(i)  => group.add(fieldIndex, i)
-          case CellValue.I64(l)  => group.add(fieldIndex, l)
+          case CellValue.I32(i) => group.add(fieldIndex, i)
+          case CellValue.I64(l) =>
+            // Schema widening (F64+I64 in same column → DOUBLE) can leave earlier I64
+            // values needing to be written to a DOUBLE field — coerce to avoid type crash.
+            if (fieldType.getPrimitiveTypeName == PrimitiveTypeName.DOUBLE)
+              group.add(fieldIndex, l.toDouble)
+            else
+              group.add(fieldIndex, l)
           case CellValue.F64(d)  => group.add(fieldIndex, d)
           case CellValue.F32(f)  => group.add(fieldIndex, f)
           case CellValue.Bool(b) => group.add(fieldIndex, b)
