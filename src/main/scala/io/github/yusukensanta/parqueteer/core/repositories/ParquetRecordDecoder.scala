@@ -153,18 +153,30 @@ private[repositories] object ParquetRecordDecoder {
   ): Map[String, CellValue] =
     record.iterator
       .map { case (key, value) =>
-        val cell =
-          if (int96Fields.contains(key))
+        val cell = value match {
+          case list: ListParquetRecord =>
+            val sz = list.size
+            if (
+              sz > 1 && warnedVariants.add(s"ListParquetRecord.multivalue:$key")
+            )
+              logger.warn(
+                s"Column '$key': repeated primitive field arrived as ListParquetRecord with $sz " +
+                  "values — only the first element is returned. Repeated primitive fields are " +
+                  "not yet fully supported."
+              )
+            list.headOption.fold[CellValue](CellValue.Null)(decodeValue)
+          case _ if int96Fields.contains(key) =>
             value match {
               case BinaryValue(bin) => decodeInt96Binary(bin.getBytes)
               case _                => decodeValue(value)
             }
-          else if (rawBinaryFields.contains(key))
+          case _ if rawBinaryFields.contains(key) =>
             value match {
               case BinaryValue(bin) => CellValue.Bytes(bin.getBytes)
               case _                => decodeValue(value)
             }
-          else decodeValue(value)
+          case _ => decodeValue(value)
+        }
         key -> cell
       }
       .to(scala.collection.immutable.ListMap)

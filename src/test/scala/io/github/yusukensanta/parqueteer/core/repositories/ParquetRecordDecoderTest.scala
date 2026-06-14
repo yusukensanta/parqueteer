@@ -15,6 +15,7 @@ import com.github.mjakubowski84.parquet4s.{
   DateTimeValue,
   DecimalValue,
   ListParquetRecord,
+  RowParquetRecord,
   TimestampFormat
 }
 import org.apache.parquet.io.api.Binary
@@ -756,5 +757,53 @@ class ParquetRecordDecoderTest extends AnyFlatSpec with Matchers {
     // The first element is returned regardless of list size; the logger emits a one-time warning.
     val list = ListParquetRecord(IntValue(1), IntValue(2), IntValue(3))
     ParquetRecordDecoder.decodeValue(list) shouldBe CellValue.I32(1)
+  }
+
+  // ── convertRecordToMapWithSchema: ListParquetRecord handling ─────────────
+  // This is the production code path (readContent/streamContent call this variant).
+
+  "ParquetRecordDecoder.convertRecordToMapWithSchema" should "return first element of multi-value ListParquetRecord" in {
+    val record =
+      RowParquetRecord("score" -> ListParquetRecord(IntValue(42), IntValue(99)))
+    val result = ParquetRecordDecoder.convertRecordToMapWithSchema(
+      record,
+      Set.empty,
+      Set.empty
+    )
+    result("score") shouldBe CellValue.I32(42)
+  }
+
+  it should "return Null for empty ListParquetRecord" in {
+    val record = RowParquetRecord("score" -> ListParquetRecord.Empty)
+    val result = ParquetRecordDecoder.convertRecordToMapWithSchema(
+      record,
+      Set.empty,
+      Set.empty
+    )
+    result("score") shouldBe CellValue.Null
+  }
+
+  it should "return single-element ListParquetRecord value without warning" in {
+    val record = RowParquetRecord("n" -> ListParquetRecord(LongValue(7L)))
+    val result = ParquetRecordDecoder.convertRecordToMapWithSchema(
+      record,
+      Set.empty,
+      Set.empty
+    )
+    result("n") shouldBe CellValue.I64(7L)
+  }
+
+  it should "decode non-list columns normally alongside ListParquetRecord columns" in {
+    val record = RowParquetRecord(
+      "id" -> LongValue(1L),
+      "flags" -> ListParquetRecord(IntValue(10), IntValue(20))
+    )
+    val result = ParquetRecordDecoder.convertRecordToMapWithSchema(
+      record,
+      Set.empty,
+      Set.empty
+    )
+    result("id") shouldBe CellValue.I64(1L)
+    result("flags") shouldBe CellValue.I32(10)
   }
 }

@@ -509,10 +509,18 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     rows.head("n") shouldBe CellValue.F64(150.0)
   }
 
-  it should "keep 1.0e3 (dot present) as F64 so mixed-column arrays don't produce I64/F64 type conflict" in {
+  it should "coerce 1.0e3 (whole mantissa dot-scientific) to I64 to match plain integer columns" in {
     val service = new ParquetService(new FakeParquetRepository())
+    // Mantissa "1.0" is whole → treat as I64(1000) so [1.0e3, 1000] stays consistent.
     val rows = service.parseJsonContent("""[{"n": 1.0e3}]""")
-    rows.head("n") shouldBe CellValue.F64(1000.0)
+    rows.head("n") shouldBe CellValue.I64(1000L)
+  }
+
+  it should "coerce 1.0e2 (whole mantissa) consistently with plain integer 150 to avoid I64/F64 mismatch crash" in {
+    val service = new ParquetService(new FakeParquetRepository())
+    val rows = service.parseJsonContent("""[{"n": 1.0e2}, {"n": 150}]""")
+    rows.head("n") shouldBe CellValue.I64(100L)
+    rows(1)("n") shouldBe CellValue.I64(150L)
   }
 
   it should "coerce integer scientific-notation without a dot (1e2) to I64" in {

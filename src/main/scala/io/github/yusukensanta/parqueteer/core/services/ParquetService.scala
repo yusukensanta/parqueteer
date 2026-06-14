@@ -652,13 +652,26 @@ class ParquetService(
               // Large fractional number (e.g. 12345678901234567.8): F64 would lose
               // precision in the integer part — preserve exact value as Decimal.
               CellValue.Dec(bd)
-            else
-              // A decimal point signals floating-point user intent (1.0, 1.5, 1.5e2).
-              // Dot-notation numbers stay F64 regardless of the exponent so that
-              // mixed-column arrays ([1.5e2, 1.5]) don't produce I64+F64 mismatch
-              // when ParquetWriteOps writes a Long to a schema-widened DOUBLE field.
-              // Integer-valued scientific notation without a dot (e.g. 1e2) is handled
-              // by the non-dot branch below, which tries Long first.
+            else if (isWhole && (raw.contains('e') || raw.contains('E'))) {
+              // Whole-valued dot-scientific (1.0e2, 1.00e3): check if the mantissa itself
+              // (the part before 'e') has a non-zero fractional digit. If so, the user
+              // expressed a fractional value in scientific notation (1.5e2 = 150.0) and
+              // F64 is correct — treating it as I64 would break mixed columns like [1.5e2, 1.5].
+              // If the mantissa is whole (1.0e2, 2.00e1), treat as I64 to match the non-dot
+              // branch (1e2 → I64) and avoid F64+I64 mismatch with plain integer columns.
+              val eIdx = raw.indexWhere(c => c == 'e' || c == 'E')
+              val mantissa = raw.take(eIdx)
+              val dotIdx = mantissa.indexOf('.')
+              val mantissaIsWhole =
+                dotIdx < 0 || mantissa.drop(dotIdx + 1).forall(_ == '0')
+              if (mantissaIsWhole)
+                n.toLong
+                  .map(CellValue.I64.apply)
+                  .getOrElse(CellValue.F64(n.toDouble))
+              else
+                CellValue.F64(n.toDouble)
+            } else
+              // A decimal point without exponent (1.0, 1.5) signals floating-point intent.
               CellValue.F64(n.toDouble)
           }
           .getOrElse(CellValue.F64(n.toDouble))
