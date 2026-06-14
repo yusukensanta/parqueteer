@@ -361,6 +361,20 @@ class ParquetWriteOpsTest extends AnyFlatSpec with Matchers {
     group.getDouble("n", 0) shouldBe 100.0 +- 1e-9
   }
 
+  it should "coerce CellValue.I32 to double when schema field is DOUBLE (schema-widening safety net)" in {
+    val mt = schema("message root { required double n; }")
+    val group = new SimpleGroupFactory(mt).newGroup()
+    ParquetWriteOps.writeRowToGroup(group, Map("n" -> CellValue.I32(42)), mt)
+    group.getDouble("n", 0) shouldBe 42.0 +- 1e-9
+  }
+
+  it should "coerce CellValue.F32 to double when schema field is DOUBLE (schema-widening safety net)" in {
+    val mt = schema("message root { required double n; }")
+    val group = new SimpleGroupFactory(mt).newGroup()
+    ParquetWriteOps.writeRowToGroup(group, Map("n" -> CellValue.F32(1.5f)), mt)
+    group.getDouble("n", 0) shouldBe 1.5 +- 1e-9
+  }
+
   it should "write multiple fields in a single row" in {
     val mt = schema(
       """message root {
