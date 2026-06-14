@@ -500,18 +500,26 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     rows.head("ratio") shouldBe CellValue.F64(1.5)
   }
 
-  it should "coerce scientific-notation whole number (1.5e2 = 150) to I64, not F64" in {
+  it should "keep scientific-notation dot-float (1.5e2) as F64 to preserve floating-point intent and avoid I64/F64 mixed-column crash" in {
     val service = new ParquetService(new FakeParquetRepository())
-    // 1.5e2 = 150: raw contains a dot so it enters the dot-branch, isWhole=true,
-    // tooLargeForF64=false — must prefer I64 not F64 to avoid a DOUBLE Parquet column.
+    // 1.5e2 has a decimal point → floating-point user intent → stays F64(150.0).
+    // Converting to I64 would crash ParquetWriteOps when the same column also has
+    // a plain fraction like 1.5 (schema widens to DOUBLE but I64 can't be written to DOUBLE).
     val rows = service.parseJsonContent("""[{"n": 1.5e2}]""")
-    rows.head("n") shouldBe CellValue.I64(150L)
+    rows.head("n") shouldBe CellValue.F64(150.0)
   }
 
-  it should "coerce 1.0e3 (whole number, scientific with dot) to I64" in {
+  it should "keep 1.0e3 (dot present) as F64 so mixed-column arrays don't produce I64/F64 type conflict" in {
     val service = new ParquetService(new FakeParquetRepository())
     val rows = service.parseJsonContent("""[{"n": 1.0e3}]""")
-    rows.head("n") shouldBe CellValue.I64(1000L)
+    rows.head("n") shouldBe CellValue.F64(1000.0)
+  }
+
+  it should "coerce integer scientific-notation without a dot (1e2) to I64" in {
+    val service = new ParquetService(new FakeParquetRepository())
+    // No decimal point → integer intent → non-dot branch tries toLong first.
+    val rows = service.parseJsonContent("""[{"n": 1e2}]""")
+    rows.head("n") shouldBe CellValue.I64(100L)
   }
 
   it should "throw for non-array JSON" in {

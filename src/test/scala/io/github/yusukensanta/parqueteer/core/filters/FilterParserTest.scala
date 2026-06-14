@@ -476,4 +476,45 @@ class FilterParserTest extends AnyFlatSpec with Matchers {
   it should "accept mixed Long/Double IN list when all Long values are exactly representable" in {
     FilterParser.parse("score IN (100, 99.5)") shouldBe a[Right[?, ?]]
   }
+
+  // ── BETWEEN Long.MaxValue precision guard (JVM d2l clamping false-negative) ─
+
+  it should "return Left for BETWEEN with Long.MaxValue lower bound (not exactly representable as Double)" in {
+    // Long.MaxValue.toDouble rounds UP to 2^63; JVM d2l clamps that back to Long.MaxValue,
+    // so the old round-trip check (l.toDouble.toLong != l) had a false negative.
+    // BigDecimal comparison correctly detects the imprecision.
+    FilterParser.parse(s"id BETWEEN ${Long.MaxValue} AND 1.0e20") match {
+      case Left(err) =>
+        err.message should include("cannot be represented exactly as a Double")
+      case Right(_) =>
+        fail(
+          "Expected Left: Long.MaxValue is not exactly representable as Double"
+        )
+    }
+  }
+
+  it should "return Left for IN list containing Long.MaxValue mixed with Double" in {
+    FilterParser.parse(s"id IN (${Long.MaxValue}, 1.5)") match {
+      case Left(err) =>
+        err.message should include("cannot be represented exactly as Double")
+      case Right(_) =>
+        fail(
+          "Expected Left: Long.MaxValue cannot be represented exactly as Double"
+        )
+    }
+  }
+
+  // ── Pure-Long IN list: DECIMAL column advisory ─────────────────────────────
+
+  it should "parse pure-Long IN list against a DECIMAL column (warning only, no error)" in {
+    val fields = List(
+      org.apache.parquet.schema.Types
+        .required(PrimitiveTypeName.INT64)
+        .as(org.apache.parquet.schema.LogicalTypeAnnotation.decimalType(2, 10))
+        .named("price")
+    )
+    val s = new org.apache.parquet.schema.MessageType("test", fields.asJava)
+    FilterParser
+      .parseWithSchema("price IN (100, 200, 300)", s) shouldBe a[Right[?, ?]]
+  }
 }
