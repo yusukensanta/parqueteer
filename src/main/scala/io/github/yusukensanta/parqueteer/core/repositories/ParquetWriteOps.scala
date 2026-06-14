@@ -15,6 +15,8 @@ private[repositories] object ParquetWriteOps {
   private val logger = org.slf4j.LoggerFactory.getLogger(getClass)
   private val decimalCoercionWarnedCols =
     java.util.concurrent.ConcurrentHashMap.newKeySet[String]()
+  private val longToDoubleWarnedCols =
+    java.util.concurrent.ConcurrentHashMap.newKeySet[String]()
 
   def writeRowToGroup(
       group: Group,
@@ -72,16 +74,32 @@ private[repositories] object ParquetWriteOps {
               s"Coercing ${value.getClass.getSimpleName} to string for BINARY column '$key' — schema type mismatch."
             )
             group.add(fieldIndex, value.display)
-          case CellValue.I32(i) => group.add(fieldIndex, i)
-          case CellValue.I64(l) =>
-            // Schema widening (F64+I64 in same column → DOUBLE) can leave earlier I64
-            // values needing to be written to a DOUBLE field — coerce to avoid type crash.
+          case CellValue.I32(i) =>
             if (fieldType.getPrimitiveTypeName == PrimitiveTypeName.DOUBLE)
-              group.add(fieldIndex, l.toDouble)
+              group.add(fieldIndex, i.toDouble)
             else
+              group.add(fieldIndex, i)
+          case CellValue.I64(l) =>
+            if (fieldType.getPrimitiveTypeName == PrimitiveTypeName.DOUBLE) {
+              // Long values outside (-2^53, 2^53) cannot be represented exactly as Double.
+              if (
+                (l > 9007199254740992L || l < -9007199254740992L) &&
+                longToDoubleWarnedCols.add(key)
+              )
+                logger.warn(
+                  s"Column '$key': Long value $l exceeds Double precision range (2^53) — " +
+                    "coercing to DOUBLE loses precision. Schema widening produced DOUBLE from a " +
+                    "mixed integer/float column; consider using consistent numeric types."
+                )
+              group.add(fieldIndex, l.toDouble)
+            } else
               group.add(fieldIndex, l)
-          case CellValue.F64(d)  => group.add(fieldIndex, d)
-          case CellValue.F32(f)  => group.add(fieldIndex, f)
+          case CellValue.F64(d) => group.add(fieldIndex, d)
+          case CellValue.F32(f) =>
+            if (fieldType.getPrimitiveTypeName == PrimitiveTypeName.DOUBLE)
+              group.add(fieldIndex, f.toDouble)
+            else
+              group.add(fieldIndex, f)
           case CellValue.Bool(b) => group.add(fieldIndex, b)
           case CellValue.Date(d) =>
             val fieldName = schema.getType(fieldIndex).getName
