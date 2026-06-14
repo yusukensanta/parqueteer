@@ -354,6 +354,13 @@ class ParquetWriteOpsTest extends AnyFlatSpec with Matchers {
     group.getBinary("name", 0).toStringUsingUTF8 shouldBe "Carol"
   }
 
+  it should "coerce CellValue.I64 to double when schema field is DOUBLE (schema-widening safety net)" in {
+    val mt = schema("message root { required double n; }")
+    val group = new SimpleGroupFactory(mt).newGroup()
+    ParquetWriteOps.writeRowToGroup(group, Map("n" -> CellValue.I64(100L)), mt)
+    group.getDouble("n", 0) shouldBe 100.0 +- 1e-9
+  }
+
   it should "write multiple fields in a single row" in {
     val mt = schema(
       """message root {

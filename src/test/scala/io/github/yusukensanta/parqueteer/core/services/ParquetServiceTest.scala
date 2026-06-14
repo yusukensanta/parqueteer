@@ -523,6 +523,16 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     rows(1)("n") shouldBe CellValue.I64(150L)
   }
 
+  it should "coerce 1.0e0 to I64 (whole-mantissa branch) — write layer handles resulting I64+F64 mix via DOUBLE coercion" in {
+    val service = new ParquetService(new FakeParquetRepository())
+    // 1.0 (no exponent) → F64; 1.0e0 (exponent, whole mantissa) → I64. The asymmetry
+    // is a known limitation; ParquetWriteOps coerces I64→Double when the field is DOUBLE
+    // so a mixed column [1.0, 1.0e0] does not crash at write time.
+    val rows = service.parseJsonContent("""[{"n": 1.0}, {"n": 1.0e0}]""")
+    rows.head("n") shouldBe CellValue.F64(1.0)
+    rows(1)("n") shouldBe CellValue.I64(1L)
+  }
+
   it should "coerce integer scientific-notation without a dot (1e2) to I64" in {
     val service = new ParquetService(new FakeParquetRepository())
     // No decimal point → integer intent → non-dot branch tries toLong first.
