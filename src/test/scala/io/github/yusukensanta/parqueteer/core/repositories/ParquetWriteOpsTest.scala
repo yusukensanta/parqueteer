@@ -375,6 +375,34 @@ class ParquetWriteOpsTest extends AnyFlatSpec with Matchers {
     group.getDouble("n", 0) shouldBe 1.5 +- 1e-9
   }
 
+  it should "coerce CellValue.I32 to long when schema field is INT64 (schema-widening safety net)" in {
+    val mt = schema("message root { required int64 n; }")
+    val group = new SimpleGroupFactory(mt).newGroup()
+    ParquetWriteOps.writeRowToGroup(group, Map("n" -> CellValue.I32(42)), mt)
+    group.getLong("n", 0) shouldBe 42L
+  }
+
+  it should "coerce CellValue.I32 to float when schema field is FLOAT" in {
+    val mt = schema("message root { required float n; }")
+    val group = new SimpleGroupFactory(mt).newGroup()
+    ParquetWriteOps.writeRowToGroup(group, Map("n" -> CellValue.I32(7)), mt)
+    group.getFloat("n", 0) shouldBe 7.0f +- 1e-6f
+  }
+
+  it should "coerce CellValue.I64 to float when schema field is FLOAT" in {
+    val mt = schema("message root { required float n; }")
+    val group = new SimpleGroupFactory(mt).newGroup()
+    ParquetWriteOps.writeRowToGroup(group, Map("n" -> CellValue.I64(42L)), mt)
+    group.getFloat("n", 0) shouldBe 42.0f +- 1e-6f
+  }
+
+  it should "coerce CellValue.F64 to float when schema field is FLOAT" in {
+    val mt = schema("message root { required float n; }")
+    val group = new SimpleGroupFactory(mt).newGroup()
+    ParquetWriteOps.writeRowToGroup(group, Map("n" -> CellValue.F64(1.5)), mt)
+    group.getFloat("n", 0) shouldBe 1.5f +- 1e-6f
+  }
+
   it should "write multiple fields in a single row" in {
     val mt = schema(
       """message root {
