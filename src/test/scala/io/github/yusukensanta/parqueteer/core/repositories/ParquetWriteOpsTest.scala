@@ -404,25 +404,36 @@ class ParquetWriteOpsTest extends AnyFlatSpec with Matchers {
   }
 
   it should "produce +Infinity (not crash) when F64 overflows Float range and schema is FLOAT" in {
-    val mt = schema("message root { required float overflow; }")
+    val mt = schema("message root { required float pos_overflow; }")
     val group = new SimpleGroupFactory(mt).newGroup()
     ParquetWriteOps.writeRowToGroup(
       group,
-      Map("overflow" -> CellValue.F64(Double.MaxValue)),
+      Map("pos_overflow" -> CellValue.F64(Double.MaxValue)),
       mt
     )
-    group.getFloat("overflow", 0) shouldBe Float.PositiveInfinity
+    group.getFloat("pos_overflow", 0) shouldBe Float.PositiveInfinity
   }
 
   it should "produce -Infinity (not crash) when negative F64 overflows Float range and schema is FLOAT" in {
-    val mt = schema("message root { required float overflow; }")
+    val mt = schema("message root { required float neg_overflow; }")
     val group = new SimpleGroupFactory(mt).newGroup()
     ParquetWriteOps.writeRowToGroup(
       group,
-      Map("overflow" -> CellValue.F64(-Double.MaxValue)),
+      Map("neg_overflow" -> CellValue.F64(-Double.MaxValue)),
       mt
     )
-    group.getFloat("overflow", 0) shouldBe Float.NegativeInfinity
+    group.getFloat("neg_overflow", 0) shouldBe Float.NegativeInfinity
+  }
+
+  it should "write Float.NaN when F64 Double.NaN coerces to FLOAT schema" in {
+    val mt = schema("message root { required float nan_col; }")
+    val group = new SimpleGroupFactory(mt).newGroup()
+    ParquetWriteOps.writeRowToGroup(
+      group,
+      Map("nan_col" -> CellValue.F64(Double.NaN)),
+      mt
+    )
+    group.getFloat("nan_col", 0).isNaN shouldBe true
   }
 
   it should "coerce CellValue.I64 to float without precision loss when value is within 2^24" in {
@@ -447,6 +458,30 @@ class ParquetWriteOpsTest extends AnyFlatSpec with Matchers {
     )
     // Float rounds to nearest even: 16777217 → 16777216.0f
     group.getFloat("n", 0) shouldBe 16777216.0f
+  }
+
+  it should "coerce CellValue.I32 to float without precision loss when value is within 2^24" in {
+    val mt = schema("message root { required float n32; }")
+    val group = new SimpleGroupFactory(mt).newGroup()
+    ParquetWriteOps.writeRowToGroup(
+      group,
+      Map("n32" -> CellValue.I32(16777216)),
+      mt
+    )
+    group.getFloat("n32", 0) shouldBe 16777216.0f
+  }
+
+  it should "coerce CellValue.I32 to float (with precision loss) when value exceeds 2^24" in {
+    val mt = schema("message root { required float n32; }")
+    val group = new SimpleGroupFactory(mt).newGroup()
+    // 16_777_217 is 2^24+1 — first integer not exactly representable as Float
+    ParquetWriteOps.writeRowToGroup(
+      group,
+      Map("n32" -> CellValue.I32(16777217)),
+      mt
+    )
+    // Float rounds to nearest even: 16777217 → 16777216.0f
+    group.getFloat("n32", 0) shouldBe 16777216.0f
   }
 
   it should "write multiple fields in a single row" in {

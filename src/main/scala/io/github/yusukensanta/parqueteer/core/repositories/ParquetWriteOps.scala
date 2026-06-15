@@ -17,6 +17,8 @@ private[repositories] object ParquetWriteOps {
     java.util.concurrent.ConcurrentHashMap.newKeySet[String]()
   private val longToDoubleWarnedCols =
     java.util.concurrent.ConcurrentHashMap.newKeySet[String]()
+  private val intToFloatWarnedCols =
+    java.util.concurrent.ConcurrentHashMap.newKeySet[String]()
   private val longToFloatWarnedCols =
     java.util.concurrent.ConcurrentHashMap.newKeySet[String]()
   private val doubleToFloatWarnedCols =
@@ -81,9 +83,19 @@ private[repositories] object ParquetWriteOps {
           case CellValue.I32(i) =>
             fieldType.getPrimitiveTypeName match {
               case PrimitiveTypeName.DOUBLE => group.add(fieldIndex, i.toDouble)
-              case PrimitiveTypeName.FLOAT  => group.add(fieldIndex, i.toFloat)
-              case PrimitiveTypeName.INT64  => group.add(fieldIndex, i.toLong)
-              case _                        => group.add(fieldIndex, i)
+              case PrimitiveTypeName.FLOAT  =>
+                // Int values outside (-2^24, 2^24) cannot be represented exactly as Float (23-bit mantissa).
+                if (
+                  (i > 16777216 || i < -16777216) &&
+                  intToFloatWarnedCols.add(key)
+                )
+                  logger.warn(
+                    s"Column '$key': Int value $i exceeds Float precision range (|value| > 2^24) — " +
+                      "coercing to FLOAT loses precision. Consider using DOUBLE schema for this column."
+                  )
+                group.add(fieldIndex, i.toFloat)
+              case PrimitiveTypeName.INT64 => group.add(fieldIndex, i.toLong)
+              case _                       => group.add(fieldIndex, i)
             }
           case CellValue.I64(l) =>
             fieldType.getPrimitiveTypeName match {
@@ -106,7 +118,7 @@ private[repositories] object ParquetWriteOps {
                   longToFloatWarnedCols.add(key)
                 )
                   logger.warn(
-                    s"Column '$key': Long value $l exceeds Float precision range (2^24) — " +
+                    s"Column '$key': Long value $l exceeds Float precision range (|value| > 2^24) — " +
                       "coercing to FLOAT loses precision. Consider using DOUBLE schema for this column."
                   )
                 group.add(fieldIndex, l.toFloat)
@@ -114,14 +126,14 @@ private[repositories] object ParquetWriteOps {
             }
           case CellValue.F64(d) =>
             if (fieldType.getPrimitiveTypeName == PrimitiveTypeName.FLOAT) {
-              // Double values outside ±Float.MaxValue overflow to ±Infinity when cast to Float.
+              // Double values outside ±Float.MaxValue overflow to ±Infinity; NaN stays NaN.
               if (
-                (d > Float.MaxValue.toDouble || d < -Float.MaxValue.toDouble) &&
+                (d.isNaN || d > Float.MaxValue.toDouble || d < -Float.MaxValue.toDouble) &&
                 doubleToFloatWarnedCols.add(key)
               )
                 logger.warn(
-                  s"Column '$key': Double value $d exceeds Float range (±${Float.MaxValue}) — " +
-                    "coercing to FLOAT produces ±Infinity. Consider using DOUBLE schema for this column."
+                  s"Column '$key': Double value $d cannot be faithfully cast to Float — " +
+                    "coercing to FLOAT produces NaN or ±Infinity. Consider using DOUBLE schema for this column."
                 )
               group.add(fieldIndex, d.toFloat)
             } else
