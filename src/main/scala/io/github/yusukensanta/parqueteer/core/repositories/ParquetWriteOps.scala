@@ -23,6 +23,8 @@ private[repositories] object ParquetWriteOps {
     java.util.concurrent.ConcurrentHashMap.newKeySet[String]()
   private val doubleToFloatWarnedCols =
     java.util.concurrent.ConcurrentHashMap.newKeySet[String]()
+  private val binaryMismatchWarnedCols =
+    java.util.concurrent.ConcurrentHashMap.newKeySet[String]()
 
   def writeRowToGroup(
       group: Group,
@@ -76,9 +78,10 @@ private[repositories] object ParquetWriteOps {
                 group.add(fieldIndex, bd.toDouble)
             }
           case _ if isBinaryField =>
-            logger.warn(
-              s"Coercing ${value.getClass.getSimpleName} to string for BINARY column '$key' — schema type mismatch."
-            )
+            if (binaryMismatchWarnedCols.add(key))
+              logger.warn(
+                s"Coercing ${value.getClass.getSimpleName} to string for BINARY column '$key' — schema type mismatch."
+              )
             group.add(fieldIndex, value.display)
           case CellValue.I32(i) =>
             fieldType.getPrimitiveTypeName match {
@@ -106,7 +109,7 @@ private[repositories] object ParquetWriteOps {
                   longToDoubleWarnedCols.add(key)
                 )
                   logger.warn(
-                    s"Column '$key': Long value $l exceeds Double precision range (2^53) — " +
+                    s"Column '$key': Long value $l exceeds Double precision range (|value| > 2^53) — " +
                       "coercing to DOUBLE loses precision. Schema widening produced DOUBLE from a " +
                       "mixed integer/float column; consider using consistent numeric types."
                   )
