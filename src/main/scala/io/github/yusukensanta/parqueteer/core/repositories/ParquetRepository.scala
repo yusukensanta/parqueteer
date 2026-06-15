@@ -85,6 +85,8 @@ class HadoopParquetRepository(
     profile: Option[String] = None,
     region: Option[String] = None
 ) extends ParquetRepository {
+  private val logger =
+    org.slf4j.LoggerFactory.getLogger(getClass)
   private val HadoopConfigCacheMaxSize = 64
   private val FooterCacheMaxSize = 1024
   private val hadoopConfigCache: java.util.Map[String, Configuration] =
@@ -451,6 +453,10 @@ class HadoopParquetRepository(
             // Row group predates the requested columns (intra-file schema evolution).
             // Emit null-valued rows to match the sequential path: the schema declares
             // the columns optional, so absent values are Null, not omitted rows.
+            logger.warn(
+              s"Row group (${block.getRowCount} rows) has no chunks matching " +
+                s"requested columns $requestedNames — fabricating null rows for schema evolution."
+            )
             val nullRow = requestedSchema.getColumns.asScala
               .map(col => col.getPath.mkString(".") -> CellValue.Null)
               .toMap

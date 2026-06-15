@@ -73,6 +73,13 @@ class ParquetService(
         .toParqueteerError
     } yield count
 
+  // Validates filter syntax before any output bytes are emitted so callers
+  // can gate output (e.g. writer.begin()) on a clean parse result.
+  def validateFilter(filter: Option[String]): Either[ParqueteerError, Unit] =
+    filter.fold[Either[ParqueteerError, Unit]](Right(()))(filterExpr =>
+      FilterParser.parse(filterExpr).map(_ => ())
+    )
+
   def getFileInfo(path: String): Either[ParqueteerError, ParquetFile] =
     for {
       location <- parseLocation(path)
