@@ -2,7 +2,7 @@
 
 This document analyzes current code paths and outlines pragmatic + advanced optimizations for large-scale read/write scenarios in a CLI context. It complements the existing roadmap by focusing only on performance levers.
 
-> Scope: Observations from repository state (Scala 3.7.3, parquet4s usage, direct Parquet API for writes, Try-based sync model). No code changes yet—this is strategic guidance.
+> Scope: Observations from repository state (Scala 3.7.4, parquet4s usage, direct Parquet API for writes, Try-based sync model). No code changes yet—this is strategic guidance.
 
 ---
 ## 1. Current Baseline & Observations
@@ -11,10 +11,8 @@ This document analyzes current code paths and outlines pragmatic + advanced opti
 - Uses parquet4s `ParquetReader.as[RowParquetRecord]...read(path)` producing an Iterator.
 - Converts entire iterator to `List` (potential full materialization):
   ```scala
-  val records = config.maxRows match {
-    case Some(limit) => reader.take(limit.toInt).toList
-    case None        => reader.toList
-  }
+  // Long-safe helper — avoids Int overflow for large limit values
+  val records = applyMaxRows(reader.iterator, config.maxRows).toList
   ```
 - Row group filtering is only via parquet4s `Filter` (predicate pushdown), but no explicit column projection optimization.
 - Always computes total row count by opening file again (`getRowCount`) – double footer read.

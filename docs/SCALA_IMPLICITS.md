@@ -15,13 +15,15 @@ Think of it as:
 
 ---
 
-## Real Example from parqueteer
+## Illustrative Example
 
-### WITHOUT `implicit` (Verbose)
+> **Note**: The examples below use `ParquetServiceEncoders` as an illustrative name — this object does not exist verbatim in the codebase. The codebase uses Scala 3 `given` syntax rather than `implicit val`. The concepts demonstrated here apply directly.
+
+### WITHOUT implicit/given (Verbose)
 
 ```scala
 // Without implicit - you must pass the encoder manually every time
-object ParquetServiceEncoders {
+object MyEncoders {
   val anyEncoder: Encoder[Any] = Encoder.instance {
     case s: String => Json.fromString(s)
     case i: Int    => Json.fromInt(i)
@@ -30,35 +32,29 @@ object ParquetServiceEncoders {
 }
 
 // Using it - VERBOSE!
-import ParquetServiceEncoders._
+import MyEncoders._
 
 val data = Map("name" -> "Alice", "age" -> 30)
 val json = data.asJson(anyEncoder)  // ❌ Must pass encoder explicitly
-//                      ^^^^^^^^^^^
-//                      Annoying repetition!
 ```
 
-### WITH `implicit` (Clean)
+### WITH given (Clean — Scala 3 style used in this project)
 
 ```scala
-// With implicit - compiler passes it automatically
-object ParquetServiceEncoders {
-  implicit val anyEncoder: Encoder[Any] = Encoder.instance {
-    case s: String => Json.fromString(s)
-    case i: Int    => Json.fromInt(i)
-    // ... more cases
+// With given - compiler passes it automatically
+object MyEncoders:
+  given Encoder[Map[String, Any]] = Encoder.instance { map =>
+    Json.obj(map.map { case (k, v) => k -> Json.fromString(v.toString) }.toSeq*)
   }
-}
 
 // Using it - CLEAN!
-import ParquetServiceEncoders._
+import MyEncoders.given
 
 val data = Map("name" -> "Alice", "age" -> 30)
-val json = data.asJson  // ✅ Compiler finds anyEncoder automatically!
-//                         No need to pass it manually
+val json = data.asJson  // ✅ Compiler finds the given encoder automatically!
 ```
 
-**The compiler automatically inserts**: `data.asJson(anyEncoder)`
+**The compiler automatically inserts**: `data.asJson(given_Encoder_Map_String_Any)`
 
 ---
 
@@ -93,36 +89,26 @@ When you call `toJson("hello")`, the compiler:
 
 ## Actual parqueteer Example
 
-### From `ParquetService.scala`
+### From `cli/CliOutputFormatter.scala` (illustrative — Scala 3 `given` style)
+
+The codebase encodes Parquet rows to JSON using a `given` chain (Scala 3 style):
 
 ```scala
-object ParquetServiceEncoders {
-  // Define implicit encoder for Any type
-  implicit val anyEncoder: Encoder[Any] = Encoder.instance {
-    case null      => Json.Null
-    case s: String => Json.fromString(s)
-    case i: Int    => Json.fromInt(i)
-    case l: Long   => Json.fromLong(l)
-    // ... more cases
-  }
+// Given instances — compiler resolves these automatically
+given Encoder[CellValue] = Encoder.instance {
+  case CellValue.Null    => Json.Null
+  case CellValue.Str(s)  => Json.fromString(s)
+  case CellValue.I32(i)  => Json.fromInt(i)
+  case CellValue.I64(l)  => Json.fromLong(l)
+  // ... more cases
+}
 
-  // This encoder depends on anyEncoder (passed implicitly!)
-  implicit val mapStringAnyEncoder: Encoder[Map[String, Any]] =
-    Encoder.instance { map =>
-      Json.obj(map.map { case (k, v) =>
-        k.toString -> anyEncoder.apply(v)  // Uses anyEncoder
-      }.toSeq*)
-    }
-
-  // This encoder depends on mapStringAnyEncoder (passed implicitly!)
-  implicit val listMapEncoder: Encoder[List[Map[String, Any]]] =
-    Encoder.instance(list =>
-      Json.fromValues(list.map(mapStringAnyEncoder.apply))  // Uses mapStringAnyEncoder
-    )
+given Encoder[Map[String, CellValue]] = Encoder.instance { row =>
+  Json.obj(row.map { case (k, v) => k -> v.asJson }.toSeq*)
 }
 ```
 
-**Key point**: `mapStringAnyEncoder` uses `anyEncoder`, and `listMapEncoder` uses `mapStringAnyEncoder`. This creates a **chain of implicit dependencies**.
+**Key point**: the `Map` encoder depends on the `CellValue` encoder — the compiler resolves the `CellValue` given automatically when encoding each value.
 
 ---
 
@@ -226,16 +212,17 @@ val listEncoder: Encoder[List[Map[String, Any]]] = Encoder.instance { list =>
 val json = listEncoder.apply(content.rows)  // ❌ Verbose
 ```
 
-### Step-by-Step With Implicit
+### Step-by-Step With given (Scala 3 style)
 
 ```scala
-// Step 1: Define implicit encoder (done once in ParquetServiceEncoders)
-implicit val anyEncoder: Encoder[Any] = Encoder.instance { ... }
-implicit val mapEncoder: Encoder[Map[String, Any]] = Encoder.instance { ... }
-implicit val listMapEncoder: Encoder[List[Map[String, Any]]] = Encoder.instance { ... }
+// Step 1: Define given encoders (done once in a companion object or module)
+object MyEncoders:
+  given Encoder[CellValue] = Encoder.instance { ... }
+  given Encoder[Map[String, CellValue]] = Encoder.instance { ... }
+  given Encoder[List[Map[String, CellValue]]] = Encoder.instance { ... }
 
-// Step 2: Import implicits
-import ParquetServiceEncoders._
+// Step 2: Import givens
+import MyEncoders.given
 import io.circe.syntax._
 
 // Step 3: Use it cleanly
@@ -244,10 +231,10 @@ val json = content.rows.asJson  // ✅ Compiler handles everything!
 
 **What the compiler does**:
 1. Sees `content.rows.asJson`
-2. `rows` is `List[Map[String, Any]]`
-3. Searches for `implicit val x: Encoder[List[Map[String, Any]]]`
-4. Finds `listMapEncoder`
-5. Rewrites to: `content.rows.asJson(listMapEncoder)`
+2. `rows` is `List[Map[String, CellValue]]`
+3. Searches for a `given Encoder[List[Map[String, CellValue]]]`
+4. Finds it in `MyEncoders`
+5. Rewrites to: `content.rows.asJson(given_Encoder_List)`
 
 ---
 

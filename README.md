@@ -21,7 +21,7 @@
 
 - 🚀 **No cluster required** - single JVM process, no Spark setup
 - ☁️ **Cloud storage** - S3, GCS, and Azure out of the box
-- 📊 **Multiple output formats** - table, JSON, CSV, Markdown, NDJSON
+- 📊 **Multiple output formats** - table, JSON, CSV, Markdown, NDJSON, LTSV
 - 🔍 **Filtering** - SQL-like expressions with BETWEEN, IN, IS NULL, nested columns
 - 🛠️ **Format conversion** - CSV/JSON ↔ Parquet
 - 🔀 **Schema diff** - compare schemas of two Parquet files
@@ -71,10 +71,17 @@ parqueteer read data.parquet --filter "score BETWEEN 80 AND 100"
 parqueteer read data.parquet --filter "deleted_at IS NULL"
 parqueteer read data.parquet --filter "address.city = 'Tokyo'"  # nested column
 
-# Output formats: table (default), json, csv, pretty, markdown, ndjson
+# Output formats: table (default), json, csv, pretty, markdown, ndjson, ltsv
 parqueteer read data.parquet --format json
 parqueteer read data.parquet --format csv
 parqueteer read data.parquet --format ndjson
+parqueteer read data.parquet --format ltsv
+
+# Streaming output (low memory; disables table formatting)
+parqueteer read data.parquet --stream --format ndjson
+
+# Parallel row-group reads (speeds up large files)
+parqueteer read data.parquet --parallel 4
 
 # Combine flags
 parqueteer read data.parquet --columns "id,name" --filter "age > 25" --limit 50 --format csv
@@ -92,6 +99,9 @@ parqueteer info data.parquet
 
 # JSON output (for scripting)
 parqueteer info data.parquet --format json
+
+# Verbose: include column-level encoding and compression details
+parqueteer info data.parquet --verbose
 ```
 
 ### Write Parquet Files
@@ -103,8 +113,15 @@ parqueteer write data.json output.parquet
 # CSV to Parquet
 parqueteer write data.csv output.parquet --input-format csv
 
+# NDJSON / LTSV to Parquet
+parqueteer write data.ndjson output.parquet --input-format ndjson
+parqueteer write data.ltsv output.parquet --input-format ltsv
+
 # With compression (uncompressed, snappy, gzip, lzo, brotli, lz4, zstd)
 parqueteer write data.csv output.parquet --input-format csv --compression zstd
+
+# Dry-run: validate input without writing
+parqueteer write data.json output.parquet --dry-run
 
 # From stdin
 cat data.json | parqueteer write - output.parquet
@@ -166,6 +183,9 @@ parqueteer validate data.parquet
 
 # Verbose: show all checks performed
 parqueteer validate data.parquet --verbose
+
+# Deep: also verify row-level data integrity (slower)
+parqueteer validate data.parquet --deep
 ```
 
 ### Configuration
@@ -212,7 +232,7 @@ parqueteer --color=never read data.parquet  # color: auto (default), always, nev
 ## Environment Variables
 
 ```bash
-# Set default output format (table, json, csv, pretty, markdown, ndjson)
+# Set default output format (table, json, csv, pretty, markdown, ndjson, ltsv)
 export PARQUETEER_DEFAULT_FORMAT=json
 
 # Color output control (auto, always, never). NO_COLOR is also respected.
@@ -396,11 +416,12 @@ parqueteer read abfss://container@account.dfs.core.windows.net/data.parquet
 |---------|-------------|
 | `read` | Display Parquet file content with optional filtering and format selection |
 | `info` | Show file metadata (file size, dates, writer version, compression ratio) |
+| `count` | Print total row count from footer metadata (no data scan) |
 | `schema FILE` | Column structure — names, types, nullability, compression |
 | `stats FILE` | Column statistics — null count, min, max (from file footer) |
 | `schema diff FILE1 FILE2` | Compare schemas of two Parquet files |
-| `write` | Create a Parquet file from JSON or CSV input |
-| `convert` | Convert between Parquet, JSON, and CSV formats |
+| `write` | Create a Parquet file from JSON, NDJSON, CSV, or LTSV input |
+| `convert` | Convert between Parquet, JSON, CSV, NDJSON, and LTSV formats |
 | `validate` | Verify Parquet file integrity |
 | `merge` | Combine multiple Parquet files into one |
 | `config` | Show effective configuration |

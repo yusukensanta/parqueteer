@@ -12,15 +12,15 @@ This document explains how Scala `implicit` definitions are used in the parquete
 ## Where Implicits Appear
 Key source file (as of writing):
 ```
-src/main/scala/io/parqueteer/config/Configuration.scala
+src/main/scala/io/github/yusukensanta/parqueteer/config/Configuration.scala
 ```
-Excerpt:
+Excerpt (Scala 3 `given` style):
 ```scala
-implicit val s3ConfigDecoder: Decoder[S3Config] = deriveDecoder[S3Config]
-implicit val s3ConfigEncoder: Encoder[S3Config] = deriveEncoder[S3Config]
+given Decoder[S3Config] = deriveDecoder[S3Config]
+given Encoder[S3Config] = deriveEncoder[S3Config]
 ...
-implicit val appConfigDecoder: Decoder[AppConfig] = deriveDecoder[AppConfig]
-implicit val appConfigEncoder: Encoder[AppConfig] = deriveEncoder[AppConfig]
+given Decoder[AppConfig] = deriveDecoder[AppConfig]
+given Encoder[AppConfig] = deriveEncoder[AppConfig]
 ```
 These values are type class instances placed in (or imported into) implicit scope so that Circe can automatically locate them when you call, for example:
 ```scala
@@ -39,12 +39,12 @@ val cfg = parser.decode(json)(appConfigDecoder)
 ```
 Scala's design for type classes before Scala 3 `given` / `using` syntax depends on `implicit` for ergonomic lookup.
 
-## Scala 3 Migration Note
-In Scala 3, `implicit val` type class instances can also be written using `given`:
+## Scala 3 Style
+This project uses Scala 3 `given` syntax throughout (not the legacy `implicit val` form):
 ```scala
 given Decoder[AppConfig] = deriveDecoder[AppConfig]
 ```
-The project (as configured) still uses the `implicit` form for cross-version clarity.
+The `implicit` form is equivalent and still accepted by Scala 3, but `given` is the idiomatic style and is what the codebase uses.
 
 ## Compiler Flag: -language:implicitConversions
 In `build.sbt` we enable:
@@ -74,13 +74,13 @@ val appConfigDecoder: Decoder[AppConfig] = deriveDecoder[AppConfig]
 ```
 Then any code invoking Circe derivation that *relies on automatic implicit search* will fail to compile unless it explicitly supplies `appConfigDecoder`. Runtime behavior does not change—this is a *compile-time* wiring mechanism. The ergonomic cost increases: every decode/encode call must be manually passed the instance.
 
-## Implicit Scope & Import Patterns
-Typical usage pattern:
+## Given Scope & Import Patterns
+Typical usage pattern (Scala 3):
 ```scala
-import io.parqueteer.config.Configuration._
+import io.github.yusukensanta.parqueteer.config.Configuration.given
 val cfg = parser.decode[AppConfig](json)
 ```
-The wildcard import pulls all implicit vals into scope. Without the import, implicit resolution fails unless another object brings them into implicit scope.
+The `given` import brings all given instances into scope. Without the import, implicit resolution fails unless another object brings them into scope.
 
 ## Risks / Pitfalls
 - Ambiguity: Defining multiple implicit `Encoder[AppConfig]` values in the same scope will cause ambiguous implicit errors. Keep a single canonical definition.
@@ -90,30 +90,19 @@ The wildcard import pulls all implicit vals into scope. Without the import, impl
 ## Recommendations
 - Keep implicit encoders/decoders in a dedicated object to manage import clarity (current setup is fine).
 - Avoid defining implicit conversions (`implicit def`) unless absolutely necessary; prefer extension methods in Scala 3 (`extension (x: Foo)` syntax) for clarity.
-- When adding new configuration case classes, follow the existing pattern:
+- When adding new configuration case classes, follow the existing pattern (Scala 3 `given`):
 ```scala
 final case class NewSection(foo: Int, bar: String)
-object Configuration {
-  implicit val newSectionDecoder: Decoder[NewSection] = deriveDecoder
-  implicit val newSectionEncoder: Encoder[NewSection] = deriveEncoder
-}
-```
-
-## Migration Path to `given` (Optional Future)
-Example rewrite:
-```scala
 object Configuration:
   import io.circe.generic.semiauto._
-  given Decoder[S3Config] = deriveDecoder
-  given Encoder[S3Config] = deriveEncoder
-  // ... and so on
+  given Decoder[NewSection] = deriveDecoder
+  given Encoder[NewSection] = deriveEncoder
 ```
-Usage then becomes:
+Usage:
 ```scala
-import io.parqueteer.config.Configuration.given
+import io.github.yusukensanta.parqueteer.config.Configuration.given
 parser.decode[AppConfig](json) // works via given instances
 ```
-Not urgent, but modernizes style.
 
 ## Summary
 - `implicit` here supplies type class instances (Encoders/Decoders) to library methods without boilerplate.

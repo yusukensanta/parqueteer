@@ -11,7 +11,7 @@ Complete guide to sbt commands used in parqueteer project.
 
 ```bash
 sbt compile
-# Output: target/scala-3.7.3/classes/
+# Output: target/scala-3.7.4/classes/
 ```
 
 **Use when**:
@@ -21,9 +21,9 @@ sbt compile
 
 **Artifacts**:
 ```
-target/scala-3.7.3/classes/
-├── io/parqueteer/cli/CliApp.class
-├── io/parqueteer/core/...
+target/scala-3.7.4/classes/
+├── io/github/yusukensanta/parqueteer/cli/CliApp.class
+├── io/github/yusukensanta/parqueteer/core/...
 └── logback.xml
 ```
 
@@ -82,7 +82,7 @@ project/project/        # Nested build cache
 
 ```bash
 sbt assembly
-# Output: target/scala-3.7.3/parqueteer.jar
+# Output: target/scala-3.7.4/parqueteer.jar
 ```
 
 **Use when**:
@@ -93,13 +93,13 @@ sbt assembly
 
 **Artifacts**:
 ```
-target/scala-3.7.3/parqueteer.jar   # 766 MB - Everything included!
+target/scala-3.7.4/parqueteer.jar   # 766 MB - Everything included!
 ```
 
 **What's inside**:
 ```
 parqueteer.jar
-├── io/parqueteer/...           # Your code
+├── io/github/yusukensanta/parqueteer/...           # Your code
 ├── org/apache/parquet/...      # Parquet library
 ├── com/amazonaws/...           # AWS SDK
 ├── scala/...                   # Scala runtime
@@ -125,7 +125,7 @@ addSbtPlugin("com.eed3si9n" % "sbt-assembly" % "2.3.1")
 
 **How to run**:
 ```bash
-java -jar target/scala-3.7.3/parqueteer.jar --help
+java -jar target/scala-3.7.4/parqueteer.jar --help
 ```
 
 ---
@@ -151,7 +151,7 @@ target/universal/stage/
 │   ├── parqueteer       # Unix launcher script (23 KB)
 │   └── parqueteer.bat   # Windows launcher script (20 KB)
 └── lib/
-    ├── io.parqueteer.parqueteer-0.1.0-SNAPSHOT.jar     # Your code (471 KB)
+    ├── io.github.yusukensanta.parqueteer.parqueteer-0.1.0-SNAPSHOT.jar     # Your code (471 KB)
     ├── org.scala-lang.scala3-library_3-3.7.3.jar       # Scala runtime
     ├── com.github.mjakubowski84.parquet4s-core_3-...   # Dependencies
     └── ... (200+ dependency JARs)
@@ -266,12 +266,12 @@ sbt "run --help"
 
 ```bash
 sbt package
-# Output: target/scala-3.7.3/parqueteer_3-0.1.0-SNAPSHOT.jar
+# Output: target/scala-3.7.4/parqueteer_3-0.1.0-SNAPSHOT.jar
 ```
 
 **Artifacts**:
 ```
-target/scala-3.7.3/parqueteer_3-0.1.0-SNAPSHOT.jar   # ~471 KB
+target/scala-3.7.4/parqueteer_3-0.1.0-SNAPSHOT.jar   # ~471 KB
 ```
 
 **Use when**:
@@ -284,8 +284,8 @@ target/scala-3.7.3/parqueteer_3-0.1.0-SNAPSHOT.jar   # ~471 KB
 
 **How to run** (requires classpath):
 ```bash
-java -cp "target/scala-3.7.3/parqueteer_3-0.1.0-SNAPSHOT.jar:lib/*" \
-  io.parqueteer.cli.CliApp --help
+java -cp "target/scala-3.7.4/parqueteer_3-0.1.0-SNAPSHOT.jar:lib/*" \
+  io.github.yusukensanta.parqueteer.cli.CliApp --help
 # Too complex for users!
 ```
 
@@ -320,7 +320,7 @@ sbt console
 
 **Example**:
 ```scala
-scala> import io.parqueteer.core.models._
+scala> import io.github.yusukensanta.parqueteer.core.models._
 scala> StorageLocationParser.parse("s3://bucket/file.parquet")
 ```
 

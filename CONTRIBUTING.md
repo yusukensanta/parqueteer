@@ -186,18 +186,29 @@ parqueteer/
 ├── src/main/scala/io/github/yusukensanta/parqueteer/
 │   ├── cli/
 │   │   ├── CliApp.scala              # Entry point, command dispatch
-│   │   └── CliOutputFormatter.scala  # Presentation layer (table/json/csv)
+│   │   ├── ArgumentParser.scala      # CLI flag/subcommand parsing
+│   │   ├── Commands.scala            # Command ADT definitions
+│   │   ├── CliOutputFormatter.scala  # Presentation layer (table/json/csv/ltsv)
+│   │   ├── HelpFormatter.scala       # --help text generation
+│   │   ├── ShellCompletions.scala    # bash/zsh/fish completion scripts
+│   │   └── CredentialRedactor.scala  # Scrubs secrets from error messages
+│   ├── config/
+│   │   ├── Configuration.scala       # Config case classes with Circe given instances
+│   │   └── EnvConfig.scala           # Environment variable resolution
 │   └── core/
+│       ├── models/                   # Domain model (CellValue, ParquetFile, etc.)
 │       ├── services/
 │       │   └── ParquetService.scala  # Business logic, Either-based API
-│       └── repositories/
-│           ├── ParquetRepository.scala    # Parquet I/O orchestration
-│           ├── ParquetRecordDecoder.scala # Row → Map decoding
-│           ├── ParquetSchemaBuilder.scala # Schema construction
-│           └── ParquetWriteOps.scala      # Write/convert operations
+│       ├── repositories/
+│       │   ├── ParquetRepository.scala    # Parquet I/O orchestration
+│       │   ├── ParquetRecordDecoder.scala # Row → Map decoding
+│       │   ├── ParquetSchemaBuilder.scala # Schema construction
+│       │   └── ParquetWriteOps.scala      # Write/convert operations
+│       └── util/                     # Shared utilities (SizeParser, FileExtension, …)
 ├── src/test/scala/         # Mirror structure of main
 ├── project/                # sbt build configuration
 ├── scripts/                # Utility scripts
+├── docs/                   # Extended documentation
 ├── .github/workflows/      # CI/CD pipelines
 ├── Makefile               # Build commands
 ├── build.sbt              # sbt build definition

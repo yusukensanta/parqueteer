@@ -35,7 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `--quiet` / `-q` global flag to suppress non-error output (#43)
 - `--color <auto|always|never>` global flag for color output control (#44)
 - `markdown` and `ndjson` output formats for `read` and `info` commands (#16)
-- Environment variable support: `PARQUETEER_FORMAT`, `PARQUETEER_COLOR`, `PARQUETEER_VERBOSE`, `PARQUETEER_MAX_ROWS` (#46, #17)
+- Environment variable support: `PARQUETEER_DEFAULT_FORMAT`, `PARQUETEER_COLOR`, `PARQUETEER_VERBOSE`, `PARQUETEER_MAX_ROWS` (#46, #17)
 - Layered config precedence: CLI flags > env vars > config file > defaults
 - Stdin read support: use `-` as input path in `write` and `convert` commands
 - Sealed `ParqueteerError` ADT with typed error variants and per-error exit codes (#7)
