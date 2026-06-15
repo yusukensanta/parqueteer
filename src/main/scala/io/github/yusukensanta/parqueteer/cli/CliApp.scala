@@ -339,19 +339,25 @@ object CliApp {
         override def writeRow(row: Map[String, CellValue]): Unit = ()
       }
       else RowStreamWriter(format, System.out)
-      val result = {
-        writer.begin()
-        service.streamRead(filePath, readConfig) { row =>
-          writer.writeRow(row)
+      // Validate filter against actual schema before emitting any output bytes,
+      // so a type-mismatch or unknown-column error doesn't produce a partial JSON/CSV document.
+      var writerStarted = false
+      val result =
+        service.validateFilter(readConfig.filter).flatMap { _ =>
+          writer.begin()
+          writerStarted = true
+          service.streamRead(filePath, readConfig) { row =>
+            writer.writeRow(row)
+          }
         }
-      }
-      // Close the document before reporting errors so output is well-formed
-      // (e.g., JSON array gets its closing `]`, table gets its bottom border).
-      // Swallow writer.end() failures — they must not mask the real read result.
-      scala.util.Try(writer.end()).failed.foreach { ex =>
-        System.err.println(
-          s"[parqueteer] warning: error flushing output: ${ex.getMessage}"
-        )
+      // Only close the document if writer.begin() was reached.
+      if (writerStarted) {
+        // Swallow writer.end() failures — they must not mask the real read result.
+        scala.util.Try(writer.end()).failed.foreach { ex =>
+          System.err.println(
+            s"[parqueteer] warning: error flushing output: ${ex.getMessage}"
+          )
+        }
       }
       // PrintStream (System.out) swallows write errors; surface disk-full / broken-pipe.
       val stdoutError = System.out.checkError()
@@ -664,57 +670,60 @@ object CliApp {
         )
       )
     else
-      scala.util
-        .Try {
-          import better.files._
-          val preExisted = File(outputPath).exists
-          val outFile = File(outputPath).createIfNotExists(createParents = true)
-          (
-            preExisted,
-            outFile,
-            new java.io.PrintStream(outFile.newOutputStream)
-          )
-        }
-        .toEither
-        .left
-        .map(ParqueteerError.IOError.apply)
-        .flatMap { case (preExisted, outFile, ps) =>
-          val writer = RowStreamWriter(outFormat, ps)
-          var failed = true
-          try {
-            writer.begin()
-            val result = service
-              .streamRead(
-                inputPath,
-                ReadConfig(maxRows = conversionConfig.maxRows)
-              )(writer.writeRow)
-            // Swallow writer.end() failures — they must not mask the real read result.
-            scala.util.Try(writer.end()).failed.foreach { ex =>
-              System.err.println(
-                s"[parqueteer] warning: error flushing output: ${ex.getMessage}"
-              )
-            }
-            // PrintStream swallows I/O exceptions; checkError() surfaces disk-full / broken-pipe.
-            val writeError = ps.checkError()
-            failed = result.isLeft || writeError
-            if (writeError && result.isRight)
-              Left(
-                ParqueteerError.IOError(
-                  new java.io.IOException(
-                    "Output stream write error (disk full or broken pipe)"
+      checkOutputWritable(outputPath).flatMap { _ =>
+        scala.util
+          .Try {
+            import better.files._
+            val preExisted = File(outputPath).exists
+            val outFile =
+              File(outputPath).createIfNotExists(createParents = true)
+            (
+              preExisted,
+              outFile,
+              new java.io.PrintStream(outFile.newOutputStream)
+            )
+          }
+          .toEither
+          .left
+          .map(ParqueteerError.IOError.apply)
+          .flatMap { case (preExisted, outFile, ps) =>
+            val writer = RowStreamWriter(outFormat, ps)
+            var failed = true
+            try {
+              writer.begin()
+              val result = service
+                .streamRead(
+                  inputPath,
+                  ReadConfig(maxRows = conversionConfig.maxRows)
+                )(writer.writeRow)
+              // Swallow writer.end() failures — they must not mask the real read result.
+              scala.util.Try(writer.end()).failed.foreach { ex =>
+                System.err.println(
+                  s"[parqueteer] warning: error flushing output: ${ex.getMessage}"
+                )
+              }
+              // PrintStream swallows I/O exceptions; checkError() surfaces disk-full / broken-pipe.
+              val writeError = ps.checkError()
+              failed = result.isLeft || writeError
+              if (writeError && result.isRight)
+                Left(
+                  ParqueteerError.IOError(
+                    new java.io.IOException(
+                      "Output stream write error (disk full or broken pipe)"
+                    )
                   )
                 )
-              )
-            else
-              result.map(_ => ())
-          } finally {
-            ps.close()
-            // Only delete output on failure if the file was created by this run.
-            // If it pre-existed, deleting it is strictly worse than leaving the partial write.
-            if (failed && !preExisted)
-              scala.util.Try(outFile.delete(swallowIOExceptions = true))
+              else
+                result.map(_ => ())
+            } finally {
+              ps.close()
+              // Only delete output on failure if the file was created by this run.
+              // If it pre-existed, deleting it is strictly worse than leaving the partial write.
+              if (failed && !preExisted)
+                scala.util.Try(outFile.delete(swallowIOExceptions = true))
+            }
           }
-        }
+      }
 
   private def executeMerge(
       service: ParquetService,

@@ -60,9 +60,23 @@ private[repositories] object ParquetWriteOps {
                 val unscaled = scaled.underlying().unscaledValue()
                 fieldType.getPrimitiveTypeName match {
                   case PrimitiveTypeName.INT32 =>
-                    group.add(fieldIndex, unscaled.intValueExact())
+                    try group.add(fieldIndex, unscaled.intValueExact())
+                    catch {
+                      case _: ArithmeticException =>
+                        throw new IllegalArgumentException(
+                          s"Column '$key': DECIMAL value $bd (unscaled $unscaled at scale $scale) " +
+                            "overflows INT32 range. Use DECIMAL(p,s) with p≤9, or widen the schema type."
+                        )
+                    }
                   case PrimitiveTypeName.INT64 =>
-                    group.add(fieldIndex, unscaled.longValueExact())
+                    try group.add(fieldIndex, unscaled.longValueExact())
+                    catch {
+                      case _: ArithmeticException =>
+                        throw new IllegalArgumentException(
+                          s"Column '$key': DECIMAL value $bd (unscaled $unscaled at scale $scale) " +
+                            "overflows INT64 range. Use DECIMAL(p,s) with p≤18, or widen the schema type."
+                        )
+                    }
                   case _ =>
                     group.add(
                       fieldIndex,
