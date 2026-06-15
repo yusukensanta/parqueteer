@@ -17,6 +17,10 @@ private[repositories] object ParquetWriteOps {
     java.util.concurrent.ConcurrentHashMap.newKeySet[String]()
   private val longToDoubleWarnedCols =
     java.util.concurrent.ConcurrentHashMap.newKeySet[String]()
+  private val longToFloatWarnedCols =
+    java.util.concurrent.ConcurrentHashMap.newKeySet[String]()
+  private val doubleToFloatWarnedCols =
+    java.util.concurrent.ConcurrentHashMap.newKeySet[String]()
 
   def writeRowToGroup(
       group: Group,
@@ -95,13 +99,32 @@ private[repositories] object ParquetWriteOps {
                       "mixed integer/float column; consider using consistent numeric types."
                   )
                 group.add(fieldIndex, l.toDouble)
-              case PrimitiveTypeName.FLOAT => group.add(fieldIndex, l.toFloat)
-              case _                       => group.add(fieldIndex, l)
+              case PrimitiveTypeName.FLOAT =>
+                // Long values outside (-2^24, 2^24) cannot be represented exactly as Float (23-bit mantissa).
+                if (
+                  (l > 16777216L || l < -16777216L) &&
+                  longToFloatWarnedCols.add(key)
+                )
+                  logger.warn(
+                    s"Column '$key': Long value $l exceeds Float precision range (2^24) — " +
+                      "coercing to FLOAT loses precision. Consider using DOUBLE schema for this column."
+                  )
+                group.add(fieldIndex, l.toFloat)
+              case _ => group.add(fieldIndex, l)
             }
           case CellValue.F64(d) =>
-            if (fieldType.getPrimitiveTypeName == PrimitiveTypeName.FLOAT)
+            if (fieldType.getPrimitiveTypeName == PrimitiveTypeName.FLOAT) {
+              // Double values outside ±Float.MaxValue overflow to ±Infinity when cast to Float.
+              if (
+                (d > Float.MaxValue.toDouble || d < -Float.MaxValue.toDouble) &&
+                doubleToFloatWarnedCols.add(key)
+              )
+                logger.warn(
+                  s"Column '$key': Double value $d exceeds Float range (±${Float.MaxValue}) — " +
+                    "coercing to FLOAT produces ±Infinity. Consider using DOUBLE schema for this column."
+                )
               group.add(fieldIndex, d.toFloat)
-            else
+            } else
               group.add(fieldIndex, d)
           case CellValue.F32(f) =>
             if (fieldType.getPrimitiveTypeName == PrimitiveTypeName.DOUBLE)
