@@ -75,26 +75,34 @@ private[repositories] object ParquetWriteOps {
             )
             group.add(fieldIndex, value.display)
           case CellValue.I32(i) =>
-            if (fieldType.getPrimitiveTypeName == PrimitiveTypeName.DOUBLE)
-              group.add(fieldIndex, i.toDouble)
-            else
-              group.add(fieldIndex, i)
+            fieldType.getPrimitiveTypeName match {
+              case PrimitiveTypeName.DOUBLE => group.add(fieldIndex, i.toDouble)
+              case PrimitiveTypeName.FLOAT  => group.add(fieldIndex, i.toFloat)
+              case PrimitiveTypeName.INT64  => group.add(fieldIndex, i.toLong)
+              case _                        => group.add(fieldIndex, i)
+            }
           case CellValue.I64(l) =>
-            if (fieldType.getPrimitiveTypeName == PrimitiveTypeName.DOUBLE) {
-              // Long values outside (-2^53, 2^53) cannot be represented exactly as Double.
-              if (
-                (l > 9007199254740992L || l < -9007199254740992L) &&
-                longToDoubleWarnedCols.add(key)
-              )
-                logger.warn(
-                  s"Column '$key': Long value $l exceeds Double precision range (2^53) — " +
-                    "coercing to DOUBLE loses precision. Schema widening produced DOUBLE from a " +
-                    "mixed integer/float column; consider using consistent numeric types."
+            fieldType.getPrimitiveTypeName match {
+              case PrimitiveTypeName.DOUBLE =>
+                // Long values outside (-2^53, 2^53) cannot be represented exactly as Double.
+                if (
+                  (l > 9007199254740992L || l < -9007199254740992L) &&
+                  longToDoubleWarnedCols.add(key)
                 )
-              group.add(fieldIndex, l.toDouble)
-            } else
-              group.add(fieldIndex, l)
-          case CellValue.F64(d) => group.add(fieldIndex, d)
+                  logger.warn(
+                    s"Column '$key': Long value $l exceeds Double precision range (2^53) — " +
+                      "coercing to DOUBLE loses precision. Schema widening produced DOUBLE from a " +
+                      "mixed integer/float column; consider using consistent numeric types."
+                  )
+                group.add(fieldIndex, l.toDouble)
+              case PrimitiveTypeName.FLOAT => group.add(fieldIndex, l.toFloat)
+              case _                       => group.add(fieldIndex, l)
+            }
+          case CellValue.F64(d) =>
+            if (fieldType.getPrimitiveTypeName == PrimitiveTypeName.FLOAT)
+              group.add(fieldIndex, d.toFloat)
+            else
+              group.add(fieldIndex, d)
           case CellValue.F32(f) =>
             if (fieldType.getPrimitiveTypeName == PrimitiveTypeName.DOUBLE)
               group.add(fieldIndex, f.toDouble)
