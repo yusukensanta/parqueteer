@@ -2,40 +2,36 @@
 
 This document analyzes current code paths and outlines pragmatic + advanced optimizations for large-scale read/write scenarios in a CLI context. It complements the existing roadmap by focusing only on performance levers.
 
-> Scope: Observations from repository state (Scala 3.7.4, parquet4s usage, direct Parquet API for writes, Try-based sync model). No code changes yet—this is strategic guidance.
+> Scope: Analysis of repository state (Scala 3.7.4, parquet4s usage, direct Parquet API for writes). Items marked ✓ are implemented; remaining items are strategic guidance for future work.
 
 ---
 ## 1. Current Baseline & Observations
 
 ### 1.1 Read Path (ParquetRepository.readContent)
 - Uses parquet4s `ParquetReader.as[RowParquetRecord]...read(path)` producing an Iterator.
-- Converts entire iterator to `List` (potential full materialization):
-  ```scala
-  // Long-safe helper — avoids Int overflow for large limit values
-  val records = applyMaxRows(reader.iterator, config.maxRows).toList
-  ```
-- Row group filtering is only via parquet4s `Filter` (predicate pushdown), but no explicit column projection optimization.
-- Always computes total row count by opening file again (`getRowCount`) – double footer read.
+- ✓ **Streaming mode** added: `--stream` flag avoids full materialization to `List`; formats like NDJSON/LTSV write row-by-row.
+- ✓ **Column projection** added: `--columns col1,col2` restricts materialization at the parquet4s level.
+- Row group filtering via parquet4s `Filter` (predicate pushdown).
+- ✓ **Footer LRU cache** added: avoids double row-count read for repeated operations on the same file.
 
 ### 1.2 Schema & Metadata Reads
-- Uses `ParquetFileReader.open` directly each time—could share footer metadata cache.
-- Compression ratio derived by iterating row groups; acceptable but can be cached.
+- ✓ Footer metadata cached via LRU; repeat calls reuse cached footer.
+- Compression ratio derived by iterating row groups; acceptable, can be cached as future work.
 
 ### 1.3 Write Path (writeContent)
 - Builds schema each invocation (either from provided ParquetSchema or inferred from first row).
-- Uses `ExampleParquetWriter` with fully materialized input `List[Map[String, Any]]` (no streaming/iterator support yet).
-- Per-row overhead: reflection avoided, but `Map[String, Any]` + pattern matching introduces boxing and allocation.
+- ✓ **Streaming write** added via `streamContent` / `writeContentStream`; accepts iterator input to avoid holding all rows in memory.
+- Per-row overhead: `Map[String, CellValue]` + pattern matching introduces some boxing; no object pooling.
 
 ### 1.4 Data Model
-- Generic `Map[String, Any]` rows → flexible but slower than generated case classes / columnar mapping.
-- No explicit memory reuse / object pooling.
+- Generic `Map[String, CellValue]` rows — typed but still allocates per row. No columnar batch representation yet.
 
 ### 1.5 Concurrency Model
-- Purely synchronous; no parallelization of row group processing.
-- No user-configurable thread pools.
+- ✓ **Parallel row group reads** added: `--parallel N` processes row groups concurrently.
+- No user-configurable thread pool size beyond `--parallel`.
 
 ### 1.6 Error & Control Flow
-- `Try` used; no ability to integrate structured async / streaming libs (cats-effect / FS2) yet.
+- ✓ **Sealed error ADT** added: `ParqueteerError` hierarchy with distinct exit codes (1–7) for all failure modes.
 
 ---
 ## 2. Guiding Principles
@@ -47,13 +43,13 @@ This document analyzes current code paths and outlines pragmatic + advanced opti
 
 ---
 ## 3. Immediate Low-Effort Wins (Tier 1)
-| Item | Change | Benefit | Effort |
-|------|--------|---------|--------|
-| Avoid double footer read | Pass footer metadata from first reader to row count logic | ~5–15% faster on small files (I/O bound) | Low |
-| Lazy limit enforcement | Stop iteration once `maxRows` reached without converting all to List first | Lower allocation, faster early exit | Low |
-| Column projection flag | Implement `--columns colA,colB` to restrict materialization | Lower CPU + memory | Low |
-| Footer cache | Simple in-memory (path -> (timestamp, footer)) | Repeated operations faster | Low |
-| Replace println in error filter fallback | Avoid console I/O in hot path (use logger at debug) | Micro | Low |
+| Item | Change | Benefit | Effort | Status |
+|------|--------|---------|--------|--------|
+| Avoid double footer read | Pass footer metadata from first reader to row count logic | ~5–15% faster on small files (I/O bound) | Low | ✓ Done |
+| Lazy limit enforcement | Stop iteration once `maxRows` reached without converting all to List first | Lower allocation, faster early exit | Low | ✓ Done |
+| Column projection flag | Implement `--columns colA,colB` to restrict materialization | Lower CPU + memory | Low | ✓ Done |
+| Footer cache | Simple in-memory (path -> (timestamp, footer)) | Repeated operations faster | Low | ✓ Done |
+| Streaming write path | Accept Iterator for write to avoid full in-memory load | Lower memory for large writes | Low | ✓ Done |
 
 ---
 ## 4. Near-Term Structural Enhancements (Tier 2)
@@ -202,4 +198,4 @@ def streamContent(file: ParquetFile, config: ReadConfig): Iterator[Map[String, A
 ## 12. Summary
 Immediate performance gains are available without architectural upheaval (streaming, projection, caching). Mid-term gains come from parallelism and batch models. Advanced paths (stats-based skipping, Arrow/zero-copy, native images) should wait until simpler improvements are realized and benchmarked.
 
-*Draft – refine before commit.*
+*Last updated: June 2026*

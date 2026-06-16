@@ -262,7 +262,7 @@ Make sure `make check` passes before submitting PR!
 
 ## Getting Help
 
-- 📖 **Documentation**: Check `.claude/` directory for detailed guides
+- 📖 **Documentation**: Check the [`docs/`](docs/) directory for detailed guides
 - 🐛 **Issues**: Browse existing issues or create a new one
 - 💬 **Discussions**: Ask questions in GitHub Discussions
 - 📧 **Email**: Contact maintainers (see GitHub profile)

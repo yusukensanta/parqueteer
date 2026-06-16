@@ -432,6 +432,21 @@ Run `parqueteer <command> --help` for per-command options.
 
 ---
 
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| [docs/SBT_COMMANDS.md](docs/SBT_COMMANDS.md) | Complete sbt command reference with artifacts and use cases |
+| [docs/SCALA_IMPLICITS.md](docs/SCALA_IMPLICITS.md) | How Scala `given`/`implicit` works in this codebase (Circe encoders, type classes) |
+| [docs/PERFORMANCE_STRATEGY.md](docs/PERFORMANCE_STRATEGY.md) | Performance analysis, implemented optimizations, and future levers |
+| [docs/FUTURE_ROADMAP.md](docs/FUTURE_ROADMAP.md) | Strategic roadmap: completed items, in-progress themes, and long-horizon ideas |
+| [docs/BENCHMARKS.md](docs/BENCHMARKS.md) | Benchmark methodology and results matrix (populate via `scripts/benchmark.sh`) |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Development setup, workflow, and PR guidelines |
+| [CHANGELOG.md](CHANGELOG.md) | Version history |
+| [SECURITY.md](SECURITY.md) | Security policy and vulnerability reporting |
+
+---
+
 ## License
 
 Apache 2.0
