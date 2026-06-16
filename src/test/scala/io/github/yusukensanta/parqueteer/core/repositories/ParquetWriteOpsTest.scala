@@ -594,4 +594,52 @@ class ParquetWriteOpsTest extends AnyFlatSpec with Matchers {
       99999L
     )
   }
+
+  it should "throw when DECIMAL value exceeds declared precision for INT32 encoding after rounding" in {
+    // DECIMAL(4,2) as INT32: max unscaled = 9999 (value 99.99).
+    // 99.995 rounds HALF_UP to 100.00, unscaled = 10000, which exceeds precision 4.
+    // intValueExact() does NOT detect this — the precision guard must fire first.
+    val mt = schema(
+      "message root { required int32 amount (DECIMAL(4,2)); }"
+    )
+    val group = new SimpleGroupFactory(mt).newGroup()
+    an[IllegalArgumentException] should be thrownBy {
+      ParquetWriteOps.writeRowToGroup(
+        group,
+        Map("amount" -> CellValue.Dec(BigDecimal("99.995"))),
+        mt
+      )
+    }
+  }
+
+  it should "throw when DECIMAL value exceeds declared precision for INT64 encoding after rounding" in {
+    // DECIMAL(4,2) as INT64: 99.995 rounds to 100.00 (unscaled 10000 > 9999).
+    val mt = schema(
+      "message root { required int64 amount (DECIMAL(4,2)); }"
+    )
+    val group = new SimpleGroupFactory(mt).newGroup()
+    an[IllegalArgumentException] should be thrownBy {
+      ParquetWriteOps.writeRowToGroup(
+        group,
+        Map("amount" -> CellValue.Dec(BigDecimal("99.995"))),
+        mt
+      )
+    }
+  }
+
+  it should "not throw for DECIMAL value within precision for INT32 encoding" in {
+    // DECIMAL(4,2) as INT32: 99.99 → unscaled 9999, within precision 4.
+    val mt = schema(
+      "message root { required int32 amount (DECIMAL(4,2)); }"
+    )
+    val group = new SimpleGroupFactory(mt).newGroup()
+    noException should be thrownBy {
+      ParquetWriteOps.writeRowToGroup(
+        group,
+        Map("amount" -> CellValue.Dec(BigDecimal("99.99"))),
+        mt
+      )
+    }
+    group.getInteger("amount", 0) shouldBe 9999
+  }
 }

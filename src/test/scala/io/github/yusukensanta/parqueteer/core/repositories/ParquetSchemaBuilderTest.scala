@@ -301,6 +301,38 @@ class ParquetSchemaBuilderTest extends AnyFlatSpec with Matchers {
     mt.getName shouldBe "root"
   }
 
+  it should "throw for DECIMAL(p,s) where precision > 38" in {
+    an[IllegalArgumentException] should be thrownBy {
+      ParquetSchemaBuilder.buildMessageType(
+        schema(columnInfo("price", "DECIMAL(39,2)"))
+      )
+    }
+  }
+
+  it should "throw for DECIMAL(p,s) where precision < 1" in {
+    an[IllegalArgumentException] should be thrownBy {
+      ParquetSchemaBuilder.buildMessageType(
+        schema(columnInfo("price", "DECIMAL(0,0)"))
+      )
+    }
+  }
+
+  it should "throw for DECIMAL(p,s) where scale >= precision" in {
+    an[IllegalArgumentException] should be thrownBy {
+      ParquetSchemaBuilder.buildMessageType(
+        schema(columnInfo("price", "DECIMAL(5,5)"))
+      )
+    }
+  }
+
+  it should "accept DECIMAL(38,10) (maximum valid precision)" in {
+    noException should be thrownBy {
+      ParquetSchemaBuilder.buildMessageType(
+        schema(columnInfo("price", "DECIMAL(38,10)"))
+      )
+    }
+  }
+
   // ── inferSchemaFromData ────────────────────────────────────────────────────
 
   "ParquetSchemaBuilder.inferSchemaFromData" should "throw on empty data" in {

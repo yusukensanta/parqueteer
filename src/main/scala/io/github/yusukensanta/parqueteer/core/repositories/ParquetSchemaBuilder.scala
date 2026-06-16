@@ -166,6 +166,14 @@ private[repositories] object ParquetSchemaBuilder {
           case decimalPattern(pStr, sStr) =>
             val precision = pStr.toInt
             val scale = sStr.trim.toInt
+            if (precision < 1 || precision > MaxDecimalPrecision)
+              throw new IllegalArgumentException(
+                s"Invalid DECIMAL precision $precision in '$t': must be in [1, $MaxDecimalPrecision]."
+              )
+            if (scale < 0 || scale >= precision)
+              throw new IllegalArgumentException(
+                s"Invalid DECIMAL scale $scale in '$t': must be in [0, precision-1] = [0, ${precision - 1}]."
+              )
             (
               PrimitiveTypeName.BINARY,
               Some(LogicalTypeAnnotation.decimalType(scale, precision))
