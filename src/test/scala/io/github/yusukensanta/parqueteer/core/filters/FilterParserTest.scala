@@ -552,4 +552,45 @@ class FilterParserTest extends AnyFlatSpec with Matchers {
     FilterParser
       .parseWithSchema("price IN (100, 200, 300)", s) shouldBe a[Right[?, ?]]
   }
+
+  // ── IS NOT NULL error message ──────────────────────────────────────────────
+
+  "FilterParser IS NOT NULL" should "report 'after IS NOT' when NOT was consumed but NULL is missing" in {
+    // "col IS NOT 42" — IS NOT consumed, next token is 42 not NULL
+    val result = FilterParser.parse("col IS NOT 42")
+    result shouldBe a[Left[?, ?]]
+    result.left.exists(_.message.contains("after IS NOT")) shouldBe true
+    result.left.exists(_.message.contains("after IS,")) shouldBe false
+  }
+
+  it should "report 'after IS' when IS alone consumed but NULL is missing" in {
+    // "col IS 42" — IS consumed, next token is 42 not NULL or NOT
+    val result = FilterParser.parse("col IS 42")
+    result shouldBe a[Left[?, ?]]
+    result.left.exists(_.message.contains("after IS,")) shouldBe true
+  }
+
+  // ── FilterParseError exit code and FilterParseException routing ───────────
+
+  "FilterParseError" should "have exit code 7" in {
+    val s = schema("age" -> PrimitiveTypeName.INT32)
+    val result = FilterParser.parseWithSchema("unknown IS NULL", s)
+    result shouldBe a[Left[?, ?]]
+    result.left.map(_.exitCode) shouldBe Left(7)
+  }
+
+  "ParqueteerError.FilterParseException" should "route to FilterParseError via toParqueteerError" in {
+    import io.github.yusukensanta.parqueteer.core.models.ParqueteerError
+    import io.github.yusukensanta.parqueteer.core.models.ParqueteerError.toParqueteerError
+    import scala.util.Try
+    val ex = new ParqueteerError.FilterParseException(
+      "col IS NULL",
+      "column 'col' not found"
+    )
+    val result = Try(throw ex).toParqueteerError
+    result shouldBe Left(
+      ParqueteerError.FilterParseError("col IS NULL", "column 'col' not found")
+    )
+    result.left.map(_.exitCode) shouldBe Left(7)
+  }
 }

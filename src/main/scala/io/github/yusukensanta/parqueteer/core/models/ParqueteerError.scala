@@ -53,6 +53,9 @@ object ParqueteerError:
       cause: Throwable = null
   ) extends RuntimeException(message, cause)
 
+  class FilterParseException(val expression: String, message: String)
+      extends RuntimeException(message)
+
   /** Thrown when a row field is missing from the write schema — maps to
     * ParseError rather than the generic InvalidFormat to produce a clear "Parse
     * error (input): ..." message.
@@ -63,6 +66,8 @@ object ParqueteerError:
   extension [A](t: Try[A])
     def toParqueteerError: Either[ParqueteerError, A] =
       t.toEither.left.map {
+        case e: FilterParseException =>
+          FilterParseError(e.expression, e.getMessage)
         case e: CloudAuthException => CloudAuthError(e.provider, e.getMessage)
         case e: RowSchemaMismatchException =>
           ParseError(

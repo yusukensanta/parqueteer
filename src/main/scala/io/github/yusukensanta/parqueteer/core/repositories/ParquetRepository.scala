@@ -543,8 +543,9 @@ class HadoopParquetRepository(
           .parseWithSchema(expr, fileSchema)
           .fold(
             err =>
-              throw new RuntimeException(
-                s"Cannot apply filter to file schema: ${err.userMessage}"
+              throw new ParqueteerError.FilterParseException(
+                expr,
+                err.message
               ),
             identity
           )
