@@ -1,19 +1,19 @@
 # parqueteer Future Roadmap (Draft)
 
-This document is an exploratory / strategic view forward, complementing the existing `ROADMAP.md` (execution-focused). It groups future possibilities by impact and sequencing assumptions based on current codebase structure (CLI-centric, repository/service layering, Parquet-first scope) and technology choices (Scala 3, Parquet4s, Circe).
+This document is an exploratory / strategic view forward. It groups future possibilities by impact and sequencing assumptions based on current codebase structure (CLI-centric, repository/service layering, Parquet-first scope) and technology choices (Scala 3, Parquet4s, Circe).
 
 > Status: Draft for discussion. Not yet committed. Use to refine priorities.
 
 ---
 ## 1. Foundational Hardening (v0.2.x–v0.3.x)
 ### 1.1 Performance & Footprint
-- Row group parallelism with controlled thread-pool (avoid global execution context contention)
-- Column projection pruning (lazy materialization; integrate with repository layer methods)
-- Benchmark harness (JMH module or simple timing suite in `scripts/`)
+- ~~Row group parallelism with controlled thread-pool~~ ✓ Done (`--parallel N`)
+- ~~Column projection pruning (lazy materialization; integrate with repository layer methods)~~ ✓ Done (`--columns`)
+- Benchmark harness (JMH module or simple timing suite in `scripts/`) — see [`scripts/benchmark.sh`](../scripts/benchmark.sh) for wall-clock baseline
 - Memory profiling & backpressure strategy for streaming (choose FS2 vs. custom iterator + Resource model)
 
 ### 1.2 Robust Error Model
-- Introduce sealed ADT for domain errors (e.g. FileNotFound, SchemaMismatch, FilterParseError, CloudAuthError)
+- ~~Introduce sealed ADT for domain errors (e.g. FileNotFound, SchemaMismatch, FilterParseError, CloudAuthError)~~ ✓ Done
 - Shift from `Try` to `Either[Error, A]` / `IO` (cats-effect) for clearer composition
 - Uniform error rendering layer (colored CLI output, exit codes table)
 
@@ -49,7 +49,7 @@ This document is an exploratory / strategic view forward, complementing the exis
 ### 3.1 Additional Formats
 - Arrow IPC writer (zero-copy path evaluation; depends on memory model choices)
 - Avro bridge (read/write; map Parquet logical types)
-- NDJSON streaming encoder (line-by-line)
+- ~~NDJSON streaming encoder (line-by-line)~~ ✓ Done
 
 ### 3.2 External Systems
 - JDBC export prototype (PostgreSQL focus; COPY-based bulk ingestion)
@@ -143,7 +143,7 @@ This document is an exploratory / strategic view forward, complementing the exis
 
 ### 8.2 QA Pipelines
 - Nightly large-file performance run (publish trend graph)
-- Cross-Java version test matrix (17, 21, LTS+1)
+- ~~Cross-Java version test matrix (17, 21, LTS+1)~~ ✓ Done (CI runs Java 17 and 21)
 - Optional native image experiment (GraalVM) for ultra-fast startup
 
 ### 8.3 Binary Distribution
@@ -154,16 +154,16 @@ This document is an exploratory / strategic view forward, complementing the exis
 
 ---
 ## 9. Priority Matrix (Indicative)
-| Theme | Impact | Effort | Priority Tier |
-|-------|--------|--------|---------------|
-| Parallel row group reads | High | Medium | P1 |
-| Streaming mode | High | Medium | P1 |
-| Unified error ADT | Medium | Low | P1 |
-| Column projection pruning | High | Medium | P1 |
-| Schema merge + diff | Medium | Medium | P2 |
-| Arrow / Avro support | Medium | High | P2 |
-| Plugin architecture | High (strategic) | High | P3 |
-| Distributed scan planner | Very High | Very High | P3 |
+| Theme | Impact | Effort | Priority Tier | Status |
+|-------|--------|--------|---------------|--------|
+| Parallel row group reads | High | Medium | P1 | ✓ Done |
+| Streaming mode | High | Medium | P1 | ✓ Done |
+| Unified error ADT | Medium | Low | P1 | ✓ Done |
+| Column projection pruning | High | Medium | P1 | ✓ Done |
+| Schema merge + diff | Medium | Medium | P2 | ✓ Done |
+| Arrow / Avro support | Medium | High | P2 | Not started |
+| Plugin architecture | High (strategic) | High | P3 | Not started |
+| Distributed scan planner | Very High | Very High | P3 | Not started |
 
 Legend: P1 = near-term, P2 = mid-term, P3 = strategic.
 

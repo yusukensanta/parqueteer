@@ -151,7 +151,7 @@ target/universal/stage/
 │   ├── parqueteer       # Unix launcher script (23 KB)
 │   └── parqueteer.bat   # Windows launcher script (20 KB)
 └── lib/
-    ├── io.github.yusukensanta.parqueteer.parqueteer-0.1.0-SNAPSHOT.jar     # Your code (471 KB)
+    ├── io.github.yusukensanta.parqueteer.parqueteer-0.10.x.jar     # Your code (471 KB)
     ├── org.scala-lang.scala3-library_3-3.7.3.jar       # Scala runtime
     ├── com.github.mjakubowski84.parquet4s-core_3-...   # Dependencies
     └── ... (200+ dependency JARs)
@@ -195,7 +195,7 @@ target\universal\stage\bin\parqueteer.bat --help
 
 ```bash
 sbt universal:packageBin
-# Output: target/universal/parqueteer-0.1.0-SNAPSHOT.zip
+# Output: target/universal/parqueteer-0.10.x.zip
 ```
 
 **Use when**:
@@ -205,12 +205,12 @@ sbt universal:packageBin
 
 **Artifacts**:
 ```
-target/universal/parqueteer-0.1.0-SNAPSHOT.zip   # 685 MB
+target/universal/parqueteer-0.10.x.zip   # 685 MB
 ```
 
 **What's inside**:
 ```
-parqueteer-0.1.0-SNAPSHOT/
+parqueteer-0.10.x/
 ├── bin/
 │   ├── parqueteer       # Ready to run!
 │   └── parqueteer.bat
@@ -266,12 +266,12 @@ sbt "run --help"
 
 ```bash
 sbt package
-# Output: target/scala-3.7.4/parqueteer_3-0.1.0-SNAPSHOT.jar
+# Output: target/scala-3.7.4/parqueteer_3-0.10.x.jar
 ```
 
 **Artifacts**:
 ```
-target/scala-3.7.4/parqueteer_3-0.1.0-SNAPSHOT.jar   # ~471 KB
+target/scala-3.7.4/parqueteer_3-0.10.x.jar   # ~471 KB
 ```
 
 **Use when**:
@@ -284,7 +284,7 @@ target/scala-3.7.4/parqueteer_3-0.1.0-SNAPSHOT.jar   # ~471 KB
 
 **How to run** (requires classpath):
 ```bash
-java -cp "target/scala-3.7.4/parqueteer_3-0.1.0-SNAPSHOT.jar:lib/*" \
+java -cp "target/scala-3.7.4/parqueteer_3-0.10.x.jar:lib/*" \
   io.github.yusukensanta.parqueteer.cli.CliApp --help
 # Too complex for users!
 ```
@@ -296,7 +296,7 @@ java -cp "target/scala-3.7.4/parqueteer_3-0.1.0-SNAPSHOT.jar:lib/*" \
 
 ```bash
 sbt publishLocal
-# Output: ~/.ivy2/local/io.parqueteer/parqueteer_3/0.1.0-SNAPSHOT/
+# Output: ~/.ivy2/local/io.parqueteer/parqueteer_3/0.10.x/
 ```
 
 **Use when**:
@@ -338,7 +338,7 @@ scala> StorageLocationParser.parse("s3://bucket/file.parquet")
 
 ---
 
-## Why I Used These Commands
+## Common Workflows
 
 ### For Development
 ```bash
@@ -478,4 +478,4 @@ sbt publish              # Remote publish
 
 ---
 
-*Last updated: October 2025*
+*Last updated: June 2026*

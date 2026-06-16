@@ -431,8 +431,6 @@ toJson("hello")
 
 ## Key Takeaway
 
-`★ Insight ─────────────────────────────────────`
-
 **Implicits = Compiler-Assisted Dependency Injection**
 
 Instead of manually threading parameters through code:
@@ -450,8 +448,6 @@ encode(data)  // ✅ Automatic
 
 **Avoid when**: Parameters are explicit business logic (user input, function-specific data)
 
-`─────────────────────────────────────────────────`
-
 ---
 
-*Last updated: October 2025*
+*Last updated: June 2026*
