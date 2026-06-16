@@ -101,9 +101,10 @@ private[repositories] object ParquetSchemaBuilder {
             (maxScale + maxIntDigits).min(MaxDecimalPrecision).max(1)
           val scale = maxScale.min(precision - 1).max(0)
           if (maxScale + maxIntDigits > MaxDecimalPrecision)
-            Console.err.println(
-              s"[parqueteer] warning: column '$key' requires precision ${maxScale + maxIntDigits} " +
-                s"but Parquet DECIMAL max is $MaxDecimalPrecision — values may be truncated"
+            throw new IllegalArgumentException(
+              s"Column '$key' requires precision ${maxScale + maxIntDigits} " +
+                s"but Parquet DECIMAL max is $MaxDecimalPrecision. " +
+                s"Reduce scale/integer-part size or split into multiple columns."
             )
           (
             PrimitiveTypeName.BINARY,

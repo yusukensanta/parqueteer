@@ -369,16 +369,17 @@ class FilterParserTest extends AnyFlatSpec with Matchers {
     result.exists(_ ne Filter.noopFilter) shouldBe true
   }
 
-  it should "succeed for IS NULL on column not present in schema (defaults to BINARY)" in {
+  it should "fail at parse time for IS NULL on column not present in schema" in {
     val s = schema("age" -> PrimitiveTypeName.INT32)
     val result = FilterParser.parseWithSchema("unknown_col IS NULL", s)
-    result shouldBe a[Right[?, ?]]
+    result shouldBe a[Left[?, ?]]
+    result.left.exists(_.message.contains("unknown_col")) shouldBe true
   }
 
-  it should "not resolve wrong column type when a dotted path segment is missing" in {
-    // Schema has root-level 'c' (INT64) but no 'a.b' group — resolveColumnType
-    // previously reset to the root schema when 'b' was not found under 'a',
-    // then matched 'c' at the root, returning INT64 instead of defaulting to BINARY.
+  it should "fail at parse time for IS NULL on an invalid dotted path" in {
+    // Schema has root-level 'a' (INT32, a primitive) and 'c' (INT64).
+    // 'a.b.c' is invalid because 'a' is not a group. The old code defaulted
+    // to BINARY and potentially threw at read time; now we fail at parse time.
     val fields = List(
       org.apache.parquet.schema.Types
         .required(PrimitiveTypeName.INT32)
@@ -391,10 +392,9 @@ class FilterParserTest extends AnyFlatSpec with Matchers {
       "test",
       fields.asJava
     )
-    // 'a.b.c' — 'a' is a primitive (not a group), so the path is invalid.
-    // Should succeed (defaults to BINARY) rather than crashing or returning INT64.
     val result = FilterParser.parseWithSchema("a.b.c IS NULL", s)
-    result shouldBe a[Right[?, ?]]
+    result shouldBe a[Left[?, ?]]
+    result.left.exists(_.message.contains("a.b.c")) shouldBe true
   }
 
   // ── BETWEEN reverse-bounds validation ─────────────────────────────────────

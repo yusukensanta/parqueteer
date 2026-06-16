@@ -559,4 +559,39 @@ class ParquetWriteOpsTest extends AnyFlatSpec with Matchers {
     )
     group.getLong("amount", 0) shouldBe 123456789L
   }
+
+  it should "throw when DECIMAL value exceeds declared precision for BINARY encoding" in {
+    // DECIMAL(5,2) allows values with at most 5 total digits (unscaled up to 99999).
+    // Writing 1000.00 produces unscaled 100000 — 6 digits — which exceeds precision 5.
+    val mt = schema(
+      "message root { required binary price (DECIMAL(5,2)); }"
+    )
+    val group = new SimpleGroupFactory(mt).newGroup()
+    an[IllegalArgumentException] should be thrownBy {
+      ParquetWriteOps.writeRowToGroup(
+        group,
+        Map("price" -> CellValue.Dec(BigDecimal("1000.00"))),
+        mt
+      )
+    }
+  }
+
+  it should "not throw for DECIMAL value at the precision boundary for BINARY encoding" in {
+    // DECIMAL(5,2): max value is 999.99 (unscaled 99999, exactly 5 digits).
+    val mt = schema(
+      "message root { required binary price (DECIMAL(5,2)); }"
+    )
+    val group = new SimpleGroupFactory(mt).newGroup()
+    noException should be thrownBy {
+      ParquetWriteOps.writeRowToGroup(
+        group,
+        Map("price" -> CellValue.Dec(BigDecimal("999.99"))),
+        mt
+      )
+    }
+    val bytes = group.getBinary("price", 0).getBytes
+    new java.math.BigInteger(bytes) shouldBe java.math.BigInteger.valueOf(
+      99999L
+    )
+  }
 }

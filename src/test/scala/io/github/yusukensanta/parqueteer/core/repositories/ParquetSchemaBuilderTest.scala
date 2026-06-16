@@ -650,4 +650,15 @@ class ParquetSchemaBuilderTest extends AnyFlatSpec with Matchers {
     val names = mt.getFields.asScala.map(_.getName).toList
     names shouldBe List("z_col", "a_col", "m_col")
   }
+
+  it should "throw when inferred DECIMAL precision exceeds 38" in {
+    // 39 integer digits + 2 scale digits = precision 41 — exceeds Parquet DECIMAL max (38).
+    val bigVal = CellValue.Dec(
+      BigDecimal("1" + "0" * 38 + ".99") // 39 integer digits, 2 decimal places
+    )
+    val data = List(Map[String, CellValue]("price" -> bigVal))
+    an[IllegalArgumentException] should be thrownBy {
+      ParquetSchemaBuilder.inferSchemaFromData(data)
+    }
+  }
 }

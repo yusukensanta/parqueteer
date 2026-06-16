@@ -78,6 +78,13 @@ private[repositories] object ParquetWriteOps {
                         )
                     }
                   case _ =>
+                    val maxUnscaled =
+                      java.math.BigInteger.TEN.pow(dec.getPrecision)
+                    if (unscaled.abs().compareTo(maxUnscaled) >= 0)
+                      throw new IllegalArgumentException(
+                        s"Column '$key': DECIMAL value $bd (unscaled $unscaled) exceeds " +
+                          s"declared precision ${dec.getPrecision} for BINARY DECIMAL encoding."
+                      )
                     group.add(
                       fieldIndex,
                       Binary.fromConstantByteArray(unscaled.toByteArray)
