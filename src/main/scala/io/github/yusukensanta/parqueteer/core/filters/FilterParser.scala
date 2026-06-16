@@ -315,7 +315,17 @@ private class FilterParserImpl(schema: Option[MessageType]) {
     val isNull = if (peek == Token.Kw("NOT")) { advance(); false }
     else true
     if (peek == Token.Kw("NULL")) {
-      advance(); Right(buildIsNullFilter(col, isNull))
+      advance()
+      // When schema is available, validate column existence at parse time to
+      // fail fast rather than defaulting to BINARY and throwing at read time
+      // with a cryptic Parquet internal type-mismatch error.
+      schema match {
+        case Some(s) if resolveColumnType(s, col).isEmpty =>
+          Left(
+            s"Filter parse error: column '$col' not found in schema for IS NULL predicate"
+          )
+        case _ => Right(buildIsNullFilter(col, isNull))
+      }
     } else Left(s"Filter parse error: expected NULL after IS, got '$peek'")
   }
 
@@ -459,14 +469,7 @@ private class FilterParserImpl(schema: Option[MessageType]) {
           else FilterApi.notEq(colRef, nullLit)
 
         schema
-          .flatMap { s =>
-            val resolved = resolveColumnType(s, col)
-            if (resolved.isEmpty)
-              Console.err.println(
-                s"[parqueteer] warning: IS NULL predicate on column '$col' not found in schema; defaulting to BINARY"
-              )
-            resolved
-          }
+          .flatMap(s => resolveColumnType(s, col))
           .getOrElse(PrimitiveTypeName.BINARY) match {
           case PrimitiveTypeName.INT32 =>
             nullEq(
