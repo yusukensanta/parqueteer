@@ -312,7 +312,8 @@ private class FilterParserImpl(schema: Option[MessageType]) {
 
   private def parseIsNull(col: String): Either[String, Filter] = {
     advance() // consume IS
-    val isNull = if (peek == Token.Kw("NOT")) { advance(); false }
+    val notConsumed = peek == Token.Kw("NOT")
+    val isNull = if (notConsumed) { advance(); false }
     else true
     if (peek == Token.Kw("NULL")) {
       advance()
@@ -326,7 +327,10 @@ private class FilterParserImpl(schema: Option[MessageType]) {
           )
         case _ => Right(buildIsNullFilter(col, isNull))
       }
-    } else Left(s"Filter parse error: expected NULL after IS, got '$peek'")
+    } else {
+      val after = if (notConsumed) "IS NOT" else "IS"
+      Left(s"Filter parse error: expected NULL after $after, got '$peek'")
+    }
   }
 
   // ── Filter construction ───────────────────────────────────────────────────
