@@ -320,7 +320,7 @@ private class FilterParserImpl(schema: Option[MessageType]) {
       // fail fast rather than defaulting to BINARY and throwing at read time
       // with a cryptic Parquet internal type-mismatch error.
       schema match {
-        case Some(s) if resolveColumnType(s, col).isEmpty =>
+        case Some(s) if resolveField(s, col).isEmpty =>
           Left(
             s"Filter parse error: column '$col' not found in schema for IS NULL predicate"
           )

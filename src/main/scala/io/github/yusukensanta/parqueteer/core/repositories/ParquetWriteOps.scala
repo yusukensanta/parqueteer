@@ -25,6 +25,10 @@ private[repositories] object ParquetWriteOps {
     java.util.concurrent.ConcurrentHashMap.newKeySet[String]()
   private val binaryMismatchWarnedCols =
     java.util.concurrent.ConcurrentHashMap.newKeySet[String]()
+  // Parquet DECIMAL precision is bounded to [1,38]. Precompute 10^p for each p
+  // so the per-row BINARY DECIMAL precision guard avoids repeated allocation.
+  private val decimalMaxUnscaled: Array[java.math.BigInteger] =
+    Array.tabulate(39)(java.math.BigInteger.TEN.pow)
 
   def writeRowToGroup(
       group: Group,
@@ -58,6 +62,16 @@ private[repositories] object ParquetWriteOps {
                 val scaled =
                   bd.setScale(scale, scala.math.BigDecimal.RoundingMode.HALF_UP)
                 val unscaled = scaled.underlying().unscaledValue()
+                val precision = dec.getPrecision
+                val maxUnscaled = decimalMaxUnscaled(
+                  precision.min(decimalMaxUnscaled.length - 1)
+                )
+                if (unscaled.abs().compareTo(maxUnscaled) >= 0)
+                  throw new IllegalArgumentException(
+                    s"Column '$key': DECIMAL value $bd (unscaled $unscaled) exceeds " +
+                      s"declared precision $precision — value may have been rounded out of range. " +
+                      s"Use a wider DECIMAL(p,s) type."
+                  )
                 fieldType.getPrimitiveTypeName match {
                   case PrimitiveTypeName.INT32 =>
                     try group.add(fieldIndex, unscaled.intValueExact())
@@ -78,13 +92,6 @@ private[repositories] object ParquetWriteOps {
                         )
                     }
                   case _ =>
-                    val maxUnscaled =
-                      java.math.BigInteger.TEN.pow(dec.getPrecision)
-                    if (unscaled.abs().compareTo(maxUnscaled) >= 0)
-                      throw new IllegalArgumentException(
-                        s"Column '$key': DECIMAL value $bd (unscaled $unscaled) exceeds " +
-                          s"declared precision ${dec.getPrecision} for BINARY DECIMAL encoding."
-                      )
                     group.add(
                       fieldIndex,
                       Binary.fromConstantByteArray(unscaled.toByteArray)
