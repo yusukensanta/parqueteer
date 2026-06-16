@@ -80,7 +80,9 @@ object RowStreamWriter {
       }
       out.print(
         columns
-          .map(c => CSVFormatter.escapeField(row.get(c).fold("")(_.display)))
+          .map(c =>
+            CSVFormatter.escapeField(row.get(c).fold("")(_.safeDisplay))
+          )
           .mkString(",") + CSVFormatter.Newline
       )
     }
@@ -106,12 +108,12 @@ object RowStreamWriter {
       columnsSet = columns.toSet
       widths = tf.calculateColumnWidths(columns, sample.toList)
       out.println(tf.drawTopBorder(widths))
-      out.println(tf.drawRow(columns, widths))
+      out.println(tf.drawRow(columns.map(CellValue.sanitizeTerminal), widths))
       out.println(tf.drawSeparator(widths))
       sample.foreach(r =>
         out.println(
           tf.drawRow(
-            columns.map(c => r.getOrElse(c, CellValue.Null).display),
+            columns.map(c => r.getOrElse(c, CellValue.Null).safeDisplay),
             widths
           )
         )
@@ -137,7 +139,7 @@ object RowStreamWriter {
         }
         out.println(
           tf.drawRow(
-            columns.map(c => row.getOrElse(c, CellValue.Null).display),
+            columns.map(c => row.getOrElse(c, CellValue.Null).safeDisplay),
             widths
           )
         )
@@ -170,7 +172,9 @@ object RowStreamWriter {
     private var warnedUnseen = false
 
     private def escapeStr(s: String): String =
-      s.replace("\\", "\\\\")
+      CellValue
+        .sanitizeTerminal(s)
+        .replace("\\", "\\\\")
         .replace("|", "\\|")
         .replace("\r\n", " ")
         .replace("\n", " ")

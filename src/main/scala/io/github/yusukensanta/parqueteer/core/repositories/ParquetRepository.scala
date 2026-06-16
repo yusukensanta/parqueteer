@@ -460,7 +460,12 @@ class HadoopParquetRepository(
             val nullRow = requestedSchema.getColumns.asScala
               .map(col => col.getPath.mkString(".") -> CellValue.Null)
               .toMap
-            List.fill(block.getRowCount.toInt)(nullRow)
+            val rowCount = block.getRowCount
+            if (rowCount > Int.MaxValue)
+              throw new IllegalStateException(
+                s"Row group has $rowCount rows — exceeds Int.MaxValue; use sequential read (--parallelism 1)"
+              )
+            List.fill(rowCount.toInt)(nullRow)
           } else {
             val rangeStart = relevantChunks.map(_.getStartingPos).min
             val rangeEnd =

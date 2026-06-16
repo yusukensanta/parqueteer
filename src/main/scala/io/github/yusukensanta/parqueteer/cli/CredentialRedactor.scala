@@ -22,7 +22,18 @@ private[cli] object CredentialRedactor {
     "(?i)(fs\\.s3a\\.secret\\.key=?)\\S+".r,
     "(?i)(fs\\.s3a\\.session\\.token=?)\\S+".r,
     // Bearer JWT / OAuth2 token in log lines (e.g. "Bearer eyJ...")
-    "(Bearer\\s+)[A-Za-z0-9+/._-]{20,}".r
+    "(Bearer\\s+)[A-Za-z0-9+/._-]{20,}".r,
+    // Bare AWS session token / STS credential in exception messages
+    "(?i)(aws_session_token\\s*[=:]\\s*)\\S[^&\\n\\r]*".r,
+    "(?i)(x-amz-security-token\\s*[=:]\\s*)\\S[^&\\n\\r]*".r,
+    // Azure SAS token in URI (?sig=... or &sv=...&sig=...)
+    "(?i)([?&]sig=)[^&\\s]+".r,
+    "(?i)(sas_token\\s*[=:]\\s*)\\S[^&\\n\\r]*".r,
+    // GCP API keys (AIza...) and OAuth2 access tokens (ya29.)
+    "()(AIza[A-Za-z0-9_-]{35,})".r,
+    "()(ya29\\.[A-Za-z0-9_-]{20,})".r,
+    // GCP service-account private_key value (JSON-escaped, single-line)
+    "(?i)(\"private_key\"\\s*:\\s*\")([^\"]{20,})".r
   )
 
   def redact(s: String): String = {

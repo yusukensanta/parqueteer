@@ -200,7 +200,8 @@ class TableFormatter extends OutputFormatter {
     "│" + paddedValues.mkString("│") + "│"
   }
 
-  private[formatters] def formatValue(value: CellValue): String = value.display
+  private[formatters] def formatValue(value: CellValue): String =
+    value.safeDisplay
 
   private[formatters] def truncate(str: String, maxWidth: Int): String = {
     if (maxWidth <= 0) return ""

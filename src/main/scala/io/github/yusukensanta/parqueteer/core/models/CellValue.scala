@@ -32,3 +32,16 @@ object CellValue:
       case Ts(i)    => i.toString
       case Dec(bd)  => bd.underlying.stripTrailingZeros.toPlainString
       case Bytes(b) => java.util.Base64.getEncoder.encodeToString(b)
+    // Safe for terminal output: strips ESC and other control codes that can
+    // embed ANSI/OSC sequences from attacker-controlled string data.
+    def safeDisplay: String = sanitizeTerminal(v.display)
+
+  // Strips terminal-control codes from an arbitrary string (for column names etc.).
+  // Keeps tab/LF/CR; removes other C0 controls (incl. ESC 0x1B), DEL (0x7F), C1 (0x80-0x9F).
+  def sanitizeTerminal(s: String): String =
+    if (s.exists(isControlCode)) s.filterNot(isControlCode) else s
+
+  private def isControlCode(c: Char): Boolean =
+    (c < ' ' && c != '\t' && c != '\n' && c != '\r') ||
+      c == '\u007F' ||
+      (c >= '\u0080' && c <= '\u009F')

@@ -72,7 +72,9 @@ class MarkdownFormatter extends OutputFormatter {
   }
 
   private def escapeCell(s: String): String =
-    s.replace("\\", "\\\\")
+    CellValue
+      .sanitizeTerminal(s)
+      .replace("\\", "\\\\")
       .replace("|", "\\|")
       .replace("\r\n", " ")
       .replace("\n", " ")
