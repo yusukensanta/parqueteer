@@ -59,7 +59,7 @@ class CSVFormatter extends OutputFormatter {
         val values = columns.map { col =>
           row.get(col) match {
             case None | Some(CellValue.Null) => ""
-            case Some(v)                     => v.display
+            case Some(v)                     => v.safeDisplay
           }
         }
         sb.append(formatRow(values))

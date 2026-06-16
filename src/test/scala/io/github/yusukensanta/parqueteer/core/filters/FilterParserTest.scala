@@ -123,6 +123,29 @@ class FilterParserTest extends AnyFlatSpec with Matchers {
     result.left.toOption.get.message should include("Unterminated")
   }
 
+  // ── String escape sequences ───────────────────────────────────────────────
+  it should "correctly decode \\t as tab in quoted string" in {
+    FilterParser.parse("""name = "a\tb"""") shouldBe a[Right[?, ?]]
+  }
+
+  it should "correctly decode \\n as newline in quoted string" in {
+    FilterParser.parse("""name = "line1\nline2"""") shouldBe a[Right[?, ?]]
+  }
+
+  it should "correctly decode \\\\ as literal backslash" in {
+    FilterParser.parse("""path = "C:\\\\Users"""") shouldBe a[Right[?, ?]]
+  }
+
+  it should "correctly decode \\\" as literal double-quote" in {
+    FilterParser.parse("""name = "say \\\"hi\\\""""") shouldBe a[Right[?, ?]]
+  }
+
+  it should "return Left for unknown escape sequence" in {
+    val result = FilterParser.parse("""name = "a\qb"""")
+    result shouldBe a[Left[?, ?]]
+    result.left.toOption.get.message should include("Unknown escape")
+  }
+
   it should "return Left for incomplete expression" in {
     FilterParser.parse("age >") shouldBe a[Left[?, ?]]
   }

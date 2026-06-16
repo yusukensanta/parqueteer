@@ -34,7 +34,7 @@ class LTSVFormatter extends OutputFormatter {
 
   private[formatters] def rowToLtsv(row: Map[String, CellValue]): String =
     row
-      .map { case (k, v) => s"${sanitize(k)}:${sanitizeValue(v.display)}" }
+      .map { case (k, v) => s"${sanitize(k)}:${sanitizeValue(v.safeDisplay)}" }
       .mkString("\t")
 
   private def sanitize(label: String): String =

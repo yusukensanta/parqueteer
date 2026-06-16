@@ -74,7 +74,17 @@ private class FilterParserImpl(schema: Option[MessageType]) {
           val sb = new StringBuilder
           while (i < n && input(i) != '"') {
             if (input(i) == '\\' && i + 1 < n) {
-              sb.append(input(i + 1)); i += 2
+              input(i + 1) match {
+                case '"'  => sb.append('"'); i += 2
+                case '\\' => sb.append('\\'); i += 2
+                case 't'  => sb.append('\t'); i += 2
+                case 'n'  => sb.append('\n'); i += 2
+                case 'r'  => sb.append('\r'); i += 2
+                case c =>
+                  throw new IllegalArgumentException(
+                    s"Unknown escape '\\$c' at position $i in filter string — supported: \\\", \\\\, \\t, \\n, \\r"
+                  )
+              }
             } else { sb.append(input(i)); i += 1 }
           }
           if (i >= n)
