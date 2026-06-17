@@ -75,8 +75,8 @@ object ParqueteerError:
             Option(e.getMessage).getOrElse(e.getClass.getSimpleName)
           )
         case e: IllegalArgumentException =>
-          InvalidFormat(
-            "argument",
+          ParseError(
+            "data",
             Option(e.getMessage).getOrElse(e.getClass.getSimpleName)
           )
         case e: java.io.FileNotFoundException =>

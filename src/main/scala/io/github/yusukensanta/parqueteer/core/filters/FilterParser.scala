@@ -317,13 +317,17 @@ private class FilterParserImpl(schema: Option[MessageType]) {
     else true
     if (peek == Token.Kw("NULL")) {
       advance()
-      // When schema is available, validate column existence at parse time to
-      // fail fast rather than defaulting to BINARY and throwing at read time
-      // with a cryptic Parquet internal type-mismatch error.
+      // When schema is available, validate column existence and type at parse
+      // time to fail fast rather than defaulting to BINARY and throwing at read
+      // time with a cryptic Parquet internal type-mismatch error.
       schema match {
         case Some(s) if resolveField(s, col).isEmpty =>
           Left(
             s"Filter parse error: column '$col' not found in schema for IS NULL predicate"
+          )
+        case Some(s) if resolveField(s, col).exists(!_.isPrimitive) =>
+          Left(
+            s"Filter parse error: IS NULL on nested column '$col' is not supported"
           )
         case _ => Right(buildIsNullFilter(col, isNull))
       }
