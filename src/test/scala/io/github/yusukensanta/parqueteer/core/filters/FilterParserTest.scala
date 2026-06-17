@@ -376,16 +376,18 @@ class FilterParserTest extends AnyFlatSpec with Matchers {
     result.left.exists(_.message.contains("unknown_col")) shouldBe true
   }
 
-  it should "succeed for IS NULL on a group/nested column in schema" in {
-    // resolveField finds the group field (returns Some); resolveColumnType
-    // would return None (non-primitive), causing a false 'not found' error.
+  it should "fail at parse time for IS NULL on a group/nested column in schema" in {
+    // GroupType IS NULL cannot be expressed as a typed Parquet filter predicate.
+    // Fail fast at parse time rather than defaulting to BINARY and throwing a
+    // cryptic type-mismatch error at read time.
     val groupField = Types
       .buildGroup(Repetition.OPTIONAL)
       .named("address")
       .asInstanceOf[org.apache.parquet.schema.Type]
     val s = new MessageType("test", List(groupField).asJava)
     val result = FilterParser.parseWithSchema("address IS NULL", s)
-    result shouldBe a[Right[?, ?]]
+    result shouldBe a[Left[?, ?]]
+    result.left.get.message should include("nested column")
   }
 
   it should "fail at parse time for IS NULL on an invalid dotted path" in {
