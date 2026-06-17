@@ -170,9 +170,9 @@ private[repositories] object ParquetSchemaBuilder {
               throw new IllegalArgumentException(
                 s"Invalid DECIMAL precision $precision in '$t': must be in [1, $MaxDecimalPrecision]."
               )
-            if (scale < 0 || scale >= precision)
+            if (scale < 0 || scale > precision)
               throw new IllegalArgumentException(
-                s"Invalid DECIMAL scale $scale in '$t': must be in [0, precision-1] = [0, ${precision - 1}]."
+                s"Invalid DECIMAL scale $scale in '$t': must be in [0, precision] = [0, $precision]."
               )
             (
               PrimitiveTypeName.BINARY,

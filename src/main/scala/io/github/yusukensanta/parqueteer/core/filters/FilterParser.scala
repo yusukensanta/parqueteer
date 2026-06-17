@@ -321,15 +321,19 @@ private class FilterParserImpl(schema: Option[MessageType]) {
       // time to fail fast rather than defaulting to BINARY and throwing at read
       // time with a cryptic Parquet internal type-mismatch error.
       schema match {
-        case Some(s) if resolveField(s, col).isEmpty =>
-          Left(
-            s"Filter parse error: column '$col' not found in schema for IS NULL predicate"
-          )
-        case Some(s) if resolveField(s, col).exists(!_.isPrimitive) =>
-          Left(
-            s"Filter parse error: IS NULL on nested column '$col' is not supported"
-          )
-        case _ => Right(buildIsNullFilter(col, isNull))
+        case Some(s) =>
+          resolveField(s, col) match {
+            case None =>
+              Left(
+                s"Filter parse error: column '$col' not found in schema for IS NULL predicate"
+              )
+            case Some(f) if !f.isPrimitive =>
+              Left(
+                s"Filter parse error: IS NULL on nested column '$col' is not supported"
+              )
+            case _ => Right(buildIsNullFilter(col, isNull))
+          }
+        case None => Right(buildIsNullFilter(col, isNull))
       }
     } else {
       val after = if (notConsumed) "IS NOT" else "IS"

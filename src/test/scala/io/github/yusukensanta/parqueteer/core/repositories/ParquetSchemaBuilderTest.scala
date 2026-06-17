@@ -317,8 +317,18 @@ class ParquetSchemaBuilderTest extends AnyFlatSpec with Matchers {
     }
   }
 
-  it should "throw for DECIMAL(p,s) where scale >= precision" in {
+  it should "throw for DECIMAL(p,s) where scale > precision" in {
+    // scale = precision + 1 is invalid (can't have more decimal places than total digits)
     an[IllegalArgumentException] should be thrownBy {
+      ParquetSchemaBuilder.buildMessageType(
+        schema(columnInfo("price", "DECIMAL(5,6)"))
+      )
+    }
+  }
+
+  it should "accept DECIMAL(p,p) where scale == precision (all digits after decimal point)" in {
+    // DECIMAL(5,5) represents values like 0.12345 — scale == precision is valid per Parquet spec
+    noException should be thrownBy {
       ParquetSchemaBuilder.buildMessageType(
         schema(columnInfo("price", "DECIMAL(5,5)"))
       )

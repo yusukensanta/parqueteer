@@ -695,18 +695,31 @@ object CliApp {
           .flatMap { case (preExisted, outFile, ps) =>
             val writer = RowStreamWriter(outFormat, ps)
             var failed = true
+            var writerStarted = false
             try {
-              writer.begin()
               val result = service
                 .streamRead(
                   inputPath,
                   ReadConfig(maxRows = conversionConfig.maxRows)
-                )(writer.writeRow)
-              // Swallow writer.end() failures — they must not mask the real read result.
-              scala.util.Try(writer.end()).failed.foreach { ex =>
-                System.err.println(
-                  s"[parqueteer] warning: error flushing output: ${ex.getMessage}"
-                )
+                ) { row =>
+                  if (!writerStarted) {
+                    writer.begin()
+                    writerStarted = true
+                  }
+                  writer.writeRow(row)
+                }
+              // Empty file — still emit a valid empty document (e.g. [] for JSON).
+              if (!writerStarted && result.isRight) {
+                writer.begin()
+                writerStarted = true
+              }
+              if (writerStarted) {
+                // Swallow writer.end() failures — they must not mask the real read result.
+                scala.util.Try(writer.end()).failed.foreach { ex =>
+                  System.err.println(
+                    s"[parqueteer] warning: error flushing output: ${ex.getMessage}"
+                  )
+                }
               }
               // PrintStream swallows I/O exceptions; checkError() surfaces disk-full / broken-pipe.
               val writeError = ps.checkError()
