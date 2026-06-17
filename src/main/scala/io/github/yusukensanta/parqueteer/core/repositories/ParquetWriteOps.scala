@@ -63,9 +63,13 @@ private[repositories] object ParquetWriteOps {
                   bd.setScale(scale, scala.math.BigDecimal.RoundingMode.HALF_UP)
                 val unscaled = scaled.underlying().unscaledValue()
                 val precision = dec.getPrecision
-                val maxUnscaled = decimalMaxUnscaled(
-                  precision.min(decimalMaxUnscaled.length - 1)
-                )
+                if (precision >= decimalMaxUnscaled.length)
+                  throw new IllegalArgumentException(
+                    s"Column '$key': DECIMAL precision $precision exceeds the maximum " +
+                      s"supported (${decimalMaxUnscaled.length - 1}). " +
+                      "This Parquet file was written with a non-standard schema."
+                  )
+                val maxUnscaled = decimalMaxUnscaled(precision)
                 if (unscaled.abs().compareTo(maxUnscaled) >= 0)
                   throw new IllegalArgumentException(
                     s"Column '$key': DECIMAL value $bd (unscaled $unscaled) exceeds " +

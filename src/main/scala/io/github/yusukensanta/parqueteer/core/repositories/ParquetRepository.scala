@@ -440,6 +440,11 @@ class HadoopParquetRepository(
         ExecutionContext.fromExecutorService(rawEc)
       val requestedNames =
         requestedSchema.getColumns.asScala.map(_.getPath.mkString(".")).toSet
+      // Track how many null-fabricated rows are still allotted across all futures so
+      // total null-row allocations never exceed maxRows regardless of group count.
+      val nullRowsAllotted = new java.util.concurrent.atomic.AtomicLong(
+        config.maxRows.getOrElse(Long.MaxValue)
+      )
       val futures = selectedBlocks.map { block =>
         Future {
           val colChunks = block.getColumns.asScala.toList
@@ -465,12 +470,12 @@ class HadoopParquetRepository(
               throw new IllegalStateException(
                 s"Row group has $rowCount rows — exceeds Int.MaxValue; use sequential read (--parallelism 1)"
               )
-            // Cap fabricated null rows at maxRows to avoid materializing tens of
-            // millions of identical Map objects when the limit is far smaller.
-            val rowsToFabricate = config.maxRows match {
-              case None        => rowCount.toInt
-              case Some(limit) => rowCount.min(limit).toInt
-            }
+            // Atomically consume from the shared allotment so the SUM of null rows
+            // across all parallel futures never exceeds maxRows (per-group capping
+            // at the full limit would allow N×maxRows allocations before the global trim).
+            val prev =
+              nullRowsAllotted.getAndUpdate(r => (r - rowCount.min(r)).max(0L))
+            val rowsToFabricate = rowCount.min(prev).toInt
             List.fill(rowsToFabricate)(nullRow)
           } else {
             val rangeStart = relevantChunks.map(_.getStartingPos).min
