@@ -465,7 +465,13 @@ class HadoopParquetRepository(
               throw new IllegalStateException(
                 s"Row group has $rowCount rows — exceeds Int.MaxValue; use sequential read (--parallelism 1)"
               )
-            List.fill(rowCount.toInt)(nullRow)
+            // Cap fabricated null rows at maxRows to avoid materializing tens of
+            // millions of identical Map objects when the limit is far smaller.
+            val rowsToFabricate = config.maxRows match {
+              case None        => rowCount.toInt
+              case Some(limit) => rowCount.min(limit).toInt
+            }
+            List.fill(rowsToFabricate)(nullRow)
           } else {
             val rangeStart = relevantChunks.map(_.getStartingPos).min
             val rangeEnd =
