@@ -339,17 +339,23 @@ object CliApp {
         override def writeRow(row: Map[String, CellValue]): Unit = ()
       }
       else RowStreamWriter(format, System.out)
-      // Validate filter against actual schema before emitting any output bytes,
-      // so a type-mismatch or unknown-column error doesn't produce a partial JSON/CSV document.
+      // Delay writer.begin() to the first row so that both syntax errors (caught by
+      // FilterParser.parse inside streamRead) and schema errors (caught by
+      // parseWithSchema inside openParquetReader) abort before any output bytes
+      // are emitted — avoiding a partial JSON/CSV document on the wire.
       var writerStarted = false
-      val result =
-        service.validateFilter(readConfig.filter).flatMap { _ =>
+      val result = service.streamRead(filePath, readConfig) { row =>
+        if (!writerStarted) {
           writer.begin()
           writerStarted = true
-          service.streamRead(filePath, readConfig) { row =>
-            writer.writeRow(row)
-          }
         }
+        writer.writeRow(row)
+      }
+      // Empty file — still emit a valid empty document (e.g. [] for JSON).
+      if (!writerStarted && result.isRight) {
+        writer.begin()
+        writerStarted = true
+      }
       // Only close the document if writer.begin() was reached.
       if (writerStarted) {
         // Swallow writer.end() failures — they must not mask the real read result.

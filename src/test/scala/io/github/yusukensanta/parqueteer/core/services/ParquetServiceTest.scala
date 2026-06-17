@@ -695,6 +695,17 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     result.left.toOption.get.userMessage should include("age >")
   }
 
+  it should "not invoke callback when filter parse fails" in {
+    val service = new ParquetService(new FakeParquetRepository())
+    var callbackInvoked = false
+    val result = service.streamRead(
+      "/tmp/test.parquet",
+      ReadConfig(filter = Some("age >"))
+    ) { _ => callbackInvoked = true }
+    result.isLeft shouldBe true
+    callbackInvoked shouldBe false
+  }
+
   it should "return Right and invoke callback when filter is valid" in {
     val service = new ParquetService(new FakeParquetRepository())
     val collected =
