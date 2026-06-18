@@ -474,7 +474,7 @@ class HadoopParquetRepository(
             // across all parallel futures never exceeds maxRows (per-group capping
             // at the full limit would allow N×maxRows allocations before the global trim).
             val prev =
-              nullRowsAllotted.getAndUpdate(r => (r - rowCount.min(r)).max(0L))
+              nullRowsAllotted.getAndUpdate(r => r - rowCount.min(r))
             val rowsToFabricate = rowCount.min(prev).toInt
             List.fill(rowsToFabricate)(nullRow)
           } else {

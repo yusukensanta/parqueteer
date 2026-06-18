@@ -339,32 +339,8 @@ object CliApp {
         override def writeRow(row: Map[String, CellValue]): Unit = ()
       }
       else RowStreamWriter(format, System.out)
-      // Delay writer.begin() to the first row so that both syntax errors (caught by
-      // FilterParser.parse inside streamRead) and schema errors (caught by
-      // parseWithSchema inside openParquetReader) abort before any output bytes
-      // are emitted — avoiding a partial JSON/CSV document on the wire.
-      var writerStarted = false
-      val result = service.streamRead(filePath, readConfig) { row =>
-        if (!writerStarted) {
-          writer.begin()
-          writerStarted = true
-        }
-        writer.writeRow(row)
-      }
-      // Empty file — still emit a valid empty document (e.g. [] for JSON).
-      if (!writerStarted && result.isRight) {
-        writer.begin()
-        writerStarted = true
-      }
-      // Only close the document if writer.begin() was reached.
-      if (writerStarted) {
-        // Swallow writer.end() failures — they must not mask the real read result.
-        scala.util.Try(writer.end()).failed.foreach { ex =>
-          System.err.println(
-            s"[parqueteer] warning: error flushing output: ${ex.getMessage}"
-          )
-        }
-      }
+      val result =
+        runWithDeferredBegin(writer, service.streamRead(filePath, readConfig))
       // PrintStream (System.out) swallows write errors; surface disk-full / broken-pipe.
       val stdoutError = System.out.checkError()
       result match {
@@ -695,32 +671,14 @@ object CliApp {
           .flatMap { case (preExisted, outFile, ps) =>
             val writer = RowStreamWriter(outFormat, ps)
             var failed = true
-            var writerStarted = false
             try {
-              val result = service
-                .streamRead(
+              val result = runWithDeferredBegin(
+                writer,
+                service.streamRead(
                   inputPath,
                   ReadConfig(maxRows = conversionConfig.maxRows)
-                ) { row =>
-                  if (!writerStarted) {
-                    writer.begin()
-                    writerStarted = true
-                  }
-                  writer.writeRow(row)
-                }
-              // Empty file — still emit a valid empty document (e.g. [] for JSON).
-              if (!writerStarted && result.isRight) {
-                writer.begin()
-                writerStarted = true
-              }
-              if (writerStarted) {
-                // Swallow writer.end() failures — they must not mask the real read result.
-                scala.util.Try(writer.end()).failed.foreach { ex =>
-                  System.err.println(
-                    s"[parqueteer] warning: error flushing output: ${ex.getMessage}"
-                  )
-                }
-              }
+                )
+              )
               // PrintStream swallows I/O exceptions; checkError() surfaces disk-full / broken-pipe.
               val writeError = ps.checkError()
               failed = result.isLeft || writeError
@@ -1007,6 +965,25 @@ object CliApp {
         )
       )
     else Right(())
+  }
+
+  private def runWithDeferredBegin(
+      writer: RowStreamWriter,
+      read: (Map[String, CellValue] => Unit) => Either[ParqueteerError, Long]
+  ): Either[ParqueteerError, Long] = {
+    var started = false
+    val result = read { row =>
+      if (!started) { writer.begin(); started = true }
+      writer.writeRow(row)
+    }
+    if (!started && result.isRight) { writer.begin(); started = true }
+    if (started)
+      scala.util.Try(writer.end()).failed.foreach { ex =>
+        System.err.println(
+          s"[parqueteer] warning: error flushing output: ${ex.getMessage}"
+        )
+      }
+    result
   }
 
   private def isStdoutTTY: Boolean = System.console() != null
