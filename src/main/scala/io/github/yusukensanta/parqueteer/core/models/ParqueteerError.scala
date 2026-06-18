@@ -69,6 +69,7 @@ object ParqueteerError:
         case e: FilterParseException =>
           FilterParseError(e.expression, e.getMessage)
         case e: CloudAuthException => CloudAuthError(e.provider, e.getMessage)
+        // RowSchemaMismatchException extends IllegalArgumentException — must precede it.
         case e: RowSchemaMismatchException =>
           ParseError(
             "input",
