@@ -977,13 +977,18 @@ object CliApp {
       writer.writeRow(row)
     }
     if (!started && result.isRight) { writer.begin(); started = true }
-    if (started)
-      scala.util.Try(writer.end()).failed.foreach { ex =>
+    val endFailure: Option[Throwable] =
+      if (started) scala.util.Try(writer.end()).failed.toOption else None
+    endFailure match {
+      case Some(ex) if result.isRight => Left(ParqueteerError.IOError(ex))
+      case Some(ex)                   =>
+        // Read already failed — warn but don't mask the original error.
         System.err.println(
           s"[parqueteer] warning: error flushing output: ${ex.getMessage}"
         )
-      }
-    result
+        result
+      case None => result
+    }
   }
 
   private def isStdoutTTY: Boolean = System.console() != null
