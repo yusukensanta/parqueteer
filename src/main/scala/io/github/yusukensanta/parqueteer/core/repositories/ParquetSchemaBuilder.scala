@@ -44,7 +44,7 @@ private[repositories] object ParquetSchemaBuilder {
   }
 
   // Helper to infer schema from data
-  private val MaxDecimalPrecision = 38
+  private[repositories] val MaxDecimalPrecision = 38
 
   def inferSchemaFromData(data: List[Map[String, CellValue]]): MessageType = {
     if (data.isEmpty)

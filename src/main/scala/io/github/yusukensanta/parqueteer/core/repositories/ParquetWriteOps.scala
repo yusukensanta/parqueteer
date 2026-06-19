@@ -25,10 +25,14 @@ private[repositories] object ParquetWriteOps {
     java.util.concurrent.ConcurrentHashMap.newKeySet[String]()
   private val binaryMismatchWarnedCols =
     java.util.concurrent.ConcurrentHashMap.newKeySet[String]()
-  // Parquet DECIMAL precision is bounded to [1,38]. Precompute 10^p for each p
-  // so the per-row BINARY DECIMAL precision guard avoids repeated allocation.
+  // Parquet DECIMAL precision is bounded to [1, MaxDecimalPrecision]. Precompute
+  // 10^p for each p so the per-row BINARY DECIMAL precision guard avoids
+  // repeated allocation.  Array size is derived from the shared constant so the
+  // guard and the schema builder stay in sync if the ceiling ever changes.
   private val decimalMaxUnscaled: Array[java.math.BigInteger] =
-    Array.tabulate(39)(java.math.BigInteger.TEN.pow)
+    Array.tabulate(ParquetSchemaBuilder.MaxDecimalPrecision + 1)(
+      java.math.BigInteger.TEN.pow
+    )
 
   def writeRowToGroup(
       group: Group,
