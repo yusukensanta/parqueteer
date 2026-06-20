@@ -382,173 +382,150 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
   }
 
   "ParquetService.parseJsonContent" should "parse JSON array" in {
-    val service = new ParquetService(new FakeParquetRepository())
-    val rows    = service.parseJsonContent("""[{"x": 1}]""")
+    val rows = DataFileReader.parseJsonContent("""[{"x": 1}]""")
     rows should have length 1
     rows.head("x") shouldBe CellValue.I64(1L)
   }
 
   it should "preserve Long precision for large integers" in {
-    val service = new ParquetService(new FakeParquetRepository())
     val largeId = 9876543210L
-    val rows    = service.parseJsonContent(s"""[{"id": $largeId}]""")
+    val rows    = DataFileReader.parseJsonContent(s"""[{"id": $largeId}]""")
     rows.head("id") shouldBe CellValue.I64(largeId)
   }
 
   it should "keep Double for fractional numbers" in {
-    val service = new ParquetService(new FakeParquetRepository())
-    val rows    = service.parseJsonContent("""[{"score": 9.5}]""")
+    val rows = DataFileReader.parseJsonContent("""[{"score": 9.5}]""")
     rows.head("score") shouldBe CellValue.F64(9.5)
   }
 
   it should "infer date string in JSON as LocalDate" in {
-    val service = new ParquetService(new FakeParquetRepository())
     val rows =
-      service.parseJsonContent("""[{"name": "Alice", "dob": "1990-06-15"}]""")
+      DataFileReader.parseJsonContent("""[{"name": "Alice", "dob": "1990-06-15"}]""")
     rows.head("dob") shouldBe CellValue.Date(
       java.time.LocalDate.of(1990, 6, 15)
     )
   }
 
   it should "infer timestamp string in JSON as Instant" in {
-    val service = new ParquetService(new FakeParquetRepository())
     val rows =
-      service.parseJsonContent(
+      DataFileReader.parseJsonContent(
         """[{"event": "login", "ts": "2024-01-01T08:00:00Z"}]"""
       )
     rows.head("ts") shouldBe a[CellValue.Ts]
   }
 
   it should "keep JSON boolean strings as CellValue.Str (JSON booleans are already typed)" in {
-    val service = new ParquetService(new FakeParquetRepository())
     val rows =
-      service.parseJsonContent("""[{"note": "true", "active": true}]""")
+      DataFileReader.parseJsonContent("""[{"note": "true", "active": true}]""")
     rows.head("note") shouldBe CellValue.Str("true")
     rows.head("active") shouldBe CellValue.Bool(true)
   }
 
   it should "preserve 1.0 as Double, not coerce to Long" in {
-    val service = new ParquetService(new FakeParquetRepository())
-    val rows    = service.parseJsonContent("""[{"x": 1.0}]""")
+    val rows = DataFileReader.parseJsonContent("""[{"x": 1.0}]""")
     rows.head("x") shouldBe CellValue.F64(1.0)
     rows.head("x") shouldBe a[CellValue.F64]
   }
 
   it should "preserve 0.0 as Double" in {
-    val service = new ParquetService(new FakeParquetRepository())
-    val rows    = service.parseJsonContent("""[{"x": 0.0}]""")
+    val rows = DataFileReader.parseJsonContent("""[{"x": 0.0}]""")
     rows.head("x") shouldBe a[CellValue.F64]
   }
 
   it should "still keep whole numbers without decimal point as Long" in {
-    val service = new ParquetService(new FakeParquetRepository())
-    val rows    = service.parseJsonContent("""[{"n": 42}]""")
+    val rows = DataFileReader.parseJsonContent("""[{"n": 42}]""")
     rows.head("n") shouldBe CellValue.I64(42L)
     rows.head("n") shouldBe a[CellValue.I64]
   }
 
   it should "map integers exceeding Long.MaxValue to Dec (BigDecimal fallback)" in {
-    val service = new ParquetService(new FakeParquetRepository())
     // 9223372036854775808 = Long.MaxValue + 1; no decimal point → toBigDecimal → Dec
-    val rows = service.parseJsonContent("""[{"n": 9223372036854775808}]""")
+    val rows = DataFileReader.parseJsonContent("""[{"n": 9223372036854775808}]""")
     rows.head("n") shouldBe a[CellValue.Dec]
   }
 
   it should "parse integer-valued scientific notation (1e10) as I64 not F64" in {
-    val service = new ParquetService(new FakeParquetRepository())
-    val rows    = service.parseJsonContent("""[{"n": 1e10}]""")
+    val rows = DataFileReader.parseJsonContent("""[{"n": 1e10}]""")
     rows.head("n") shouldBe CellValue.I64(10000000000L)
   }
 
   it should "preserve 1.0 as Double (small integer with decimal — no precision risk)" in {
-    val service = new ParquetService(new FakeParquetRepository())
-    val rows    = service.parseJsonContent("""[{"x": 1.0}]""")
+    val rows = DataFileReader.parseJsonContent("""[{"x": 1.0}]""")
     rows.head("x") shouldBe a[CellValue.F64]
   }
 
   it should "coerce large integer written with decimal point to I64 (avoids F64 precision loss)" in {
-    val service = new ParquetService(new FakeParquetRepository())
     // 10000000000000001 > 2^53; written with decimal in JSON → previously lost the trailing 1
-    val rows = service.parseJsonContent("""[{"id": 1.0000000000000001e16}]""")
+    val rows = DataFileReader.parseJsonContent("""[{"id": 1.0000000000000001e16}]""")
     rows.head("id") shouldBe CellValue.I64(10000000000000001L)
   }
 
   it should "coerce huge decimal-point integer > Long.MaxValue to Dec" in {
-    val service = new ParquetService(new FakeParquetRepository())
     // 1e20 > Long.MaxValue — must use Dec, not lose precision in F64
-    val rows = service.parseJsonContent("""[{"n": 1.0e20}]""")
+    val rows = DataFileReader.parseJsonContent("""[{"n": 1.0e20}]""")
     rows.head("n") shouldBe CellValue.Dec(
       scala.math.BigDecimal("100000000000000000000")
     )
   }
 
   it should "coerce large fractional number to Dec instead of F64 (avoids integer-part precision loss)" in {
-    val service = new ParquetService(new FakeParquetRepository())
     // 12345678901234567.8 — integer part > 2^53; F64 would silently truncate the integer part.
-    val rows = service.parseJsonContent("""[{"price": 12345678901234567.8}]""")
+    val rows = DataFileReader.parseJsonContent("""[{"price": 12345678901234567.8}]""")
     rows.head("price") shouldBe CellValue.Dec(
       scala.math.BigDecimal("12345678901234567.8")
     )
   }
 
   it should "still use F64 for small fractional numbers (integer part fits in F64)" in {
-    val service = new ParquetService(new FakeParquetRepository())
-    val rows    = service.parseJsonContent("""[{"ratio": 1.5}]""")
+    val rows = DataFileReader.parseJsonContent("""[{"ratio": 1.5}]""")
     rows.head("ratio") shouldBe CellValue.F64(1.5)
   }
 
   it should "keep scientific-notation dot-float (1.5e2) as F64 to preserve floating-point intent and avoid I64/F64 mixed-column crash" in {
-    val service = new ParquetService(new FakeParquetRepository())
     // 1.5e2 has a decimal point → floating-point user intent → stays F64(150.0).
     // Converting to I64 would crash ParquetWriteOps when the same column also has
     // a plain fraction like 1.5 (schema widens to DOUBLE but I64 can't be written to DOUBLE).
-    val rows = service.parseJsonContent("""[{"n": 1.5e2}]""")
+    val rows = DataFileReader.parseJsonContent("""[{"n": 1.5e2}]""")
     rows.head("n") shouldBe CellValue.F64(150.0)
   }
 
   it should "coerce 1.0e3 (whole mantissa dot-scientific) to I64 to match plain integer columns" in {
-    val service = new ParquetService(new FakeParquetRepository())
     // Mantissa "1.0" is whole → treat as I64(1000) so [1.0e3, 1000] stays consistent.
-    val rows = service.parseJsonContent("""[{"n": 1.0e3}]""")
+    val rows = DataFileReader.parseJsonContent("""[{"n": 1.0e3}]""")
     rows.head("n") shouldBe CellValue.I64(1000L)
   }
 
   it should "coerce 1.0e2 (whole mantissa) consistently with plain integer 150 to avoid I64/F64 mismatch crash" in {
-    val service = new ParquetService(new FakeParquetRepository())
-    val rows    = service.parseJsonContent("""[{"n": 1.0e2}, {"n": 150}]""")
+    val rows = DataFileReader.parseJsonContent("""[{"n": 1.0e2}, {"n": 150}]""")
     rows.head("n") shouldBe CellValue.I64(100L)
     rows(1)("n") shouldBe CellValue.I64(150L)
   }
 
   it should "coerce 1.0e0 to I64 (whole-mantissa branch) — write layer handles resulting I64+F64 mix via DOUBLE coercion" in {
-    val service = new ParquetService(new FakeParquetRepository())
     // 1.0 (no exponent) → F64; 1.0e0 (exponent, whole mantissa) → I64. The asymmetry
     // is a known limitation; ParquetWriteOps coerces I64→Double when the field is DOUBLE
     // so a mixed column [1.0, 1.0e0] does not crash at write time.
-    val rows = service.parseJsonContent("""[{"n": 1.0}, {"n": 1.0e0}]""")
+    val rows = DataFileReader.parseJsonContent("""[{"n": 1.0}, {"n": 1.0e0}]""")
     rows.head("n") shouldBe CellValue.F64(1.0)
     rows(1)("n") shouldBe CellValue.I64(1L)
   }
 
   it should "coerce integer scientific-notation without a dot (1e2) to I64" in {
-    val service = new ParquetService(new FakeParquetRepository())
     // No decimal point → integer intent → non-dot branch tries toLong first.
-    val rows = service.parseJsonContent("""[{"n": 1e2}]""")
+    val rows = DataFileReader.parseJsonContent("""[{"n": 1e2}]""")
     rows.head("n") shouldBe CellValue.I64(100L)
   }
 
   it should "throw for non-array JSON" in {
-    val service = new ParquetService(new FakeParquetRepository())
     an[IllegalArgumentException] should be thrownBy {
-      service.parseJsonContent("""{"not": "array"}""")
+      DataFileReader.parseJsonContent("""{"not": "array"}""")
     }
   }
 
   "ParquetService.parseNdjsonContent" should "parse NDJSON lines into rows" in {
-    val service = new ParquetService(new FakeParquetRepository())
-    val ndjson  = """{"id": 1, "name": "Alice"}
+    val ndjson = """{"id": 1, "name": "Alice"}
 {"id": 2, "name": "Bob"}"""
-    val rows    = service.parseNdjsonContent(ndjson)
+    val rows   = DataFileReader.parseNdjsonContent(ndjson)
     rows should have length 2
     rows.head("id") shouldBe CellValue.I64(1L)
     rows.head("name") shouldBe CellValue.Str("Alice")
@@ -556,54 +533,47 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
   }
 
   it should "skip blank lines" in {
-    val service = new ParquetService(new FakeParquetRepository())
-    val ndjson  = """{"x": 1}
+    val ndjson = """{"x": 1}
 
 {"x": 2}
 """
-    val rows    = service.parseNdjsonContent(ndjson)
+    val rows   = DataFileReader.parseNdjsonContent(ndjson)
     rows should have length 2
   }
 
   it should "preserve 1.0 as Double (same logic as parseJsonContent)" in {
-    val service = new ParquetService(new FakeParquetRepository())
-    val rows    = service.parseNdjsonContent("""{"v": 1.0}""")
+    val rows = DataFileReader.parseNdjsonContent("""{"v": 1.0}""")
     rows.head("v") shouldBe a[CellValue.F64]
   }
 
   it should "throw for a non-object NDJSON line" in {
-    val service = new ParquetService(new FakeParquetRepository())
     an[IllegalArgumentException] should be thrownBy {
-      service.parseNdjsonContent("""[1, 2, 3]""")
+      DataFileReader.parseNdjsonContent("""[1, 2, 3]""")
     }
   }
 
   it should "be reachable via readFromStdin with --input-format ndjson" in {
-    val service = new ParquetService(new FakeParquetRepository())
     val stdin = new java.io.ByteArrayInputStream(
       """{"x": 42}""".getBytes("UTF-8")
     )
-    val rows = service.readFromStdin("ndjson", stdin).get
+    val rows = DataFileReader.readFromStdin("ndjson", stdin).get
     rows.head("x") shouldBe CellValue.I64(42L)
   }
 
   "ParquetService.parseCsvContent" should "parse CSV string with type inference" in {
-    val service = new ParquetService(new FakeParquetRepository())
-    val rows    = service.parseCsvContent("a,b\n1,2\n3,4\n")
+    val rows = DataFileReader.parseCsvContent("a,b\n1,2\n3,4\n")
     rows should have length 2
     rows.head("a") shouldBe CellValue.I64(1L)
     rows.head("b") shouldBe CellValue.I64(2L)
   }
 
   it should "return empty list for empty input" in {
-    val service = new ParquetService(new FakeParquetRepository())
-    service.parseCsvContent("") shouldBe empty
+    DataFileReader.parseCsvContent("") shouldBe empty
   }
 
   it should "infer date strings as LocalDate" in {
-    val service = new ParquetService(new FakeParquetRepository())
     val rows =
-      service.parseCsvContent("name,dob\nAlice,1990-06-15\nBob,2001-12-01\n")
+      DataFileReader.parseCsvContent("name,dob\nAlice,1990-06-15\nBob,2001-12-01\n")
     rows.head("dob") shouldBe CellValue.Date(
       java.time.LocalDate.of(1990, 6, 15)
     )
@@ -611,33 +581,29 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
   }
 
   it should "infer timestamp strings as Instant" in {
-    val service = new ParquetService(new FakeParquetRepository())
     val rows =
-      service.parseCsvContent(
+      DataFileReader.parseCsvContent(
         "event,ts\nlogin,2024-01-01T08:00:00Z\nlogout,2024-01-01T09:30:00Z\n"
       )
     rows.head("ts") shouldBe a[CellValue.Ts]
   }
 
   it should "infer boolean strings as Boolean" in {
-    val service = new ParquetService(new FakeParquetRepository())
-    val rows    = service.parseCsvContent("name,active\nAlice,true\nBob,false\n")
+    val rows = DataFileReader.parseCsvContent("name,active\nAlice,true\nBob,false\n")
     rows.head("active") shouldBe CellValue.Bool(true)
     rows(1)("active") shouldBe CellValue.Bool(false)
   }
 
   it should "preserve leading-zero strings as String" in {
-    val service = new ParquetService(new FakeParquetRepository())
-    val rows    = service.parseCsvContent("code\n007\n042\n")
+    val rows = DataFileReader.parseCsvContent("code\n007\n042\n")
     rows.head("code") shouldBe CellValue.Str("007")
     rows(1)("code") shouldBe CellValue.Str("042")
   }
 
   it should "parse CSV with quoted fields containing newlines" in {
-    val service = new ParquetService(new FakeParquetRepository())
     val csv =
       "name,bio\n\"Alice\",\"Line one\nLine two\"\n\"Bob\",\"Single line\"\n"
-    val result = service.parseCsvContent(csv)
+    val result = DataFileReader.parseCsvContent(csv)
     result should have length 2
     result.head("name") shouldBe CellValue.Str("Alice")
     result.head("bio") shouldBe CellValue.Str("Line one\nLine two")

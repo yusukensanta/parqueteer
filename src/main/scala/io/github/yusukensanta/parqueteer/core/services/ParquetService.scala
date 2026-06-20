@@ -5,8 +5,6 @@ import io.github.yusukensanta.parqueteer.core.models.ParqueteerError.toParquetee
 import io.github.yusukensanta.parqueteer.core.models.StorageLocationParser
 import io.github.yusukensanta.parqueteer.core.repositories.ParquetRepository
 import io.github.yusukensanta.parqueteer.core.filters.FilterParser
-import io.github.yusukensanta.parqueteer.core.util.{CsvParser, LTSVParser, TypeInferrer}
-import scala.util.{Try, Using}
 
 class ParquetService(
     repository: ParquetRepository
@@ -295,6 +293,27 @@ class ParquetService(
         m.contains("already exists") || m.contains("File already exists")
       )
 
+  private def handleStreamWriteResult(
+      outputLocation: StorageLocation,
+      writeResult: scala.util.Try[Long]
+  ): Either[ParqueteerError, Long] =
+    writeResult match {
+      case scala.util.Failure(ex: MergeStreamException) =>
+        deletePartialOutput(outputLocation)
+        Left(ex.error)
+      case scala.util.Failure(ex) if isOutputAlreadyExistsError(ex) =>
+        Left(
+          ParqueteerError.InvalidFormat(
+            outputLocation.path,
+            s"Output file already exists: ${outputLocation.path}. Remove it first or choose a different output path."
+          )
+        )
+      case scala.util.Failure(ex) =>
+        deletePartialOutput(outputLocation)
+        scala.util.Failure(ex).toParqueteerError
+      case other => other.toParqueteerError
+    }
+
   /**
    * Stream rows from each input file into a single output writer. On the first
    * read failure throws a sentinel exception through the writer so the partial
@@ -365,22 +384,7 @@ class ParquetService(
           }
         }
 
-      writeResult match {
-        case scala.util.Failure(ex: MergeStreamException) =>
-          deletePartialOutput(outputLocation)
-          Left(ex.error)
-        case scala.util.Failure(ex) if isOutputAlreadyExistsError(ex) =>
-          Left(
-            ParqueteerError.InvalidFormat(
-              outputLocation.path,
-              s"Output file already exists: ${outputLocation.path}. Remove it first or choose a different output path."
-            )
-          )
-        case scala.util.Failure(ex) =>
-          deletePartialOutput(outputLocation)
-          scala.util.Failure(ex).toParqueteerError
-        case other => other.toParqueteerError
-      }
+      handleStreamWriteResult(outputLocation, writeResult)
     }
   }
 
@@ -434,22 +438,7 @@ class ParquetService(
           case _ =>
         }
       }
-      count <- writeResult match {
-        case scala.util.Failure(ex: MergeStreamException) =>
-          deletePartialOutput(outputLocation)
-          Left(ex.error)
-        case scala.util.Failure(ex) if isOutputAlreadyExistsError(ex) =>
-          Left(
-            ParqueteerError.InvalidFormat(
-              outputLocation.path,
-              s"Output file already exists: ${outputLocation.path}. Remove it first or choose a different output path."
-            )
-          )
-        case scala.util.Failure(ex) =>
-          deletePartialOutput(outputLocation)
-          scala.util.Failure(ex).toParqueteerError
-        case scala.util.Success(n) => Right(n)
-      }
+      count <- handleStreamWriteResult(outputLocation, writeResult)
     } yield count
 
   def getStats(path: String): Either[ParqueteerError, FileStats] =
@@ -480,21 +469,26 @@ class ParquetService(
       maxRows: Option[Long] = None
   ): Either[ParqueteerError, List[Map[String, CellValue]]] =
     if path == "-" then
-      readFromStdin(inputFormat, stdin)
+      DataFileReader
+        .readFromStdin(inputFormat, stdin)
         .map(applyMaxRowsLimit(_, maxRows))
         .toParqueteerError
     else
       inputFormat.toLowerCase match {
         case "json" =>
-          readJsonFile(path)
+          DataFileReader
+            .readJsonFile(path)
             .map(applyMaxRowsLimit(_, maxRows))
             .toParqueteerError
         case "ndjson" =>
-          readNdjsonFile(path, maxRows).toParqueteerError
+          DataFileReader.readNdjsonFile(path, maxRows).toParqueteerError
         case "csv" =>
-          readCsvFile(path).map(applyMaxRowsLimit(_, maxRows)).toParqueteerError
+          DataFileReader
+            .readCsvFile(path)
+            .map(applyMaxRowsLimit(_, maxRows))
+            .toParqueteerError
         case "ltsv" =>
-          readLtsvFile(path, maxRows).toParqueteerError
+          DataFileReader.readLtsvFile(path, maxRows).toParqueteerError
         case fmt =>
           Left(
             ParqueteerError.IOError(
@@ -511,24 +505,6 @@ class ParquetService(
       // rows.length is Int-bounded; if limit >= length we keep all rows, otherwise limit.toInt is safe.
       if limit >= rows.length.toLong then rows else rows.take(limit.toInt)
     }
-
-  private[services] def readFromStdin(
-      inputFormat: String,
-      stdin: java.io.InputStream = System.in
-  ): Try[List[Map[String, CellValue]]] = Try {
-    val content =
-      Using.resource(
-        scala.io.Source.fromInputStream(stdin)(using scala.io.Codec.UTF8)
-      )(_.mkString)
-    inputFormat.toLowerCase match {
-      case "json"   => parseJsonContent(content)
-      case "ndjson" => parseNdjsonContent(content)
-      case "csv"    => parseCsvContent(content)
-      case "ltsv"   => parseLtsvContent(content)
-      case fmt =>
-        throw new IllegalArgumentException(s"Unsupported input format: $fmt")
-    }
-  }
 
   def validateFile(
       path: String,
@@ -581,194 +557,6 @@ class ParquetService(
       }
 
       SchemaDiff(added, removed, changed, unchanged)
-    }
-
-  private def readJsonFile(
-      path: String
-  ): Try[List[Map[String, CellValue]]] = Try {
-    import better.files.*
-    parseJsonContent(
-      File(path).contentAsString(using java.nio.charset.StandardCharsets.UTF_8)
-    )
-  }
-
-  private def readNdjsonFile(
-      path: String,
-      maxRows: Option[Long]
-  ): Try[List[Map[String, CellValue]]] =
-    Using(scala.io.Source.fromFile(path, "UTF-8")) { source =>
-      val iter = source.getLines()
-      parseNdjsonLines(maxRows.fold(iter)(iterTakeLong(iter, _)))
-    }
-
-  private def readCsvFile(path: String): Try[List[Map[String, CellValue]]] =
-    Try {
-      import better.files.*
-      parseCsvContent(
-        File(path).contentAsString(using
-          java.nio.charset.StandardCharsets.UTF_8
-        )
-      )
-    }
-
-  private def readLtsvFile(
-      path: String,
-      maxRows: Option[Long]
-  ): Try[List[Map[String, CellValue]]] =
-    Using(scala.io.Source.fromFile(path, "UTF-8")) { source =>
-      val iter = source.getLines()
-      LTSVParser
-        .parseLines(maxRows.fold(iter)(iterTakeLong(iter, _)))
-        .toList
-    }
-
-  private[services] def parseLtsvContent(
-      content: String
-  ): List[Map[String, CellValue]] =
-    LTSVParser.parse(content)
-
-  private def coerceJsonValue(
-      j: io.circe.Json
-  ): CellValue =
-    if j.isString then
-      TypeInferrer
-        .inferJsonString(j.asString.get)
-    else if j.isNumber then {
-      val n   = j.asNumber.get
-      val raw = j.noSpaces
-      // A decimal point in the raw JSON representation signals explicit floating-point (1.0, 1.5).
-      // Exception: large integers written with a decimal point (e.g., 1.0e18) would silently
-      // lose precision when cast to F64 — redirect those to Dec/I64 instead.
-      // No decimal point means integer or scientific-notation integer (1e10) — try Long first.
-      if raw.contains('.') then
-        n.toBigDecimal
-          .map { bd =>
-            val isWhole        = bd.underlying.stripTrailingZeros.scale <= 0
-            val tooLargeForF64 = bd.abs > BigDecimal(9007199254740992L)
-            if isWhole && tooLargeForF64 then
-              // Large whole number with a decimal point (e.g. 1.0e18): keep as integer.
-              n.toLong
-                .map(CellValue.I64.apply)
-                .getOrElse(CellValue.Dec(bd.setScale(0)))
-            else if !isWhole && tooLargeForF64 then
-              // Large fractional number (e.g. 12345678901234567.8): F64 would lose
-              // precision in the integer part — preserve exact value as Decimal.
-              CellValue.Dec(bd)
-            else if isWhole && (raw.contains('e') || raw.contains('E')) then {
-              // Whole-valued dot-scientific (1.0e2, 1.00e3): check if the mantissa itself
-              // (the part before 'e') has a non-zero fractional digit. If so, the user
-              // expressed a fractional value in scientific notation (1.5e2 = 150.0) and
-              // F64 is correct — treating it as I64 would break mixed columns like [1.5e2, 1.5].
-              // If the mantissa is whole (1.0e2, 2.00e1), treat as I64 to match the non-dot
-              // branch (1e2 → I64) and avoid F64+I64 mismatch with plain integer columns.
-              val eIdx     = raw.indexWhere(c => c == 'e' || c == 'E')
-              val mantissa = raw.take(eIdx)
-              val dotIdx   = mantissa.indexOf('.')
-              val mantissaIsWhole =
-                dotIdx < 0 || mantissa.drop(dotIdx + 1).forall(_ == '0')
-              if mantissaIsWhole then
-                n.toLong
-                  .map(CellValue.I64.apply)
-                  .getOrElse(CellValue.F64(n.toDouble))
-              else CellValue.F64(n.toDouble)
-            } else
-              // A decimal point without exponent (1.0, 1.5) signals floating-point intent.
-              CellValue.F64(n.toDouble)
-          }
-          .getOrElse(CellValue.F64(n.toDouble))
-      else
-        n.toLong
-          .map(CellValue.I64.apply)
-          .orElse(n.toBigDecimal.map(CellValue.Dec.apply))
-          .getOrElse(CellValue.F64(n.toDouble))
-    } else if j.isBoolean then CellValue.Bool(j.asBoolean.get)
-    else if j.isNull then CellValue.Null
-    else CellValue.Str(j.toString)
-
-  private[services] def parseJsonContent(
-      content: String
-  ): List[Map[String, CellValue]] = {
-    import io.circe.parser.*
-    parse(content) match {
-      case Left(error) =>
-        throw new IllegalArgumentException(
-          s"Failed to parse JSON: ${error.getMessage}"
-        )
-      case Right(json) =>
-        json.asArray match {
-          case Some(array) =>
-            array.toList.map { elem =>
-              jsonObjectToRow(
-                elem,
-                s"Each element of the JSON array must be an object, got: ${elem.noSpaces}"
-              )
-            }
-          case None =>
-            throw new IllegalArgumentException(
-              "JSON input must be an array of objects"
-            )
-        }
-    }
-  }
-
-  private[services] def parseNdjsonContent(
-      content: String
-  ): List[Map[String, CellValue]] =
-    parseNdjsonLines(content.linesIterator)
-
-  // Shared NDJSON line decoder: parse each non-blank line as a JSON object
-  // and coerce values to CellValues. Used by both file and string entry points.
-  private def parseNdjsonLines(
-      lines: Iterator[String]
-  ): List[Map[String, CellValue]] = {
-    import io.circe.parser.*
-    lines
-      .map(_.trim)
-      .filter(_.nonEmpty)
-      .map { line =>
-        parse(line) match {
-          case Left(error) =>
-            throw new IllegalArgumentException(
-              s"Failed to parse NDJSON line: ${error.getMessage}"
-            )
-          case Right(json) =>
-            jsonObjectToRow(
-              json,
-              s"Each NDJSON line must be a JSON object, got: ${json.noSpaces}"
-            )
-        }
-      }
-      .toList
-  }
-
-  // Turn a JSON object into a CellValue row; raise a precise error if the
-  // value is not an object. Used by both JSON-array and NDJSON code paths.
-  private def jsonObjectToRow(
-      json: io.circe.Json,
-      notAnObjectMessage: => String
-  ): Map[String, CellValue] =
-    scala.collection.immutable.ListMap.from(
-      json.asObject
-        .getOrElse(throw new IllegalArgumentException(notAnObjectMessage))
-        .toIterable
-        .map { case (k, v) => k -> coerceJsonValue(v) }
-    )
-
-  private[services] def parseCsvContent(
-      content: String
-  ): List[Map[String, CellValue]] =
-    CsvParser.parse(content)
-
-  private def iterTakeLong[A](iter: Iterator[A], n: Long): Iterator[A] =
-    new Iterator[A] {
-      private var remaining = n
-      def hasNext: Boolean  = remaining > 0 && iter.hasNext
-
-      def next(): A = {
-        if !hasNext then throw new NoSuchElementException("next on empty iterator")
-        remaining -= 1
-        iter.next()
-      }
     }
 
 }

@@ -159,11 +159,39 @@ class CloudCredentialManagerTest extends AnyFlatSpec with Matchers {
   }
 
   it should "return false (not disable SSL) when endpoint has no scheme" in {
-    // scheme-less endpoints don't start with http:// so SSL stays enabled;
-    // the warning path is exercised separately
     val mgr = new S3CredentialManager()
     mgr.endpointDisablesSsl("localhost:9000") shouldBe false
     mgr.endpointDisablesSsl("minio.example.com") shouldBe false
+  }
+
+  it should "return false for empty string" in {
+    val mgr = new S3CredentialManager()
+    mgr.endpointDisablesSsl("") shouldBe false
+  }
+
+  "S3CredentialManager" should "return Failure for non-S3 location" in {
+    val mgr    = new S3CredentialManager()
+    val result = mgr.configureHadoop(GCSLocation("bucket", "path"))
+    result.isFailure shouldBe true
+    result.failed.get shouldBe a[IllegalArgumentException]
+  }
+
+  it should "resolve credentials with explicit profile" in {
+    val mgr    = new S3CredentialManager(profile = Some("nonexistent-profile-xyz"))
+    val result = mgr.configureHadoop(S3Location("bucket", "key"))
+    result.isFailure shouldBe true
+  }
+
+  "S3CredentialManager.tryEnvironmentVariables" should "succeed when AWS_ACCESS_KEY_ID is set" in {
+    assume(
+      sys.env.contains("AWS_ACCESS_KEY_ID") && sys.env.contains("AWS_SECRET_ACCESS_KEY"),
+      "Skipped: AWS env vars not set"
+    )
+    val mgr    = new S3CredentialManager()
+    val result = mgr.configureHadoop(S3Location("bucket", "key"))
+    result.isSuccess shouldBe true
+    result.get.get("fs.s3a.access.key") shouldBe sys.env("AWS_ACCESS_KEY_ID")
+    result.get.get("fs.s3a.secret.key") shouldBe sys.env("AWS_SECRET_ACCESS_KEY")
   }
 
   // ── GCSCredentialManager ────────────────────────────────────────────────

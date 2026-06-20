@@ -1,6 +1,12 @@
 package io.github.yusukensanta.parqueteer.cloud
 
-import io.github.yusukensanta.parqueteer.core.models.StorageLocation
+import io.github.yusukensanta.parqueteer.core.models.{
+  AzureLocation,
+  GCSLocation,
+  LocalPath,
+  S3Location,
+  StorageLocation
+}
 import org.apache.hadoop.conf.Configuration
 import scala.util.{Failure, Success, Try}
 
@@ -15,13 +21,10 @@ object CloudCredentialManager {
       profile: Option[String] = None
   ): Option[CloudCredentialManager] =
     location match {
-      case _: io.github.yusukensanta.parqueteer.core.models.S3Location =>
-        Some(new S3CredentialManager(profile))
-      case _: io.github.yusukensanta.parqueteer.core.models.GCSLocation =>
-        Some(new GCSCredentialManager)
-      case _: io.github.yusukensanta.parqueteer.core.models.AzureLocation =>
-        Some(new AzureCredentialManager)
-      case _: io.github.yusukensanta.parqueteer.core.models.LocalPath => None
+      case _: S3Location    => Some(new S3CredentialManager(profile))
+      case _: GCSLocation   => Some(new GCSCredentialManager)
+      case _: AzureLocation => Some(new AzureCredentialManager)
+      case _: LocalPath     => None
     }
 
   /**
