@@ -13,21 +13,17 @@ import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path as HadoopPath}
 import org.apache.parquet.hadoop.ParquetFileReader
 import org.apache.parquet.hadoop.example.ExampleParquetWriter
-import org.apache.parquet.hadoop.metadata.{BlockMetaData, ParquetMetadata}
+import org.apache.parquet.hadoop.metadata.BlockMetaData
 import org.apache.parquet.hadoop.util.HadoopInputFile
 import org.apache.parquet.example.data.simple.SimpleGroupFactory
-import org.apache.parquet.format.converter.ParquetMetadataConverter
 import org.apache.parquet.hadoop.ParquetWriter as HParquetWriter
 import org.apache.parquet.example.data.Group
-import org.apache.parquet.schema.{GroupType, LogicalTypeAnnotation, MessageType}
-import org.apache.parquet.schema.LogicalTypeAnnotation.*
-import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
+import org.apache.parquet.schema.{GroupType, MessageType}
 import org.apache.parquet.schema.Type.Repetition
 import org.apache.parquet.ParquetReadOptions
 import org.slf4j.LoggerFactory
 import scala.concurrent.{Await, ExecutionContext, ExecutionContextExecutorService, Future}
-import java.io.{ByteArrayInputStream, FileNotFoundException, IOException}
-import java.nio.{ByteBuffer, ByteOrder}
+import java.io.{FileNotFoundException, IOException}
 import java.nio.file.{Files, Paths}
 import java.util.concurrent.{Executors, TimeUnit, TimeoutException}
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong}
@@ -162,9 +158,6 @@ class HadoopParquetRepository(
       configMisses = configCacheMisses.get()
     )
 
-  private val metadataConverter =
-    new ParquetMetadataConverter()
-
   private def configCacheKey(location: StorageLocation): String =
     location match {
       case LocalPath(_) => "local"
@@ -185,95 +178,6 @@ class HadoopParquetRepository(
       )
     )
 
-  // ── Shared footer infrastructure ──────────────────────────────────────────
-
-  private val parquetMagic = Array[Byte]('P', 'A', 'R', '1')
-
-  private def readFooterBytes(inputFile: HadoopInputFile): Array[Byte] =
-    Using.resource(inputFile.newStream()) { stream =>
-      val fileLen = inputFile.getLength
-      if fileLen < 12 then
-        throw new IOException(
-          s"File too small to be a valid Parquet file (${fileLen} bytes)"
-        )
-      val tail = new Array[Byte](8)
-      stream.seek(fileLen - 8)
-      stream.readFully(tail)
-      if tail(4) != parquetMagic(0) || tail(5) != parquetMagic(1) ||
-        tail(6) != parquetMagic(2) || tail(7) != parquetMagic(3)
-      then
-        throw new IOException(
-          "File does not end with PAR1 magic bytes — not a valid Parquet file"
-        )
-      val footerLen = ByteBuffer
-        .wrap(tail, 0, 4)
-        .order(ByteOrder.LITTLE_ENDIAN)
-        .getInt
-      val MaxFooterBytes = 256 * 1024 * 1024
-      if footerLen <= 0 || footerLen > fileLen - 8 || footerLen > MaxFooterBytes
-      then
-        throw new IOException(
-          s"Invalid Parquet footer length: $footerLen (file length: $fileLen, max: ${MaxFooterBytes}B)"
-        )
-      stream.seek(fileLen - 8 - footerLen)
-      val footerBytes = new Array[Byte](footerLen)
-      stream.readFully(footerBytes)
-      footerBytes
-    }
-
-  private def parseFooter(
-      footerBytes: Array[Byte]
-  ): ParquetMetadata =
-    metadataConverter.readParquetMetadata(
-      new ByteArrayInputStream(footerBytes),
-      ParquetMetadataConverter.NO_FILTER
-    )
-
-  // Returns (formatVersion, createdBy) from the raw Thrift footer
-  private def parseRawMeta(footerBytes: Array[Byte]): (String, String) = {
-    val raw = org.apache.parquet.format.Util.readFileMetaData(
-      new ByteArrayInputStream(footerBytes)
-    )
-    (
-      if raw.version == 2 then "2.0" else "1.0",
-      Option(raw.created_by).getOrElse("")
-    )
-  }
-
-  private def buildParquetSchema(
-      msgSchema: MessageType,
-      blocks: List[BlockMetaData]
-  ): ParquetSchema = {
-    val chunkMap = blocks.headOption
-      .map(
-        _.getColumns.asScala
-          .map(c => c.getPath.toDotString -> c)
-          .toMap
-      )
-      .getOrElse(Map.empty)
-    val columns = msgSchema.getColumns.asScala.map { col =>
-      val colPath = col.getPath.mkString(".")
-      val pt      = col.getPrimitiveType
-      val chunk   = chunkMap.get(colPath)
-      ColumnInfo(
-        name = colPath,
-        dataType = logicalTypeName(pt.getPrimitiveTypeName, pt.getLogicalTypeAnnotation),
-        isOptional = pt.getRepetition == Repetition.OPTIONAL,
-        maxDefinitionLevel = col.getMaxDefinitionLevel,
-        maxRepetitionLevel = col.getMaxRepetitionLevel,
-        compressionType = chunk.map(_.getCodec.name()).getOrElse("UNKNOWN"),
-        encodings = chunk
-          .map(_.getEncodings.asScala.map(_.name()).toList.sorted.distinct)
-          .getOrElse(Nil)
-      )
-    }.toList
-    ParquetSchema(
-      columns = columns,
-      rowGroupCount = blocks.size.toLong,
-      totalRowCount = blocks.map(_.getRowCount).sum
-    )
-  }
-
   // Cache-aware footer fetch: 0 cloud ops on hit, 1 stat + 1 stream on miss.
   // LRU eviction is handled by the LinkedHashMap's removeEldestEntry override.
   private def getFooter(
@@ -287,8 +191,8 @@ class HadoopParquetRepository(
         cached
       case None =>
         footerCacheMisses.incrementAndGet()
-        val footerBytes = readFooterBytes(HadoopInputFile.fromPath(path, conf))
-        val meta        = parseFooter(footerBytes)
+        val footerBytes = FooterReader.readFooterBytes(HadoopInputFile.fromPath(path, conf))
+        val meta        = FooterReader.parseFooter(footerBytes)
         val entry =
           (meta.getFileMetaData.getSchema, meta.getBlocks.asScala.toList)
         footerCache.put(key, entry)
@@ -597,7 +501,7 @@ class HadoopParquetRepository(
       Try {
         val path                = new HadoopPath(file.location.path)
         val (msgSchema, blocks) = getFooter(path, hadoopConfig)
-        buildParquetSchema(msgSchema, blocks)
+        FooterReader.buildParquetSchema(msgSchema, blocks)
       }
     }
 
@@ -609,13 +513,13 @@ class HadoopParquetRepository(
         val path                 = new HadoopPath(file.location.path)
         val fileStatus           = path.getFileSystem(hadoopConfig).getFileStatus(path)
         val inputFile            = HadoopInputFile.fromStatus(fileStatus, hadoopConfig)
-        val footerBytes          = readFooterBytes(inputFile)
-        val (version, createdBy) = parseRawMeta(footerBytes)
-        val meta                 = parseFooter(footerBytes)
+        val footerBytes          = FooterReader.readFooterBytes(inputFile)
+        val (version, createdBy) = FooterReader.parseRawMeta(footerBytes)
+        val meta                 = FooterReader.parseFooter(footerBytes)
         val blocks               = meta.getBlocks.asScala.toList
         val msgSchema            = meta.getFileMetaData.getSchema
         val ratio                = calculateCompressionRatio(blocks)
-        val parsedSchema         = buildParquetSchema(msgSchema, blocks)
+        val parsedSchema         = FooterReader.buildParquetSchema(msgSchema, blocks)
         val codecs               = parsedSchema.columns.map(_.compressionType).distinct
         val codec =
           if codecs.isEmpty then None
@@ -816,7 +720,7 @@ class HadoopParquetRepository(
           val typeName =
             if field.isPrimitive then {
               val pf = field.asPrimitiveType()
-              logicalTypeName(
+              FooterReader.logicalTypeName(
                 pf.getPrimitiveTypeName,
                 pf.getLogicalTypeAnnotation
               )
@@ -827,33 +731,6 @@ class HadoopParquetRepository(
         }
       }
     }
-
-  private def logicalTypeName(
-      primitive: PrimitiveTypeName,
-      annotation: LogicalTypeAnnotation
-  ): String =
-    if annotation == null then primitive.name()
-    else
-      annotation match {
-        case _: DateLogicalTypeAnnotation => "DATE"
-        case ts: TimestampLogicalTypeAnnotation =>
-          ts.getUnit match {
-            case LogicalTypeAnnotation.TimeUnit.MICROS => "TIMESTAMP_MICROS"
-            case LogicalTypeAnnotation.TimeUnit.NANOS  => "TIMESTAMP_NANOS"
-            case _                                     => "TIMESTAMP_MILLIS"
-          }
-        case _: StringLogicalTypeAnnotation => "STRING"
-        case _: EnumLogicalTypeAnnotation   => "STRING"
-        case _: JsonLogicalTypeAnnotation   => "STRING"
-        case dec: DecimalLogicalTypeAnnotation =>
-          s"DECIMAL(${dec.getPrecision},${dec.getScale})"
-        case _ =>
-          primitive match {
-            case PrimitiveTypeName.INT96                => "TIMESTAMP_MICROS"
-            case PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY => "BINARY"
-            case _                                      => primitive.name()
-          }
-      }
 
   def deleteFile(location: StorageLocation): Try[Unit] =
     setupHadoopConfiguration(location).flatMap { hadoopConfig =>
@@ -877,7 +754,7 @@ class HadoopParquetRepository(
           val pt          = colDescriptor.getPrimitiveType
           val typeName    = pt.getPrimitiveTypeName
           val logicalType = pt.getLogicalTypeAnnotation
-          val dataType    = logicalTypeName(typeName, logicalType)
+          val dataType    = FooterReader.logicalTypeName(typeName, logicalType)
 
           val chunkStats = blocks
             .flatMap { block =>

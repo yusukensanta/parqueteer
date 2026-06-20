@@ -16,9 +16,11 @@ ThisBuild / scalacOptions ++= Seq(
   "-Wunused:all"
 )
 
-// Target: 80%. Current baseline: ~69%. Gate prevents regressions while coverage improves.
-coverageMinimumStmtTotal := 68
-coverageFailOnMinimum    := true
+// Target: 80%. Current baseline: ~69% stmt / ~60% branch.
+// Gates prevent regressions while coverage improves.
+coverageMinimumStmtTotal   := 68
+coverageMinimumBranchTotal := 60
+coverageFailOnMinimum      := true
 
 // Fork test JVM so AWS SDK service registry has a flat classpath.
 // Without forking, sbt's layered classloader hides transitive deps that
