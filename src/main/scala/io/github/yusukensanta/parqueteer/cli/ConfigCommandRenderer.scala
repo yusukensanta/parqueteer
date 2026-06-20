@@ -1,6 +1,7 @@
 package io.github.yusukensanta.parqueteer.cli
 
 import io.github.yusukensanta.parqueteer.config.{ConfigurationManager, EnvConfig}
+import io.github.yusukensanta.parqueteer.cli.CredentialRedactor
 
 private[cli] object ConfigCommandRenderer {
 
@@ -24,10 +25,12 @@ private[cli] object ConfigCommandRenderer {
         if !globalOptions.quiet then println(s"✓ Configuration is valid")
         0
       case scala.util.Success(issues) =>
-        issues.foreach(i => println(s"  $i"))
+        issues.foreach(i => println(s"  ${CredentialRedactor.redact(i)}"))
         0
       case scala.util.Failure(ex) =>
-        System.err.println(s"Config error: ${ex.getMessage}")
+        System.err.println(
+          s"Config error: ${CredentialRedactor.redact(ex.getMessage)}"
+        )
         1
     }
 
@@ -55,7 +58,7 @@ private[cli] object ConfigCommandRenderer {
         println("Environment variables:")
         EnvConfig.SupportedVars.foreach { key =>
           envVars.get(key) match {
-            case Some(v) => println(s"  $key=$v")
+            case Some(v) => println(s"  $key=${CredentialRedactor.redact(v)}")
             case None    => ()
           }
         }
