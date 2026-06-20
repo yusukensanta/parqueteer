@@ -1,6 +1,6 @@
 package io.github.yusukensanta.parqueteer.core.formatters
 
-import io.github.yusukensanta.parqueteer.core.models._
+import io.github.yusukensanta.parqueteer.core.models.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import java.time.Instant
@@ -12,13 +12,13 @@ class TableFormatterTest extends AnyFlatSpec with Matchers {
   private val sampleContent = FileContent(
     rows = List(
       Map(
-        "name" -> CellValue.Str("Alice"),
-        "age" -> CellValue.I64(30L),
+        "name"  -> CellValue.Str("Alice"),
+        "age"   -> CellValue.I64(30L),
         "score" -> CellValue.F64(9.5)
       ),
       Map(
-        "name" -> CellValue.Str("Bob"),
-        "age" -> CellValue.I64(25L),
+        "name"  -> CellValue.Str("Bob"),
+        "age"   -> CellValue.I64(25L),
         "score" -> CellValue.F64(7.2)
       )
     ),
@@ -82,7 +82,7 @@ class TableFormatterTest extends AnyFlatSpec with Matchers {
 
   it should "show partial summary when isPartial=true" in {
     val partial = sampleContent.copy(totalRows = 100L, isPartial = true)
-    val result = formatter.formatContent(partial, None)
+    val result  = formatter.formatContent(partial, None)
     result should include("100 rows total")
     result should include("showing first 2")
   }
@@ -264,13 +264,13 @@ class TableFormatterTest extends AnyFlatSpec with Matchers {
       rows = List(
         Map(
           "active" -> CellValue.Bool(true),
-          "count" -> CellValue.I32(7),
-          "ratio" -> CellValue.F32(0.5f)
+          "count"  -> CellValue.I32(7),
+          "ratio"  -> CellValue.F32(0.5f)
         ),
         Map(
           "active" -> CellValue.Bool(false),
-          "count" -> CellValue.I32(0),
-          "ratio" -> CellValue.F32(1.0f)
+          "count"  -> CellValue.I32(0),
+          "ratio"  -> CellValue.F32(1.0f)
         )
       ),
       totalRows = 2L,
@@ -379,7 +379,7 @@ class TableFormatterTest extends AnyFlatSpec with Matchers {
     formatter.displayWidth("《") shouldBe 2 // U+300A LEFT DOUBLE ANGLE BRACKET
     formatter.displayWidth(
       "【"
-    ) shouldBe 2 // U+3010 LEFT BLACK LENTICULAR BRACKET
+    ) shouldBe 2                           // U+3010 LEFT BLACK LENTICULAR BRACKET
     formatter.displayWidth("　") shouldBe 2 // U+3000 IDEOGRAPHIC SPACE
   }
 
@@ -399,14 +399,14 @@ class TableFormatterTest extends AnyFlatSpec with Matchers {
   }
 
   it should "handle mixed ASCII and CJK correctly" in {
-    formatter.displayWidth("Hi中") shouldBe 4 // 1+1+2
+    formatter.displayWidth("Hi中") shouldBe 4       // 1+1+2
     formatter.displayWidth("名前:Alice") shouldBe 10 // 2+2+1+1+1+1+1+1
   }
 
   it should "pad rows correctly so borders align with CJK content" in {
     val content = FileContent(
       rows = List(
-        Map("名前" -> CellValue.Str("山田"), "age" -> CellValue.I64(30L)),
+        Map("名前" -> CellValue.Str("山田"), "age"    -> CellValue.I64(30L)),
         Map("名前" -> CellValue.Str("Alice"), "age" -> CellValue.I64(25L))
       ),
       totalRows = 2L

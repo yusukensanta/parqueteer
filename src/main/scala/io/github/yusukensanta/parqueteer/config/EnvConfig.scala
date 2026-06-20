@@ -4,6 +4,7 @@ import io.github.yusukensanta.parqueteer.cli.{ColorMode, GlobalOptions}
 import io.github.yusukensanta.parqueteer.core.models.OutputFormat
 
 object EnvConfig {
+
   val SupportedVars: List[String] = List(
     "PARQUETEER_CONFIG",
     "PARQUETEER_DEFAULT_FORMAT",
@@ -27,7 +28,7 @@ object EnvConfig {
         case "ltsv"     => Some(OutputFormat.LTSV)
         case _          => None
       }
-      if (parsed.isEmpty)
+      if parsed.isEmpty then
         System.err.println(
           s"[parqueteer] warning: PARQUETEER_DEFAULT_FORMAT=$s is not a recognized format; ignoring"
         )
@@ -35,7 +36,7 @@ object EnvConfig {
     }
 
   def parsedColorMode: ColorMode =
-    if (sys.env.get("NO_COLOR").exists(_.nonEmpty)) ColorMode.Never
+    if sys.env.get("NO_COLOR").exists(_.nonEmpty) then ColorMode.Never
     else
       sys.env.get("PARQUETEER_COLOR") match {
         case None => ColorMode.Auto
@@ -58,7 +59,7 @@ object EnvConfig {
   def parsedMaxRows: Option[Long] =
     sys.env.get("PARQUETEER_MAX_ROWS").flatMap { raw =>
       val parsed = raw.toLongOption.filter(_ > 0)
-      if (parsed.isEmpty)
+      if parsed.isEmpty then
         System.err.println(
           s"[parqueteer] warning: PARQUETEER_MAX_ROWS=$raw is not a positive integer; ignoring"
         )

@@ -1,32 +1,31 @@
 package io.github.yusukensanta.parqueteer.cloud
 
-import io.github.yusukensanta.parqueteer.core.models.{
-  StorageLocation,
-  S3Location
-}
+import io.github.yusukensanta.parqueteer.core.models.{S3Location, StorageLocation}
 import org.apache.hadoop.conf.Configuration
 import software.amazon.awssdk.auth.credentials.{
   AwsSessionCredentials,
   DefaultCredentialsProvider,
-  ProfileCredentialsProvider,
-  InstanceProfileCredentialsProvider
+  InstanceProfileCredentialsProvider,
+  ProfileCredentialsProvider
 }
-import scala.util.{Try, Success, Failure, Using}
+import scala.util.{Failure, Success, Try, Using}
 
 private object S3Tuning {
-  val MaxConnections = "100"
-  val MaxAttempts = "3"
-  val ThrottleRetryLimit = "20"
+  val MaxConnections        = "100"
+  val MaxAttempts           = "3"
+  val ThrottleRetryLimit    = "20"
   val ThrottleRetryInterval = "50ms"
-  val MultipartSize = "100m"
-  val MultipartThreshold = "100m"
+  val MultipartSize         = "100m"
+  val MultipartThreshold    = "100m"
 }
 
 // Process-wide singletons so background IMDS refresh threads are shared and
 // closed exactly once on JVM exit (same pattern as Hadoop FileSystem.closeAll).
 private object S3CredentialProviders {
+
   lazy val default: DefaultCredentialsProvider =
     DefaultCredentialsProvider.create()
+
   lazy val instanceProfile: InstanceProfileCredentialsProvider =
     InstanceProfileCredentialsProvider.create()
 
@@ -38,11 +37,11 @@ private object S3CredentialProviders {
   }))
 }
 
-class S3CredentialManager(profile: Option[String] = None)
-    extends CloudCredentialManager {
+class S3CredentialManager(profile: Option[String] = None) extends CloudCredentialManager {
+
   override def configureHadoop(
       location: StorageLocation
-  ): Try[Configuration] = {
+  ): Try[Configuration] =
     location match {
       case s3Location: S3Location =>
         Try {
@@ -60,13 +59,9 @@ class S3CredentialManager(profile: Option[String] = None)
             case Success((accessKey, secretKey, sessionToken)) =>
               conf.set("fs.s3a.access.key", accessKey)
               conf.set("fs.s3a.secret.key", secretKey)
-              sessionToken.foreach(token =>
-                conf.set("fs.s3a.session.token", token)
-              )
+              sessionToken.foreach(token => conf.set("fs.s3a.session.token", token))
 
-              s3Location.region.foreach(region => {
-                conf.set("fs.s3a.endpoint.region", region)
-              })
+              s3Location.region.foreach(region => conf.set("fs.s3a.endpoint.region", region))
 
               conf.set("fs.s3a.connection.maximum", S3Tuning.MaxConnections)
               conf.set("fs.s3a.attempts.maximum", S3Tuning.MaxAttempts)
@@ -91,7 +86,7 @@ class S3CredentialManager(profile: Option[String] = None)
               // Support custom S3-compatible endpoints (RustFS, LocalStack, etc.)
               // AWS_ENDPOINT_URL is the standard override used by AWS CLI v2 and SDKs
               sys.env.get("AWS_ENDPOINT_URL").foreach { rawEndpoint =>
-                val endpoint = if (!rawEndpoint.contains("://")) {
+                val endpoint = if !rawEndpoint.contains("://") then {
                   Console.err.println(
                     s"[parqueteer] warning: AWS_ENDPOINT_URL='$rawEndpoint' has no scheme; assuming http:// — set explicitly (e.g. http://$rawEndpoint) to suppress this warning"
                   )
@@ -99,7 +94,7 @@ class S3CredentialManager(profile: Option[String] = None)
                 } else rawEndpoint
                 conf.set("fs.s3a.endpoint", endpoint)
                 conf.set("fs.s3a.path.style.access", "true")
-                if (endpointDisablesSsl(endpoint))
+                if endpointDisablesSsl(endpoint) then
                   conf.set("fs.s3a.connection.ssl.enabled", "false")
               }
 
@@ -114,7 +109,6 @@ class S3CredentialManager(profile: Option[String] = None)
       case _ =>
         Failure(new IllegalArgumentException("Expected S3Location"))
     }
-  }
 
   private[cloud] def endpointDisablesSsl(endpoint: String): Boolean =
     endpoint.toLowerCase(java.util.Locale.ROOT).startsWith("http://")
@@ -137,8 +131,7 @@ class S3CredentialManager(profile: Option[String] = None)
     )
   }
 
-  private def tryEnvironmentVariables()
-      : Try[(String, String, Option[String])] = {
+  private def tryEnvironmentVariables(): Try[(String, String, Option[String])] =
     Try {
       val accessKey = sys.env
         .get("AWS_ACCESS_KEY_ID")
@@ -164,10 +157,8 @@ class S3CredentialManager(profile: Option[String] = None)
 
       (accessKey, secretKey, sessionToken)
     }
-  }
 
-  private def tryDefaultCredentialsProvider()
-      : Try[(String, String, Option[String])] =
+  private def tryDefaultCredentialsProvider(): Try[(String, String, Option[String])] =
     Try {
       val credentials = S3CredentialProviders.default.resolveCredentials()
       val sessionToken = credentials match {
@@ -178,8 +169,7 @@ class S3CredentialManager(profile: Option[String] = None)
       (credentials.accessKeyId(), credentials.secretAccessKey(), sessionToken)
     }
 
-  private[cloud] def tryInstanceProfile()
-      : Try[(String, String, Option[String])] =
+  private[cloud] def tryInstanceProfile(): Try[(String, String, Option[String])] =
     Try {
       val credentials =
         S3CredentialProviders.instanceProfile.resolveCredentials()
@@ -198,18 +188,17 @@ class S3CredentialManager(profile: Option[String] = None)
       .orElse(sys.env.get("AWS_PROFILE"))
       .getOrElse("default")
     Try {
-      Using.resource(ProfileCredentialsProvider.create(profileName)) {
-        provider =>
-          val credentials = provider.resolveCredentials()
-          val sessionToken = credentials match {
-            case s: AwsSessionCredentials => Some(s.sessionToken())
-            case _                        => None
-          }
-          (
-            credentials.accessKeyId(),
-            credentials.secretAccessKey(),
-            sessionToken
-          )
+      Using.resource(ProfileCredentialsProvider.create(profileName)) { provider =>
+        val credentials = provider.resolveCredentials()
+        val sessionToken = credentials match {
+          case s: AwsSessionCredentials => Some(s.sessionToken())
+          case _                        => None
+        }
+        (
+          credentials.accessKeyId(),
+          credentials.secretAccessKey(),
+          sessionToken
+        )
       }
     }
   }

@@ -3,23 +3,23 @@ package io.github.yusukensanta.parqueteer.core.formatters
 import io.github.yusukensanta.parqueteer.core.models.{
   CellValue,
   FileContent,
-  ParquetSchema,
-  FileMetadata
+  FileMetadata,
+  ParquetSchema
 }
 
 class TableFormatter extends OutputFormatter {
   private val MaxColumnWidth = 50
   private val MinColumnWidth = 5
-  private val MaxTableRows = 10_000
+  private val MaxTableRows   = 10_000
 
   override def formatContent(
       content: FileContent,
       schema: Option[ParquetSchema]
   ): String =
-    if (content.rows.isEmpty) "No data to display"
+    if content.rows.isEmpty then "No data to display"
     else {
       val (rows, effectiveContent) =
-        if (content.rows.size > MaxTableRows) {
+        if content.rows.size > MaxTableRows then {
           Console.err.println(
             s"[parqueteer] warning: ${content.rows.size} rows exceeds table limit ($MaxTableRows). " +
               s"Showing first $MaxTableRows rows. Use --limit N to cap output, or --format json for large datasets."
@@ -33,19 +33,17 @@ class TableFormatter extends OutputFormatter {
 
       // Pre-format all cell values once: calculateColumnWidths and drawRow both
       // need the formatted string, so computing it twice per cell is wasteful.
-      val fmtRows = rows.map(row =>
-        columns.map(col => row.get(col).map(formatValue).getOrElse("null"))
-      )
+      val fmtRows =
+        rows.map(row => columns.map(col => row.get(col).map(formatValue).getOrElse("null")))
       val columnWidths = {
         val ws = columns.map(c => displayWidth(c)).toArray
         fmtRows.foreach(vs =>
           vs.zipWithIndex.foreach { case (s, i) =>
             val w = displayWidth(s)
-            if (w > ws(i)) ws(i) = w
+            if w > ws(i) then ws(i) = w
           }
         )
-        ws.map(w => math.max(MinColumnWidth, math.min(MaxColumnWidth, w)))
-          .toList
+        ws.map(w => math.max(MinColumnWidth, math.min(MaxColumnWidth, w))).toList
       }
       val sb = new StringBuilder()
 
@@ -83,10 +81,10 @@ class TableFormatter extends OutputFormatter {
 
     val hasEncodings = schema.columns.exists(_.encodings.nonEmpty)
     val headers =
-      if (hasEncodings) List("Name", "Type", "Optional", "Encoding")
+      if hasEncodings then List("Name", "Type", "Optional", "Encoding")
       else List("Name", "Type", "Optional")
     val columnWidths =
-      if (hasEncodings) List(30, 15, 10, 30)
+      if hasEncodings then List(30, 15, 10, 30)
       else List(30, 15, 10)
 
     sb.append(drawTopBorder(columnWidths))
@@ -98,18 +96,18 @@ class TableFormatter extends OutputFormatter {
 
     schema.columns.foreach { col =>
       val row =
-        if (hasEncodings)
+        if hasEncodings then
           List(
             truncate(col.name, 30),
             col.dataType,
-            if (col.isOptional) "Yes" else "No",
+            if col.isOptional then "Yes" else "No",
             col.encodings.mkString(",")
           )
         else
           List(
             truncate(col.name, 30),
             col.dataType,
-            if (col.isOptional) "Yes" else "No"
+            if col.isOptional then "Yes" else "No"
           )
       sb.append(drawRow(row, columnWidths))
       sb.append("\n")
@@ -166,7 +164,7 @@ class TableFormatter extends OutputFormatter {
     rows.foreach { row =>
       columns.zipWithIndex.foreach { case (col, i) =>
         val w = row.get(col).map(v => displayWidth(formatValue(v))).getOrElse(0)
-        if (w > widths(i)) widths(i) = w
+        if w > widths(i) then widths(i) = w
       }
     }
     widths
@@ -204,17 +202,17 @@ class TableFormatter extends OutputFormatter {
     value.safeDisplay
 
   private[formatters] def truncate(str: String, maxWidth: Int): String = {
-    if (maxWidth <= 0) return ""
-    if (displayWidth(str) <= maxWidth) return str
-    if (maxWidth <= 3) return ".".repeat(maxWidth)
+    if maxWidth <= 0 then return ""
+    if displayWidth(str) <= maxWidth then return str
+    if maxWidth <= 3 then return ".".repeat(maxWidth)
     else {
       val sb = new java.lang.StringBuilder
-      var w = 0
-      var i = 0
-      while (i < str.length) {
-        val cp = str.codePointAt(i)
-        val cpw = if (isWideCodePoint(cp)) 2 else 1
-        if (w + cpw + 3 > maxWidth) { sb.append("..."); return sb.toString }
+      var w  = 0
+      var i  = 0
+      while i < str.length do {
+        val cp  = str.codePointAt(i)
+        val cpw = if isWideCodePoint(cp) then 2 else 1
+        if w + cpw + 3 > maxWidth then { sb.append("..."); return sb.toString }
         sb.appendCodePoint(cp)
         w += cpw
         i += Character.charCount(cp)
@@ -229,9 +227,9 @@ class TableFormatter extends OutputFormatter {
   private[formatters] def displayWidth(s: String): Int = {
     var w = 0
     var i = 0
-    while (i < s.length) {
+    while i < s.length do {
       val cp = s.codePointAt(i)
-      w += (if (isWideCodePoint(cp)) 2 else 1)
+      w += (if isWideCodePoint(cp) then 2 else 1)
       i += Character.charCount(cp)
     }
     w
@@ -240,27 +238,27 @@ class TableFormatter extends OutputFormatter {
   private def isWideCodePoint(cp: Int): Boolean =
     // Unicode East Asian Width W (Wide) and F (Fullwidth) — renders as 2 terminal columns.
     // Ranges derived from Unicode EAW property data (ucd/EastAsianWidth.txt).
-    (cp >= 0x1100 && cp <= 0x115f) || // Hangul Jamo
-      (cp >= 0x2e80 && cp <= 0x303f) || // CJK Radicals, Kangxi, CJK Symbols+Punct (。、《【〇　)
-      (cp >= 0x3040 && cp <= 0x33ff) || // Hiragana, Katakana, Bopomofo, Enclosed CJK, CJK Compat
-      (cp >= 0x3400 && cp <= 0x4dbf) || // CJK Extension A
-      (cp >= 0x4e00 && cp <= 0x9fff) || // CJK Unified Ideographs
-      (cp >= 0xa000 && cp <= 0xa4cf) || // Yi Syllables + Radicals
-      (cp >= 0xa960 && cp <= 0xa97f) || // Hangul Jamo Extended-A
-      (cp >= 0xac00 && cp <= 0xd7af) || // Hangul Syllables
-      (cp >= 0xf900 && cp <= 0xfaff) || // CJK Compatibility Ideographs
-      (cp >= 0xfe10 && cp <= 0xfe6f) || // Vertical Forms, CJK Compat Forms, Small Form Variants
-      (cp >= 0xff00 && cp <= 0xff60) || // Fullwidth Latin & ASCII
-      (cp >= 0xffe0 && cp <= 0xffe6) || // Fullwidth symbols
+    (cp >= 0x1100 && cp <= 0x115f) ||     // Hangul Jamo
+      (cp >= 0x2e80 && cp <= 0x303f) ||   // CJK Radicals, Kangxi, CJK Symbols+Punct (。、《【〇　)
+      (cp >= 0x3040 && cp <= 0x33ff) ||   // Hiragana, Katakana, Bopomofo, Enclosed CJK, CJK Compat
+      (cp >= 0x3400 && cp <= 0x4dbf) ||   // CJK Extension A
+      (cp >= 0x4e00 && cp <= 0x9fff) ||   // CJK Unified Ideographs
+      (cp >= 0xa000 && cp <= 0xa4cf) ||   // Yi Syllables + Radicals
+      (cp >= 0xa960 && cp <= 0xa97f) ||   // Hangul Jamo Extended-A
+      (cp >= 0xac00 && cp <= 0xd7af) ||   // Hangul Syllables
+      (cp >= 0xf900 && cp <= 0xfaff) ||   // CJK Compatibility Ideographs
+      (cp >= 0xfe10 && cp <= 0xfe6f) ||   // Vertical Forms, CJK Compat Forms, Small Form Variants
+      (cp >= 0xff00 && cp <= 0xff60) ||   // Fullwidth Latin & ASCII
+      (cp >= 0xffe0 && cp <= 0xffe6) ||   // Fullwidth symbols
       (cp >= 0x1b000 && cp <= 0x1b16f) || // Kana Supplement, Kana Extended-A, Small Kana Extension
       (cp >= 0x20000 && cp <= 0x2fffd) || // CJK Extensions B–F (supplementary planes)
-      (cp >= 0x30000 && cp <= 0x3fffd) // CJK Extensions G+ (supplementary planes)
+      (cp >= 0x30000 && cp <= 0x3fffd)    // CJK Extensions G+ (supplementary planes)
 
   private[formatters] def drawSummary(content: FileContent): String = {
     val displayed = content.rows.size
-    val total = content.totalRows
+    val total     = content.totalRows
 
-    if (content.isPartial) {
+    if content.isPartial then {
       s"$total rows total (showing first $displayed)"
     } else {
       s"$displayed rows (showing all)"

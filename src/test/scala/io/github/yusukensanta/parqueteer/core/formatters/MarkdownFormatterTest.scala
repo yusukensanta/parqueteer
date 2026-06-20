@@ -2,10 +2,10 @@ package io.github.yusukensanta.parqueteer.core.formatters
 
 import io.github.yusukensanta.parqueteer.core.models.{
   CellValue,
-  FileContent,
-  ParquetSchema,
   ColumnInfo,
-  FileMetadata
+  FileContent,
+  FileMetadata,
+  ParquetSchema
 }
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -19,8 +19,10 @@ class MarkdownFormatterTest extends AnyFlatSpec with Matchers {
     Map("id" -> CellValue.I64(1L), "name" -> CellValue.Str("Alice")),
     Map("id" -> CellValue.I64(2L), "name" -> CellValue.Str("Bob"))
   )
+
   private val content =
     FileContent(rows = rows, totalRows = 2L, isPartial = false)
+
   private val partialContent =
     FileContent(rows = rows, totalRows = 10L, isPartial = true)
 
@@ -55,12 +57,12 @@ class MarkdownFormatterTest extends AnyFlatSpec with Matchers {
 
   it should "escape pipe characters in cell values" in {
     val pipeRow = List(Map("col" -> CellValue.Str("a|b")))
-    val result = formatter.formatContent(FileContent(pipeRow, 1L), None)
+    val result  = formatter.formatContent(FileContent(pipeRow, 1L), None)
     result should include("a\\|b")
   }
 
   it should "escape backslashes before pipes so a\\| cell renders correctly" in {
-    val row = List(Map("col" -> CellValue.Str("a\\|b")))
+    val row    = List(Map("col" -> CellValue.Str("a\\|b")))
     val result = formatter.formatContent(FileContent(row, 1L), None)
     result should include("a\\\\\\|b")
     result should not include "a\\|b|"
@@ -128,8 +130,7 @@ class MarkdownFormatterTest extends AnyFlatSpec with Matchers {
 
   "MarkdownFormatter.formatSchema" should "produce a markdown header and table" in {
     val schema = ParquetSchema(
-      columns =
-        List(ColumnInfo("id", "INT64", isOptional = false, 1, 0, "SNAPPY")),
+      columns = List(ColumnInfo("id", "INT64", isOptional = false, 1, 0, "SNAPPY")),
       rowGroupCount = 1L,
       totalRowCount = 100L
     )

@@ -1,10 +1,6 @@
 package io.github.yusukensanta.parqueteer.core.formatters
 
-import io.github.yusukensanta.parqueteer.core.models.{
-  FileContent,
-  ParquetSchema,
-  FileMetadata
-}
+import io.github.yusukensanta.parqueteer.core.models.{FileContent, FileMetadata, ParquetSchema}
 import io.circe.Json
 
 class NDJSONFormatter extends OutputFormatter {
@@ -12,7 +8,7 @@ class NDJSONFormatter extends OutputFormatter {
   override def formatContent(
       content: FileContent,
       schema: Option[ParquetSchema]
-  ): String = {
+  ): String =
     content.rows.map { row =>
       val fields =
         row.map { case (k, v) =>
@@ -21,23 +17,21 @@ class NDJSONFormatter extends OutputFormatter {
         }
       Json.obj(fields.toSeq*).noSpaces + "\n"
     }.mkString
-  }
 
-  override def formatSchema(schema: ParquetSchema): String = {
+  override def formatSchema(schema: ParquetSchema): String =
     schema.columns.map { col =>
       Json
         .obj(
-          "name" -> Json.fromString(col.name),
-          "type" -> Json.fromString(col.dataType),
-          "optional" -> Json.fromBoolean(col.isOptional),
+          "name"        -> Json.fromString(col.name),
+          "type"        -> Json.fromString(col.dataType),
+          "optional"    -> Json.fromBoolean(col.isOptional),
           "compression" -> Json.fromString(col.compressionType)
         )
         .noSpaces + "\n"
     }.mkString
-  }
 
   override def formatMetadata(metadata: FileMetadata): String = {
-    import io.circe.syntax._
+    import io.circe.syntax.*
     import io.github.yusukensanta.parqueteer.core.formatters.JSONFormatter.given
     metadata.asJson.noSpaces
   }

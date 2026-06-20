@@ -1,15 +1,12 @@
 package io.github.yusukensanta.parqueteer.cli
 
-import io.github.yusukensanta.parqueteer.core.models.{
-  OutputFormat,
-  CompressionType,
-  SchemaMode
-}
+import io.github.yusukensanta.parqueteer.core.models.{CompressionType, OutputFormat, SchemaMode}
 
 enum InputFormat:
   case Json, NDJson, Csv, Ltsv
 
 object InputFormat:
+
   def fromString(s: String): Option[InputFormat] = s.toLowerCase match
     case "json"   => Some(Json)
     case "ndjson" => Some(NDJson)
@@ -100,6 +97,7 @@ enum ColorMode:
   case Auto, Always, Never
 
 object ColorMode:
+
   def fromString(s: String): Option[ColorMode] = s.toLowerCase match
     case "always" => Some(Always)
     case "never"  => Some(Never)

@@ -4,27 +4,23 @@ import io.github.yusukensanta.parqueteer.core.services.ParquetService
 import io.github.yusukensanta.parqueteer.core.repositories.HadoopParquetRepository
 import io.github.yusukensanta.parqueteer.core.models.{
   CellValue,
-  ReadConfig,
-  WriteConfig,
-  OutputFormat,
   CompressionType,
+  ConversionConfig,
+  OutputFormat,
   ParqueteerError,
+  ReadConfig,
   SchemaMode,
-  ConversionConfig
+  WriteConfig
 }
 import io.github.yusukensanta.parqueteer.core.formatters.{
   OutputFormatter,
   RowStreamWriter,
   TableFormatter
 }
-import io.github.yusukensanta.parqueteer.config.{
-  AppConfig,
-  ConfigurationManager,
-  EnvConfig
-}
+import io.github.yusukensanta.parqueteer.config.{AppConfig, ConfigurationManager, EnvConfig}
 import io.github.yusukensanta.parqueteer.core.util.FileExtension
 import scopt.OParser
-import scala.util.{Success, Failure}
+import scala.util.{Failure, Success}
 import org.slf4j.LoggerFactory
 
 object CliApp {
@@ -39,7 +35,7 @@ object CliApp {
     // Force UTF-8 for stdout/stderr regardless of platform locale.
     // The launcher scripts also pass -Dfile.encoding=UTF-8 / -Dstdout.encoding=UTF-8
     // so this backstop only matters when the JAR is invoked directly via `java -jar`.
-    val utf8 = java.nio.charset.StandardCharsets.UTF_8
+    val utf8    = java.nio.charset.StandardCharsets.UTF_8
     val utf8Out = new java.io.PrintStream(System.out, true, utf8)
     val utf8Err = new java.io.PrintStream(System.err, true, utf8)
     System.setOut(utf8Out)
@@ -52,13 +48,13 @@ object CliApp {
   }
 
   private def mainImpl(args: Array[String]): Unit = {
-    if (shouldShowVersion(args)) {
+    if shouldShowVersion(args) then {
       showVersion()
       System.exit(0)
     }
 
     // Show custom top-level help only when no subcommand is present
-    if (shouldShowTopLevelHelp(args)) {
+    if shouldShowTopLevelHelp(args) then {
       println(HelpFormatter.topLevelHelp())
       System.exit(0)
     }
@@ -78,7 +74,7 @@ object CliApp {
         System.exit(exitCode)
       case None =>
         val exitCode =
-          if (args.contains("--help") || args.contains("-h")) 0 else 2
+          if args.contains("--help") || args.contains("-h") then 0 else 2
         System.exit(exitCode)
     }
   }
@@ -88,9 +84,9 @@ object CliApp {
 
   private def showVersion(): Unit = {
     import io.github.yusukensanta.parqueteer.BuildInfo
-    val javaVersion = System.getProperty("java.version")
-    val javaVendor = System.getProperty("java.vendor", "")
-    val vendorSuffix = if (javaVendor.nonEmpty) s" ($javaVendor)" else ""
+    val javaVersion  = System.getProperty("java.version")
+    val javaVendor   = System.getProperty("java.vendor", "")
+    val vendorSuffix = if javaVendor.nonEmpty then s" ($javaVendor)" else ""
     println(s"parqueteer ${BuildInfo.version}")
     println(s"Scala ${BuildInfo.scalaVersion} · Java $javaVersion$vendorSuffix")
   }
@@ -114,14 +110,14 @@ object CliApp {
     cmd.split(' ').forall(args.contains)
 
   private def shouldShowTopLevelHelp(args: Array[String]): Boolean = {
-    val hasHelp = args.contains("--help") || args.contains("-h")
+    val hasHelp    = args.contains("--help") || args.contains("-h")
     val hasCommand = knownCommands.exists(commandMatches(_, args))
     hasHelp && !hasCommand
   }
 
   private def detectSubcommandHelp(args: Array[String]): Option[String] = {
     val hasHelp = args.contains("--help") || args.contains("-h")
-    if (!hasHelp) return None
+    if !hasHelp then return None
     // prefer longer match: "schema diff" over "schema"
     knownCommands
       .filter(commandMatches(_, args))
@@ -139,13 +135,13 @@ object CliApp {
             .loadConfig(config.globalOptions.configPath) match {
             case scala.util.Success(c) => c
             case scala.util.Failure(e) =>
-              if (!config.globalOptions.quiet)
+              if !config.globalOptions.quiet then
                 System.err.println(
                   s"[parqueteer] warning: could not load config: ${e.getMessage}; using defaults"
                 )
               AppConfig()
           }
-          val opts = applyAppConfig(config.globalOptions, appConfig)
+          val opts         = applyAppConfig(config.globalOptions, appConfig)
           val effectiveCmd = applyAppConfigToCommand(cmd, appConfig)
           val repository = new HadoopParquetRepository(
             profile = opts.profile,
@@ -162,7 +158,7 @@ object CliApp {
             System.err.println(
               s"Error: ${CredentialRedactor.redact(Option(e.getMessage).getOrElse(e.getClass.getSimpleName))}"
             )
-            if (config.globalOptions.verbose)
+            if config.globalOptions.verbose then
               System.err.println(CredentialRedactor.redactThrowable(e))
             1
         }
@@ -197,7 +193,7 @@ object CliApp {
       command: Command,
       service: ParquetService,
       globalOptions: GlobalOptions
-  ): Int = {
+  ): Int =
     command match {
       case ReadCommand(
             filePath,
@@ -290,7 +286,6 @@ object CliApp {
       case CompletionsCommand(shell) =>
         executeCompletions(shell, globalOptions)
     }
-  }
 
   private def executeRead(
       service: ParquetService,
@@ -304,8 +299,8 @@ object CliApp {
       globalOptions: GlobalOptions
   ): Int = {
     val effectiveParallelism =
-      if (filter.isDefined && parallelism > 1) {
-        if (!globalOptions.quiet)
+      if filter.isDefined && parallelism > 1 then {
+        if !globalOptions.quiet then
           System.err.println(
             "Warning: --filter disables parallel mode; falling back to sequential read."
           )
@@ -322,23 +317,24 @@ object CliApp {
 
     val effectiveStreaming = streaming || (format == OutputFormat.NDJSON)
 
-    if (effectiveStreaming && effectiveParallelism > 1 && !globalOptions.quiet)
+    if effectiveStreaming && effectiveParallelism > 1 && !globalOptions.quiet then
       System.err.println(
         s"Warning: --parallelism $effectiveParallelism is ignored in streaming mode; streaming is always sequential."
       )
 
-    if (
-      effectiveStreaming && format == OutputFormat.Pretty && !globalOptions.quiet
-    )
+    if effectiveStreaming && format == OutputFormat.Pretty && !globalOptions.quiet
+    then
       System.err.println(
         "Warning: --format pretty is not supported in streaming mode; falling back to ndjson."
       )
 
-    if (effectiveStreaming) {
-      val writer = if (globalOptions.quiet) new RowStreamWriter {
-        override def writeRow(row: Map[String, CellValue]): Unit = ()
-      }
-      else RowStreamWriter(format, System.out)
+    if effectiveStreaming then {
+      val writer =
+        if globalOptions.quiet then
+          new RowStreamWriter {
+            override def writeRow(row: Map[String, CellValue]): Unit = ()
+          }
+        else RowStreamWriter(format, System.out)
       val result =
         runWithDeferredBegin(writer, service.streamRead(filePath, readConfig))
       // PrintStream (System.out) swallows write errors; surface disk-full / broken-pipe.
@@ -356,7 +352,7 @@ object CliApp {
     } else {
       service.readFile(filePath, readConfig) match {
         case Right(file) =>
-          if (!globalOptions.quiet) {
+          if !globalOptions.quiet then {
             val useColors = globalOptions.colorMode match {
               case ColorMode.Never  => false
               case ColorMode.Always => true
@@ -373,11 +369,10 @@ object CliApp {
           0
         case Left(error) =>
           val filterHint =
-            if (
-              filter.isDefined && error.userMessage.contains(
+            if filter.isDefined && error.userMessage.contains(
                 "FilterPredicate"
               ) && error.userMessage.contains("BINARY")
-            )
+            then
               Some(
                 "Hint: BINARY/STRING columns require quoted-string comparisons. Use: column = \"value\""
               )
@@ -393,10 +388,10 @@ object CliApp {
       format: OutputFormat,
       verbose: Boolean,
       globalOptions: GlobalOptions
-  ): Int = {
+  ): Int =
     service.getFileInfo(filePath) match {
       case Right(file) =>
-        if (!globalOptions.quiet) {
+        if !globalOptions.quiet then {
           format match {
             case OutputFormat.JSON =>
               println(CliOutputFormatter.formatInfoJson(file, verbose))
@@ -412,7 +407,7 @@ object CliApp {
                   s"Columns:     ${s.columns.size}"
               }
               val verboseOut =
-                if (verbose && file.rowGroups.nonEmpty)
+                if verbose && file.rowGroups.nonEmpty then
                   "\n\n" + CliOutputFormatter.formatRowGroupsTable(
                     file.rowGroups
                   )
@@ -424,7 +419,6 @@ object CliApp {
       case Left(error) =>
         reportError("Failed to get file info", globalOptions)(error)
     }
-  }
 
   private def executeWrite(
       service: ParquetService,
@@ -446,7 +440,7 @@ object CliApp {
         return reportError("Failed to write file", globalOptions)(err)
       case Right(_) =>
     }
-    if (dryRun) {
+    if dryRun then {
       service.readDataFile(inputPath, formatStr, maxRows = Some(1L)) match {
         case Left(error) =>
           reportError("Failed to read input file", globalOptions)(error)
@@ -465,8 +459,7 @@ object CliApp {
         case Right(inputData) =>
           service.writeFile(outputPath, inputData, writeConfig) match {
             case Right(_) =>
-              if (showStatus(globalOptions))
-                println(s"Successfully wrote data to $outputPath")
+              if showStatus(globalOptions) then println(s"Successfully wrote data to $outputPath")
               0
             case Left(error) =>
               reportError("Failed to write file", globalOptions)(error)
@@ -481,12 +474,12 @@ object CliApp {
       verbose: Boolean,
       deep: Boolean,
       globalOptions: GlobalOptions
-  ): Int = {
+  ): Int =
     service.validateFile(filePath, deep) match {
       case Right(result) =>
-        if (result.isValid) {
-          if (!globalOptions.quiet) println(s"✓ File $filePath is valid")
-          if (verbose) {
+        if result.isValid then {
+          if !globalOptions.quiet then println(s"✓ File $filePath is valid")
+          if verbose then {
             service.getFileInfo(filePath) match {
               case Right(file) =>
                 file.schema.foreach { s =>
@@ -506,7 +499,6 @@ object CliApp {
       case Left(error) =>
         reportError("Failed to validate file", globalOptions)(error)
     }
-  }
 
   private def executeConvert(
       service: ParquetService,
@@ -522,7 +514,7 @@ object CliApp {
       maxRows = maxRows
     )
 
-    if (dryRun)
+    if dryRun then
       runConvertDryRun(
         service,
         inputPath,
@@ -533,7 +525,7 @@ object CliApp {
     else
       performConvert(service, inputPath, outputPath, conversionConfig) match {
         case Right(_) =>
-          if (showStatus(globalOptions))
+          if showStatus(globalOptions) then
             println(s"Successfully converted $inputPath to $outputPath")
           0
         case Left(error) =>
@@ -541,10 +533,11 @@ object CliApp {
       }
   }
 
-  /** Print the dry-run summary for `convert`. For parquet inputs we read the
-    * footer to surface row count, column count and the compression-codec
-    * change; for non-parquet inputs we only know what the user told us.
-    */
+  /**
+   * Print the dry-run summary for `convert`. For parquet inputs we read the
+   * footer to surface row count, column count and the compression-codec
+   * change; for non-parquet inputs we only know what the user told us.
+   */
   private def runConvertDryRun(
       service: ParquetService,
       inputPath: String,
@@ -553,7 +546,7 @@ object CliApp {
       globalOptions: GlobalOptions
   ): Int = {
     val inputExt = FileExtension.of(inputPath)
-    if (inputExt == "parquet")
+    if inputExt == "parquet" then
       service.getFileInfo(inputPath) match {
         case Left(error) =>
           reportError("Failed to read input", globalOptions)(error)
@@ -586,17 +579,18 @@ object CliApp {
     }
   }
 
-  /** Dispatch on the (input, output) extension pair to the appropriate
-    * conversion strategy. Returns a `Right(())` on success so the caller can
-    * print the standard "Successfully converted…" message.
-    */
+  /**
+   * Dispatch on the (input, output) extension pair to the appropriate
+   * conversion strategy. Returns a `Right(())` on success so the caller can
+   * print the standard "Successfully converted…" message.
+   */
   private def performConvert(
       service: ParquetService,
       inputPath: String,
       outputPath: String,
       conversionConfig: ConversionConfig
   ): Either[ParqueteerError, Unit] = {
-    val inputExt = FileExtension.of(inputPath)
+    val inputExt  = FileExtension.of(inputPath)
     val outputExt = FileExtension.of(outputPath)
     (inputExt, outputExt) match {
       case ("parquet", ext @ ("json" | "ndjson" | "csv")) =>
@@ -619,9 +613,7 @@ object CliApp {
       case (ext @ ("json" | "ndjson" | "csv" | "ltsv"), "parquet") =>
         service
           .readDataFile(inputPath, ext)
-          .flatMap(data =>
-            service.writeFile(outputPath, data, conversionConfig.writeConfig)
-          )
+          .flatMap(data => service.writeFile(outputPath, data, conversionConfig.writeConfig))
       case _ =>
         Left(
           ParqueteerError.InvalidFormat(
@@ -632,9 +624,10 @@ object CliApp {
     }
   }
 
-  /** parquet → json / ndjson / csv: stream rows one at a time to avoid loading
-    * the entire file into memory.
-    */
+  /**
+   * parquet → json / ndjson / csv: stream rows one at a time to avoid loading
+   * the entire file into memory.
+   */
   private def convertParquetStreamed(
       service: ParquetService,
       inputPath: String,
@@ -642,7 +635,7 @@ object CliApp {
       outFormat: OutputFormat,
       conversionConfig: ConversionConfig
   ): Either[ParqueteerError, Unit] =
-    if (cloudUriPattern.findFirstIn(outputPath).isDefined)
+    if cloudUriPattern.findFirstIn(outputPath).isDefined then
       Left(
         ParqueteerError.InvalidFormat(
           outputPath,
@@ -655,7 +648,7 @@ object CliApp {
       checkOutputWritable(outputPath).flatMap { _ =>
         scala.util
           .Try {
-            import better.files._
+            import better.files.*
             val preExisted = File(outputPath).exists
             val outFile =
               File(outputPath).createIfNotExists(createParents = true)
@@ -682,7 +675,7 @@ object CliApp {
               // PrintStream swallows I/O exceptions; checkError() surfaces disk-full / broken-pipe.
               val writeError = ps.checkError()
               failed = result.isLeft || writeError
-              if (writeError && result.isRight)
+              if writeError && result.isRight then
                 Left(
                   ParqueteerError.IOError(
                     new java.io.IOException(
@@ -690,13 +683,12 @@ object CliApp {
                     )
                   )
                 )
-              else
-                result.map(_ => ())
+              else result.map(_ => ())
             } finally {
               ps.close()
               // Only delete output on failure if the file was created by this run.
               // If it pre-existed, deleting it is strictly worse than leaving the partial write.
-              if (failed && !preExisted)
+              if failed && !preExisted then
                 scala.util.Try(outFile.delete(swallowIOExceptions = true))
             }
           }
@@ -718,8 +710,7 @@ object CliApp {
     }
     val total = inputPaths.size
     val onProgress: (Int, Int, String) => Unit = (i, n, path) =>
-      if (!globalOptions.quiet)
-        System.err.println(s"[$i/$n] Merging: $path")
+      if !globalOptions.quiet then System.err.println(s"[$i/$n] Merging: $path")
 
     service.mergeFiles(
       inputPaths,
@@ -729,7 +720,7 @@ object CliApp {
       onProgress
     ) match {
       case Right(count) =>
-        if (showStatus(globalOptions))
+        if showStatus(globalOptions) then
           println(s"Merged $total files ($count rows) → $outputPath")
         0
       case Left(error) =>
@@ -741,8 +732,8 @@ object CliApp {
       service: ParquetService,
       cmd: SchemaCommand,
       globalOptions: GlobalOptions
-  ): Int = {
-    if (cmd.filePath.isEmpty) {
+  ): Int =
+    if cmd.filePath.isEmpty then {
       System.err.println(
         "Error: schema requires a file path, or use 'schema diff FILE1 FILE2'"
       )
@@ -752,7 +743,7 @@ object CliApp {
         case Left(error) =>
           reportError("Failed to read schema", globalOptions)(error)
         case Right(file) =>
-          if (!globalOptions.quiet) {
+          if !globalOptions.quiet then {
             cmd.format match {
               case OutputFormat.JSON =>
                 println(CliOutputFormatter.formatSchemaJson(file))
@@ -766,17 +757,16 @@ object CliApp {
           }
           0
       }
-  }
 
   private def executeStats(
       service: ParquetService,
       filePath: String,
       format: OutputFormat,
       globalOptions: GlobalOptions
-  ): Int = {
+  ): Int =
     service.getStats(filePath) match {
       case Right(stats) =>
-        if (!globalOptions.quiet) {
+        if !globalOptions.quiet then {
           format match {
             case OutputFormat.JSON =>
               println(CliOutputFormatter.formatStatsJson(stats))
@@ -787,17 +777,16 @@ object CliApp {
       case Left(error) =>
         reportError("Failed to get stats", globalOptions)(error)
     }
-  }
 
   private def executeCount(
       service: ParquetService,
       filePath: String,
       format: OutputFormat,
       globalOptions: GlobalOptions
-  ): Int = {
+  ): Int =
     service.getFileInfo(filePath) match {
       case Right(file) =>
-        if (!globalOptions.quiet) {
+        if !globalOptions.quiet then {
           val count = file.schema.fold(0L)(_.totalRowCount)
           format match {
             case OutputFormat.JSON =>
@@ -809,7 +798,6 @@ object CliApp {
       case Left(error) =>
         reportError("Failed to count rows", globalOptions)(error)
     }
-  }
 
   private def executeCompletions(
       shell: String,
@@ -817,13 +805,13 @@ object CliApp {
   ): Int =
     shell.toLowerCase match {
       case "bash" =>
-        if (!globalOptions.quiet) println(ShellCompletions.bash)
+        if !globalOptions.quiet then println(ShellCompletions.bash)
         0
       case "zsh" =>
-        if (!globalOptions.quiet) println(ShellCompletions.zsh)
+        if !globalOptions.quiet then println(ShellCompletions.zsh)
         0
       case "fish" =>
-        if (!globalOptions.quiet) println(ShellCompletions.fish)
+        if !globalOptions.quiet then println(ShellCompletions.fish)
         0
       case other =>
         System.err.println(s"Unsupported shell: $other")
@@ -834,12 +822,12 @@ object CliApp {
       service: ParquetService,
       cmd: SchemaDiffCommand,
       globalOptions: GlobalOptions
-  ): Int = {
+  ): Int =
     service.diffSchemas(cmd.file1, cmd.file2) match {
       case Left(error) =>
         reportError("Failed to diff schemas", globalOptions)(error)
       case Right(diff) =>
-        if (!globalOptions.quiet)
+        if !globalOptions.quiet then
           cmd.format match {
             case OutputFormat.JSON =>
               println(CliOutputFormatter.formatSchemaDiffJson(diff))
@@ -852,20 +840,19 @@ object CliApp {
                 )
               )
           }
-        if (diff.identical) 0 else 1
+        if diff.identical then 0 else 1
     }
-  }
 
   private def executeConfig(
       cmd: ConfigCommand,
       globalOptions: GlobalOptions
   ): Int = {
     val configManager = new ConfigurationManager()
-    val configPath = globalOptions.configPath
-    if (cmd.validate) {
+    val configPath    = globalOptions.configPath
+    if cmd.validate then {
       configManager.validate(configPath) match {
         case scala.util.Success(Nil) =>
-          if (!globalOptions.quiet) println(s"✓ Configuration is valid")
+          if !globalOptions.quiet then println(s"✓ Configuration is valid")
           0
         case scala.util.Success(issues) =>
           issues.foreach(i => println(s"  $i"))
@@ -875,20 +862,18 @@ object CliApp {
           1
       }
     } else {
-      if (!globalOptions.quiet) {
+      if !globalOptions.quiet then {
         val resolvedPath = configManager.resolvedConfigPath(configPath)
-        val fileExists = better.files.File(resolvedPath).exists
-        println(s"Config file: $resolvedPath [${
-            if (fileExists) "exists" else "not found"
-          }]")
-        if (fileExists)
+        val fileExists   = better.files.File(resolvedPath).exists
+        println(s"Config file: $resolvedPath [${if fileExists then "exists" else "not found"}]")
+        if fileExists then
           println(
             "  Note: config file is parsed for validation only; settings are not yet applied."
           )
         println()
 
         val envVars = EnvConfig.allSet
-        if (envVars.isEmpty) {
+        if envVars.isEmpty then {
           println("Environment variables: (none set)")
         } else {
           println("Environment variables:")
@@ -909,17 +894,17 @@ object CliApp {
         val color = {
           val cm = globalOptions.colorMode
           val src =
-            if (sys.env.get("NO_COLOR").exists(_.nonEmpty)) "[env: NO_COLOR]"
-            else if (sys.env.contains("PARQUETEER_COLOR")) "[env]"
+            if sys.env.get("NO_COLOR").exists(_.nonEmpty) then "[env: NO_COLOR]"
+            else if sys.env.contains("PARQUETEER_COLOR") then "[env]"
             else "[default]"
           s"${cm.toString.toLowerCase} $src"
         }
         println(s"  color:    $color")
         val verboseFlag =
-          if (globalOptions.verbose) "true [cli/env]" else "false [default]"
+          if globalOptions.verbose then "true [cli/env]" else "false [default]"
         println(s"  verbose:  $verboseFlag")
         val quiet =
-          if (globalOptions.quiet) "true [cli]" else "false [default]"
+          if globalOptions.quiet then "true [cli]" else "false [default]"
         println(s"  quiet:    $quiet")
         EnvConfig.parsedMaxRows.foreach { n =>
           println(s"  limit: $n [env: PARQUETEER_MAX_ROWS]")
@@ -938,14 +923,15 @@ object CliApp {
       s"$prefix: ${CredentialRedactor.redact(error.userMessage)}"
     )
     hint.foreach(System.err.println)
-    if (opts.verbose) error match {
-      case ParqueteerError.IOError(cause) =>
-        System.err.println(
-          s"[verbose] ${CredentialRedactor.redactThrowable(cause)}"
-        )
-        cause.getStackTrace.foreach(f => System.err.println(s"\tat $f"))
-      case _ => ()
-    }
+    if opts.verbose then
+      error match {
+        case ParqueteerError.IOError(cause) =>
+          System.err.println(
+            s"[verbose] ${CredentialRedactor.redactThrowable(cause)}"
+          )
+          cause.getStackTrace.foreach(f => System.err.println(s"\tat $f"))
+        case _ => ()
+      }
     error.exitCode
   }
 
@@ -954,9 +940,9 @@ object CliApp {
   private def checkOutputWritable(
       outputPath: String
   ): Either[ParqueteerError, Unit] = {
-    if (cloudUriPattern.findFirstIn(outputPath).isDefined) return Right(())
+    if cloudUriPattern.findFirstIn(outputPath).isDefined then return Right(())
     val parent = java.nio.file.Paths.get(outputPath).toAbsolutePath.getParent
-    if (parent != null && parent.toFile.exists() && !parent.toFile.canWrite)
+    if parent != null && parent.toFile.exists() && !parent.toFile.canWrite then
       Left(
         ParqueteerError.IOError(
           new java.io.IOException(
@@ -973,12 +959,12 @@ object CliApp {
   ): Either[ParqueteerError, Long] = {
     var started = false
     val result = read { row =>
-      if (!started) { writer.begin(); started = true }
+      if !started then { writer.begin(); started = true }
       writer.writeRow(row)
     }
-    if (!started && result.isRight) { writer.begin(); started = true }
+    if !started && result.isRight then { writer.begin(); started = true }
     val endFailure: Option[Throwable] =
-      if (started) scala.util.Try(writer.end()).failed.toOption else None
+      if started then scala.util.Try(writer.end()).failed.toOption else None
     endFailure match {
       case Some(ex) if result.isRight => Left(ParqueteerError.IOError(ex))
       case Some(ex)                   =>

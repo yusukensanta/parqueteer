@@ -5,10 +5,7 @@ import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 import org.scalacheck.Gen
 
-class CredentialRedactorTest
-    extends AnyFlatSpec
-    with Matchers
-    with ScalaCheckPropertyChecks {
+class CredentialRedactorTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks {
 
   "CredentialRedactor.redact" should "redact Authorization header value" in {
     val input = "Authorization: Bearer eyJhbGciOiJSUzI1NiJ9.secret"
@@ -17,7 +14,7 @@ class CredentialRedactorTest
   }
 
   it should "redact X-Amz-Security-Token header value" in {
-    val input = "X-Amz-Security-Token: IQoJb3JpZ2luXsecrettoken"
+    val input  = "X-Amz-Security-Token: IQoJb3JpZ2luXsecrettoken"
     val result = CredentialRedactor.redact(input)
     result should include("X-Amz-Security-Token: [REDACTED]")
     result should not include "IQoJb3JpZ2luXsecrettoken"
@@ -32,20 +29,20 @@ class CredentialRedactorTest
   }
 
   it should "NOT redact non-secret X-Amz-Date header (debug info)" in {
-    val input = "X-Amz-Date: 20230101T120000Z"
+    val input  = "X-Amz-Date: 20230101T120000Z"
     val result = CredentialRedactor.redact(input)
     // Date is non-secret: must NOT be redacted
     result shouldBe input
   }
 
   it should "NOT redact non-secret X-Amz-SignedHeaders header (debug info)" in {
-    val input = "X-Amz-SignedHeaders: host;x-amz-content-sha256"
+    val input  = "X-Amz-SignedHeaders: host;x-amz-content-sha256"
     val result = CredentialRedactor.redact(input)
     result shouldBe input
   }
 
   it should "NOT redact non-secret X-Amz-Algorithm header (debug info)" in {
-    val input = "X-Amz-Algorithm: AWS4-HMAC-SHA256"
+    val input  = "X-Amz-Algorithm: AWS4-HMAC-SHA256"
     val result = CredentialRedactor.redact(input)
     result shouldBe input
   }
@@ -93,7 +90,7 @@ class CredentialRedactorTest
   }
 
   it should "redact AWSAccessKeyId query parameter" in {
-    val input = "AWSAccessKeyId=AKIAIOSFODNN7EXAMPLE&other=val"
+    val input  = "AWSAccessKeyId=AKIAIOSFODNN7EXAMPLE&other=val"
     val result = CredentialRedactor.redact(input)
     result should include("AWSAccessKeyId=[REDACTED]")
     result should not include "AKIAIOSFODNN7EXAMPLE"
@@ -116,21 +113,21 @@ class CredentialRedactorTest
   }
 
   it should "be case-insensitive for header names" in {
-    val input = "authorization: token secret123"
+    val input  = "authorization: token secret123"
     val result = CredentialRedactor.redact(input)
     result should not include "secret123"
     result should include("[REDACTED]")
   }
 
   it should "redact raw AWS access key (AKIA* prefix) in unstructured message" in {
-    val input = "Forbidden for AKIAIOSFODNN7EXAMPLE while accessing bucket"
+    val input  = "Forbidden for AKIAIOSFODNN7EXAMPLE while accessing bucket"
     val result = CredentialRedactor.redact(input)
     result should not include "AKIAIOSFODNN7EXAMPLE"
     result should include("[REDACTED]")
   }
 
   it should "redact raw AWS SSO access key (ASIA* prefix) in unstructured message" in {
-    val input = "Access denied: ASIAIOSFODNN7EXAMPLE"
+    val input  = "Access denied: ASIAIOSFODNN7EXAMPLE"
     val result = CredentialRedactor.redact(input)
     result should not include "ASIAIOSFODNN7EXAMPLE"
     result should include("[REDACTED]")
@@ -143,10 +140,10 @@ class CredentialRedactorTest
 
   // ── L-B: service principal IDs (AROA*, AIPA*, etc.) are public — not redacted ──
   it should "NOT redact AWS IAM role/instance/service principal IDs (AROA/AIPA/ANPA/AGPA/AIDA)" in {
-    val roleId = "AROAIOSFODNN7EXAMPLE12"
+    val roleId            = "AROAIOSFODNN7EXAMPLE12"
     val instanceProfileId = "AIPAIOSFODNN7EXAMPLE"
-    val input = s"role=$roleId, profile=$instanceProfileId"
-    val result = CredentialRedactor.redact(input)
+    val input             = s"role=$roleId, profile=$instanceProfileId"
+    val result            = CredentialRedactor.redact(input)
     result should include(roleId)
     result should include(instanceProfileId)
     result should not include "[REDACTED]"
@@ -248,40 +245,40 @@ class CredentialRedactorTest
   // ── redactThrowable: cause-chain walking ──────────────────────────────────
 
   "CredentialRedactor.redactThrowable" should "redact credentials in nested cause chain" in {
-    val secret = "AKIAIOSFODNN7EXAMPLE"
-    val inner = new RuntimeException(s"AWSAccessKeyId=$secret")
-    val outer = new RuntimeException("outer error", inner)
+    val secret   = "AKIAIOSFODNN7EXAMPLE"
+    val inner    = new RuntimeException(s"AWSAccessKeyId=$secret")
+    val outer    = new RuntimeException("outer error", inner)
     val redacted = CredentialRedactor.redactThrowable(outer)
     redacted should not include secret
     redacted should include("[REDACTED]")
   }
 
   it should "redact credentials in second-level cause" in {
-    val secret = "AKIAIOSFODNN7EXAMPLE"
-    val root = new RuntimeException(s"AWSAccessKeyId=$secret")
-    val mid = new RuntimeException("mid", root)
-    val top = new RuntimeException("top", mid)
+    val secret   = "AKIAIOSFODNN7EXAMPLE"
+    val root     = new RuntimeException(s"AWSAccessKeyId=$secret")
+    val mid      = new RuntimeException("mid", root)
+    val top      = new RuntimeException("top", mid)
     val redacted = CredentialRedactor.redactThrowable(top)
     redacted should not include secret
   }
 
   it should "include the top-level message when no cause exists" in {
-    val secret = "AKIAIOSFODNN7EXAMPLE"
-    val ex = new RuntimeException(s"AWSAccessKeyId=$secret")
+    val secret   = "AKIAIOSFODNN7EXAMPLE"
+    val ex       = new RuntimeException(s"AWSAccessKeyId=$secret")
     val redacted = CredentialRedactor.redactThrowable(ex)
     redacted should not include secret
     redacted should include("[REDACTED]")
   }
 
   it should "use class name when getMessage returns null" in {
-    val ex = new RuntimeException(null: String)
+    val ex       = new RuntimeException(null: String)
     val redacted = CredentialRedactor.redactThrowable(ex)
     redacted should include("RuntimeException")
   }
 
   it should "include Caused by prefix for each nested cause" in {
-    val inner = new RuntimeException("inner msg")
-    val outer = new RuntimeException("outer msg", inner)
+    val inner    = new RuntimeException("inner msg")
+    val outer    = new RuntimeException("outer msg", inner)
     val redacted = CredentialRedactor.redactThrowable(outer)
     redacted should include("outer msg")
     redacted should include("Caused by: ")
@@ -289,10 +286,8 @@ class CredentialRedactorTest
   }
 
   it should "terminate on circular cause chain without infinite loop" in {
-    val base = new RuntimeException("base: AWSAccessKeyId=AKIAIOSFODNN7EXAMPLE")
-    val chain = (1 to 100).foldLeft(base: Throwable)((acc, _) =>
-      new RuntimeException("mid", acc)
-    )
+    val base   = new RuntimeException("base: AWSAccessKeyId=AKIAIOSFODNN7EXAMPLE")
+    val chain  = (1 to 100).foldLeft(base: Throwable)((acc, _) => new RuntimeException("mid", acc))
     val result = CredentialRedactor.redactThrowable(chain)
     result should not include "AKIAIOSFODNN7EXAMPLE"
   }
@@ -308,7 +303,7 @@ class CredentialRedactorTest
   }
 
   it should "redact S3A secret key Hadoop property value" in {
-    val input = "fs.s3a.secret.key=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+    val input  = "fs.s3a.secret.key=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
     val result = CredentialRedactor.redact(input)
     result should not include "wJalrXUtnFEMI"
     result should include("[REDACTED]")

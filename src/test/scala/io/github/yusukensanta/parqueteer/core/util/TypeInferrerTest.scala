@@ -7,10 +7,7 @@ import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 import org.scalacheck.Gen
 import java.time.LocalDate
 
-class TypeInferrerTest
-    extends AnyFlatSpec
-    with Matchers
-    with ScalaCheckPropertyChecks {
+class TypeInferrerTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks {
 
   "TypeInferrer.inferCsvValue" should "infer Boolean true" in {
     TypeInferrer.inferCsvValue("true") shouldBe CellValue.Bool(true)
@@ -120,8 +117,8 @@ class TypeInferrerTest
     // Cap at 18 digits: 18 digits starting with 1-9 always fit within Long.MaxValue
     val canonical: Gen[String] = for {
       first <- Gen.choose('1', '9')
-      len <- Gen.choose(0, 17)
-      rest <- Gen.listOfN(len, Gen.numChar)
+      len   <- Gen.choose(0, 17)
+      rest  <- Gen.listOfN(len, Gen.numChar)
     } yield first.toString + rest.mkString
     forAll(canonical) { s =>
       TypeInferrer.inferCsvValue(s) shouldBe a[CellValue.I64]

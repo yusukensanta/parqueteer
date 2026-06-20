@@ -9,7 +9,7 @@ class RowStreamWriterTest extends AnyFlatSpec with Matchers {
 
   private def capture(f: PrintStream => Unit): String = {
     val baos = new ByteArrayOutputStream()
-    val ps = new PrintStream(baos, true, "UTF-8")
+    val ps   = new PrintStream(baos, true, "UTF-8")
     f(ps)
     ps.flush()
     baos.toString("UTF-8")
@@ -27,13 +27,14 @@ class RowStreamWriterTest extends AnyFlatSpec with Matchers {
 
   private val row1 =
     Map("a" -> CellValue.I64(1L), "b" -> CellValue.Str("hello"))
+
   private val row2 =
     Map("a" -> CellValue.I64(2L), "b" -> CellValue.Str("world"))
 
   // ── NDJSON ──────────────────────────────────────────────────────────────────
 
   "RowStreamWriter NDJSON" should "emit one JSON object per line" in {
-    val out = run(OutputFormat.NDJSON, List(row1, row2))
+    val out   = run(OutputFormat.NDJSON, List(row1, row2))
     val lines = out.trim.split("\n")
     lines should have length 2
     lines(0) should (include("\"a\":1") and include("\"b\":\"hello\""))
@@ -119,7 +120,7 @@ class RowStreamWriterTest extends AnyFlatSpec with Matchers {
   // ── CSV ──────────────────────────────────────────────────────────────────────
 
   "RowStreamWriter CSV" should "emit header then data rows" in {
-    val out = run(OutputFormat.CSV, List(row1))
+    val out   = run(OutputFormat.CSV, List(row1))
     val lines = out.trim.split("\r?\n")
     lines should have length 2
     lines(0) should (include("a") and include("b"))
@@ -127,13 +128,13 @@ class RowStreamWriterTest extends AnyFlatSpec with Matchers {
   }
 
   it should "quote values containing commas" in {
-    val r = Map("x" -> CellValue.Str("a,b"))
+    val r   = Map("x" -> CellValue.Str("a,b"))
     val out = run(OutputFormat.CSV, List(r))
     out should include("\"a,b\"")
   }
 
   it should "quote values containing double quotes" in {
-    val r = Map("x" -> CellValue.Str("say \"hi\""))
+    val r   = Map("x" -> CellValue.Str("say \"hi\""))
     val out = run(OutputFormat.CSV, List(r))
     out should include("\"say \"\"hi\"\"\"")
   }
@@ -176,7 +177,7 @@ class RowStreamWriterTest extends AnyFlatSpec with Matchers {
   // ── Markdown ─────────────────────────────────────────────────────────────────
 
   "RowStreamWriter Markdown" should "emit header and separator rows" in {
-    val out = run(OutputFormat.Markdown, List(row1, row2))
+    val out   = run(OutputFormat.Markdown, List(row1, row2))
     val lines = out.trim.split("\n")
     lines(0) should startWith("|")
     lines(1) should include("---")
@@ -184,7 +185,7 @@ class RowStreamWriterTest extends AnyFlatSpec with Matchers {
   }
 
   it should "escape pipe characters in values" in {
-    val r = Map("x" -> CellValue.Str("a|b"))
+    val r   = Map("x" -> CellValue.Str("a|b"))
     val out = run(OutputFormat.Markdown, List(r))
     out should include("a\\|b")
   }
@@ -197,7 +198,7 @@ class RowStreamWriterTest extends AnyFlatSpec with Matchers {
   // ── LTSV ─────────────────────────────────────────────────────────────────────
 
   "RowStreamWriter LTSV" should "emit one LTSV line per row" in {
-    val out = run(OutputFormat.LTSV, List(row1, row2))
+    val out   = run(OutputFormat.LTSV, List(row1, row2))
     val lines = out.trim.split("\n")
     lines should have length 2
     lines(0) should (include("a:1") or include("b:hello"))
@@ -220,9 +221,9 @@ class RowStreamWriterTest extends AnyFlatSpec with Matchers {
   // sampling; the unseen-key warning only fires for rows arriving after the flush.
 
   "RowStreamWriter CSV" should "drop unseen keys introduced after the header row" in {
-    val r1 = Map("a" -> CellValue.I64(1L))
-    val r2 = Map("a" -> CellValue.I64(2L), "z" -> CellValue.Str("extra"))
-    val out = run(OutputFormat.CSV, List(r1, r2))
+    val r1    = Map("a" -> CellValue.I64(1L))
+    val r2    = Map("a" -> CellValue.I64(2L), "z" -> CellValue.Str("extra"))
+    val out   = run(OutputFormat.CSV, List(r1, r2))
     val lines = out.trim.split("\r?\n")
     lines(0) shouldBe "a"
     lines(1) shouldBe "1"
@@ -231,8 +232,8 @@ class RowStreamWriterTest extends AnyFlatSpec with Matchers {
   }
 
   "RowStreamWriter Table" should "include extra keys that appear within the sample window" in {
-    val r1 = Map("a" -> CellValue.I64(1L))
-    val r2 = Map("a" -> CellValue.I64(2L), "z" -> CellValue.Str("extra"))
+    val r1  = Map("a" -> CellValue.I64(1L))
+    val r2  = Map("a" -> CellValue.I64(2L), "z" -> CellValue.Str("extra"))
     val out = run(OutputFormat.Table, List(r1, r2))
     out should include("a")
     out should include("z")
@@ -241,8 +242,8 @@ class RowStreamWriterTest extends AnyFlatSpec with Matchers {
   }
 
   "RowStreamWriter Markdown" should "include extra keys that appear within the sample window" in {
-    val r1 = Map("a" -> CellValue.I64(1L))
-    val r2 = Map("a" -> CellValue.I64(2L), "z" -> CellValue.Str("extra"))
+    val r1  = Map("a" -> CellValue.I64(1L))
+    val r2  = Map("a" -> CellValue.I64(2L), "z" -> CellValue.Str("extra"))
     val out = run(OutputFormat.Markdown, List(r1, r2))
     out should include("a")
     out should include("z")
@@ -264,7 +265,7 @@ class RowStreamWriterTest extends AnyFlatSpec with Matchers {
       "a_col" -> CellValue.I64(1L),
       "m_col" -> CellValue.I64(2L)
     )
-    val out = run(OutputFormat.CSV, List(orderedRow))
+    val out    = run(OutputFormat.CSV, List(orderedRow))
     val header = out.split("\r?\n").head
     header shouldBe "z_col,a_col,m_col"
   }
@@ -303,10 +304,10 @@ class RowStreamWriterTest extends AnyFlatSpec with Matchers {
 
   it should "escape CSV header columns that contain commas" in {
     val row = scala.collection.immutable.ListMap(
-      "a,b" -> CellValue.Str("val1"),
+      "a,b"    -> CellValue.Str("val1"),
       "normal" -> CellValue.Str("val2")
     )
-    val out = run(OutputFormat.CSV, List(row))
+    val out    = run(OutputFormat.CSV, List(row))
     val header = out.split("\r?\n").head
     header shouldBe "\"a,b\",normal"
   }
@@ -314,43 +315,43 @@ class RowStreamWriterTest extends AnyFlatSpec with Matchers {
   // ── CWE-1236 formula injection protection (streaming CSV path) ───────────────
 
   it should "prefix '=' values with apostrophe to prevent formula injection" in {
-    val row = Map("x" -> CellValue.Str("=SUM(A1:A10)"))
-    val out = run(OutputFormat.CSV, List(row))
+    val row      = Map("x" -> CellValue.Str("=SUM(A1:A10)"))
+    val out      = run(OutputFormat.CSV, List(row))
     val dataLine = out.split("\r?\n").last
     dataLine shouldBe "'=SUM(A1:A10)"
   }
 
   it should "prefix '+' values with apostrophe to prevent formula injection" in {
-    val row = Map("x" -> CellValue.Str("+cmd|' /C calc'!A0"))
-    val out = run(OutputFormat.CSV, List(row))
+    val row      = Map("x" -> CellValue.Str("+cmd|' /C calc'!A0"))
+    val out      = run(OutputFormat.CSV, List(row))
     val dataLine = out.split("\r?\n").last
     dataLine shouldBe "'+cmd|' /C calc'!A0"
   }
 
   it should "prefix '@' values with apostrophe to prevent formula injection" in {
-    val row = Map("x" -> CellValue.Str("@SUM(1+1)"))
-    val out = run(OutputFormat.CSV, List(row))
+    val row      = Map("x" -> CellValue.Str("@SUM(1+1)"))
+    val out      = run(OutputFormat.CSV, List(row))
     val dataLine = out.split("\r?\n").last
     dataLine shouldBe "'@SUM(1+1)"
   }
 
   it should "not modify values that do not start with formula-trigger chars" in {
-    val row = Map("x" -> CellValue.Str("hello world"))
-    val out = run(OutputFormat.CSV, List(row))
+    val row      = Map("x" -> CellValue.Str("hello world"))
+    val out      = run(OutputFormat.CSV, List(row))
     val dataLine = out.split("\r?\n").last
     dataLine shouldBe "hello world"
   }
 
   it should "prefix values with leading whitespace before '=' with apostrophe (H5 bypass)" in {
-    val row = Map("x" -> CellValue.Str(" =SUM(A1:A10)"))
-    val out = run(OutputFormat.CSV, List(row))
+    val row      = Map("x" -> CellValue.Str(" =SUM(A1:A10)"))
+    val out      = run(OutputFormat.CSV, List(row))
     val dataLine = out.split("\r?\n").last
     dataLine shouldBe "' =SUM(A1:A10)"
   }
 
   it should "not prefix ordinary whitespace-only values" in {
-    val row = Map("x" -> CellValue.Str("  hello"))
-    val out = run(OutputFormat.CSV, List(row))
+    val row      = Map("x" -> CellValue.Str("  hello"))
+    val out      = run(OutputFormat.CSV, List(row))
     val dataLine = out.split("\r?\n").last
     dataLine shouldBe "  hello"
   }

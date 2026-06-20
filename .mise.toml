@@ -25,4 +25,4 @@ depends = ["sync-sbt"]
 "enter" = "mise run sync-sbt"
 
 [tools]
-sbt = "1.12.2"
+sbt = "1.12.11"

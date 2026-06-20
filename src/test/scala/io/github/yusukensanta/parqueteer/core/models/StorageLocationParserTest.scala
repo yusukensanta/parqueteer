@@ -4,6 +4,7 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 class StorageLocationParserTest extends AnyFlatSpec with Matchers {
+
   "StorageLocationParser" should "parse S3 URLs correctly" in {
     val result =
       StorageLocationParser.parse("s3://my-bucket/path/to/file.parquet")

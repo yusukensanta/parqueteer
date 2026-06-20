@@ -2,6 +2,7 @@ package io.github.yusukensanta.parqueteer.core.models
 
 import scala.util.matching.Regex
 
+/** A file location that may be local or on a cloud object store (S3, GCS, Azure). */
 sealed trait StorageLocation {
   def path: String
 }
@@ -28,26 +29,29 @@ case class AzureLocation(
     container: String,
     key: String
 ) extends StorageLocation {
+
   override def path: String =
     s"abfss://$container@$account.dfs.core.windows.net/$key"
 }
 
 object StorageLocationParser {
-  private val s3Pattern: Regex = """s3a?://([^/]+)/(.+)""".r
+  private val s3Pattern: Regex  = """s3a?://([^/]+)/(.+)""".r
   private val gcsPattern: Regex = """gs://([^/]+)/(.+)""".r
+
   // Matches both abfss:// (secure) and abfs:// (non-secure); both map to AzureLocation.
   private val azurePattern: Regex =
     """abfss?://([^@]+)@([^.]+)\.dfs\.core\.windows\.net/(.+)""".r
   private val wasbPattern: Regex = """wasbs?://.*""".r
 
-  /** Parse a storage URL into the appropriate StorageLocation
-    *
-    * @param url
-    *   The storage URL to parse
-    * @return
-    *   Either an error message or the parsed StorageLocation
-    */
-  def parse(url: String): Either[String, StorageLocation] = {
+  /**
+   * Parse a storage URL into the appropriate StorageLocation
+   *
+   * @param url
+   *   The storage URL to parse
+   * @return
+   *   Either an error message or the parsed StorageLocation
+   */
+  def parse(url: String): Either[String, StorageLocation] =
     url.trim match {
       case s3Pattern(bucket, key) =>
         Right(S3Location(bucket, key))
@@ -69,6 +73,5 @@ object StorageLocationParser {
       case unsupported =>
         Left(s"Unsupported storage location format: $unsupported")
     }
-  }
 
 }

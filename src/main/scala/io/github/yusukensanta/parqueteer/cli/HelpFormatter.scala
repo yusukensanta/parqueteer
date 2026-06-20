@@ -270,7 +270,7 @@ object HelpFormatter {
        |  parqueteer config --validate
        |""".stripMargin
 
-  def topLevelHelp(): String = {
+  def topLevelHelp(): String =
     s"""parqueteer ${io.github.yusukensanta.parqueteer.BuildInfo.version} - A modern CLI toolkit for Apache Parquet files
        |
        |USAGE:
@@ -314,5 +314,4 @@ object HelpFormatter {
        |  parqueteer stats data.parquet
        |  parqueteer schema diff old.parquet new.parquet
        |""".stripMargin
-  }
 }

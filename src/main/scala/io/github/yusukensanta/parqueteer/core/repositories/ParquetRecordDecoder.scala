@@ -1,32 +1,34 @@
 package io.github.yusukensanta.parqueteer.core.repositories
 
 import com.github.mjakubowski84.parquet4s.{
-  RowParquetRecord,
-  Value,
-  NullValue,
-  BooleanValue,
-  IntValue,
-  LongValue,
-  FloatValue,
-  DoubleValue,
   BinaryValue,
+  BooleanValue,
   DateTimeValue,
   DecimalValue,
-  ListParquetRecord
+  DoubleValue,
+  FloatValue,
+  IntValue,
+  ListParquetRecord,
+  LongValue,
+  NullValue,
+  RowParquetRecord,
+  Value
 }
 import io.github.yusukensanta.parqueteer.core.models.CellValue
-import org.apache.parquet.schema.{MessageType, LogicalTypeAnnotation, GroupType}
+import org.apache.parquet.schema.{GroupType, LogicalTypeAnnotation, MessageType}
 import java.time.temporal.ChronoUnit
 import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
 import org.apache.parquet.column.page.PageReadStore
 import org.apache.parquet.io.ColumnIOFactory
 import org.apache.parquet.example.data.Group
 import org.apache.parquet.example.data.simple.convert.GroupRecordConverter
-import scala.jdk.CollectionConverters._
+import scala.jdk.CollectionConverters.*
 
 private[repositories] object ParquetRecordDecoder {
+
   private val logger =
     org.slf4j.LoggerFactory.getLogger(getClass)
+
   private val warnedVariants =
     java.util.concurrent.ConcurrentHashMap.newKeySet[String]()
 
@@ -60,7 +62,7 @@ private[repositories] object ParquetRecordDecoder {
       list.headOption.fold[CellValue](CellValue.Null)(decodeValue)
     case other =>
       val cls = other.getClass.getName
-      if (warnedVariants.add(cls))
+      if warnedVariants.add(cls) then
         logger.warn(
           s"Unknown parquet4s Value variant $cls — falling back to toString. " +
             "Upgrade parqueteer to add explicit support."
@@ -73,9 +75,8 @@ private[repositories] object ParquetRecordDecoder {
       .map {
         case (col, list: ListParquetRecord) =>
           val sz = list.size
-          if (
-            sz > 1 && warnedVariants.add(s"ListParquetRecord.multivalue:$col")
-          )
+          if sz > 1 && warnedVariants.add(s"ListParquetRecord.multivalue:$col")
+          then
             logger.warn(
               s"Column '$col': repeated primitive field arrived as ListParquetRecord with $sz " +
                 "values — only the first element is returned. Repeated primitive fields are " +
@@ -86,10 +87,11 @@ private[repositories] object ParquetRecordDecoder {
       }
       .to(scala.collection.immutable.ListMap)
 
-  /** Pre-compute which BINARY columns carry raw bytes (no string annotation).
-    * Call once per file/schema and pass to convertRecordToMapWithSchema to
-    * avoid rebuilding this Set for every row.
-    */
+  /**
+   * Pre-compute which BINARY columns carry raw bytes (no string annotation).
+   * Call once per file/schema and pass to convertRecordToMapWithSchema to
+   * avoid rebuilding this Set for every row.
+   */
   def rawBinaryFieldsFor(schema: MessageType): Set[String] =
     schema.getFields.asScala.collect {
       case f
@@ -112,8 +114,7 @@ private[repositories] object ParquetRecordDecoder {
     schema.getFields.asScala.collect {
       case f
           if f.isPrimitive &&
-            f.asPrimitiveType()
-              .getPrimitiveTypeName == PrimitiveTypeName.INT96 =>
+            f.asPrimitiveType().getPrimitiveTypeName == PrimitiveTypeName.INT96 =>
         f.getName
     }.toSet
 
@@ -123,7 +124,7 @@ private[repositories] object ParquetRecordDecoder {
     val buf =
       java.nio.ByteBuffer.wrap(bytes).order(java.nio.ByteOrder.LITTLE_ENDIAN)
     val nanosOfDay = buf.getLong(0)
-    val julianDay = buf.getInt(8).toLong - 2440588L
+    val julianDay  = buf.getInt(8).toLong - 2440588L
     val totalNanos =
       try
         Some(
@@ -156,9 +157,8 @@ private[repositories] object ParquetRecordDecoder {
         val cell = value match {
           case list: ListParquetRecord =>
             val sz = list.size
-            if (
-              sz > 1 && warnedVariants.add(s"ListParquetRecord.multivalue:$key")
-            )
+            if sz > 1 && warnedVariants.add(s"ListParquetRecord.multivalue:$key")
+            then
               logger.warn(
                 s"Column '$key': repeated primitive field arrived as ListParquetRecord with $sz " +
                   "values — only the first element is returned. Repeated primitive fields are " +
@@ -191,17 +191,18 @@ private[repositories] object ParquetRecordDecoder {
       int96FieldsFor(schema)
     )
 
-  /** Pre-compute a per-column transformer from the schema. Call once per file
-    * and pass to applyTemporalTransformer for each row to avoid O(N×K) map
-    * rebuilds (K = temporal column count, N = row count).
-    */
+  /**
+   * Pre-compute a per-column transformer from the schema. Call once per file
+   * and pass to applyTemporalTransformer for each row to avoid O(N×K) map
+   * rebuilds (K = temporal column count, N = row count).
+   */
   def buildTemporalTransformer(
       schema: MessageType
   ): Map[String, CellValue => CellValue] =
     schema.getFields.asScala
       .filter(_.isPrimitive)
       .flatMap { field =>
-        val pt = field.asPrimitiveType()
+        val pt   = field.asPrimitiveType()
         val name = field.getName
         Option(pt.getLogicalTypeAnnotation) match {
           case Some(_: LogicalTypeAnnotation.DateLogicalTypeAnnotation) =>
@@ -254,7 +255,7 @@ private[repositories] object ParquetRecordDecoder {
       row: Map[String, CellValue],
       transformer: Map[String, CellValue => CellValue]
   ): Map[String, CellValue] =
-    if (transformer.isEmpty) row
+    if transformer.isEmpty then row
     else row.map { case (k, v) => k -> transformer.get(k).fold(v)(_(v)) }
 
   def postProcessTemporalFields(
@@ -270,14 +271,14 @@ private[repositories] object ParquetRecordDecoder {
   ): List[Map[String, CellValue]] = {
     val columnIO =
       new ColumnIOFactory().getColumnIO(requestedSchema, fileSchema)
-    val converter = new GroupRecordConverter(requestedSchema)
+    val converter    = new GroupRecordConverter(requestedSchema)
     val recordReader = columnIO.getRecordReader(pageStore, converter)
-    val rowCount = pageStore.getRowCount
-    val result = List.newBuilder[Map[String, CellValue]]
-    var i = 0L
-    while (i < rowCount) {
+    val rowCount     = pageStore.getRowCount
+    val result       = List.newBuilder[Map[String, CellValue]]
+    var i            = 0L
+    while i < rowCount do {
       val group = recordReader.read()
-      if (group != null) result += decodeGroup(group, requestedSchema)
+      if group != null then result += decodeGroup(group, requestedSchema)
       i += 1
     }
     result.result()
@@ -290,14 +291,14 @@ private[repositories] object ParquetRecordDecoder {
       fieldIndex: Int,
       listGroupType: GroupType
   ): CellValue = {
-    val outerGroup = group.getGroup(fieldIndex, 0)
+    val outerGroup   = group.getGroup(fieldIndex, 0)
     val elementCount = outerGroup.getFieldRepetitionCount(0)
-    if (elementCount == 0) return CellValue.Str("[]")
+    if elementCount == 0 then return CellValue.Str("[]")
     val repeatedType = listGroupType.getType(0).asGroupType()
-    val elemType = repeatedType.getType(0)
+    val elemType     = repeatedType.getType(0)
     val elements = (0 until elementCount).map { j =>
       val wrapper = outerGroup.getGroup(0, j)
-      if (wrapper.getFieldRepetitionCount(0) > 0 && elemType.isPrimitive)
+      if wrapper.getFieldRepetitionCount(0) > 0 && elemType.isPrimitive then
         wrapper.getValueToString(0, 0)
       else "null"
     }
@@ -311,11 +312,10 @@ private[repositories] object ParquetRecordDecoder {
     val builder =
       scala.collection.immutable.ListMap.newBuilder[String, CellValue]
     var i = 0
-    while (i < schema.getFieldCount) {
-      if (
-        group.getFieldRepetitionCount(i) > 0 && !schema.getType(i).isPrimitive
-      ) {
-        val name = schema.getType(i).getName
+    while i < schema.getFieldCount do {
+      if group.getFieldRepetitionCount(i) > 0 && !schema.getType(i).isPrimitive
+      then {
+        val name      = schema.getType(i).getName
         val groupType = schema.getType(i).asGroupType()
         Option(groupType.getLogicalTypeAnnotation) match {
           case Some(_: LogicalTypeAnnotation.ListLogicalTypeAnnotation) =>
@@ -323,7 +323,7 @@ private[repositories] object ParquetRecordDecoder {
               try decodeListField(group, i, groupType)
               catch {
                 case ex: Exception =>
-                  if (warnedVariants.add(s"list-layout:$name"))
+                  if warnedVariants.add(s"list-layout:$name") then
                     logger.warn(
                       s"Column '$name' has a non-standard LIST layout — emitting Null. Cause: ${ex.getMessage}"
                     )
@@ -331,7 +331,7 @@ private[repositories] object ParquetRecordDecoder {
               }
             builder += name -> listVal
           case _ =>
-            if (warnedVariants.add(s"nested:$name"))
+            if warnedVariants.add(s"nested:$name") then
               logger.warn(
                 s"Column '$name' is a nested group type (STRUCT/MAP) — emitting Null. " +
                   "Nested columns are readable but not round-trippable: convert and merge will " +
@@ -339,19 +339,18 @@ private[repositories] object ParquetRecordDecoder {
               )
             builder += name -> CellValue.Null
         }
-      } else if (
-        group.getFieldRepetitionCount(i) == 0 && schema.getType(i).isPrimitive
-      ) {
+      } else if group.getFieldRepetitionCount(i) == 0 && schema.getType(i).isPrimitive
+      then {
         builder += schema.getType(i).getName -> CellValue.Null
-      } else if (schema.getType(i).isPrimitive) {
-        val name = schema.getType(i).getName
+      } else if schema.getType(i).isPrimitive then {
+        val name     = schema.getType(i).getName
         val repCount = group.getFieldRepetitionCount(i)
-        if (repCount > 1 && warnedVariants.add(s"repeated:$name"))
+        if repCount > 1 && warnedVariants.add(s"repeated:$name") then
           logger.warn(
             s"Column '$name' has $repCount repeated values — only the first is returned. " +
               "Repeated primitive fields are not yet fully supported."
           )
-        val fieldType = schema.getType(i).asPrimitiveType()
+        val fieldType   = schema.getType(i).asPrimitiveType()
         val logicalType = Option(fieldType.getLogicalTypeAnnotation)
         val value: CellValue =
           (fieldType.getPrimitiveTypeName, logicalType) match {

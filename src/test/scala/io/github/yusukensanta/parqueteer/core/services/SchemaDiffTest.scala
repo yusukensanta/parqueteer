@@ -1,6 +1,6 @@
 package io.github.yusukensanta.parqueteer.core.services
 
-import io.github.yusukensanta.parqueteer.core.models._
+import io.github.yusukensanta.parqueteer.core.models.*
 import io.github.yusukensanta.parqueteer.core.repositories.ParquetRepository
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -13,44 +13,57 @@ class SchemaDiffTest extends AnyFlatSpec with Matchers {
       schema2: ParquetSchema,
       metadata: FileMetadata
   ) extends ParquetRepository {
+
     override def readSchema(file: ParquetFile): Try[ParquetSchema] =
-      if (file.location.path.contains("file1")) Success(schema1)
+      if file.location.path.contains("file1") then Success(schema1)
       else Success(schema2)
+
     override def readMetadata(file: ParquetFile): Try[FileMetadata] =
       Success(metadata)
+
     override def readFileInfo(
         file: ParquetFile
     ): Try[(ParquetSchema, FileMetadata, List[RowGroupInfo])] =
-      for { s <- readSchema(file); m <- readMetadata(file) } yield (s, m, Nil)
+      for {
+        s <- readSchema(file)
+        m <- readMetadata(file)
+      } yield (s, m, Nil)
+
     override def readContent(
         file: ParquetFile,
         config: ReadConfig
     ): Try[FileContent] =
       Success(FileContent(List.empty, 0, false))
+
     override def validateFile(
         file: ParquetFile,
         deep: Boolean = false
     ): Try[List[String]] =
       Success(List.empty)
+
     override def writeContent(
         location: StorageLocation,
         data: List[Map[String, CellValue]],
         schema: Option[ParquetSchema],
         config: WriteConfig
     ): Try[Unit] = Success(())
+
     override def streamContent(
         file: ParquetFile,
         config: ReadConfig
     )(process: Map[String, CellValue] => Unit): Try[Long] = Success(0L)
+
     override def writeContentStream(
         location: StorageLocation,
         schema: ParquetSchema,
         config: WriteConfig
     )(feed: (Map[String, CellValue] => Unit) => Unit): Try[Long] = Success(0L)
+
     override def readSchemaFields(
         file: ParquetFile
     ): Try[List[FieldSummary]] = Success(List.empty)
     override def deleteFile(location: StorageLocation): Try[Unit] = Success(())
+
     override def readStats(file: ParquetFile): Try[FileStats] =
       Success(FileStats(List.empty, 0L, 0L))
   }
@@ -70,10 +83,10 @@ class SchemaDiffTest extends AnyFlatSpec with Matchers {
   private val metadata = FileMetadata(512L, None, None, None, "2.0", None)
 
   "ParquetService.diffSchemas" should "report identical schemas" in {
-    val s = schema(col("id", "INT64"), col("name", "BINARY"))
-    val repo = new TwoSchemaRepository(s, s, metadata)
+    val s       = schema(col("id", "INT64"), col("name", "BINARY"))
+    val repo    = new TwoSchemaRepository(s, s, metadata)
     val service = new ParquetService(repo)
-    val result = service.diffSchemas("/file1.parquet", "/file2.parquet")
+    val result  = service.diffSchemas("/file1.parquet", "/file2.parquet")
     result.isRight shouldBe true
     result.toOption.get.identical shouldBe true
     result.toOption.get.added shouldBe empty
@@ -83,10 +96,10 @@ class SchemaDiffTest extends AnyFlatSpec with Matchers {
   }
 
   it should "detect added columns" in {
-    val s1 = schema(col("id", "INT64"))
-    val s2 = schema(col("id", "INT64"), col("email", "BINARY"))
+    val s1      = schema(col("id", "INT64"))
+    val s2      = schema(col("id", "INT64"), col("email", "BINARY"))
     val service = new ParquetService(new TwoSchemaRepository(s1, s2, metadata))
-    val result = service.diffSchemas("/file1.parquet", "/file2.parquet")
+    val result  = service.diffSchemas("/file1.parquet", "/file2.parquet")
     result.isRight shouldBe true
     result.toOption.get.added.map(_.name) should contain("email")
     result.toOption.get.removed shouldBe empty
@@ -94,20 +107,20 @@ class SchemaDiffTest extends AnyFlatSpec with Matchers {
   }
 
   it should "detect removed columns" in {
-    val s1 = schema(col("id", "INT64"), col("legacy", "BINARY"))
-    val s2 = schema(col("id", "INT64"))
+    val s1      = schema(col("id", "INT64"), col("legacy", "BINARY"))
+    val s2      = schema(col("id", "INT64"))
     val service = new ParquetService(new TwoSchemaRepository(s1, s2, metadata))
-    val result = service.diffSchemas("/file1.parquet", "/file2.parquet")
+    val result  = service.diffSchemas("/file1.parquet", "/file2.parquet")
     result.isRight shouldBe true
     result.toOption.get.removed.map(_.name) should contain("legacy")
     result.toOption.get.added shouldBe empty
   }
 
   it should "detect type changes" in {
-    val s1 = schema(col("id", "INT32"))
-    val s2 = schema(col("id", "INT64"))
+    val s1      = schema(col("id", "INT32"))
+    val s2      = schema(col("id", "INT64"))
     val service = new ParquetService(new TwoSchemaRepository(s1, s2, metadata))
-    val result = service.diffSchemas("/file1.parquet", "/file2.parquet")
+    val result  = service.diffSchemas("/file1.parquet", "/file2.parquet")
     result.isRight shouldBe true
     result.toOption.get.changed should have length 1
     result.toOption.get.changed.head.name shouldBe "id"
@@ -116,10 +129,10 @@ class SchemaDiffTest extends AnyFlatSpec with Matchers {
   }
 
   it should "detect optionality changes" in {
-    val s1 = schema(col("name", "BINARY", optional = false))
-    val s2 = schema(col("name", "BINARY", optional = true))
+    val s1      = schema(col("name", "BINARY", optional = false))
+    val s2      = schema(col("name", "BINARY", optional = true))
     val service = new ParquetService(new TwoSchemaRepository(s1, s2, metadata))
-    val result = service.diffSchemas("/file1.parquet", "/file2.parquet")
+    val result  = service.diffSchemas("/file1.parquet", "/file2.parquet")
     result.isRight shouldBe true
     result.toOption.get.changed should have length 1
     result.toOption.get.changed.head.fromOptional shouldBe false
@@ -135,7 +148,7 @@ class SchemaDiffTest extends AnyFlatSpec with Matchers {
       col("new_col", "BOOLEAN")
     )
     val service = new ParquetService(new TwoSchemaRepository(s1, s2, metadata))
-    val result = service.diffSchemas("/file1.parquet", "/file2.parquet")
+    val result  = service.diffSchemas("/file1.parquet", "/file2.parquet")
     result.isRight shouldBe true
     result.toOption.get.unchanged should contain("id")
     result.toOption.get.removed.map(_.name) should contain("old")
@@ -144,9 +157,9 @@ class SchemaDiffTest extends AnyFlatSpec with Matchers {
   }
 
   it should "return Left for invalid file path" in {
-    val s = schema(col("id", "INT64"))
+    val s       = schema(col("id", "INT64"))
     val service = new ParquetService(new TwoSchemaRepository(s, s, metadata))
-    val result = service.diffSchemas("ftp://bad", "/file2.parquet")
+    val result  = service.diffSchemas("ftp://bad", "/file2.parquet")
     result.isLeft shouldBe true
     result.left.toOption.get shouldBe a[ParqueteerError.InvalidFormat]
   }

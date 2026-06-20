@@ -3,6 +3,7 @@ package io.github.yusukensanta.parqueteer.core.models
 import java.time.Instant
 import scala.concurrent.duration.{Duration, FiniteDuration}
 
+/** Aggregate view of a Parquet file: location, schema, metadata, content, and row groups. */
 case class ParquetFile(
     location: StorageLocation,
     schema: Option[ParquetSchema] = None,
@@ -18,6 +19,7 @@ case class RowGroupInfo(
     uncompressedBytes: Long
 )
 
+/** Column-level schema with aggregate row group and row count metadata. */
 case class ParquetSchema(
     columns: List[ColumnInfo],
     rowGroupCount: Long,
@@ -45,12 +47,14 @@ case class FileMetadata(
     avgRowGroupSizeBytes: Option[Long] = None
 )
 
+/** Decoded rows from a Parquet file, with total-row count and partial-read indicator. */
 case class FileContent(
     rows: List[Map[String, CellValue]],
     totalRows: Long,
     isPartial: Boolean = false
 )
 
+/** Controls how rows are read: row limit, column projection, filter, output format, parallelism. */
 case class ReadConfig(
     maxRows: Option[Long] = None,
     columns: Option[List[String]] = None,
@@ -63,6 +67,7 @@ case class ReadConfig(
 enum OutputFormat:
   case Table, JSON, CSV, Pretty, Markdown, NDJSON, LTSV
 
+/** Controls Parquet write: compression codec, row group size, page size, dictionary encoding. */
 case class WriteConfig(
     compressionType: CompressionType = CompressionType.Snappy,
     rowGroupSize: Long = WriteConfig.DefaultRowGroupSize,
@@ -116,6 +121,7 @@ case class ColumnChange(
     toOptional: Boolean
 )
 
+/** Result of comparing two Parquet schemas: added, removed, changed, and unchanged columns. */
 case class SchemaDiff(
     added: List[ColumnInfo],
     removed: List[ColumnInfo],

@@ -6,6 +6,7 @@ import io.github.yusukensanta.parqueteer.core.models.CellValue
 // NaN and Infinity float/double values are serialized as JSON strings ("NaN", "Infinity", "-Infinity")
 // because RFC 8259 disallows them as number literals. Downstream consumers must handle string fallback.
 object JsonEncoder {
+
   def encode(value: CellValue): Json = value match {
     case CellValue.Null   => Json.Null
     case CellValue.Str(s) => Json.fromString(s)
@@ -41,8 +42,8 @@ object JsonEncoder {
       isNegInf: Boolean,
       finite: => Json
   ): Json =
-    if (isNaN) Json.fromString("NaN")
-    else if (isPosInf) Json.fromString("Infinity")
-    else if (isNegInf) Json.fromString("-Infinity")
+    if isNaN then Json.fromString("NaN")
+    else if isPosInf then Json.fromString("Infinity")
+    else if isNegInf then Json.fromString("-Infinity")
     else finite
 }

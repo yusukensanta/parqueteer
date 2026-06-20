@@ -1,10 +1,11 @@
 package io.github.yusukensanta.parqueteer.core.services
 
-import io.github.yusukensanta.parqueteer.core.models._
+import io.github.yusukensanta.parqueteer.core.models.*
 import io.github.yusukensanta.parqueteer.core.models.ParqueteerError.toParqueteerError
 import io.github.yusukensanta.parqueteer.core.models.StorageLocationParser
 import io.github.yusukensanta.parqueteer.core.repositories.ParquetRepository
 import io.github.yusukensanta.parqueteer.core.filters.FilterParser
+import io.github.yusukensanta.parqueteer.core.util.{CsvParser, LTSVParser, TypeInferrer}
 import scala.util.{Try, Using}
 
 class ParquetService(
@@ -21,7 +22,7 @@ class ParquetService(
       .map(msg => ParqueteerError.InvalidFormat(path, msg))
 
   private def requireNotStdin(path: String): Either[ParqueteerError, Unit] =
-    if (path == "-")
+    if path == "-" then
       Left(
         ParqueteerError.InvalidFormat(
           "-",
@@ -94,7 +95,7 @@ class ParquetService(
       schemaMode: SchemaMode,
       onProgress: (Int, Int, String) => Unit = (_, _, _) => ()
   ): Either[ParqueteerError, Long] =
-    if (inputPaths.size < 2)
+    if inputPaths.size < 2 then
       Left(
         ParqueteerError.InvalidFormat(
           "merge",
@@ -104,8 +105,8 @@ class ParquetService(
     else
       for {
         inputLocations <- parseLocations(inputPaths)
-        schemas <- readAllSchemas(inputLocations)
-        mergedFields <- mergeSchemas(schemas, inputPaths, schemaMode)
+        schemas        <- readAllSchemas(inputLocations)
+        mergedFields   <- mergeSchemas(schemas, inputPaths, schemaMode)
         outputLocation <- parseLocation(outputPath)
         count <- streamMerge(
           inputLocations,
@@ -117,9 +118,10 @@ class ParquetService(
         )
       } yield count
 
-  /** Lift a list of paths into a single Either of parsed locations,
-    * short-circuiting on the first malformed path.
-    */
+  /**
+   * Lift a list of paths into a single Either of parsed locations,
+   * short-circuiting on the first malformed path.
+   */
   private def parseLocations(
       paths: List[String]
   ): Either[ParqueteerError, Vector[StorageLocation]] =
@@ -127,9 +129,10 @@ class ParquetService(
       Right(Vector.empty)
     )((acc, p) => acc.flatMap(locs => parseLocation(p).map(locs :+ _)))
 
-  /** Read the field-summary schema for each input file, preserving order. Stops
-    * on the first read failure.
-    */
+  /**
+   * Read the field-summary schema for each input file, preserving order. Stops
+   * on the first read failure.
+   */
   private def readAllSchemas(
       locations: Vector[StorageLocation]
   ): Either[ParqueteerError, Vector[List[FieldSummary]]] =
@@ -144,21 +147,22 @@ class ParquetService(
       )
     )
 
-  /** Combine per-file schemas under the chosen strategy:
-    *   - Strict: every input must match the first file's schema exactly.
-    *   - Union: collect the union of fields, surfacing per-column type
-    *     conflicts as a single InvalidFormat error. Union-merged fields are
-    *     marked optional because not every file is guaranteed to supply them.
-    */
+  /**
+   * Combine per-file schemas under the chosen strategy:
+   *   - Strict: every input must match the first file's schema exactly.
+   *   - Union: collect the union of fields, surfacing per-column type
+   *     conflicts as a single InvalidFormat error. Union-merged fields are
+   *     marked optional because not every file is guaranteed to supply them.
+   */
   private def mergeSchemas(
       schemas: Vector[List[FieldSummary]],
       inputPaths: List[String],
       schemaMode: SchemaMode
   ): Either[ParqueteerError, List[FieldSummary]] = schemaMode match {
     case SchemaMode.Strict =>
-      if (schemas.isEmpty) Right(Nil)
+      if schemas.isEmpty then Right(Nil)
       else {
-        val first = schemas.head
+        val first    = schemas.head
         val firstSet = first.map(f => (f.name, f.dataType, f.isOptional)).toSet
         schemas.zipWithIndex
           .collectFirst {
@@ -166,15 +170,15 @@ class ParquetService(
                 if s
                   .map(f => (f.name, f.dataType, f.isOptional))
                   .toSet != firstSet =>
-              val thisSet = s.map(f => (f.name, f.dataType, f.isOptional)).toSet
-              val missing = firstSet -- thisSet
-              val extra = thisSet -- firstSet
-              val missingNames = missing.map(_._1)
-              val extraNames = extra.map(_._1)
-              val changedNames = missingNames.intersect(extraNames)
+              val thisSet          = s.map(f => (f.name, f.dataType, f.isOptional)).toSet
+              val missing          = firstSet -- thisSet
+              val extra            = thisSet -- firstSet
+              val missingNames     = missing.map(_._1)
+              val extraNames       = extra.map(_._1)
+              val changedNames     = missingNames.intersect(extraNames)
               val onlyMissingNames = missingNames -- changedNames
-              val onlyExtraNames = extraNames -- changedNames
-              val fmt = (t: String, o: Boolean) => if (o) s"$t?" else t
+              val onlyExtraNames   = extraNames -- changedNames
+              val fmt              = (t: String, o: Boolean) => if o then s"$t?" else t
               val changedDetails = changedNames.toList.sorted.flatMap { name =>
                 for {
                   (_, ft, fo) <- missing.find(_._1 == name)
@@ -182,13 +186,13 @@ class ParquetService(
                 } yield s"$name (${fmt(ft, fo)} → ${fmt(tt, to)})"
               }
               val diffMsg = List(
-                if (changedNames.nonEmpty)
+                if changedNames.nonEmpty then
                   s"type/nullability changed: ${changedDetails.mkString(", ")}"
                 else "",
-                if (onlyMissingNames.nonEmpty)
+                if onlyMissingNames.nonEmpty then
                   s"missing: ${onlyMissingNames.toList.sorted.mkString(", ")}"
                 else "",
-                if (onlyExtraNames.nonEmpty)
+                if onlyExtraNames.nonEmpty then
                   s"extra: ${onlyExtraNames.toList.sorted.mkString(", ")}"
                 else ""
               ).filter(_.nonEmpty).mkString("; ")
@@ -207,57 +211,56 @@ class ParquetService(
       val seen =
         scala.collection.mutable.LinkedHashMap.empty[String, (String, Boolean)]
       schemas.zipWithIndex
-        .foldLeft[Either[ParqueteerError, Unit]](Right(())) {
-          case (acc, (fields, fileIdx)) =>
-            acc.flatMap { _ =>
-              val duplicates = fields
-                .groupBy(_.name)
-                .collect { case (n, fs) if fs.size > 1 => n }
-                .toList
-                .sorted
-              if (duplicates.nonEmpty)
+        .foldLeft[Either[ParqueteerError, Unit]](Right(())) { case (acc, (fields, fileIdx)) =>
+          acc.flatMap { _ =>
+            val duplicates = fields
+              .groupBy(_.name)
+              .collect { case (n, fs) if fs.size > 1 => n }
+              .toList
+              .sorted
+            if duplicates.nonEmpty then
+              Left(
+                ParqueteerError.InvalidFormat(
+                  "merge",
+                  s"File at index $fileIdx has duplicate column names: ${duplicates
+                      .mkString(", ")}. " +
+                    "Parquet files with duplicate column names cannot be merged."
+                )
+              )
+            else {
+              val fieldMap = fields.view.map(f => f.name -> f).toMap
+              val conflicts = fields.collect {
+                case f if seen.get(f.name).exists(_._1 != f.dataType) =>
+                  s"'${f.name}' (${seen(f.name)._1} vs ${f.dataType})"
+              }
+              if conflicts.nonEmpty then
                 Left(
                   ParqueteerError.InvalidFormat(
                     "merge",
-                    s"File at index $fileIdx has duplicate column names: ${duplicates
-                        .mkString(", ")}. " +
-                      "Parquet files with duplicate column names cannot be merged."
+                    s"Type conflicts in union merge: ${conflicts.mkString(", ")}. " +
+                      "Cannot union-merge columns with incompatible types."
                   )
                 )
               else {
-                val fieldMap = fields.view.map(f => f.name -> f).toMap
-                val conflicts = fields.collect {
-                  case f if seen.get(f.name).exists(_._1 != f.dataType) =>
-                    s"'${f.name}' (${seen(f.name)._1} vs ${f.dataType})"
+                // Fields already seen but absent from this schema → must become optional
+                seen.keys.filterNot(fieldMap.contains).foreach { name =>
+                  seen(name) = (seen(name)._1, false)
                 }
-                if (conflicts.nonEmpty)
-                  Left(
-                    ParqueteerError.InvalidFormat(
-                      "merge",
-                      s"Type conflicts in union merge: ${conflicts.mkString(", ")}. " +
-                        "Cannot union-merge columns with incompatible types."
-                    )
-                  )
-                else {
-                  // Fields already seen but absent from this schema → must become optional
-                  seen.keys.filterNot(fieldMap.contains).foreach { name =>
-                    seen(name) = (seen(name)._1, false)
+                fields.foreach { f =>
+                  seen.get(f.name) match {
+                    case Some((dt, wasRequired)) =>
+                      seen(f.name) = (dt, wasRequired && !f.isOptional)
+                    case None =>
+                      // New field: required only if it appears in the first file AND is marked required.
+                      // A field first seen in a later file was absent from earlier files, so it must be optional.
+                      val isRequired = fileIdx == 0 && !f.isOptional
+                      seen(f.name) = (f.dataType, isRequired)
                   }
-                  fields.foreach { f =>
-                    seen.get(f.name) match {
-                      case Some((dt, wasRequired)) =>
-                        seen(f.name) = (dt, wasRequired && !f.isOptional)
-                      case None =>
-                        // New field: required only if it appears in the first file AND is marked required.
-                        // A field first seen in a later file was absent from earlier files, so it must be optional.
-                        val isRequired = fileIdx == 0 && !f.isOptional
-                        seen(f.name) = (f.dataType, isRequired)
-                    }
-                  }
-                  Right(())
                 }
-              } // end else (no duplicate names)
-            }
+                Right(())
+              }
+            } // end else (no duplicate names)
+          }
         }
         .map(_ =>
           seen.map { case (name, (t, allRequired)) =>
@@ -266,10 +269,11 @@ class ParquetService(
         )
   }
 
-  /** Thrown inside the writeContentStream feed callback to abort streaming on
-    * read error. Propagates through writeContentStream's Try wrapper so the
-    * partial output can be cleaned up before returning the real error.
-    */
+  /**
+   * Thrown inside the writeContentStream feed callback to abort streaming on
+   * read error. Propagates through writeContentStream's Try wrapper so the
+   * partial output can be cleaned up before returning the real error.
+   */
   private class MergeStreamException(val error: ParqueteerError)
       extends RuntimeException(error.userMessage, null, true, false)
 
@@ -291,11 +295,12 @@ class ParquetService(
         m.contains("already exists") || m.contains("File already exists")
       )
 
-  /** Stream rows from each input file into a single output writer. On the first
-    * read failure throws a sentinel exception through the writer so the partial
-    * output is deleted before returning the real error. Returns the count of
-    * rows written on success.
-    */
+  /**
+   * Stream rows from each input file into a single output writer. On the first
+   * read failure throws a sentinel exception through the writer so the partial
+   * output is deleted before returning the real error. Returns the count of
+   * rows written on success.
+   */
   private def streamMerge(
       inputLocations: Vector[StorageLocation],
       inputPaths: List[String],
@@ -308,7 +313,7 @@ class ParquetService(
       f.dataType.startsWith("STRUCT") || f.dataType
         .startsWith("MAP") || f.dataType.startsWith("LIST")
     )
-    if (nestedFields.nonEmpty)
+    if nestedFields.nonEmpty then
       Left(
         ParqueteerError.InvalidFormat(
           "merge",
@@ -323,7 +328,7 @@ class ParquetService(
             f.name,
             f.dataType,
             f.isOptional,
-            if (f.isOptional) 1 else 0,
+            if f.isOptional then 1 else 0,
             0,
             "" // compression controlled by WriteConfig, not ColumnInfo
           )
@@ -333,32 +338,31 @@ class ParquetService(
       )
       val fieldNames = mergedFields.map(_.name).toArray
       val writeResult = repository
-        .writeContentStream(outputLocation, explicitSchema, writeConfig) {
-          write =>
-            inputLocations.zipWithIndex.foreach { case (loc, i) =>
-              onProgress(i + 1, inputLocations.size, inputPaths(i))
-              repository
-                .streamContent(ParquetFile(loc), ReadConfig()) { row =>
-                  val builder = scala.collection.immutable.ListMap
-                    .newBuilder[String, CellValue]
-                  var j = 0
-                  while (j < fieldNames.length) {
-                    val name = fieldNames(j)
-                    builder += name -> row.getOrElse(name, CellValue.Null)
-                    j += 1
-                  }
-                  write(builder.result())
-                } match {
-                case scala.util.Failure(err) =>
-                  throw new MergeStreamException(
-                    scala.util
-                      .Failure(err)
-                      .toParqueteerError
-                      .fold(identity, _ => ParqueteerError.IOError(err))
-                  )
-                case _ =>
-              }
+        .writeContentStream(outputLocation, explicitSchema, writeConfig) { write =>
+          inputLocations.zipWithIndex.foreach { case (loc, i) =>
+            onProgress(i + 1, inputLocations.size, inputPaths(i))
+            repository
+              .streamContent(ParquetFile(loc), ReadConfig()) { row =>
+                val builder = scala.collection.immutable.ListMap
+                  .newBuilder[String, CellValue]
+                var j = 0
+                while j < fieldNames.length do {
+                  val name = fieldNames(j)
+                  builder += name -> row.getOrElse(name, CellValue.Null)
+                  j += 1
+                }
+                write(builder.result())
+              } match {
+              case scala.util.Failure(err) =>
+                throw new MergeStreamException(
+                  scala.util
+                    .Failure(err)
+                    .toParqueteerError
+                    .fold(identity, _ => ParqueteerError.IOError(err))
+                )
+              case _ =>
             }
+          }
         }
 
       writeResult match {
@@ -380,17 +384,18 @@ class ParquetService(
     }
   }
 
-  /** Stream parquet → parquet conversion without loading the entire file into
-    * memory. Reads the source schema, opens a streaming writer for the output,
-    * and feeds rows one at a time. Deletes partial output on failure.
-    */
+  /**
+   * Stream parquet → parquet conversion without loading the entire file into
+   * memory. Reads the source schema, opens a streaming writer for the output,
+   * and feeds rows one at a time. Deletes partial output on failure.
+   */
   def convertParquetFile(
       inputPath: String,
       outputPath: String,
       conversionConfig: ConversionConfig
   ): Either[ParqueteerError, Long] =
     for {
-      inputLocation <- parseLocation(inputPath)
+      inputLocation  <- parseLocation(inputPath)
       outputLocation <- parseLocation(outputPath)
       schemaFields <- repository
         .readSchemaFields(ParquetFile(inputLocation))
@@ -401,7 +406,7 @@ class ParquetService(
             f.name,
             f.dataType,
             f.isOptional,
-            if (f.isOptional) 1 else 0,
+            if f.isOptional then 1 else 0,
             0,
             conversionConfig.writeConfig.compressionType.codecName
           )
@@ -474,7 +479,7 @@ class ParquetService(
       stdin: java.io.InputStream = System.in,
       maxRows: Option[Long] = None
   ): Either[ParqueteerError, List[Map[String, CellValue]]] =
-    if (path == "-")
+    if path == "-" then
       readFromStdin(inputFormat, stdin)
         .map(applyMaxRowsLimit(_, maxRows))
         .toParqueteerError
@@ -504,7 +509,7 @@ class ParquetService(
   ): List[Map[String, CellValue]] =
     maxRows.fold(rows) { limit =>
       // rows.length is Int-bounded; if limit >= length we keep all rows, otherwise limit.toInt is safe.
-      if (limit >= rows.length.toLong) rows else rows.take(limit.toInt)
+      if limit >= rows.length.toLong then rows else rows.take(limit.toInt)
     }
 
   private[services] def readFromStdin(
@@ -540,21 +545,21 @@ class ParquetService(
   def diffSchemas(
       path1: String,
       path2: String
-  ): Either[ParqueteerError, SchemaDiff] = {
+  ): Either[ParqueteerError, SchemaDiff] =
     for {
       f1 <- getFileInfo(path1)
       f2 <- getFileInfo(path2)
     } yield {
       val cols1 = f1.schema.map(_.columns).getOrElse(List.empty)
       val cols2 = f2.schema.map(_.columns).getOrElse(List.empty)
-      val map1 = cols1.map(c => c.name -> c).toMap
-      val map2 = cols2.map(c => c.name -> c).toMap
+      val map1  = cols1.map(c => c.name -> c).toMap
+      val map2  = cols2.map(c => c.name -> c).toMap
 
-      val added = cols2.filterNot(c => map1.contains(c.name))
+      val added   = cols2.filterNot(c => map1.contains(c.name))
       val removed = cols1.filterNot(c => map2.contains(c.name))
       val changed = cols1.flatMap { c1 =>
         map2.get(c1.name).flatMap { c2 =>
-          if (c1.dataType != c2.dataType || c1.isOptional != c2.isOptional)
+          if c1.dataType != c2.dataType || c1.isOptional != c2.isOptional then
             Some(
               ColumnChange(
                 c1.name,
@@ -571,20 +576,17 @@ class ParquetService(
         case c
             if map2
               .get(c.name)
-              .exists(c2 =>
-                c.dataType == c2.dataType && c.isOptional == c2.isOptional
-              ) =>
+              .exists(c2 => c.dataType == c2.dataType && c.isOptional == c2.isOptional) =>
           c.name
       }
 
       SchemaDiff(added, removed, changed, unchanged)
     }
-  }
 
   private def readJsonFile(
       path: String
   ): Try[List[Map[String, CellValue]]] = Try {
-    import better.files._
+    import better.files.*
     parseJsonContent(
       File(path).contentAsString(using java.nio.charset.StandardCharsets.UTF_8)
     )
@@ -601,7 +603,7 @@ class ParquetService(
 
   private def readCsvFile(path: String): Try[List[Map[String, CellValue]]] =
     Try {
-      import better.files._
+      import better.files.*
       parseCsvContent(
         File(path).contentAsString(using
           java.nio.charset.StandardCharsets.UTF_8
@@ -615,7 +617,7 @@ class ParquetService(
   ): Try[List[Map[String, CellValue]]] =
     Using(scala.io.Source.fromFile(path, "UTF-8")) { source =>
       val iter = source.getLines()
-      io.github.yusukensanta.parqueteer.core.util.LTSVParser
+      LTSVParser
         .parseLines(maxRows.fold(iter)(iterTakeLong(iter, _)))
         .toList
     }
@@ -623,53 +625,52 @@ class ParquetService(
   private[services] def parseLtsvContent(
       content: String
   ): List[Map[String, CellValue]] =
-    io.github.yusukensanta.parqueteer.core.util.LTSVParser.parse(content)
+    LTSVParser.parse(content)
 
   private def coerceJsonValue(
       j: io.circe.Json
   ): CellValue =
-    if (j.isString)
-      io.github.yusukensanta.parqueteer.core.util.TypeInferrer
+    if j.isString then
+      TypeInferrer
         .inferJsonString(j.asString.get)
-    else if (j.isNumber) {
-      val n = j.asNumber.get
+    else if j.isNumber then {
+      val n   = j.asNumber.get
       val raw = j.noSpaces
       // A decimal point in the raw JSON representation signals explicit floating-point (1.0, 1.5).
       // Exception: large integers written with a decimal point (e.g., 1.0e18) would silently
       // lose precision when cast to F64 — redirect those to Dec/I64 instead.
       // No decimal point means integer or scientific-notation integer (1e10) — try Long first.
-      if (raw.contains('.'))
+      if raw.contains('.') then
         n.toBigDecimal
           .map { bd =>
-            val isWhole = bd.underlying.stripTrailingZeros.scale <= 0
+            val isWhole        = bd.underlying.stripTrailingZeros.scale <= 0
             val tooLargeForF64 = bd.abs > BigDecimal(9007199254740992L)
-            if (isWhole && tooLargeForF64)
+            if isWhole && tooLargeForF64 then
               // Large whole number with a decimal point (e.g. 1.0e18): keep as integer.
               n.toLong
                 .map(CellValue.I64.apply)
                 .getOrElse(CellValue.Dec(bd.setScale(0)))
-            else if (!isWhole && tooLargeForF64)
+            else if !isWhole && tooLargeForF64 then
               // Large fractional number (e.g. 12345678901234567.8): F64 would lose
               // precision in the integer part — preserve exact value as Decimal.
               CellValue.Dec(bd)
-            else if (isWhole && (raw.contains('e') || raw.contains('E'))) {
+            else if isWhole && (raw.contains('e') || raw.contains('E')) then {
               // Whole-valued dot-scientific (1.0e2, 1.00e3): check if the mantissa itself
               // (the part before 'e') has a non-zero fractional digit. If so, the user
               // expressed a fractional value in scientific notation (1.5e2 = 150.0) and
               // F64 is correct — treating it as I64 would break mixed columns like [1.5e2, 1.5].
               // If the mantissa is whole (1.0e2, 2.00e1), treat as I64 to match the non-dot
               // branch (1e2 → I64) and avoid F64+I64 mismatch with plain integer columns.
-              val eIdx = raw.indexWhere(c => c == 'e' || c == 'E')
+              val eIdx     = raw.indexWhere(c => c == 'e' || c == 'E')
               val mantissa = raw.take(eIdx)
-              val dotIdx = mantissa.indexOf('.')
+              val dotIdx   = mantissa.indexOf('.')
               val mantissaIsWhole =
                 dotIdx < 0 || mantissa.drop(dotIdx + 1).forall(_ == '0')
-              if (mantissaIsWhole)
+              if mantissaIsWhole then
                 n.toLong
                   .map(CellValue.I64.apply)
                   .getOrElse(CellValue.F64(n.toDouble))
-              else
-                CellValue.F64(n.toDouble)
+              else CellValue.F64(n.toDouble)
             } else
               // A decimal point without exponent (1.0, 1.5) signals floating-point intent.
               CellValue.F64(n.toDouble)
@@ -680,14 +681,14 @@ class ParquetService(
           .map(CellValue.I64.apply)
           .orElse(n.toBigDecimal.map(CellValue.Dec.apply))
           .getOrElse(CellValue.F64(n.toDouble))
-    } else if (j.isBoolean) CellValue.Bool(j.asBoolean.get)
-    else if (j.isNull) CellValue.Null
+    } else if j.isBoolean then CellValue.Bool(j.asBoolean.get)
+    else if j.isNull then CellValue.Null
     else CellValue.Str(j.toString)
 
   private[services] def parseJsonContent(
       content: String
   ): List[Map[String, CellValue]] = {
-    import io.circe.parser._
+    import io.circe.parser.*
     parse(content) match {
       case Left(error) =>
         throw new IllegalArgumentException(
@@ -720,7 +721,7 @@ class ParquetService(
   private def parseNdjsonLines(
       lines: Iterator[String]
   ): List[Map[String, CellValue]] = {
-    import io.circe.parser._
+    import io.circe.parser.*
     lines
       .map(_.trim)
       .filter(_.nonEmpty)
@@ -756,14 +757,15 @@ class ParquetService(
   private[services] def parseCsvContent(
       content: String
   ): List[Map[String, CellValue]] =
-    io.github.yusukensanta.parqueteer.core.util.CsvParser.parse(content)
+    CsvParser.parse(content)
 
   private def iterTakeLong[A](iter: Iterator[A], n: Long): Iterator[A] =
     new Iterator[A] {
       private var remaining = n
-      def hasNext: Boolean = remaining > 0 && iter.hasNext
+      def hasNext: Boolean  = remaining > 0 && iter.hasNext
+
       def next(): A = {
-        if (!hasNext) throw new NoSuchElementException("next on empty iterator")
+        if !hasNext then throw new NoSuchElementException("next on empty iterator")
         remaining -= 1
         iter.next()
       }

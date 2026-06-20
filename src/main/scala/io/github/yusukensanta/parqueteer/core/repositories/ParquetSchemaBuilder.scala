@@ -1,15 +1,9 @@
 package io.github.yusukensanta.parqueteer.core.repositories
 
-import io.github.yusukensanta.parqueteer.core.models._
-import org.apache.parquet.schema.{
-  LogicalTypeAnnotation,
-  MessageType,
-  PrimitiveType,
-  Type,
-  Types
-}
+import io.github.yusukensanta.parqueteer.core.models.*
+import org.apache.parquet.schema.{LogicalTypeAnnotation, MessageType, PrimitiveType, Type, Types}
 import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
-import scala.jdk.CollectionConverters._
+import scala.jdk.CollectionConverters.*
 
 private[repositories] object ParquetSchemaBuilder {
 
@@ -21,7 +15,7 @@ private[repositories] object ParquetSchemaBuilder {
     val fields = fileSchema.getFields.asScala
       .filter(f => columnSet.contains(f.getName))
       .toList
-    if (fields.isEmpty) {
+    if fields.isEmpty then {
       val available = fileSchema.getFields.asScala.map(_.getName).mkString(", ")
       throw new IllegalArgumentException(
         s"None of the requested columns exist in the file: ${columns
@@ -35,7 +29,7 @@ private[repositories] object ParquetSchemaBuilder {
     val builder = Types.buildMessage()
     schema.columns.foreach { col =>
       val repetition =
-        if (col.isOptional) Type.Repetition.OPTIONAL
+        if col.isOptional then Type.Repetition.OPTIONAL
         else Type.Repetition.REQUIRED
       val (primitive, annotation) = mapDeclaredType(col.dataType)
       builder.addField(makeField(col.name, primitive, repetition, annotation))
@@ -47,12 +41,11 @@ private[repositories] object ParquetSchemaBuilder {
   private[repositories] val MaxDecimalPrecision = 38
 
   def inferSchemaFromData(data: List[Map[String, CellValue]]): MessageType = {
-    if (data.isEmpty)
-      throw new IllegalArgumentException("Cannot infer schema from empty data")
+    if data.isEmpty then throw new IllegalArgumentException("Cannot infer schema from empty data")
 
     // Single pass: accumulate per-column TypeRank from non-null values only.
     // seenKeys tracks all keys (including null-only columns) for schema output.
-    val seenKeys = scala.collection.mutable.LinkedHashSet.empty[String]
+    val seenKeys  = scala.collection.mutable.LinkedHashSet.empty[String]
     val rankByKey = scala.collection.mutable.HashMap.empty[String, TypeRank]
     // (maxScale, maxIntDigits) per decimal column, collected in same pass.
     val decimalMetaByKey =
@@ -61,15 +54,14 @@ private[repositories] object ParquetSchemaBuilder {
     data.foreach { row =>
       row.foreach { case (k, v) =>
         seenKeys.add(k)
-        if (v != CellValue.Null) {
+        if v != CellValue.Null then {
           val r = typeRankForValue(v)
           rankByKey.updateWith(k) {
             case Some(prev) =>
               val widened = widenTypeRanks(prev, r)
-              if (
-                widened == TypeRank.String && prev != TypeRank.String && warnedWiden
+              if widened == TypeRank.String && prev != TypeRank.String && warnedWiden
                   .add(k)
-              )
+              then
                 Console.err.println(
                   s"[parqueteer] warning: column '$k' has mixed types ($prev and $r) — falling back to STRING"
                 )
@@ -78,7 +70,7 @@ private[repositories] object ParquetSchemaBuilder {
           }
           v match {
             case CellValue.Dec(bd) =>
-              val scale = bd.scale.max(0)
+              val scale     = bd.scale.max(0)
               val intDigits = (bd.precision - bd.scale).max(1)
               decimalMetaByKey.updateWith(k) {
                 case Some((ms, mi)) => Some((ms.max(scale), mi.max(intDigits)))
@@ -94,13 +86,13 @@ private[repositories] object ParquetSchemaBuilder {
     seenKeys.toList.foreach { key =>
       val rank = rankByKey.getOrElse(key, TypeRank.String)
       val (primitive, annotation) =
-        if (rank == TypeRank.Decimal) {
+        if rank == TypeRank.Decimal then {
           val (maxScale, maxIntDigits) =
             decimalMetaByKey.getOrElse(key, (18, 20))
           val precision =
             (maxScale + maxIntDigits).min(MaxDecimalPrecision).max(1)
           val scale = maxScale.min(precision - 1).max(0)
-          if (maxScale + maxIntDigits > MaxDecimalPrecision)
+          if maxScale + maxIntDigits > MaxDecimalPrecision then
             throw new IllegalArgumentException(
               s"Column '$key' requires precision ${maxScale + maxIntDigits} " +
                 s"but Parquet DECIMAL max is $MaxDecimalPrecision. " +
@@ -120,8 +112,9 @@ private[repositories] object ParquetSchemaBuilder {
 
   // ── private helpers ───────────────────────────────────────────────────────
 
-  /** Build a Parquet primitive field with an optional logical type annotation.
-    */
+  /**
+   * Build a Parquet primitive field with an optional logical type annotation.
+   */
   private def makeField(
       name: String,
       primitive: PrimitiveTypeName,
@@ -165,12 +158,12 @@ private[repositories] object ParquetSchemaBuilder {
         t match {
           case decimalPattern(pStr, sStr) =>
             val precision = pStr.toInt
-            val scale = sStr.trim.toInt
-            if (precision < 1 || precision > MaxDecimalPrecision)
+            val scale     = sStr.trim.toInt
+            if precision < 1 || precision > MaxDecimalPrecision then
               throw new IllegalArgumentException(
                 s"Invalid DECIMAL precision $precision in '$t': must be in [1, $MaxDecimalPrecision]."
               )
-            if (scale < 0 || scale > precision)
+            if scale < 0 || scale > precision then
               throw new IllegalArgumentException(
                 s"Invalid DECIMAL scale $scale in '$t': must be in [0, precision] = [0, $precision]."
               )
@@ -231,7 +224,8 @@ private[repositories] object ParquetSchemaBuilder {
     case Int, Long, Float, Double, Decimal, Boolean, Date, Timestamp, String
 
   private val integerRanks: Set[TypeRank] = Set(TypeRank.Int, TypeRank.Long)
-  private val floatRanks: Set[TypeRank] = Set(TypeRank.Float, TypeRank.Double)
+  private val floatRanks: Set[TypeRank]   = Set(TypeRank.Float, TypeRank.Double)
+
   private val numericRanks: Set[TypeRank] =
     integerRanks | floatRanks | Set(TypeRank.Decimal)
 
@@ -247,22 +241,22 @@ private[repositories] object ParquetSchemaBuilder {
     case _                 => TypeRank.String
   }
 
-  /** Widen two numeric ranks losslessly. Decimal beats all other numeric types
-    * to avoid silent precision loss. Integer+float cross-family produces Double
-    * — Float cannot represent the full Long range.
-    */
+  /**
+   * Widen two numeric ranks losslessly. Decimal beats all other numeric types
+   * to avoid silent precision loss. Integer+float cross-family produces Double
+   * — Float cannot represent the full Long range.
+   */
   private def widenTypeRanks(a: TypeRank, b: TypeRank): TypeRank =
-    if (a == b) a
-    else if (a == TypeRank.Decimal && numericRanks(b)) TypeRank.Decimal
-    else if (b == TypeRank.Decimal && numericRanks(a)) TypeRank.Decimal
-    else if (integerRanks(a) && integerRanks(b))
-      if (a == TypeRank.Long || b == TypeRank.Long) TypeRank.Long
+    if a == b then a
+    else if a == TypeRank.Decimal && numericRanks(b) then TypeRank.Decimal
+    else if b == TypeRank.Decimal && numericRanks(a) then TypeRank.Decimal
+    else if integerRanks(a) && integerRanks(b) then
+      if a == TypeRank.Long || b == TypeRank.Long then TypeRank.Long
       else TypeRank.Int
-    else if (floatRanks(a) && floatRanks(b))
-      if (a == TypeRank.Double || b == TypeRank.Double) TypeRank.Double
+    else if floatRanks(a) && floatRanks(b) then
+      if a == TypeRank.Double || b == TypeRank.Double then TypeRank.Double
       else TypeRank.Float
-    else if (numericRanks(a) && numericRanks(b))
-      TypeRank.Double
+    else if numericRanks(a) && numericRanks(b) then TypeRank.Double
     else TypeRank.String
 
   private def rankToParquetType(

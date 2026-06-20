@@ -23,13 +23,13 @@ object LTSVParser {
           .split("\t", -1)
           .map { field =>
             val colon = field.indexOf(':')
-            if (colon < 0)
+            if colon < 0 then
               throw new IllegalArgumentException(
                 s"LTSV line ${lineIdx + 1}: field '$field' has no ':' separator"
               )
             val label = field.substring(0, colon)
             val value = field.substring(colon + 1)
-            if (!isValidLabel(label))
+            if !isValidLabel(label) then
               throw new IllegalArgumentException(
                 s"LTSV line ${lineIdx + 1}: invalid label '$label' — allowed chars: [0x21-0x7E] except ':' and '='"
               )
@@ -38,7 +38,7 @@ object LTSVParser {
         val lhm =
           scala.collection.mutable.LinkedHashMap.empty[String, CellValue]
         pairs.foreach { case (label, value) =>
-          if (lhm.contains(label))
+          if lhm.contains(label) then
             Console.err.println(
               s"[parqueteer] warning: LTSV line ${lineIdx + 1}: duplicate label '$label' — last value wins"
             )

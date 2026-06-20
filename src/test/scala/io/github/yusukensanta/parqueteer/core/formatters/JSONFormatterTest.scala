@@ -1,6 +1,6 @@
 package io.github.yusukensanta.parqueteer.core.formatters
 
-import io.github.yusukensanta.parqueteer.core.models._
+import io.github.yusukensanta.parqueteer.core.models.*
 import io.circe.parser.parse
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -13,13 +13,13 @@ class JSONFormatterTest extends AnyFlatSpec with Matchers {
   private val sampleContent = FileContent(
     rows = List(
       Map(
-        "id" -> CellValue.I64(1L),
-        "name" -> CellValue.Str("Alice"),
+        "id"     -> CellValue.I64(1L),
+        "name"   -> CellValue.Str("Alice"),
         "active" -> CellValue.Bool(true)
       ),
       Map(
-        "id" -> CellValue.I64(2L),
-        "name" -> CellValue.Str("Bob"),
+        "id"     -> CellValue.I64(2L),
+        "name"   -> CellValue.Str("Bob"),
         "active" -> CellValue.Bool(false)
       )
     ),
@@ -52,28 +52,28 @@ class JSONFormatterTest extends AnyFlatSpec with Matchers {
 
   it should "include rows array with correct length" in {
     val result = formatter.formatContent(sampleContent, None)
-    val json = parse(result).getOrElse(fail("not JSON"))
-    val rows = json.hcursor.downField("rows").as[List[io.circe.Json]]
+    val json   = parse(result).getOrElse(fail("not JSON"))
+    val rows   = json.hcursor.downField("rows").as[List[io.circe.Json]]
     rows.map(_.length) shouldBe Right(2)
   }
 
   it should "report correct totalRows" in {
     val result = formatter.formatContent(sampleContent, None)
-    val json = parse(result).getOrElse(fail("not JSON"))
-    val total = json.hcursor.downField("totalRows").as[Long]
+    val json   = parse(result).getOrElse(fail("not JSON"))
+    val total  = json.hcursor.downField("totalRows").as[Long]
     total shouldBe Right(2L)
   }
 
   it should "report isPartial as false" in {
-    val result = formatter.formatContent(sampleContent, None)
-    val json = parse(result).getOrElse(fail("not JSON"))
+    val result    = formatter.formatContent(sampleContent, None)
+    val json      = parse(result).getOrElse(fail("not JSON"))
     val isPartial = json.hcursor.downField("isPartial").as[Boolean]
     isPartial shouldBe Right(false)
   }
 
   it should "include displayedRows count" in {
-    val result = formatter.formatContent(sampleContent, None)
-    val json = parse(result).getOrElse(fail("not JSON"))
+    val result        = formatter.formatContent(sampleContent, None)
+    val json          = parse(result).getOrElse(fail("not JSON"))
     val displayedRows = json.hcursor.downField("displayedRows").as[Int]
     displayedRows shouldBe Right(2)
   }
@@ -100,15 +100,15 @@ class JSONFormatterTest extends AnyFlatSpec with Matchers {
   }
 
   it should "include columns array with correct length" in {
-    val result = formatter.formatSchema(sampleSchema)
-    val json = parse(result).getOrElse(fail("not JSON"))
+    val result  = formatter.formatSchema(sampleSchema)
+    val json    = parse(result).getOrElse(fail("not JSON"))
     val columns = json.hcursor.downField("columns").as[List[io.circe.Json]]
     columns.map(_.length) shouldBe Right(2)
   }
 
   it should "include rowGroupCount" in {
     val result = formatter.formatSchema(sampleSchema)
-    val json = parse(result).getOrElse(fail("not JSON"))
+    val json   = parse(result).getOrElse(fail("not JSON"))
     json.hcursor.downField("rowGroupCount").as[Long] shouldBe Right(1L)
   }
 
@@ -119,7 +119,7 @@ class JSONFormatterTest extends AnyFlatSpec with Matchers {
 
   it should "include fileSize" in {
     val result = formatter.formatMetadata(sampleMetadata)
-    val json = parse(result).getOrElse(fail("not JSON"))
+    val json   = parse(result).getOrElse(fail("not JSON"))
     json.hcursor.downField("fileSize").as[Long] shouldBe Right(1024L)
   }
 }

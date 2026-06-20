@@ -3,7 +3,7 @@ package io.github.yusukensanta.parqueteer.config
 import io.circe.{ACursor, Decoder, Encoder, JsonObject}
 import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 import better.files.File
-import scala.util.{Try, Success}
+import scala.util.{Success, Try}
 
 case class AppConfig(
     cloud: CloudConfig = CloudConfig(),
@@ -73,25 +73,28 @@ object AppConfig {
       })
     })
 
-  given Decoder[S3Config] = deriveDecoder[S3Config].prepare(normalizeKeys)
-  given Encoder[S3Config] = deriveEncoder[S3Config]
-  given Decoder[GCSConfig] = deriveDecoder[GCSConfig].prepare(normalizeKeys)
-  given Encoder[GCSConfig] = deriveEncoder[GCSConfig]
+  given Decoder[S3Config]    = deriveDecoder[S3Config].prepare(normalizeKeys)
+  given Encoder[S3Config]    = deriveEncoder[S3Config]
+  given Decoder[GCSConfig]   = deriveDecoder[GCSConfig].prepare(normalizeKeys)
+  given Encoder[GCSConfig]   = deriveEncoder[GCSConfig]
   given Decoder[AzureConfig] = deriveDecoder[AzureConfig].prepare(normalizeKeys)
   given Encoder[AzureConfig] = deriveEncoder[AzureConfig]
   given Decoder[CloudConfig] = deriveDecoder[CloudConfig].prepare(normalizeKeys)
   given Encoder[CloudConfig] = deriveEncoder[CloudConfig]
+
   given Decoder[OutputConfig] =
     deriveDecoder[OutputConfig].prepare(normalizeKeys)
   given Encoder[OutputConfig] = deriveEncoder[OutputConfig]
+
   given Decoder[PerformanceConfig] =
     deriveDecoder[PerformanceConfig].prepare(normalizeKeys)
   given Encoder[PerformanceConfig] = deriveEncoder[PerformanceConfig]
+
   given Decoder[LoggingConfig] =
     deriveDecoder[LoggingConfig].prepare(normalizeKeys)
   given Encoder[LoggingConfig] = deriveEncoder[LoggingConfig]
-  given Decoder[AppConfig] = deriveDecoder[AppConfig].prepare(normalizeKeys)
-  given Encoder[AppConfig] = deriveEncoder[AppConfig]
+  given Decoder[AppConfig]     = deriveDecoder[AppConfig].prepare(normalizeKeys)
+  given Encoder[AppConfig]     = deriveEncoder[AppConfig]
 }
 
 class ConfigurationManager {
@@ -99,7 +102,7 @@ class ConfigurationManager {
 
   def loadConfig(configPath: Option[String] = None): Try[AppConfig] = {
     val configFile = File(resolvedConfigPath(configPath))
-    if (!configFile.exists) Success(AppConfig())
+    if !configFile.exists then Success(AppConfig())
     else parseConfigFile(configFile)
   }
 
@@ -109,7 +112,7 @@ class ConfigurationManager {
     Try(
       configFile.contentAsString(using java.nio.charset.StandardCharsets.UTF_8)
     ).flatMap { yamlContent =>
-      if (yamlContent.trim.isEmpty) Success(AppConfig())
+      if yamlContent.trim.isEmpty then Success(AppConfig())
       else
         Try {
           parser.parse(yamlContent) match {
@@ -134,7 +137,7 @@ class ConfigurationManager {
 
   def validate(configPath: Option[String] = None): Try[List[String]] = {
     val configFile = File(resolvedConfigPath(configPath))
-    if (!configFile.exists) {
+    if !configFile.exists then {
       Success(
         List(
           s"Config file not found: ${configFile.pathAsString} (using defaults)"

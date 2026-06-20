@@ -3,8 +3,8 @@ package io.github.yusukensanta.parqueteer.core.formatters
 import io.github.yusukensanta.parqueteer.core.models.{
   CellValue,
   FileContent,
-  ParquetSchema,
-  FileMetadata
+  FileMetadata,
+  ParquetSchema
 }
 
 object CSVFormatter {
@@ -15,12 +15,11 @@ object CSVFormatter {
     // because spreadsheets trim leading spaces before formula evaluation.
     val firstSig = field.dropWhile(_ == ' ')
     val sanitized =
-      if (
-        firstSig.nonEmpty && (firstSig.charAt(0) match {
+      if firstSig.nonEmpty && (firstSig.charAt(0) match {
           case '=' | '+' | '-' | '@' | '\t' | '\r' => true
           case _                                   => false
         })
-      ) "'" + field
+      then "'" + field
       else field
 
     val needsQuoting = sanitized.contains(",") ||
@@ -28,7 +27,7 @@ object CSVFormatter {
       sanitized.contains("\n") ||
       sanitized.contains("\r")
 
-    if (needsQuoting) {
+    if needsQuoting then {
       "\"" + sanitized.replace("\"", "\"\"") + "\""
     } else {
       sanitized
@@ -39,15 +38,15 @@ object CSVFormatter {
 class CSVFormatter extends OutputFormatter {
 
   private val Delimiter = ","
-  private val Newline = CSVFormatter.Newline
+  private val Newline   = CSVFormatter.Newline
 
   override def formatContent(
       content: FileContent,
       schema: Option[ParquetSchema]
   ): String =
-    if (content.rows.isEmpty) ""
+    if content.rows.isEmpty then ""
     else {
-      val rows = content.rows
+      val rows    = content.rows
       val columns = extractColumns(rows, schema)
 
       val sb = new StringBuilder()
@@ -71,7 +70,7 @@ class CSVFormatter extends OutputFormatter {
 
   override def formatSchema(schema: ParquetSchema): String = {
     val headers = List("Column Name", "Data Type", "Optional", "Compression")
-    val sb = new StringBuilder()
+    val sb      = new StringBuilder()
 
     sb.append(formatRow(headers))
     sb.append(Newline)
@@ -80,7 +79,7 @@ class CSVFormatter extends OutputFormatter {
       val row = List(
         col.name,
         col.dataType,
-        if (col.isOptional) "Yes" else "No",
+        if col.isOptional then "Yes" else "No",
         col.compressionType
       )
       sb.append(formatRow(row))
@@ -114,7 +113,6 @@ class CSVFormatter extends OutputFormatter {
     sb.toString
   }
 
-  private def formatRow(values: List[String]): String = {
+  private def formatRow(values: List[String]): String =
     values.map(CSVFormatter.escapeField).mkString(Delimiter)
-  }
 }

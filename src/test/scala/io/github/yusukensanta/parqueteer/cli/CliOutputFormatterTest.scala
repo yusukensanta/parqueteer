@@ -41,7 +41,7 @@ class CliOutputFormatterTest extends AnyFlatSpec with Matchers {
       name = name,
       dataType = dataType,
       isOptional = isOptional,
-      maxDefinitionLevel = if (isOptional) 1 else 0,
+      maxDefinitionLevel = if isOptional then 1 else 0,
       maxRepetitionLevel = 0,
       compressionType = compressionType,
       encodings = encodings
@@ -148,9 +148,9 @@ class CliOutputFormatterTest extends AnyFlatSpec with Matchers {
   // ─── formatInfoJson ─────────────────────────────────────────────────────────
 
   "CliOutputFormatter.formatInfoJson" should "return empty JSON object when metadata is absent" in {
-    val file = makeParquetFile()
+    val file   = makeParquetFile()
     val result = CliOutputFormatter.formatInfoJson(file)
-    val json = parse(result).toOption
+    val json   = parse(result).toOption
     json shouldBe defined
     json.get.asObject.get.isEmpty shouldBe true
   }
@@ -165,9 +165,9 @@ class CliOutputFormatterTest extends AnyFlatSpec with Matchers {
       modifiedAt = Some(ts),
       compressionRatio = Some(0.75)
     )
-    val file = makeParquetFile(metadata = Some(meta))
+    val file   = makeParquetFile(metadata = Some(meta))
     val result = CliOutputFormatter.formatInfoJson(file)
-    val json = parse(result).toOption.get.asObject.get
+    val json   = parse(result).toOption.get.asObject.get
 
     json("fileSize").get.asNumber.get.toLong.get shouldBe 2048L
     json("version").get.asString.get shouldBe "2.6"
@@ -177,10 +177,10 @@ class CliOutputFormatterTest extends AnyFlatSpec with Matchers {
   }
 
   it should "render null for optional metadata fields when absent" in {
-    val meta = makeMetadata()
-    val file = makeParquetFile(metadata = Some(meta))
+    val meta   = makeMetadata()
+    val file   = makeParquetFile(metadata = Some(meta))
     val result = CliOutputFormatter.formatInfoJson(file)
-    val json = parse(result).toOption.get.asObject.get
+    val json   = parse(result).toOption.get.asObject.get
 
     json("createdAt").get.isNull shouldBe true
     json("modifiedAt").get.isNull shouldBe true
@@ -189,10 +189,10 @@ class CliOutputFormatterTest extends AnyFlatSpec with Matchers {
   }
 
   it should "omit rowGroupDetails when verbose=false" in {
-    val meta = makeMetadata()
-    val file = makeParquetFile(metadata = Some(meta))
+    val meta   = makeMetadata()
+    val file   = makeParquetFile(metadata = Some(meta))
     val result = CliOutputFormatter.formatInfoJson(file, verbose = false)
-    val json = parse(result).toOption.get.asObject.get
+    val json   = parse(result).toOption.get.asObject.get
     json.contains("rowGroupDetails") shouldBe false
   }
 
@@ -218,8 +218,8 @@ class CliOutputFormatterTest extends AnyFlatSpec with Matchers {
       rowGroups = rgs
     )
     val result = CliOutputFormatter.formatInfoJson(file, verbose = true)
-    val json = parse(result).toOption.get.asObject.get
-    val arr = json("rowGroupDetails").get.asArray.get
+    val json   = parse(result).toOption.get.asObject.get
+    val arr    = json("rowGroupDetails").get.asArray.get
     arr.length shouldBe 2
     arr(0).asObject.get("rowCount").get.asNumber.get.toLong.get shouldBe 1000L
     arr(1).asObject
@@ -234,7 +234,7 @@ class CliOutputFormatterTest extends AnyFlatSpec with Matchers {
   // ─── formatRowGroupsTable ────────────────────────────────────────────────────
 
   "CliOutputFormatter.formatRowGroupsTable" should "include header with # and Rows columns" in {
-    val rgs = List(RowGroupInfo(0, 1000L, 4096L, 8192L))
+    val rgs    = List(RowGroupInfo(0, 1000L, 4096L, 8192L))
     val result = CliOutputFormatter.formatRowGroupsTable(rgs)
     result should include("#")
     result should include("Rows")
@@ -257,9 +257,9 @@ class CliOutputFormatterTest extends AnyFlatSpec with Matchers {
   // ─── formatSchemaJson ───────────────────────────────────────────────────────
 
   "CliOutputFormatter.formatSchemaJson" should "return empty JSON object when schema is absent" in {
-    val file = makeParquetFile()
+    val file   = makeParquetFile()
     val result = CliOutputFormatter.formatSchemaJson(file)
-    val json = parse(result).toOption.get
+    val json   = parse(result).toOption.get
     json.asObject.get.isEmpty shouldBe true
   }
 
@@ -271,9 +271,9 @@ class CliOutputFormatterTest extends AnyFlatSpec with Matchers {
       compressionType = "SNAPPY"
     )
     val schema = makeSchema(List(col), totalRowCount = 200L, rowGroupCount = 3L)
-    val file = makeParquetFile(schema = Some(schema))
+    val file   = makeParquetFile(schema = Some(schema))
     val result = CliOutputFormatter.formatSchemaJson(file)
-    val json = parse(result).toOption.get.asObject.get
+    val json   = parse(result).toOption.get.asObject.get
 
     json("totalRowCount").get.asNumber.get.toLong.get shouldBe 200L
     json("rowGroupCount").get.asNumber.get.toLong.get shouldBe 3L
@@ -291,7 +291,7 @@ class CliOutputFormatterTest extends AnyFlatSpec with Matchers {
     val col =
       makeColumnInfo("id", "INT64", encodings = List("PLAIN", "RLE_DICTIONARY"))
     val schema = makeSchema(List(col))
-    val file = makeParquetFile(schema = Some(schema))
+    val file   = makeParquetFile(schema = Some(schema))
     val result = CliOutputFormatter.formatSchemaJson(file)
     val c0 = parse(result).toOption.get.asObject
       .get("columns")
@@ -311,9 +311,9 @@ class CliOutputFormatterTest extends AnyFlatSpec with Matchers {
       makeColumnInfo("a", "INT64"),
       makeColumnInfo("b", "BINARY", isOptional = true)
     )
-    val file = makeParquetFile(schema = Some(makeSchema(cols)))
+    val file   = makeParquetFile(schema = Some(makeSchema(cols)))
     val result = CliOutputFormatter.formatSchemaJson(file)
-    val arr = parse(result).toOption.get.asObject.get("columns").get.asArray.get
+    val arr    = parse(result).toOption.get.asObject.get("columns").get.asArray.get
     arr.length shouldBe 2
     arr(1).asObject.get("optional").get.asBoolean.get shouldBe true
   }
@@ -321,7 +321,7 @@ class CliOutputFormatterTest extends AnyFlatSpec with Matchers {
   // ─── formatStatsTable ───────────────────────────────────────────────────────
 
   "CliOutputFormatter.formatStatsTable" should "include header with row and row-group counts" in {
-    val stats = makeStats(Nil, totalRows = 10L, rowGroupCount = 1L)
+    val stats  = makeStats(Nil, totalRows = 10L, rowGroupCount = 1L)
     val result = CliOutputFormatter.formatStatsTable(stats)
     result should include("10 rows")
     result should include("1 row groups")
@@ -335,7 +335,7 @@ class CliOutputFormatterTest extends AnyFlatSpec with Matchers {
       minValue = Some("18"),
       maxValue = Some("65")
     )
-    val stats = makeStats(List(col))
+    val stats  = makeStats(List(col))
     val result = CliOutputFormatter.formatStatsTable(stats)
     result should include("age")
     result should include("INT32")
@@ -345,22 +345,22 @@ class CliOutputFormatterTest extends AnyFlatSpec with Matchers {
   }
 
   it should "show n/a for negative nullCount" in {
-    val col = makeColumnStats("col", nullCount = -1L)
-    val stats = makeStats(List(col))
+    val col    = makeColumnStats("col", nullCount = -1L)
+    val stats  = makeStats(List(col))
     val result = CliOutputFormatter.formatStatsTable(stats)
     result should include("n/a")
   }
 
   it should "show n/a for missing min/max" in {
-    val col = makeColumnStats("col", minValue = None, maxValue = None)
-    val stats = makeStats(List(col))
+    val col    = makeColumnStats("col", minValue = None, maxValue = None)
+    val stats  = makeStats(List(col))
     val result = CliOutputFormatter.formatStatsTable(stats)
     result should include("n/a")
   }
 
   it should "not end with trailing whitespace" in {
-    val col = makeColumnStats("x")
-    val stats = makeStats(List(col))
+    val col    = makeColumnStats("x")
+    val stats  = makeStats(List(col))
     val result = CliOutputFormatter.formatStatsTable(stats)
     result should not endWith " "
   }
@@ -392,7 +392,7 @@ class CliOutputFormatterTest extends AnyFlatSpec with Matchers {
   }
 
   it should "render null for missing min/max values" in {
-    val col = makeColumnStats("x", minValue = None, maxValue = None)
+    val col   = makeColumnStats("x", minValue = None, maxValue = None)
     val stats = makeStats(List(col))
     val json =
       parse(CliOutputFormatter.formatStatsJson(stats)).toOption.get.asObject.get
@@ -539,7 +539,7 @@ class CliOutputFormatterTest extends AnyFlatSpec with Matchers {
       unchanged = List("id")
     )
     val result = CliOutputFormatter.formatSchemaDiffJson(diff)
-    val json = parse(result).toOption.get.asObject.get
+    val json   = parse(result).toOption.get.asObject.get
 
     json("identical").get.asBoolean.get shouldBe true
     json("added").get.asArray.get shouldBe empty
@@ -557,7 +557,7 @@ class CliOutputFormatterTest extends AnyFlatSpec with Matchers {
       unchanged = Nil
     )
     val result = CliOutputFormatter.formatSchemaDiffJson(diff)
-    val json = parse(result).toOption.get.asObject.get
+    val json   = parse(result).toOption.get.asObject.get
 
     json("identical").get.asBoolean.get shouldBe false
     val arr = json("added").get.asArray.get
@@ -577,7 +577,7 @@ class CliOutputFormatterTest extends AnyFlatSpec with Matchers {
       unchanged = Nil
     )
     val result = CliOutputFormatter.formatSchemaDiffJson(diff)
-    val arr = parse(result).toOption.get.asObject.get("removed").get.asArray.get
+    val arr    = parse(result).toOption.get.asObject.get("removed").get.asArray.get
     arr.length shouldBe 1
     arr(0).asObject.get("name").get.asString.get shouldBe "old_col"
   }
@@ -597,7 +597,7 @@ class CliOutputFormatterTest extends AnyFlatSpec with Matchers {
       unchanged = Nil
     )
     val result = CliOutputFormatter.formatSchemaDiffJson(diff)
-    val arr = parse(result).toOption.get.asObject.get("changed").get.asArray.get
+    val arr    = parse(result).toOption.get.asObject.get("changed").get.asArray.get
     arr.length shouldBe 1
     val c0 = arr(0).asObject.get
     c0("name").get.asString.get shouldBe "col"
@@ -618,13 +618,13 @@ class CliOutputFormatterTest extends AnyFlatSpec with Matchers {
 
   "CliOutputFormatter.formatCountJson" should "emit count field as integer" in {
     val result = CliOutputFormatter.formatCountJson(42L)
-    val obj = parse(result).toOption.get.asObject.get
+    val obj    = parse(result).toOption.get.asObject.get
     obj("count").get.asNumber.get.toLong.get shouldBe 42L
   }
 
   it should "handle zero rows" in {
     val result = CliOutputFormatter.formatCountJson(0L)
-    val obj = parse(result).toOption.get.asObject.get
+    val obj    = parse(result).toOption.get.asObject.get
     obj("count").get.asNumber.get.toLong.get shouldBe 0L
   }
 }

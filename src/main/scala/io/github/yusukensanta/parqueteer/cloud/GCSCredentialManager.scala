@@ -1,34 +1,32 @@
 package io.github.yusukensanta.parqueteer.cloud
 
-import io.github.yusukensanta.parqueteer.core.models.{
-  StorageLocation,
-  GCSLocation
-}
+import io.github.yusukensanta.parqueteer.core.models.{GCSLocation, StorageLocation}
 import org.apache.hadoop.conf.Configuration
 import org.slf4j.LoggerFactory
-import scala.util.{Try, Success, Failure}
+import scala.util.{Failure, Success, Try}
 import java.nio.file.{Files, Paths}
 
 private object GCSTuning {
   // All values as plain bytes to avoid NumberFormatException: Hadoop 3.5
   // core-default.xml ships GCS defaults with suffix notation ("8m", "64m")
   // but conf.getLong/getInt call Long.parseLong directly.
-  val BlockSize = "67108864" // 64MB
-  val InputBufferSize = "8388608" // 8MB
-  val InplaceSeekLimit = "8388608" // 8MB
-  val MinRangeRequestSize = "2097152" // 2MB
-  val OutputBufferSize = "8388608" // 8MB
-  val UploadChunkSize = "67108864" // 64MB
+  val BlockSize           = "67108864"  // 64MB
+  val InputBufferSize     = "8388608"   // 8MB
+  val InplaceSeekLimit    = "8388608"   // 8MB
+  val MinRangeRequestSize = "2097152"   // 2MB
+  val OutputBufferSize    = "8388608"   // 8MB
+  val UploadChunkSize     = "67108864"  // 64MB
   val RewriteMaxChunkSize = "536870912" // 512MB
   val MaxRequestsPerBatch = "30"
-  val BatchThreads = "15"
+  val BatchThreads        = "15"
 }
 
 class GCSCredentialManager extends CloudCredentialManager {
   private val logger = LoggerFactory.getLogger(getClass)
+
   override def configureHadoop(
       location: StorageLocation
-  ): Try[Configuration] = {
+  ): Try[Configuration] =
     location match {
       case _: GCSLocation =>
         Try {
@@ -99,7 +97,6 @@ class GCSCredentialManager extends CloudCredentialManager {
       case _ =>
         Failure(new IllegalArgumentException("Expected GCSLocation"))
     }
-  }
 
   private def resolveCredentials(): Try[String] =
     CloudCredentialManager.firstSuccess(
@@ -120,14 +117,14 @@ class GCSCredentialManager extends CloudCredentialManager {
       .getOrElse(
         throw new RuntimeException("GOOGLE_APPLICATION_CREDENTIALS not set")
       )
-    if (!Files.exists(Paths.get(credPath)))
+    if !Files.exists(Paths.get(credPath)) then
       throw new RuntimeException(
         s"GOOGLE_APPLICATION_CREDENTIALS file not found: $credPath"
       )
     credPath
   }
 
-  private def tryEnvironmentVariable(): Try[String] = {
+  private def tryEnvironmentVariable(): Try[String] =
     sys.env
       .get("GCP_SERVICE_ACCOUNT_KEY_FILE")
       .filter(path => Files.exists(Paths.get(path)))
@@ -139,7 +136,6 @@ class GCSCredentialManager extends CloudCredentialManager {
           )
         )
       )
-  }
 
   private def tryWellKnownLocation(): Try[String] = Try {
     val homeDir = sys.props
@@ -153,7 +149,7 @@ class GCSCredentialManager extends CloudCredentialManager {
       "application_default_credentials.json"
     )
 
-    if (Files.exists(wellKnownPath)) wellKnownPath.toString
+    if Files.exists(wellKnownPath) then wellKnownPath.toString
     else
       throw new RuntimeException(
         s"No credentials found at well-known location: $wellKnownPath"

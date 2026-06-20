@@ -3,8 +3,8 @@ package io.github.yusukensanta.parqueteer.core.formatters
 import io.github.yusukensanta.parqueteer.core.models.{
   CellValue,
   FileContent,
-  ParquetSchema,
-  FileMetadata
+  FileMetadata,
+  ParquetSchema
 }
 
 class MarkdownFormatter extends OutputFormatter {
@@ -13,10 +13,10 @@ class MarkdownFormatter extends OutputFormatter {
       content: FileContent,
       schema: Option[ParquetSchema]
   ): String =
-    if (content.rows.isEmpty) "No data to display"
+    if content.rows.isEmpty then "No data to display"
     else {
       val columns = extractColumns(content.rows, schema)
-      val sb = new StringBuilder()
+      val sb      = new StringBuilder()
 
       sb.append("| ")
         .append(columns.map(escapeCell).mkString(" | "))
@@ -31,12 +31,11 @@ class MarkdownFormatter extends OutputFormatter {
         sb.append("| ").append(values.mkString(" | ")).append(" |\n")
       }
 
-      if (content.isPartial)
+      if content.isPartial then
         sb.append(
           s"\n_${content.totalRows} rows total (showing first ${content.rows.size})_\n"
         )
-      else
-        sb.append(s"\n_${content.rows.size} rows_\n")
+      else sb.append(s"\n_${content.rows.size} rows_\n")
 
       sb.toString
     }
@@ -51,7 +50,7 @@ class MarkdownFormatter extends OutputFormatter {
     sb.append("| --- | --- | --- | --- |\n")
     schema.columns.foreach { col =>
       sb.append(s"| ${escapeCell(col.name)} | ${escapeCell(col.dataType)} | ${
-          if (col.isOptional) "Yes" else "No"
+          if col.isOptional then "Yes" else "No"
         } | ${escapeCell(col.compressionType)} |\n")
     }
     sb.toString
@@ -65,9 +64,7 @@ class MarkdownFormatter extends OutputFormatter {
     metadata.modifiedAt.foreach(t => sb.append(s"- **Modified:** $t\n"))
     sb.append(s"- **Parquet Version:** ${metadata.version}\n")
     metadata.createdBy.foreach(c => sb.append(s"- **Created By:** $c\n"))
-    metadata.compressionRatio.foreach(r =>
-      sb.append(f"- **Compression Ratio:** $r%.2f\n")
-    )
+    metadata.compressionRatio.foreach(r => sb.append(f"- **Compression Ratio:** $r%.2f\n"))
     sb.toString
   }
 
