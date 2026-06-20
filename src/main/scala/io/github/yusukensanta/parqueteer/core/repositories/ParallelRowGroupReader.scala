@@ -17,7 +17,8 @@ import scala.util.Using
 
 private[repositories] object ParallelRowGroupReader {
 
-  private val logger = LoggerFactory.getLogger(getClass)
+  private val MaxParallelism = 64
+  private val logger         = LoggerFactory.getLogger(getClass)
 
   def read(
       path: HadoopPath,
@@ -43,7 +44,9 @@ private[repositories] object ParallelRowGroupReader {
     }
 
     val threadCount =
-      math.min(config.parallelism, math.max(1, selectedBlocks.size))
+      math
+        .min(config.parallelism, math.max(1, selectedBlocks.size))
+        .min(MaxParallelism)
     val rawEc = Executors.newFixedThreadPool(threadCount)
 
     var forciblyShutdown = false
