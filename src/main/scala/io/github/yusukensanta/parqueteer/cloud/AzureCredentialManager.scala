@@ -84,15 +84,9 @@ class AzureCredentialManager extends CloudCredentialManager {
       conf: Configuration,
       location: AzureLocation
   ): Unit = {
-    val clientId = sys.env
-      .get("AZURE_CLIENT_ID")
-      .getOrElse(throw new RuntimeException("AZURE_CLIENT_ID not set"))
-    val clientSecret = sys.env
-      .get("AZURE_CLIENT_SECRET")
-      .getOrElse(throw new RuntimeException("AZURE_CLIENT_SECRET not set"))
-    val tenantId = sys.env
-      .get("AZURE_TENANT_ID")
-      .getOrElse(throw new RuntimeException("AZURE_TENANT_ID not set"))
+    val clientId     = CloudCredentialManager.requiredEnv("AZURE_CLIENT_ID")
+    val clientSecret = CloudCredentialManager.requiredEnv("AZURE_CLIENT_SECRET")
+    val tenantId     = CloudCredentialManager.requiredEnv("AZURE_TENANT_ID")
 
     conf.set(
       s"fs.azure.account.auth.type.${location.account}.dfs.core.windows.net",
@@ -120,9 +114,7 @@ class AzureCredentialManager extends CloudCredentialManager {
       conf: Configuration,
       location: AzureLocation
   ): Unit = {
-    val accountKey = sys.env
-      .get("AZURE_STORAGE_KEY")
-      .getOrElse(throw new RuntimeException("AZURE_STORAGE_KEY not set"))
+    val accountKey = CloudCredentialManager.requiredEnv("AZURE_STORAGE_KEY")
 
     // Explicit per-account auth type overrides the global OAuth default set above.
     conf.set(
@@ -139,9 +131,7 @@ class AzureCredentialManager extends CloudCredentialManager {
       conf: Configuration,
       location: AzureLocation
   ): Unit = {
-    val sasToken = sys.env
-      .get("AZURE_STORAGE_SAS_TOKEN")
-      .getOrElse(throw new RuntimeException("AZURE_STORAGE_SAS_TOKEN not set"))
+    val sasToken = CloudCredentialManager.requiredEnv("AZURE_STORAGE_SAS_TOKEN")
 
     // Explicit per-account auth type overrides the global OAuth default set above.
     conf.set(

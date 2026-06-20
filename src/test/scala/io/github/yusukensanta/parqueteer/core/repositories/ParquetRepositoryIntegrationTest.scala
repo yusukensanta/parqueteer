@@ -171,11 +171,11 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
     result.get shouldBe empty
   }
 
-  it should "report file-not-found issue for missing path" taggedAs IntegrationTest in {
+  it should "fail with FileNotFoundException for missing path" taggedAs IntegrationTest in {
     val loc    = LocalPath("/tmp/parqueteer_no_such_file_xyz.parquet")
     val result = repo.validateFile(ParquetFile(loc))
-    result.isSuccess shouldBe true
-    result.get should contain("File does not exist")
+    result.isFailure shouldBe true
+    result.failed.get shouldBe a[java.io.FileNotFoundException]
   }
 
   // ── ReadConfig ─────────────────────────────────────────────────────────
