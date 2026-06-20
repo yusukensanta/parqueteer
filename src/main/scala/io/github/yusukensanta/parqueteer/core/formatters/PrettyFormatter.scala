@@ -3,23 +3,23 @@ package io.github.yusukensanta.parqueteer.core.formatters
 import io.github.yusukensanta.parqueteer.core.models.{
   CellValue,
   FileContent,
-  ParquetSchema,
-  FileMetadata
+  FileMetadata,
+  ParquetSchema
 }
 
 class PrettyFormatter(
     useColors: Boolean = !sys.env.get("NO_COLOR").exists(_.nonEmpty)
 ) extends OutputFormatter {
 
-  private val Reset = "\u001b[0m"
-  private val Bold = "\u001b[1m"
-  private val Dim = "\u001b[2m"
-  private val Red = "\u001b[31m"
-  private val Green = "\u001b[32m"
-  private val Yellow = "\u001b[33m"
-  private val Blue = "\u001b[34m"
+  private val Reset   = "\u001b[0m"
+  private val Bold    = "\u001b[1m"
+  private val Dim     = "\u001b[2m"
+  private val Red     = "\u001b[31m"
+  private val Green   = "\u001b[32m"
+  private val Yellow  = "\u001b[33m"
+  private val Blue    = "\u001b[34m"
   private val Magenta = "\u001b[35m"
-  private val Cyan = "\u001b[36m"
+  private val Cyan    = "\u001b[36m"
 
   private val tableFormatter = new TableFormatter()
 
@@ -27,11 +27,11 @@ class PrettyFormatter(
       content: FileContent,
       schema: Option[ParquetSchema]
   ): String =
-    if (!useColors) tableFormatter.formatContent(content, schema)
-    else if (content.rows.isEmpty) colorize("No data to display", Yellow)
+    if !useColors then tableFormatter.formatContent(content, schema)
+    else if content.rows.isEmpty then colorize("No data to display", Yellow)
     else {
-      val rows = content.rows
-      val columns = extractColumns(rows, schema)
+      val rows         = content.rows
+      val columns      = extractColumns(rows, schema)
       val columnWidths = tableFormatter.calculateColumnWidths(columns, rows)
 
       val sb = new StringBuilder()
@@ -52,7 +52,7 @@ class PrettyFormatter(
     }
 
   override def formatSchema(schema: ParquetSchema): String =
-    if (!useColors) tableFormatter.formatSchema(schema)
+    if !useColors then tableFormatter.formatSchema(schema)
     else {
       val sb = new StringBuilder()
 
@@ -77,9 +77,9 @@ class PrettyFormatter(
       schema.columns.foreach { col =>
         sb.append(s"  ${colorize(col.name, Cyan)}\n")
         sb.append(s"    Type: ${colorizeType(col.dataType)}\n")
-        sb.append(s"    Optional: ${
-            if (col.isOptional) colorize("Yes", Green) else colorize("No", Red)
-          }\n")
+        sb.append(
+          s"    Optional: ${if col.isOptional then colorize("Yes", Green) else colorize("No", Red)}\n"
+        )
         sb.append(
           s"    Compression: ${colorize(col.compressionType, Yellow)}\n"
         )
@@ -90,7 +90,7 @@ class PrettyFormatter(
     }
 
   override def formatMetadata(metadata: FileMetadata): String =
-    if (!useColors) tableFormatter.formatMetadata(metadata)
+    if !useColors then tableFormatter.formatMetadata(metadata)
     else {
       val sb = new StringBuilder()
 
@@ -124,12 +124,11 @@ class PrettyFormatter(
       sb.toString
     }
 
-  private def colorize(text: String, color: String): String = {
-    if (useColors) s"$color$text$Reset"
+  private def colorize(text: String, color: String): String =
+    if useColors then s"$color$text$Reset"
     else text
-  }
 
-  private def colorizeType(dataType: String): String = {
+  private def colorizeType(dataType: String): String =
     dataType.toUpperCase match {
       case t if t.contains("INT") => colorize(dataType, Blue)
       case t if t.contains("FLOAT") || t.contains("DOUBLE") =>
@@ -139,7 +138,6 @@ class PrettyFormatter(
       case t if t.contains("BOOL") => colorize(dataType, Yellow)
       case _                       => colorize(dataType, Cyan)
     }
-  }
 
   private def colorizeFormatted(formatted: String, cv: CellValue): String =
     cv match {
@@ -173,10 +171,10 @@ class PrettyFormatter(
   ): String = {
     val paddedValues =
       columns.zip(widths).map { case (col, width) =>
-        val cv = row.getOrElse(col, CellValue.Null)
+        val cv        = row.getOrElse(col, CellValue.Null)
         val formatted = tableFormatter.truncate(cv.safeDisplay, width)
-        val colored = colorizeFormatted(formatted, cv)
-        val padding = " " * (width - tableFormatter.displayWidth(formatted))
+        val colored   = colorizeFormatted(formatted, cv)
+        val padding   = " " * (width - tableFormatter.displayWidth(formatted))
         colored + padding
       }
 

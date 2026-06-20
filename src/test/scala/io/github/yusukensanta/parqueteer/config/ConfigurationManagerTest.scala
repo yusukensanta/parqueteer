@@ -8,8 +8,8 @@ import scala.util.Success
 class ConfigurationManagerTest extends AnyFlatSpec with Matchers {
 
   "ConfigurationManager" should "create default config if not exists" in {
-    val manager = new ConfigurationManager()
-    val tempDir = File.newTemporaryDirectory()
+    val manager    = new ConfigurationManager()
+    val tempDir    = File.newTemporaryDirectory()
     val configPath = (tempDir / "config.yaml").pathAsString
 
     val result = manager.loadConfig(Some(configPath))
@@ -21,15 +21,15 @@ class ConfigurationManagerTest extends AnyFlatSpec with Matchers {
 
   "ConfigurationManager.validate" should "report config-not-found for nonexistent path" in {
     val manager = new ConfigurationManager()
-    val result = manager.validate(Some("/nonexistent/path/config.yaml"))
+    val result  = manager.validate(Some("/nonexistent/path/config.yaml"))
     result.isSuccess shouldBe true
     result.get should not be empty
     result.get.head should include("not found")
   }
 
   it should "return empty issues for valid config" in {
-    val manager = new ConfigurationManager()
-    val tempDir = File.newTemporaryDirectory()
+    val manager    = new ConfigurationManager()
+    val tempDir    = File.newTemporaryDirectory()
     val configFile = tempDir / "config.yaml"
     configFile.write(
       """|cloud:
@@ -71,8 +71,8 @@ class ConfigurationManagerTest extends AnyFlatSpec with Matchers {
   }
 
   it should "parse auto-generated snake_case config (roundtrip)" in {
-    val manager = new ConfigurationManager()
-    val tempDir = File.newTemporaryDirectory()
+    val manager    = new ConfigurationManager()
+    val tempDir    = File.newTemporaryDirectory()
     val configPath = (tempDir / "config.yaml").pathAsString
 
     // First call: file absent → createDefaultConfig writes snake_case YAML
@@ -98,8 +98,8 @@ class ConfigurationManagerTest extends AnyFlatSpec with Matchers {
   }
 
   it should "parse explicit snake_case YAML keys" in {
-    val manager = new ConfigurationManager()
-    val tempDir = File.newTemporaryDirectory()
+    val manager    = new ConfigurationManager()
+    val tempDir    = File.newTemporaryDirectory()
     val configFile = tempDir / "config.yaml"
     configFile.write(
       """|cloud:
@@ -164,8 +164,8 @@ class ConfigurationManagerTest extends AnyFlatSpec with Matchers {
   }
 
   it should "return issues for malformed YAML" in {
-    val manager = new ConfigurationManager()
-    val tempDir = File.newTemporaryDirectory()
+    val manager    = new ConfigurationManager()
+    val tempDir    = File.newTemporaryDirectory()
     val configFile = tempDir / "bad.yaml"
     configFile.write("output:\n  default_format: [unclosed")
 
@@ -177,8 +177,8 @@ class ConfigurationManagerTest extends AnyFlatSpec with Matchers {
   }
 
   it should "return default AppConfig for an empty config file" in {
-    val manager = new ConfigurationManager()
-    val tempDir = File.newTemporaryDirectory()
+    val manager    = new ConfigurationManager()
+    val tempDir    = File.newTemporaryDirectory()
     val configFile = tempDir / "empty.yaml"
     configFile.write("")
 
@@ -189,8 +189,8 @@ class ConfigurationManagerTest extends AnyFlatSpec with Matchers {
   }
 
   it should "return default AppConfig for a whitespace-only config file" in {
-    val manager = new ConfigurationManager()
-    val tempDir = File.newTemporaryDirectory()
+    val manager    = new ConfigurationManager()
+    val tempDir    = File.newTemporaryDirectory()
     val configFile = tempDir / "blank.yaml"
     configFile.write("   \n  \n")
 
@@ -201,7 +201,7 @@ class ConfigurationManagerTest extends AnyFlatSpec with Matchers {
   }
 
   "ConfigurationManager.resolvedConfigPath" should "prefer explicit path over env default" in {
-    val manager = new ConfigurationManager()
+    val manager  = new ConfigurationManager()
     val explicit = "/explicit/config.yaml"
     manager.resolvedConfigPath(Some(explicit)) shouldBe explicit
   }

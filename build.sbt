@@ -1,11 +1,10 @@
 ThisBuild / organization := "io.github.yusukensanta"
 // Version managed by sbt-ci-release from git tags
-name := "parqueteer"
+name                     := "parqueteer"
 ThisBuild / scalaVersion := "3.7.4"
 
 // sbt-ci-release configuration
 ThisBuild / versionScheme := Some("early-semver")
-
 
 ThisBuild / scalacOptions ++= Seq(
   "-encoding",
@@ -17,8 +16,9 @@ ThisBuild / scalacOptions ++= Seq(
   "-Wunused:all"
 )
 
-coverageMinimumStmtTotal := 80
-coverageFailOnMinimum := false
+// Target: 80%. Current baseline: ~69%. Gate prevents regressions while coverage improves.
+coverageMinimumStmtTotal := 68
+coverageFailOnMinimum    := true
 
 // Fork test JVM so AWS SDK service registry has a flat classpath.
 // Without forking, sbt's layered classloader hides transitive deps that
@@ -28,7 +28,7 @@ Test / fork := true
 lazy val root = (project in file("."))
   .enablePlugins(JavaAppPackaging, BuildInfoPlugin)
   .settings(
-    buildInfoKeys := Seq[BuildInfoKey](version, scalaVersion),
+    buildInfoKeys    := Seq[BuildInfoKey](version, scalaVersion),
     buildInfoPackage := "io.github.yusukensanta.parqueteer",
     assembly / mainClass := Some(
       "io.github.yusukensanta.parqueteer.cli.CliApp"
@@ -71,13 +71,13 @@ lazy val root = (project in file("."))
     batScriptExtraDefines += """set "_JAVA_OPTS=%_JAVA_OPTS% -Dstdout.encoding=UTF-8"""",
 
     // Universal packaging configuration for distribution
-    Universal / packageName := s"${name.value}-${version.value}",
+    Universal / packageName       := s"${name.value}-${version.value}",
     Universal / topLevelDirectory := Some(s"${name.value}-${version.value}"),
 
     // Include README and other docs in distribution
     Universal / mappings ++= Seq(
       (ThisBuild / baseDirectory).value / "README.md" -> "README.md",
-      (ThisBuild / baseDirectory).value / "LICENSE" -> "LICENSE"
+      (ThisBuild / baseDirectory).value / "LICENSE"   -> "LICENSE"
     ).filter(_._1.exists),
 
     // Exclude assembly JAR from Universal package (Universal creates its own structure)
@@ -89,30 +89,30 @@ lazy val root = (project in file("."))
       }
     },
     libraryDependencies ++= {
-      val parquet4sVersion = "2.23.0"
-      val circeVersion = "0.14.14"
-      val circeYamlV12Version = "0.16.1"
-      val scoptVersion = "4.1.0"
-      val betterFilesVersion = "3.9.2"
-      val slf4jVersion = "2.0.18"
-      val scalatestVersion = "3.2.20"
-      val scalamockVersion = "7.5.5"
+      val parquet4sVersion           = "2.23.0"
+      val circeVersion               = "0.14.14"
+      val circeYamlV12Version        = "0.16.1"
+      val scoptVersion               = "4.1.0"
+      val betterFilesVersion         = "3.9.2"
+      val slf4jVersion               = "2.0.18"
+      val scalatestVersion           = "3.2.20"
+      val scalamockVersion           = "7.5.5"
       val scalatestScalacheckVersion = "3.2.18.0"
-      val awsSdkVersion = "2.46.4"
-      val googleCloudStorageVersion = "2.68.0"
-      val azureStorageVersion = "12.34.0"
-      val azureIdentityVersion = "1.16.2"
-      val hadoopVersion = "3.5.0"
-      val gcsConnectorVersion = "hadoop3-2.2.28"
+      val awsSdkVersion              = "2.46.4"
+      val googleCloudStorageVersion  = "2.68.0"
+      val azureStorageVersion        = "12.34.0"
+      val azureIdentityVersion       = "1.16.2"
+      val hadoopVersion              = "3.5.0"
+      val gcsConnectorVersion        = "hadoop3-2.2.28"
 
       Seq(
         "com.github.mjakubowski84" %% "parquet4s-core" % parquet4sVersion,
-        "com.github.scopt" %% "scopt" % scoptVersion,
+        "com.github.scopt"         %% "scopt"          % scoptVersion,
 
         // JSON processing
-        "io.circe" %% "circe-core" % circeVersion,
-        "io.circe" %% "circe-generic" % circeVersion,
-        "io.circe" %% "circe-parser" % circeVersion,
+        "io.circe" %% "circe-core"     % circeVersion,
+        "io.circe" %% "circe-generic"  % circeVersion,
+        "io.circe" %% "circe-parser"   % circeVersion,
         "io.circe" %% "circe-yaml-v12" % circeYamlV12Version,
 
         // File I/O
@@ -132,12 +132,12 @@ lazy val root = (project in file("."))
           exclude ("software.amazon.awssdk", "bundle"),
 
         // Add only the AWS SDK v2 modules we need (instead of 641 MB bundle)
-        "software.amazon.awssdk" % "s3" % awsSdkVersion,
-        "software.amazon.awssdk" % "sts" % awsSdkVersion,
-        "software.amazon.awssdk" % "sso" % awsSdkVersion,
-        "software.amazon.awssdk" % "ssooidc" % awsSdkVersion,
+        "software.amazon.awssdk" % "s3"                  % awsSdkVersion,
+        "software.amazon.awssdk" % "sts"                 % awsSdkVersion,
+        "software.amazon.awssdk" % "sso"                 % awsSdkVersion,
+        "software.amazon.awssdk" % "ssooidc"             % awsSdkVersion,
         "software.amazon.awssdk" % "s3-transfer-manager" % awsSdkVersion,
-        "software.amazon.awssdk" % "apache-client" % awsSdkVersion,
+        "software.amazon.awssdk" % "apache-client"       % awsSdkVersion,
 
         // ================================================================
         // Cloud Storage - Google Cloud (Optimized)
@@ -145,7 +145,7 @@ lazy val root = (project in file("."))
 
         // GCS connector for Hadoop (gs:// URIs)
         "com.google.cloud.bigdataoss" % "gcs-connector" % gcsConnectorVersion
-          exclude ("com.google.guava", "guava") // Avoid version conflicts
+          exclude ("com.google.guava", "guava")           // Avoid version conflicts
           exclude ("org.apache.hadoop", "hadoop-common"), // Already included
 
         // Native GCS client (for direct API usage)
@@ -161,21 +161,21 @@ lazy val root = (project in file("."))
 
         // Native Azure client (for direct API usage)
         "com.azure" % "azure-storage-blob" % azureStorageVersion,
-        "com.azure" % "azure-identity" % azureIdentityVersion,
+        "com.azure" % "azure-identity"     % azureIdentityVersion,
 
         // ================================================================
         // Hadoop Core (Minimal for cloud filesystem support)
         // ================================================================
 
-        "org.apache.hadoop" % "hadoop-client-api" % hadoopVersion,
+        "org.apache.hadoop" % "hadoop-client-api"     % hadoopVersion,
         "org.apache.hadoop" % "hadoop-client-runtime" % hadoopVersion,
 
         // commons-lang3 required by hadoop-aws 3.5.0 S3AUtils at S3AFileSystem.initialize()
         "org.apache.commons" % "commons-lang3" % "3.18.0",
 
         // Testing
-        "org.scalatest" %% "scalatest" % scalatestVersion % Test,
-        "org.scalamock" %% "scalamock" % scalamockVersion % Test,
+        "org.scalatest"     %% "scalatest"       % scalatestVersion           % Test,
+        "org.scalamock"     %% "scalamock"       % scalamockVersion           % Test,
         "org.scalatestplus" %% "scalacheck-1-17" % scalatestScalacheckVersion % Test
       )
     },
@@ -206,9 +206,9 @@ lazy val root = (project in file("."))
         "io.netty" % "netty-resolver-dns-classes-macos"   % nettyVersion,
         "io.netty" % "netty-resolver-dns-native-macos"    % nettyVersion,
         // Transitive CVE patches
-        "org.xerial.snappy" % "snappy-java"     % "1.1.10.8", // CVE-2023-43642 + CVE-2023-34455; 1.1.10.8 is current clean release
-        "com.nimbusds"      % "nimbus-jose-jwt" % "10.9.1",   // CVE-2025-53864 — deeply nested JSON DoS (fixed >=10.0.2; 10.9.1 is current)
-        "net.minidev"       % "json-smart"      % "2.6.0",    // CVE-2024-57699 — nested JSON stack exhaustion DoS (nimbus transitive)
+        "org.xerial.snappy" % "snappy-java" % "1.1.10.8", // CVE-2023-43642 + CVE-2023-34455; 1.1.10.8 is current clean release
+        "com.nimbusds" % "nimbus-jose-jwt" % "10.9.1", // CVE-2025-53864 — deeply nested JSON DoS (fixed >=10.0.2; 10.9.1 is current)
+        "net.minidev" % "json-smart" % "2.6.0", // CVE-2024-57699 — nested JSON stack exhaustion DoS (nimbus transitive)
         // GHSA-72hv-8253-57qq (async parser DoS) fixed in jackson-core 2.18.6;
         // pin all three Jackson artifacts together to prevent version skew.
         "com.fasterxml.jackson.core" % "jackson-core"        % "2.18.6",
@@ -217,15 +217,15 @@ lazy val root = (project in file("."))
       )
     },
     assembly / assemblyMergeStrategy := {
-      case PathList("META-INF", "services", xs @ _*) => MergeStrategy.concat
-      case PathList("META-INF", "versions", xs @ _*) => MergeStrategy.first
+      case PathList("META-INF", "services", xs*) => MergeStrategy.concat
+      case PathList("META-INF", "versions", xs*) => MergeStrategy.first
       case PathList(
             "META-INF",
             "LICENSE" | "LICENSE.txt" | "NOTICE" | "NOTICE.txt",
-            xs @ _*
+            xs*
           ) =>
         MergeStrategy.discard
-      case PathList("META-INF", xs @ _*) => MergeStrategy.discard
+      case PathList("META-INF", xs*)     => MergeStrategy.discard
       case PathList("module-info.class") => MergeStrategy.discard
       case PathList("reference.conf")    => MergeStrategy.concat
       case _                             => MergeStrategy.first

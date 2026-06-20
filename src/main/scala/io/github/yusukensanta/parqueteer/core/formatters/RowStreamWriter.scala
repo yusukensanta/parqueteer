@@ -29,8 +29,8 @@ object RowStreamWriter {
     Json.obj(row.view.mapValues(JsonEncoder.encode).toSeq*).noSpaces
   }
 
-  private class NDJSONRowStreamWriter(out: PrintStream)
-      extends RowStreamWriter {
+  private class NDJSONRowStreamWriter(out: PrintStream) extends RowStreamWriter {
+
     // NDJSON spec requires LF line endings; println emits CRLF on Windows.
     override def writeRow(row: Map[String, CellValue]): Unit = {
       out.print(rowToJson(row))
@@ -44,22 +44,25 @@ object RowStreamWriter {
     // Defer writing `[` until the first row so a failed read produces no stdout
     // output rather than a stray `[` before the error on stderr.
     override def begin(): Unit = begun = true
+
     override def writeRow(row: Map[String, CellValue]): Unit = {
-      if (first) { out.print("["); first = false }
+      if first then { out.print("["); first = false }
       else out.print(",")
       out.print(rowToJson(row))
     }
+
     override def end(): Unit =
-      if (!first) out.println("]")
-      else if (begun) out.println("[]")
+      if !first then out.println("]")
+      else if begun then out.println("[]")
   }
 
   private class CSVRowStreamWriter(out: PrintStream) extends RowStreamWriter {
-    private var columns: List[String] = Nil
+    private var columns: List[String]   = Nil
     private var columnsSet: Set[String] = Set.empty
-    private var warnedUnseen = false
+    private var warnedUnseen            = false
+
     override def writeRow(row: Map[String, CellValue]): Unit = {
-      if (columns.isEmpty) {
+      if columns.isEmpty then {
         val seen = scala.collection.mutable.LinkedHashSet.empty[String]
         row.keysIterator.foreach(seen += _)
         columns = seen.toList
@@ -69,9 +72,9 @@ object RowStreamWriter {
             .map(CSVFormatter.escapeField)
             .mkString(",") + CSVFormatter.Newline
         )
-      } else if (!warnedUnseen) {
+      } else if !warnedUnseen then {
         val unseen = row.keySet -- columnsSet
-        if (unseen.nonEmpty) {
+        if unseen.nonEmpty then {
           Console.err.println(
             s"[parqueteer] warning: CSV writer dropping unseen column keys: ${unseen.mkString(", ")}"
           )
@@ -80,9 +83,7 @@ object RowStreamWriter {
       }
       out.print(
         columns
-          .map(c =>
-            CSVFormatter.escapeField(row.get(c).fold("")(_.safeDisplay))
-          )
+          .map(c => CSVFormatter.escapeField(row.get(c).fold("")(_.safeDisplay)))
           .mkString(",") + CSVFormatter.Newline
       )
     }
@@ -90,14 +91,14 @@ object RowStreamWriter {
 
   private class TableRowStreamWriter(out: PrintStream) extends RowStreamWriter {
     private val tf = new TableFormatter()
-    private val sample
-        : scala.collection.mutable.ListBuffer[Map[String, CellValue]] =
+
+    private val sample: scala.collection.mutable.ListBuffer[Map[String, CellValue]] =
       scala.collection.mutable.ListBuffer.empty
-    private var columns: List[String] = Nil
+    private var columns: List[String]   = Nil
     private var columnsSet: Set[String] = Set.empty
-    private var widths: List[Int] = Nil
-    private var flushed = false
-    private var warnedUnseen = false
+    private var widths: List[Int]       = Nil
+    private var flushed                 = false
+    private var warnedUnseen            = false
 
     private def flushSample(): Unit = {
       columns = {
@@ -121,14 +122,14 @@ object RowStreamWriter {
       flushed = true
     }
 
-    override def writeRow(row: Map[String, CellValue]): Unit = {
-      if (!flushed) {
+    override def writeRow(row: Map[String, CellValue]): Unit =
+      if !flushed then {
         sample += row
-        if (sample.size >= SampleSize) flushSample()
+        if sample.size >= SampleSize then flushSample()
       } else {
-        if (!warnedUnseen) {
+        if !warnedUnseen then {
           val unseen = row.keySet -- columnsSet
-          if (unseen.nonEmpty) {
+          if unseen.nonEmpty then {
             Console.err.println(
               s"[parqueteer] warning: table output drops columns first seen after the ${SampleSize}-row " +
                 s"sample window: ${unseen.toList.sorted.mkString(", ")}. " +
@@ -144,16 +145,16 @@ object RowStreamWriter {
           )
         )
       }
-    }
 
     override def end(): Unit = {
-      if (!flushed && sample.nonEmpty) flushSample()
-      if (widths.nonEmpty) out.println(tf.drawBottomBorder(widths))
+      if !flushed && sample.nonEmpty then flushSample()
+      if widths.nonEmpty then out.println(tf.drawBottomBorder(widths))
     }
   }
 
   private class LTSVRowStreamWriter(out: PrintStream) extends RowStreamWriter {
     private val fmt = new LTSVFormatter()
+
     // LTSV spec requires LF line endings; println emits CRLF on Windows.
     override def writeRow(row: Map[String, CellValue]): Unit = {
       out.print(fmt.rowToLtsv(row))
@@ -161,15 +162,14 @@ object RowStreamWriter {
     }
   }
 
-  private class MarkdownRowStreamWriter(out: PrintStream)
-      extends RowStreamWriter {
-    private val sample
-        : scala.collection.mutable.ListBuffer[Map[String, CellValue]] =
+  private class MarkdownRowStreamWriter(out: PrintStream) extends RowStreamWriter {
+
+    private val sample: scala.collection.mutable.ListBuffer[Map[String, CellValue]] =
       scala.collection.mutable.ListBuffer.empty
-    private var columns: List[String] = Nil
+    private var columns: List[String]   = Nil
     private var columnsSet: Set[String] = Set.empty
-    private var flushed = false
-    private var warnedUnseen = false
+    private var flushed                 = false
+    private var warnedUnseen            = false
 
     private def escapeStr(s: String): String =
       CellValue
@@ -201,14 +201,14 @@ object RowStreamWriter {
       flushed = true
     }
 
-    override def writeRow(row: Map[String, CellValue]): Unit = {
-      if (!flushed) {
+    override def writeRow(row: Map[String, CellValue]): Unit =
+      if !flushed then {
         sample += row
-        if (sample.size >= SampleSize) flushSample()
+        if sample.size >= SampleSize then flushSample()
       } else {
-        if (!warnedUnseen) {
+        if !warnedUnseen then {
           val unseen = row.keySet -- columnsSet
-          if (unseen.nonEmpty) {
+          if unseen.nonEmpty then {
             Console.err.println(
               s"[parqueteer] warning: markdown output drops columns first seen after the ${SampleSize}-row " +
                 s"sample window: ${unseen.toList.sorted.mkString(", ")}. " +
@@ -223,10 +223,8 @@ object RowStreamWriter {
             .mkString(" | ") + " |"
         )
       }
-    }
 
-    override def end(): Unit = {
-      if (!flushed && sample.nonEmpty) flushSample()
-    }
+    override def end(): Unit =
+      if !flushed && sample.nonEmpty then flushSample()
   }
 }

@@ -1,6 +1,6 @@
 package io.github.yusukensanta.parqueteer.core.repositories
 
-import io.github.yusukensanta.parqueteer.core.models._
+import io.github.yusukensanta.parqueteer.core.models.*
 import io.github.yusukensanta.parqueteer.core.models.ParqueteerError.toParqueteerError
 import org.scalatest.Tag
 import org.scalatest.flatspec.AnyFlatSpec
@@ -22,18 +22,18 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
 
   private val sampleData: List[Map[String, CellValue]] = List(
     Map(
-      "id" -> CellValue.I64(1L),
-      "name" -> CellValue.Str("Alice"),
+      "id"    -> CellValue.I64(1L),
+      "name"  -> CellValue.Str("Alice"),
       "score" -> CellValue.F64(95.5)
     ),
     Map(
-      "id" -> CellValue.I64(2L),
-      "name" -> CellValue.Str("Bob"),
+      "id"    -> CellValue.I64(2L),
+      "name"  -> CellValue.Str("Bob"),
       "score" -> CellValue.F64(87.3)
     ),
     Map(
-      "id" -> CellValue.I64(3L),
-      "name" -> CellValue.Str("Charlie"),
+      "id"    -> CellValue.I64(3L),
+      "name"  -> CellValue.Str("Charlie"),
       "score" -> CellValue.F64(92.1)
     )
   )
@@ -172,7 +172,7 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
   }
 
   it should "report file-not-found issue for missing path" taggedAs IntegrationTest in {
-    val loc = LocalPath("/tmp/parqueteer_no_such_file_xyz.parquet")
+    val loc    = LocalPath("/tmp/parqueteer_no_such_file_xyz.parquet")
     val result = repo.validateFile(ParquetFile(loc))
     result.isSuccess shouldBe true
     result.get should contain("File does not exist")
@@ -345,7 +345,7 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
     val manyRows = (1 to 30)
       .map(i =>
         Map[String, CellValue](
-          "id" -> CellValue.I64(i.toLong),
+          "id"   -> CellValue.I64(i.toLong),
           "name" -> CellValue.Str(s"user$i")
         )
       )
@@ -367,7 +367,7 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
     val manyRows = (1 to 20)
       .map(i =>
         Map[String, CellValue](
-          "id" -> CellValue.I64(i.toLong),
+          "id"   -> CellValue.I64(i.toLong),
           "name" -> CellValue.Str(s"u$i")
         )
       )
@@ -407,8 +407,8 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
     val manyRows = (1 to 10)
       .map(i =>
         Map[String, CellValue](
-          "id" -> CellValue.I64(i.toLong),
-          "name" -> CellValue.Str(s"u$i"),
+          "id"    -> CellValue.I64(i.toLong),
+          "name"  -> CellValue.Str(s"u$i"),
           "score" -> CellValue.F64(i.toDouble)
         )
       )
@@ -448,15 +448,15 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
   it should "filter IS NULL on INT64 column without IllegalArgumentException" taggedAs IntegrationTest in {
     val data = List(
       Map[String, CellValue](
-        "id" -> CellValue.I64(1L),
+        "id"   -> CellValue.I64(1L),
         "name" -> CellValue.Str("Alice")
       ),
       Map[String, CellValue](
-        "id" -> CellValue.I64(2L),
+        "id"   -> CellValue.I64(2L),
         "name" -> CellValue.Null
       ),
       Map[String, CellValue](
-        "id" -> CellValue.I64(3L),
+        "id"   -> CellValue.I64(3L),
         "name" -> CellValue.Str("Charlie")
       )
     )
@@ -474,15 +474,15 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
   it should "filter IS NULL on DOUBLE column without IllegalArgumentException" taggedAs IntegrationTest in {
     val data = List(
       Map[String, CellValue](
-        "id" -> CellValue.I64(1L),
+        "id"    -> CellValue.I64(1L),
         "score" -> CellValue.F64(9.5)
       ),
       Map[String, CellValue](
-        "id" -> CellValue.I64(2L),
+        "id"    -> CellValue.I64(2L),
         "score" -> CellValue.Null
       ),
       Map[String, CellValue](
-        "id" -> CellValue.I64(3L),
+        "id"    -> CellValue.I64(3L),
         "score" -> CellValue.F64(7.1)
       )
     )
@@ -500,7 +500,7 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
   // ── Edge cases ─────────────────────────────────────────────────────────
 
   it should "fail to write empty data (no schema to infer)" taggedAs IntegrationTest in {
-    val loc = LocalPath(tempFile().getAbsolutePath)
+    val loc    = LocalPath(tempFile().getAbsolutePath)
     val result = repo.writeContent(loc, List.empty, None)
     result.isFailure shouldBe true
   }
@@ -508,15 +508,15 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
   it should "write and read back INT32 (Int) values preserving type" taggedAs IntegrationTest in {
     val data = List(
       Map[String, CellValue](
-        "id" -> CellValue.I32(1),
+        "id"    -> CellValue.I32(1),
         "count" -> CellValue.I32(100)
       ),
       Map[String, CellValue](
-        "id" -> CellValue.I32(2),
+        "id"    -> CellValue.I32(2),
         "count" -> CellValue.I32(-50)
       ),
       Map[String, CellValue](
-        "id" -> CellValue.I32(3),
+        "id"    -> CellValue.I32(3),
         "count" -> CellValue.I32(Int.MaxValue)
       )
     )
@@ -563,15 +563,15 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
   it should "write and read back BOOLEAN values" taggedAs IntegrationTest in {
     val data = List(
       Map[String, CellValue](
-        "name" -> CellValue.Str("Alice"),
+        "name"   -> CellValue.Str("Alice"),
         "active" -> CellValue.Bool(true)
       ),
       Map[String, CellValue](
-        "name" -> CellValue.Str("Bob"),
+        "name"   -> CellValue.Str("Bob"),
         "active" -> CellValue.Bool(false)
       ),
       Map[String, CellValue](
-        "name" -> CellValue.Str("Charlie"),
+        "name"   -> CellValue.Str("Charlie"),
         "active" -> CellValue.Bool(true)
       )
     )
@@ -590,15 +590,15 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
   it should "read null field as CellValue.Null (key present) via sequential path" taggedAs IntegrationTest in {
     val data = List(
       Map[String, CellValue](
-        "id" -> CellValue.I64(1L),
+        "id"   -> CellValue.I64(1L),
         "note" -> CellValue.Str("present")
       ),
       Map[String, CellValue](
-        "id" -> CellValue.I64(2L),
+        "id"   -> CellValue.I64(2L),
         "note" -> CellValue.Null
       ),
       Map[String, CellValue](
-        "id" -> CellValue.I64(3L),
+        "id"   -> CellValue.I64(3L),
         "note" -> CellValue.Str("also present")
       )
     )
@@ -618,11 +618,11 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
   it should "write and read back DATE (LocalDate) values as LocalDate" taggedAs IntegrationTest in {
     val data = List(
       Map[String, CellValue](
-        "id" -> CellValue.I64(1L),
+        "id"  -> CellValue.I64(1L),
         "dob" -> CellValue.Date(java.time.LocalDate.of(1990, 6, 15))
       ),
       Map[String, CellValue](
-        "id" -> CellValue.I64(2L),
+        "id"  -> CellValue.I64(2L),
         "dob" -> CellValue.Date(java.time.LocalDate.of(2001, 12, 1))
       )
     )
@@ -645,11 +645,11 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
     val data = List(
       Map[String, CellValue](
         "event" -> CellValue.Str("login"),
-        "ts" -> CellValue.Ts(ts1)
+        "ts"    -> CellValue.Ts(ts1)
       ),
       Map[String, CellValue](
         "event" -> CellValue.Str("logout"),
-        "ts" -> CellValue.Ts(ts2)
+        "ts"    -> CellValue.Ts(ts2)
       )
     )
     val loc = LocalPath(tempFile().getAbsolutePath)
@@ -665,14 +665,14 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
 
   it should "emit CellValue.Null for absent fields in parallel (low-level) read path" taggedAs IntegrationTest in {
     val manyRows = (1 to 10).map { i =>
-      if (i == 5)
+      if i == 5 then
         Map[String, CellValue](
-          "id" -> CellValue.I64(i.toLong),
+          "id"   -> CellValue.I64(i.toLong),
           "note" -> CellValue.Null
         )
       else
         Map[String, CellValue](
-          "id" -> CellValue.I64(i.toLong),
+          "id"   -> CellValue.I64(i.toLong),
           "note" -> CellValue.Str(s"row$i")
         )
     }.toList
@@ -735,7 +735,7 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
     // Use a tiny rowGroupSize to force the writer to flush multiple row groups
     val data = (1 to 200).toList.map(i =>
       Map[String, CellValue](
-        "id" -> CellValue.I64(i.toLong),
+        "id"    -> CellValue.I64(i.toLong),
         "label" -> CellValue.Str(s"item_$i")
       )
     )
@@ -860,7 +860,7 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
     val result = repo.writeContentStream(loc, schema) { write =>
       write(
         Map(
-          "id" -> CellValue.I64(1L),
+          "id"          -> CellValue.I64(1L),
           "unknown_col" -> CellValue.Str("surprise")
         )
       )
@@ -899,7 +899,7 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
     // Unset AWS credentials by pointing to a non-existent profile
     val repo =
       new HadoopParquetRepository(profile = Some("__nonexistent_profile_xyz__"))
-    val file = ParquetFile(S3Location("test-bucket", "key.parquet", None))
+    val file   = ParquetFile(S3Location("test-bucket", "key.parquet", None))
     val result = repo.readSchema(file)
     result.isFailure shouldBe true
     // After our fix, the error should be a CloudAuthException
@@ -915,7 +915,7 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
 
   it should "decode TIMESTAMP_MICROS as ISO-8601 Instant in sequential read" taggedAs IntegrationTest in {
     import org.apache.parquet.hadoop.example.ExampleParquetWriter
-    import org.apache.parquet.schema.{Types => PTypes}
+    import org.apache.parquet.schema.Types as PTypes
     import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
     import org.apache.parquet.schema.Type.Repetition
     import org.apache.parquet.schema.LogicalTypeAnnotation
@@ -934,8 +934,8 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
       )
       .named("root")
 
-    val f = tempFile()
-    val conf = new org.apache.hadoop.conf.Configuration()
+    val f       = tempFile()
+    val conf    = new org.apache.hadoop.conf.Configuration()
     val factory = new SimpleGroupFactory(microsSchema)
     val writer = ExampleParquetWriter
       .builder(new org.apache.hadoop.fs.Path(f.getAbsolutePath))
@@ -948,7 +948,7 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
     writer.write(group)
     writer.close()
 
-    val loc = LocalPath(f.getAbsolutePath)
+    val loc    = LocalPath(f.getAbsolutePath)
     val result = repo.readContent(ParquetFile(loc), ReadConfig())
     result.isSuccess shouldBe true
     result.get.rows.head("ts") shouldBe CellValue.Ts(
@@ -958,7 +958,7 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
 
   "HadoopParquetRepository.cacheStats" should "count footer cache hits and misses" taggedAs IntegrationTest in {
     val freshRepo = new HadoopParquetRepository()
-    val loc = LocalPath(tempFile().getAbsolutePath)
+    val loc       = LocalPath(tempFile().getAbsolutePath)
     freshRepo
       .writeContent(loc, List(Map("x" -> CellValue.I64(1L))), None)
       .get
@@ -986,11 +986,11 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
       .map(n => Map[String, CellValue]("id" -> CellValue.I64(n.toLong)))
       .toList
     val rowWithExtra = Map[String, CellValue](
-      "id" -> CellValue.I64(1001L),
+      "id"    -> CellValue.I64(1001L),
       "extra" -> CellValue.Str("hello")
     )
     val allRows = rows :+ rowWithExtra
-    val result = repo.writeContent(loc, allRows, None)
+    val result  = repo.writeContent(loc, allRows, None)
     result.isSuccess shouldBe true
     val readBack = repo.readContent(ParquetFile(loc), ReadConfig()).get.rows
     readBack should have size 1001
@@ -1060,7 +1060,7 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
           f.name,
           f.dataType,
           f.isOptional,
-          if (f.isOptional) 1 else 0,
+          if f.isOptional then 1 else 0,
           0,
           "UNCOMPRESSED"
         )
@@ -1143,7 +1143,7 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
     import org.apache.parquet.schema.MessageTypeParser
     import org.apache.parquet.example.data.simple.SimpleGroupFactory
     import org.apache.parquet.hadoop.example.ExampleParquetWriter
-    import org.apache.hadoop.fs.{Path => HadoopPath}
+    import org.apache.hadoop.fs.Path as HadoopPath
     import org.apache.hadoop.conf.Configuration
 
     val loc = LocalPath(tempFile().getAbsolutePath)
@@ -1155,7 +1155,7 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
         |  }
         |}""".stripMargin
     )
-    val conf = new Configuration()
+    val conf    = new Configuration()
     val factory = new SimpleGroupFactory(schema)
 
     val writer = ExampleParquetWriter

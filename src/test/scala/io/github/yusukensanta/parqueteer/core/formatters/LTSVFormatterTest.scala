@@ -74,13 +74,13 @@ class LTSVFormatterTest extends AnyFlatSpec with Matchers {
     import io.github.yusukensanta.parqueteer.core.util.LTSVParser
     val rows = List(
       Map(
-        "host" -> CellValue.Str("example.com"),
+        "host"   -> CellValue.Str("example.com"),
         "status" -> CellValue.I64(200L)
       )
     )
     val content = FileContent(rows = rows, totalRows = 1L)
-    val ltsv = fmt.formatContent(content, None)
-    val parsed = LTSVParser.parse(ltsv)
+    val ltsv    = fmt.formatContent(content, None)
+    val parsed  = LTSVParser.parse(ltsv)
     parsed should have size 1
     parsed(0)("host") shouldBe CellValue.Str("example.com")
     parsed(0)("status") shouldBe CellValue.I64(200L)
@@ -93,7 +93,7 @@ class LTSVFormatterTest extends AnyFlatSpec with Matchers {
       isPartial = true
     )
     val result = fmt.formatContent(content, None)
-    val lines = result.split("\n")
+    val lines  = result.split("\n")
     lines should have length 1
     lines(0) should startWith("k:")
     result should not include "#"
@@ -112,8 +112,7 @@ class LTSVFormatterTest extends AnyFlatSpec with Matchers {
 
   it should "end with a newline (POSIX text file convention)" in {
     val content = FileContent(
-      rows =
-        List(Map("a" -> CellValue.Str("1")), Map("a" -> CellValue.Str("2"))),
+      rows = List(Map("a" -> CellValue.Str("1")), Map("a" -> CellValue.Str("2"))),
       totalRows = 2L
     )
     fmt.formatContent(content, None) should endWith("\n")

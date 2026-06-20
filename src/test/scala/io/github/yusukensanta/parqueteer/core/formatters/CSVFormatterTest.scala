@@ -1,6 +1,6 @@
 package io.github.yusukensanta.parqueteer.core.formatters
 
-import io.github.yusukensanta.parqueteer.core.models._
+import io.github.yusukensanta.parqueteer.core.models.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -28,14 +28,14 @@ class CSVFormatterTest extends AnyFlatSpec with Matchers {
 
   "CSVFormatter.formatContent" should "produce header row from column names" in {
     val result = formatter.formatContent(sampleContent, None)
-    val lines = result.split("\r\n")
+    val lines  = result.split("\r\n")
     lines.head should include("age")
     lines.head should include("name")
   }
 
   it should "produce correct number of lines (header + 2 data)" in {
     val result = formatter.formatContent(sampleContent, None)
-    val lines = result.strip().split("\r\n")
+    val lines  = result.strip().split("\r\n")
     lines.length shouldBe 3
   }
 
@@ -78,7 +78,7 @@ class CSVFormatterTest extends AnyFlatSpec with Matchers {
       isPartial = false
     )
     val result = formatter.formatContent(withNull, None)
-    val lines = result.split("\r\n", -1)
+    val lines  = result.split("\r\n", -1)
     lines.length shouldBe 3
     lines(0) shouldBe "key"
     lines(1) shouldBe ""

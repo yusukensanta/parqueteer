@@ -1,6 +1,6 @@
 package io.github.yusukensanta.parqueteer.cloud
 
-import io.github.yusukensanta.parqueteer.core.models._
+import io.github.yusukensanta.parqueteer.core.models.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -8,7 +8,7 @@ class CloudCredentialManagerTest extends AnyFlatSpec with Matchers {
 
   "CloudCredentialManager" should "return S3CredentialManager for S3Location" in {
     val location = S3Location("bucket", "key")
-    val manager = CloudCredentialManager.forLocation(location)
+    val manager  = CloudCredentialManager.forLocation(location)
 
     manager shouldBe defined
     manager.get shouldBe a[S3CredentialManager]
@@ -16,7 +16,7 @@ class CloudCredentialManagerTest extends AnyFlatSpec with Matchers {
 
   it should "return GCSCredentialManager for GCSLocation" in {
     val location = GCSLocation("bucket", "path")
-    val manager = CloudCredentialManager.forLocation(location)
+    val manager  = CloudCredentialManager.forLocation(location)
 
     manager shouldBe defined
     manager.get shouldBe a[GCSCredentialManager]
@@ -24,7 +24,7 @@ class CloudCredentialManagerTest extends AnyFlatSpec with Matchers {
 
   it should "return AzureCredentialManager for AzureLocation" in {
     val location = AzureLocation("account", "container", "path")
-    val manager = CloudCredentialManager.forLocation(location)
+    val manager  = CloudCredentialManager.forLocation(location)
 
     manager shouldBe defined
     manager.get shouldBe a[AzureCredentialManager]
@@ -46,7 +46,7 @@ class CloudCredentialManagerTest extends AnyFlatSpec with Matchers {
 
   it should "return None for LocalPath" in {
     val location = LocalPath("/local/path")
-    val manager = CloudCredentialManager.forLocation(location)
+    val manager  = CloudCredentialManager.forLocation(location)
 
     manager shouldBe empty
   }
@@ -62,7 +62,7 @@ class CloudCredentialManagerTest extends AnyFlatSpec with Matchers {
 
   it should "return S3CredentialManager without profile when profile is None" in {
     val location = S3Location("bucket", "key")
-    val manager = CloudCredentialManager.forLocation(location, profile = None)
+    val manager  = CloudCredentialManager.forLocation(location, profile = None)
 
     manager shouldBe defined
     manager.get shouldBe a[S3CredentialManager]
@@ -214,7 +214,7 @@ class CloudCredentialManagerTest extends AnyFlatSpec with Matchers {
         sys.env("AZURE_AUTH_METHOD") == "managed_identity",
       "Skipped: AZURE_AUTH_METHOD is not managed_identity"
     )
-    val loc = AzureLocation("myaccount", "mycontainer", "path/to/file")
+    val loc    = AzureLocation("myaccount", "mycontainer", "path/to/file")
     val result = new AzureCredentialManager().configureHadoop(loc)
     result.isSuccess shouldBe true
     val conf = result.get
@@ -230,7 +230,7 @@ class CloudCredentialManagerTest extends AnyFlatSpec with Matchers {
         sys.env.contains("AZURE_STORAGE_KEY"),
       "Skipped: AZURE_AUTH_METHOD=shared_key and AZURE_STORAGE_KEY not set"
     )
-    val loc = AzureLocation("myaccount", "mycontainer", "path/to/file")
+    val loc    = AzureLocation("myaccount", "mycontainer", "path/to/file")
     val result = new AzureCredentialManager().configureHadoop(loc)
     result.isSuccess shouldBe true
     val conf = result.get
@@ -246,7 +246,7 @@ class CloudCredentialManagerTest extends AnyFlatSpec with Matchers {
         sys.env.contains("AZURE_STORAGE_SAS_TOKEN"),
       "Skipped: AZURE_AUTH_METHOD=sas_token and AZURE_STORAGE_SAS_TOKEN not set"
     )
-    val loc = AzureLocation("myaccount", "mycontainer", "path/to/file")
+    val loc    = AzureLocation("myaccount", "mycontainer", "path/to/file")
     val result = new AzureCredentialManager().configureHadoop(loc)
     result.isSuccess shouldBe true
     val conf = result.get

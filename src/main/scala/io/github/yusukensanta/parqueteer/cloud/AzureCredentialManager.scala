@@ -1,16 +1,14 @@
 package io.github.yusukensanta.parqueteer.cloud
 
-import io.github.yusukensanta.parqueteer.core.models.{
-  StorageLocation,
-  AzureLocation
-}
+import io.github.yusukensanta.parqueteer.core.models.{AzureLocation, StorageLocation}
 import org.apache.hadoop.conf.Configuration
-import scala.util.{Try, Failure}
+import scala.util.{Failure, Try}
 
 class AzureCredentialManager extends CloudCredentialManager {
+
   override def configureHadoop(
       location: StorageLocation
-  ): Try[Configuration] = {
+  ): Try[Configuration] =
     location match {
       case azureLocation: AzureLocation =>
         Try {
@@ -43,7 +41,7 @@ class AzureCredentialManager extends CloudCredentialManager {
           // Performance and reliability settings
           conf.set("fs.azure.io.retry.max.retries", "3")
           conf.set("fs.azure.io.retry.backoff.interval", "3000")
-          conf.set("fs.azure.read.request.size", "8388608") // 8MB
+          conf.set("fs.azure.read.request.size", "8388608")  // 8MB
           conf.set("fs.azure.write.request.size", "8388608") // 8MB
 
           conf
@@ -51,7 +49,6 @@ class AzureCredentialManager extends CloudCredentialManager {
       case _ =>
         Failure(new IllegalArgumentException("Expected AzureLocation"))
     }
-  }
 
   private def configureManagedIdentity(
       conf: Configuration,

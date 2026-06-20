@@ -7,7 +7,7 @@ class CellValueTest extends AnyFlatSpec with Matchers {
 
   private val ESC = 0x1b.toChar.toString // ANSI escape character
   private val DEL = 0x7f.toChar.toString // DEL (0x7F)
-  private val C1 = 0x9f.toChar.toString // last C1 control code
+  private val C1  = 0x9f.toChar.toString // last C1 control code
 
   "CellValue.sanitizeTerminal" should "pass through normal strings unchanged" in {
     CellValue.sanitizeTerminal("hello world") shouldBe "hello world"

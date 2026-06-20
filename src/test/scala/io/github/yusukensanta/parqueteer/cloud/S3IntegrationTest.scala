@@ -1,14 +1,11 @@
 package io.github.yusukensanta.parqueteer.cloud
 
-import io.github.yusukensanta.parqueteer.core.models._
+import io.github.yusukensanta.parqueteer.core.models.*
 import io.github.yusukensanta.parqueteer.core.repositories.HadoopParquetRepository
 import org.scalatest.{BeforeAndAfterAll, Tag}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import software.amazon.awssdk.auth.credentials.{
-  AwsBasicCredentials,
-  StaticCredentialsProvider
-}
+import software.amazon.awssdk.auth.credentials.{AwsBasicCredentials, StaticCredentialsProvider}
 import software.amazon.awssdk.regions.Region
 import software.amazon.awssdk.services.s3.S3Client
 import software.amazon.awssdk.services.s3.model.{
@@ -18,28 +15,26 @@ import software.amazon.awssdk.services.s3.model.{
   ListObjectsV2Request
 }
 import java.net.URI
-import scala.jdk.CollectionConverters._
+import scala.jdk.CollectionConverters.*
 import scala.util.Try
 
 object S3IntegrationTest extends Tag("S3IntegrationTest")
 
-/** Runs against a local S3-compatible server (RustFS).
-  *
-  * Required env vars: AWS_ENDPOINT_URL — e.g. http://localhost:9000
-  * AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
-  *
-  * All tests are skipped when these vars are absent.
-  */
-class S3IntegrationTest
-    extends AnyFlatSpec
-    with Matchers
-    with BeforeAndAfterAll {
+/**
+ * Runs against a local S3-compatible server (RustFS).
+ *
+ * Required env vars: AWS_ENDPOINT_URL — e.g. http://localhost:9000
+ * AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
+ *
+ * All tests are skipped when these vars are absent.
+ */
+class S3IntegrationTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
 
-  private val endpoint = sys.env.get("AWS_ENDPOINT_URL")
-  private val accessKey = sys.env.getOrElse("AWS_ACCESS_KEY_ID", "")
-  private val secretKey = sys.env.getOrElse("AWS_SECRET_ACCESS_KEY", "")
+  private val endpoint   = sys.env.get("AWS_ENDPOINT_URL")
+  private val accessKey  = sys.env.getOrElse("AWS_ACCESS_KEY_ID", "")
+  private val secretKey  = sys.env.getOrElse("AWS_SECRET_ACCESS_KEY", "")
   private val testBucket = "parqueteer-test"
-  private val repo = new HadoopParquetRepository()
+  private val repo       = new HadoopParquetRepository()
 
   private lazy val s3Client: S3Client = S3Client
     .builder()
@@ -55,34 +50,33 @@ class S3IntegrationTest
 
   private val sampleData: List[Map[String, CellValue]] = List(
     Map(
-      "id" -> CellValue.I64(1L),
-      "name" -> CellValue.Str("Alice"),
+      "id"    -> CellValue.I64(1L),
+      "name"  -> CellValue.Str("Alice"),
       "score" -> CellValue.F64(95.5)
     ),
     Map(
-      "id" -> CellValue.I64(2L),
-      "name" -> CellValue.Str("Bob"),
+      "id"    -> CellValue.I64(2L),
+      "name"  -> CellValue.Str("Bob"),
       "score" -> CellValue.F64(87.3)
     ),
     Map(
-      "id" -> CellValue.I64(3L),
-      "name" -> CellValue.Str("Charlie"),
+      "id"    -> CellValue.I64(3L),
+      "name"  -> CellValue.Str("Charlie"),
       "score" -> CellValue.F64(92.1)
     )
   )
 
-  override def beforeAll(): Unit = {
-    if (endpoint.isDefined) {
+  override def beforeAll(): Unit =
+    if endpoint.isDefined then {
       Try(
         s3Client.createBucket(
           CreateBucketRequest.builder().bucket(testBucket).build()
         )
       )
     }
-  }
 
-  override def afterAll(): Unit = {
-    if (endpoint.isDefined) {
+  override def afterAll(): Unit =
+    if endpoint.isDefined then {
       Try {
         val objects = s3Client
           .listObjectsV2(
@@ -104,7 +98,6 @@ class S3IntegrationTest
         )
       }
     }
-  }
 
   private def assumeS3Available(): Unit =
     assume(

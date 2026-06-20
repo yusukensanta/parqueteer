@@ -7,7 +7,7 @@ class ParquetRepositoryTraitTest extends AnyFlatSpec with Matchers {
 
   "ParquetRepository.cacheStats" should "be callable through the trait interface" in {
     val repo: ParquetRepository = new HadoopParquetRepository()
-    val stats = repo.cacheStats()
+    val stats                   = repo.cacheStats()
     stats shouldBe a[ParquetRepository.CacheStats]
     stats.footerHits shouldBe 0L
     stats.footerMisses shouldBe 0L
@@ -19,13 +19,13 @@ class ParquetRepositoryTraitTest extends AnyFlatSpec with Matchers {
     // A no-op stub that inherits the default cacheStats() from the trait
     val stub = new ParquetRepository {
       import scala.util.Try
-      import io.github.yusukensanta.parqueteer.core.models._
+      import io.github.yusukensanta.parqueteer.core.models.*
       def readContent(f: ParquetFile, c: ReadConfig) = Try(???)
       def streamContent(f: ParquetFile, c: ReadConfig)(
           p: Map[String, CellValue] => Unit
       ) =
         Try(???)
-      def readSchema(f: ParquetFile) = Try(???)
+      def readSchema(f: ParquetFile)   = Try(???)
       def readFileInfo(f: ParquetFile) = Try(???)
       def readMetadata(f: ParquetFile) = Try(???)
       def writeContent(
@@ -43,9 +43,9 @@ class ParquetRepositoryTraitTest extends AnyFlatSpec with Matchers {
           feed: (Map[String, CellValue] => Unit) => Unit
       ) = Try(???)
       def validateFile(f: ParquetFile, deep: Boolean) = Try(???)
-      def readSchemaFields(f: ParquetFile) = Try(???)
-      def deleteFile(l: StorageLocation) = Try(???)
-      def readStats(f: ParquetFile) = Try(???)
+      def readSchemaFields(f: ParquetFile)            = Try(???)
+      def deleteFile(l: StorageLocation)              = Try(???)
+      def readStats(f: ParquetFile)                   = Try(???)
     }
     val stats = stub.cacheStats()
     stats shouldBe ParquetRepository.CacheStats(0L, 0L, 0L, 0L)

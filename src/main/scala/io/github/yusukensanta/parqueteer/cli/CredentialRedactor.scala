@@ -1,6 +1,7 @@
 package io.github.yusukensanta.parqueteer.cli
 
 private[cli] object CredentialRedactor {
+
   private val patterns: Seq[scala.util.matching.Regex] = Seq(
     "(?i)(Authorization\\s*[:=]\\s*)\\S[^&\\n\\r]*".r,
     // Redact secret X-Amz headers. Non-secret debug headers (Date, Algorithm, SignedHeaders)
@@ -37,7 +38,7 @@ private[cli] object CredentialRedactor {
   )
 
   def redact(s: String): String = {
-    if (s == null) return ""
+    if s == null then return ""
     patterns.foldLeft(s) { (acc, pattern) =>
       pattern.replaceAllIn(
         acc,
@@ -53,26 +54,22 @@ private[cli] object CredentialRedactor {
   private val MaxCauseChain = 20
 
   def redactThrowable(t: Throwable): String = {
-    val sb = new StringBuilder
-    val seen = new java.util.IdentityHashMap[Throwable, Boolean]()
+    val sb                 = new StringBuilder
+    val seen               = new java.util.IdentityHashMap[Throwable, Boolean]()
     var current: Throwable = t
-    var depth = 0
-    while (
-      current != null && !seen.containsKey(current) && depth < MaxCauseChain
-    ) {
+    var depth              = 0
+    while current != null && !seen.containsKey(current) && depth < MaxCauseChain
+    do {
       seen.put(current, java.lang.Boolean.TRUE)
       val msg =
         Option(current.getMessage).getOrElse(current.getClass.getSimpleName)
       sb.append(redact(msg))
       current = current.getCause
       depth += 1
-      if (
-        current != null && !seen.containsKey(current) && depth < MaxCauseChain
-      )
-        sb.append("\nCaused by: ")
+      if current != null && !seen.containsKey(current) && depth < MaxCauseChain
+      then sb.append("\nCaused by: ")
     }
-    if (current != null && depth >= MaxCauseChain)
-      sb.append("\n[cause chain truncated]")
+    if current != null && depth >= MaxCauseChain then sb.append("\n[cause chain truncated]")
     sb.toString
   }
 }

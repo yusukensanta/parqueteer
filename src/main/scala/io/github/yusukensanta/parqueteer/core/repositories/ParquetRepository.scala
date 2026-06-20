@@ -1,51 +1,64 @@
 package io.github.yusukensanta.parqueteer.core.repositories
 
-import io.github.yusukensanta.parqueteer.core.models._
+import io.github.yusukensanta.parqueteer.core.models.*
 import io.github.yusukensanta.parqueteer.core.models.ParqueteerError.CloudAuthException
 import io.github.yusukensanta.parqueteer.cloud.CloudCredentialManager
 import com.github.mjakubowski84.parquet4s.{
+  Filter,
   ParquetReader,
-  RowParquetRecord,
-  Path => Parquet4sPath,
-  Filter
+  Path as Parquet4sPath,
+  RowParquetRecord
 }
 import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.{FileSystem, Path => HadoopPath}
+import org.apache.hadoop.fs.{FileSystem, Path as HadoopPath}
 import org.apache.parquet.hadoop.ParquetFileReader
-import org.apache.parquet.hadoop.metadata.BlockMetaData
+import org.apache.parquet.hadoop.example.ExampleParquetWriter
+import org.apache.parquet.hadoop.metadata.{BlockMetaData, ParquetMetadata}
 import org.apache.parquet.hadoop.util.HadoopInputFile
-import org.apache.parquet.schema.MessageType
+import org.apache.parquet.example.data.simple.SimpleGroupFactory
+import org.apache.parquet.format.converter.ParquetMetadataConverter
+import org.apache.parquet.hadoop.ParquetWriter as HParquetWriter
+import org.apache.parquet.example.data.Group
+import org.apache.parquet.schema.{GroupType, LogicalTypeAnnotation, MessageType}
+import org.apache.parquet.schema.LogicalTypeAnnotation.*
 import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
-import scala.concurrent.{
-  Future,
-  Await,
-  ExecutionContext,
-  ExecutionContextExecutorService
-}
-import java.util.concurrent.Executors
-import scala.util.{Try, Success, Using}
-import scala.jdk.CollectionConverters._
+import org.apache.parquet.schema.Type.Repetition
+import org.apache.parquet.ParquetReadOptions
+import org.slf4j.LoggerFactory
+import scala.concurrent.{Await, ExecutionContext, ExecutionContextExecutorService, Future}
+import java.io.{ByteArrayInputStream, FileNotFoundException, IOException}
+import java.nio.{ByteBuffer, ByteOrder}
+import java.nio.file.{Files, Paths}
+import java.util.concurrent.{Executors, TimeUnit, TimeoutException}
+import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong}
+import scala.util.{Success, Try, Using}
+import scala.jdk.CollectionConverters.*
 
-/** Public interface for Parquet file I/O. Implementations may choose to use
-  * Hadoop, in-memory fakes for testing, etc.
-  */
+/**
+ * Public interface for Parquet file I/O. Implementations may choose to use
+ * Hadoop, in-memory fakes for testing, etc.
+ */
 trait ParquetRepository {
   def readContent(file: ParquetFile, config: ReadConfig): Try[FileContent]
+
   def streamContent(
       file: ParquetFile,
       config: ReadConfig
   )(process: Map[String, CellValue] => Unit): Try[Long]
   def readSchema(file: ParquetFile): Try[ParquetSchema]
+
   def readFileInfo(
       file: ParquetFile
   ): Try[(ParquetSchema, FileMetadata, List[RowGroupInfo])]
   def readMetadata(file: ParquetFile): Try[FileMetadata]
+
   def writeContent(
       location: StorageLocation,
       data: List[Map[String, CellValue]],
       schema: Option[ParquetSchema],
       config: WriteConfig = WriteConfig()
   ): Try[Unit]
+
   def writeContentStream(
       location: StorageLocation,
       schema: ParquetSchema,
@@ -55,11 +68,13 @@ trait ParquetRepository {
   def readSchemaFields(file: ParquetFile): Try[List[FieldSummary]]
   def deleteFile(location: StorageLocation): Try[Unit]
   def readStats(file: ParquetFile): Try[FileStats]
+
   def cacheStats(): ParquetRepository.CacheStats =
     ParquetRepository.CacheStats(0, 0, 0, 0)
 }
 
 object ParquetRepository {
+
   final case class CacheStats(
       footerHits: Long,
       footerMisses: Long,
@@ -69,11 +84,13 @@ object ParquetRepository {
 }
 
 object HadoopParquetRepository {
+
   private val shutdownHookRegistered =
-    new java.util.concurrent.atomic.AtomicBoolean(false)
+    new AtomicBoolean(false)
 
   // Keep type alias for source compatibility with code referencing HadoopParquetRepository.CacheStats
   type CacheStats = ParquetRepository.CacheStats
+
   val CacheStats: ParquetRepository.CacheStats.type =
     ParquetRepository.CacheStats
 }
@@ -85,10 +102,12 @@ class HadoopParquetRepository(
     profile: Option[String] = None,
     region: Option[String] = None
 ) extends ParquetRepository {
+
   private val logger =
-    org.slf4j.LoggerFactory.getLogger(getClass)
+    LoggerFactory.getLogger(getClass)
   private val HadoopConfigCacheMaxSize = 64
-  private val FooterCacheMaxSize = 1024
+  private val FooterCacheMaxSize       = 1024
+
   private val hadoopConfigCache: java.util.Map[String, Configuration] =
     java.util.Collections.synchronizedMap(
       new java.util.LinkedHashMap[String, Configuration](
@@ -96,6 +115,7 @@ class HadoopParquetRepository(
         0.75f,
         true
       ) {
+
         override def removeEldestEntry(
             eldest: java.util.Map.Entry[String, Configuration]
         ): Boolean = size() > HadoopConfigCacheMaxSize
@@ -105,14 +125,14 @@ class HadoopParquetRepository(
   // Caches (MessageType, blocks) per file path for the lifetime of this repository instance.
   // Bounded LRU: evicts the least-recently-used entry when size exceeds FooterCacheMaxSize so
   // large multi-file merges don't grow the cache unboundedly.
-  private val footerCache
-      : java.util.Map[String, (MessageType, List[BlockMetaData])] =
+  private val footerCache: java.util.Map[String, (MessageType, List[BlockMetaData])] =
     java.util.Collections.synchronizedMap(
       new java.util.LinkedHashMap[String, (MessageType, List[BlockMetaData])](
         16,
         0.75f,
         true
       ) {
+
         override def removeEldestEntry(
             eldest: java.util.Map.Entry[
               String,
@@ -123,13 +143,16 @@ class HadoopParquetRepository(
     )
 
   private val footerCacheHits =
-    new java.util.concurrent.atomic.AtomicLong(0)
+    new AtomicLong(0)
+
   private val footerCacheMisses =
-    new java.util.concurrent.atomic.AtomicLong(0)
+    new AtomicLong(0)
+
   private val configCacheHits =
-    new java.util.concurrent.atomic.AtomicLong(0)
+    new AtomicLong(0)
+
   private val configCacheMisses =
-    new java.util.concurrent.atomic.AtomicLong(0)
+    new AtomicLong(0)
 
   override def cacheStats(): ParquetRepository.CacheStats =
     ParquetRepository.CacheStats(
@@ -140,7 +163,7 @@ class HadoopParquetRepository(
     )
 
   private val metadataConverter =
-    new org.apache.parquet.format.converter.ParquetMetadataConverter()
+    new ParquetMetadataConverter()
 
   private def configCacheKey(location: StorageLocation): String =
     location match {
@@ -154,7 +177,7 @@ class HadoopParquetRepository(
     }
 
   // Close S3A/GCS/ABFS connection pools on JVM exit to prevent background thread leaks
-  if (HadoopParquetRepository.shutdownHookRegistered.compareAndSet(false, true))
+  if HadoopParquetRepository.shutdownHookRegistered.compareAndSet(false, true) then
     Runtime.getRuntime.addShutdownHook(
       new Thread(() =>
         try FileSystem.closeAll()
@@ -169,29 +192,27 @@ class HadoopParquetRepository(
   private def readFooterBytes(inputFile: HadoopInputFile): Array[Byte] =
     Using.resource(inputFile.newStream()) { stream =>
       val fileLen = inputFile.getLength
-      if (fileLen < 12)
-        throw new java.io.IOException(
+      if fileLen < 12 then
+        throw new IOException(
           s"File too small to be a valid Parquet file (${fileLen} bytes)"
         )
       val tail = new Array[Byte](8)
       stream.seek(fileLen - 8)
       stream.readFully(tail)
-      if (
-        tail(4) != parquetMagic(0) || tail(5) != parquetMagic(1) ||
+      if tail(4) != parquetMagic(0) || tail(5) != parquetMagic(1) ||
         tail(6) != parquetMagic(2) || tail(7) != parquetMagic(3)
-      )
-        throw new java.io.IOException(
+      then
+        throw new IOException(
           "File does not end with PAR1 magic bytes — not a valid Parquet file"
         )
-      val footerLen = java.nio.ByteBuffer
+      val footerLen = ByteBuffer
         .wrap(tail, 0, 4)
-        .order(java.nio.ByteOrder.LITTLE_ENDIAN)
+        .order(ByteOrder.LITTLE_ENDIAN)
         .getInt
       val MaxFooterBytes = 256 * 1024 * 1024
-      if (
-        footerLen <= 0 || footerLen > fileLen - 8 || footerLen > MaxFooterBytes
-      )
-        throw new java.io.IOException(
+      if footerLen <= 0 || footerLen > fileLen - 8 || footerLen > MaxFooterBytes
+      then
+        throw new IOException(
           s"Invalid Parquet footer length: $footerLen (file length: $fileLen, max: ${MaxFooterBytes}B)"
         )
       stream.seek(fileLen - 8 - footerLen)
@@ -202,19 +223,19 @@ class HadoopParquetRepository(
 
   private def parseFooter(
       footerBytes: Array[Byte]
-  ): org.apache.parquet.hadoop.metadata.ParquetMetadata =
+  ): ParquetMetadata =
     metadataConverter.readParquetMetadata(
-      new java.io.ByteArrayInputStream(footerBytes),
-      org.apache.parquet.format.converter.ParquetMetadataConverter.NO_FILTER
+      new ByteArrayInputStream(footerBytes),
+      ParquetMetadataConverter.NO_FILTER
     )
 
   // Returns (formatVersion, createdBy) from the raw Thrift footer
   private def parseRawMeta(footerBytes: Array[Byte]): (String, String) = {
     val raw = org.apache.parquet.format.Util.readFileMetaData(
-      new java.io.ByteArrayInputStream(footerBytes)
+      new ByteArrayInputStream(footerBytes)
     )
     (
-      if (raw.version == 2) "2.0" else "1.0",
+      if raw.version == 2 then "2.0" else "1.0",
       Option(raw.created_by).getOrElse("")
     )
   }
@@ -232,14 +253,12 @@ class HadoopParquetRepository(
       .getOrElse(Map.empty)
     val columns = msgSchema.getColumns.asScala.map { col =>
       val colPath = col.getPath.mkString(".")
-      val pt = col.getPrimitiveType
-      val chunk = chunkMap.get(colPath)
+      val pt      = col.getPrimitiveType
+      val chunk   = chunkMap.get(colPath)
       ColumnInfo(
         name = colPath,
-        dataType =
-          logicalTypeName(pt.getPrimitiveTypeName, pt.getLogicalTypeAnnotation),
-        isOptional =
-          pt.getRepetition == org.apache.parquet.schema.Type.Repetition.OPTIONAL,
+        dataType = logicalTypeName(pt.getPrimitiveTypeName, pt.getLogicalTypeAnnotation),
+        isOptional = pt.getRepetition == Repetition.OPTIONAL,
         maxDefinitionLevel = col.getMaxDefinitionLevel,
         maxRepetitionLevel = col.getMaxRepetitionLevel,
         compressionType = chunk.map(_.getCodec.name()).getOrElse("UNKNOWN"),
@@ -269,7 +288,7 @@ class HadoopParquetRepository(
       case None =>
         footerCacheMisses.incrementAndGet()
         val footerBytes = readFooterBytes(HadoopInputFile.fromPath(path, conf))
-        val meta = parseFooter(footerBytes)
+        val meta        = parseFooter(footerBytes)
         val entry =
           (meta.getFileMetaData.getSchema, meta.getBlocks.asScala.toList)
         footerCache.put(key, entry)
@@ -279,20 +298,20 @@ class HadoopParquetRepository(
 
   // ── Public API ────────────────────────────────────────────────────────────
 
-  def readContent(file: ParquetFile, config: ReadConfig): Try[FileContent] = {
+  def readContent(file: ParquetFile, config: ReadConfig): Try[FileContent] =
     setupHadoopConfiguration(file.location).flatMap { hadoopConfig =>
       val cacheKey = new HadoopPath(file.location.path).toString
       val result = Try {
-        val hadoopPath = new HadoopPath(file.location.path)
+        val hadoopPath           = new HadoopPath(file.location.path)
         val (fileSchema, blocks) = getFooter(hadoopPath, hadoopConfig)
-        val totalRows = blocks.map(_.getRowCount).sum
+        val totalRows            = blocks.map(_.getRowCount).sum
 
         // filter forces sequential: parquet4s evaluates predicates during
         // deserialization, not at page-selection time, so parallel reads can't
         // short-circuit and the overhead exceeds any concurrency benefit.
         val useParallel = config.parallelism > 1 && config.filter.isEmpty
         val (rows, hasMoreAfterLimit) =
-          if (useParallel)
+          if useParallel then
             // getFooter above is already cached; readParallel reuses it
             (readParallel(hadoopPath, hadoopConfig, config), false)
           else {
@@ -335,14 +354,13 @@ class HadoopParquetRepository(
           }
         val hitLimit = config.maxRows.exists(rows.size.toLong >= _)
         val isPartial =
-          if (config.filter.isDefined) hitLimit && hasMoreAfterLimit
+          if config.filter.isDefined then hitLimit && hasMoreAfterLimit
           else hitLimit && rows.size.toLong < totalRows
         FileContent(rows = rows, totalRows = totalRows, isPartial = isPartial)
       }
-      if (result.isFailure) footerCache.remove(cacheKey)
+      if result.isFailure then footerCache.remove(cacheKey)
       result
     }
-  }
 
   // Apply the optional row-limit to any IterableOnce source. Centralizes the
   // `Some(limit) => take | None => iter` dance so callers can chain transforms.
@@ -351,23 +369,23 @@ class HadoopParquetRepository(
       maxRows: Option[Long]
   ): Iterator[A] =
     maxRows.fold(source.iterator) { n =>
-      val base = source.iterator
+      val base  = source.iterator
       var taken = 0L
       new Iterator[A] {
         def hasNext: Boolean = taken < n && base.hasNext
-        def next(): A = { val v = base.next(); taken += 1; v }
+        def next(): A        = { val v = base.next(); taken += 1; v }
       }
     }
 
   def streamContent(
       file: ParquetFile,
       config: ReadConfig
-  )(process: Map[String, CellValue] => Unit): Try[Long] = {
+  )(process: Map[String, CellValue] => Unit): Try[Long] =
     setupHadoopConfiguration(file.location).flatMap { hadoopConfig =>
       val cacheKey = new HadoopPath(file.location.path).toString
       val result = Try {
-        val path4s = Parquet4sPath(file.location.path)
-        val hadoopPath = new HadoopPath(file.location.path)
+        val path4s          = Parquet4sPath(file.location.path)
+        val hadoopPath      = new HadoopPath(file.location.path)
         val (fileSchema, _) = getFooter(hadoopPath, hadoopConfig)
         val rawBinaryFields =
           ParquetRecordDecoder.rawBinaryFieldsFor(fileSchema)
@@ -378,7 +396,7 @@ class HadoopParquetRepository(
         Using.resource(
           openParquetReader(path4s, hadoopConfig, config, fileSchema)
         ) { source =>
-          val iter = applyMaxRows(source.iterator, config.maxRows)
+          val iter  = applyMaxRows(source.iterator, config.maxRows)
           var count = 0L
           iter.foreach { record =>
             process(
@@ -397,10 +415,9 @@ class HadoopParquetRepository(
           count
         }
       }
-      if (result.isFailure) footerCache.remove(cacheKey)
+      if result.isFailure then footerCache.remove(cacheKey)
       result
     }
-  }
 
   private def readParallel(
       path: HadoopPath,
@@ -417,7 +434,7 @@ class HadoopParquetRepository(
       case Some(limit) =>
         var cumulative = 0L
         blocks.takeWhile { block =>
-          if (cumulative >= limit) false
+          if cumulative >= limit then false
           else { cumulative += block.getRowCount; true }
         }
     }
@@ -442,19 +459,16 @@ class HadoopParquetRepository(
         requestedSchema.getColumns.asScala.map(_.getPath.mkString(".")).toSet
       // Track how many null-fabricated rows are still allotted across all futures so
       // total null-row allocations never exceed maxRows regardless of group count.
-      val nullRowsAllotted = new java.util.concurrent.atomic.AtomicLong(
+      val nullRowsAllotted = new AtomicLong(
         config.maxRows.getOrElse(Long.MaxValue)
       )
       val futures = selectedBlocks.map { block =>
         Future {
           val colChunks = block.getColumns.asScala.toList
           val relevantChunks =
-            if (requestedNames.isEmpty) colChunks
-            else
-              colChunks.filter(c =>
-                requestedNames.contains(c.getPath.toDotString)
-              )
-          if (relevantChunks.isEmpty) {
+            if requestedNames.isEmpty then colChunks
+            else colChunks.filter(c => requestedNames.contains(c.getPath.toDotString))
+          if relevantChunks.isEmpty then {
             // Row group predates the requested columns (intra-file schema evolution).
             // Emit null-valued rows to match the sequential path: the schema declares
             // the columns optional, so absent values are Null, not omitted rows.
@@ -466,7 +480,7 @@ class HadoopParquetRepository(
               .map(col => col.getPath.mkString(".") -> CellValue.Null)
               .toMap
             val rowCount = block.getRowCount
-            if (rowCount > Int.MaxValue)
+            if rowCount > Int.MaxValue then
               throw new IllegalStateException(
                 s"Row group has $rowCount rows — exceeds Int.MaxValue; use sequential read (--parallelism 1)"
               )
@@ -481,7 +495,7 @@ class HadoopParquetRepository(
             val rangeStart = relevantChunks.map(_.getStartingPos).min
             val rangeEnd =
               relevantChunks.map(c => c.getStartingPos + c.getTotalSize).max
-            val readOptions = org.apache.parquet.ParquetReadOptions
+            val readOptions = ParquetReadOptions
               .builder()
               .withRange(rangeStart, rangeEnd)
               .build()
@@ -492,7 +506,7 @@ class HadoopParquetRepository(
               )
             ) { reader =>
               val pageStore = reader.readNextRowGroup()
-              if (pageStore == null) List.empty[Map[String, CellValue]]
+              if pageStore == null then List.empty[Map[String, CellValue]]
               else
                 ParquetRecordDecoder.decodePageStore(
                   pageStore,
@@ -506,7 +520,7 @@ class HadoopParquetRepository(
       val allRows =
         try Await.result(Future.sequence(futures), config.readTimeout).flatten
         catch {
-          case _: java.util.concurrent.TimeoutException =>
+          case _: TimeoutException =>
             forciblyShutdown = true
             ec.shutdownNow()
             throw new RuntimeException(
@@ -520,7 +534,7 @@ class HadoopParquetRepository(
         }
       config.maxRows match {
         case Some(limit) =>
-          if (limit >= allRows.size.toLong) allRows
+          if limit >= allRows.size.toLong then allRows
           // limit < allRows.size (an Int), so limit fits in Int — safe narrowing.
           else allRows.take(limit.toInt)
         case None => allRows
@@ -529,12 +543,11 @@ class HadoopParquetRepository(
       rawEc.shutdown()
       // After shutdownNow() the pool may linger up to 30s draining interrupted tasks —
       // that is expected; only warn when a graceful shutdown stalls unexpectedly.
-      if (
-        !forciblyShutdown && !rawEc.awaitTermination(
+      if !forciblyShutdown && !rawEc.awaitTermination(
           30,
-          java.util.concurrent.TimeUnit.SECONDS
+          TimeUnit.SECONDS
         )
-      )
+      then
         Console.err.println(
           "[parqueteer] warning: parallel read executor did not terminate within 30s — some cloud connections may remain open"
         )
@@ -582,7 +595,7 @@ class HadoopParquetRepository(
   def readSchema(file: ParquetFile): Try[ParquetSchema] =
     setupHadoopConfiguration(file.location).flatMap { hadoopConfig =>
       Try {
-        val path = new HadoopPath(file.location.path)
+        val path                = new HadoopPath(file.location.path)
         val (msgSchema, blocks) = getFooter(path, hadoopConfig)
         buildParquetSchema(msgSchema, blocks)
       }
@@ -590,26 +603,26 @@ class HadoopParquetRepository(
 
   def readFileInfo(
       file: ParquetFile
-  ): Try[(ParquetSchema, FileMetadata, List[RowGroupInfo])] = {
+  ): Try[(ParquetSchema, FileMetadata, List[RowGroupInfo])] =
     setupHadoopConfiguration(file.location).flatMap { hadoopConfig =>
       Try {
-        val path = new HadoopPath(file.location.path)
-        val fileStatus = path.getFileSystem(hadoopConfig).getFileStatus(path)
-        val inputFile = HadoopInputFile.fromStatus(fileStatus, hadoopConfig)
-        val footerBytes = readFooterBytes(inputFile)
+        val path                 = new HadoopPath(file.location.path)
+        val fileStatus           = path.getFileSystem(hadoopConfig).getFileStatus(path)
+        val inputFile            = HadoopInputFile.fromStatus(fileStatus, hadoopConfig)
+        val footerBytes          = readFooterBytes(inputFile)
         val (version, createdBy) = parseRawMeta(footerBytes)
-        val meta = parseFooter(footerBytes)
-        val blocks = meta.getBlocks.asScala.toList
-        val msgSchema = meta.getFileMetaData.getSchema
-        val ratio = calculateCompressionRatio(blocks)
-        val parsedSchema = buildParquetSchema(msgSchema, blocks)
-        val codecs = parsedSchema.columns.map(_.compressionType).distinct
+        val meta                 = parseFooter(footerBytes)
+        val blocks               = meta.getBlocks.asScala.toList
+        val msgSchema            = meta.getFileMetaData.getSchema
+        val ratio                = calculateCompressionRatio(blocks)
+        val parsedSchema         = buildParquetSchema(msgSchema, blocks)
+        val codecs               = parsedSchema.columns.map(_.compressionType).distinct
         val codec =
-          if (codecs.isEmpty) None
-          else if (codecs.size == 1) Some(codecs.head)
+          if codecs.isEmpty then None
+          else if codecs.size == 1 then Some(codecs.head)
           else Some("MIXED")
         val avgRGSize =
-          if (blocks.isEmpty) None
+          if blocks.isEmpty then None
           else Some(blocks.map(_.getTotalByteSize).sum / blocks.size)
         val metadata = FileMetadata(
           fileSize = fileStatus.getLen,
@@ -635,7 +648,6 @@ class HadoopParquetRepository(
         (parsedSchema, metadata, rowGroups)
       }
     }
-  }
 
   def readMetadata(file: ParquetFile): Try[FileMetadata] =
     readFileInfo(file).map { case (_, meta, _) => meta }
@@ -645,15 +657,11 @@ class HadoopParquetRepository(
       location: StorageLocation,
       hadoopConfig: Configuration,
       config: WriteConfig
-  ): org.apache.parquet.hadoop.ParquetWriter[
-    org.apache.parquet.example.data.Group
-  ] = {
-    import org.apache.parquet.hadoop.example.ExampleParquetWriter
-
+  ): HParquetWriter[Group] = {
     location match {
       case LocalPath(p) =>
-        val parent = java.nio.file.Paths.get(p).getParent
-        if (parent != null) java.nio.file.Files.createDirectories(parent)
+        val parent = Paths.get(p).getParent
+        if parent != null then Files.createDirectories(parent)
       case _ =>
     }
 
@@ -676,11 +684,9 @@ class HadoopParquetRepository(
       data: List[Map[String, CellValue]],
       schema: Option[ParquetSchema],
       config: WriteConfig = WriteConfig()
-  ): Try[Unit] = {
+  ): Try[Unit] =
     setupHadoopConfiguration(location).flatMap { hadoopConfig =>
       Try {
-        import org.apache.parquet.example.data.simple.SimpleGroupFactory
-
         val parquetSchema = schema match {
           case Some(ps) => ParquetSchemaBuilder.buildMessageType(ps)
           case None     =>
@@ -702,52 +708,47 @@ class HadoopParquetRepository(
         }
       }
     }
-  }
 
   def writeContentStream(
       location: StorageLocation,
       schema: ParquetSchema,
       config: WriteConfig = WriteConfig()
-  )(feed: (Map[String, CellValue] => Unit) => Unit): Try[Long] = {
+  )(feed: (Map[String, CellValue] => Unit) => Unit): Try[Long] =
     setupHadoopConfiguration(location).flatMap { hadoopConfig =>
       Try {
-        import org.apache.parquet.example.data.simple.SimpleGroupFactory
-
         val parquetSchema = ParquetSchemaBuilder.buildMessageType(schema)
 
-        var count = 0L
+        var count   = 0L
         val factory = new SimpleGroupFactory(parquetSchema)
         // Using preserves the feed exception as primary and adds close failure as suppressed,
         // preventing writer.close() from masking the original MergeStreamException.
         scala.util
-          .Using(buildWriter(parquetSchema, location, hadoopConfig, config)) {
-            w =>
-              feed { row =>
-                val group = factory.newGroup()
-                ParquetWriteOps.writeRowToGroup(group, row, parquetSchema)
-                w.write(group)
-                count += 1
-              }
+          .Using(buildWriter(parquetSchema, location, hadoopConfig, config)) { w =>
+            feed { row =>
+              val group = factory.newGroup()
+              ParquetWriteOps.writeRowToGroup(group, row, parquetSchema)
+              w.write(group)
+              count += 1
+            }
           }
           .get
         count
       }
     }
-  }
 
   def validateFile(
       file: ParquetFile,
       deep: Boolean = false
-  ): Try[List[String]] = {
+  ): Try[List[String]] =
     setupHadoopConfiguration(file.location).flatMap { hadoopConfig =>
       Try {
-        val path = new HadoopPath(file.location.path)
+        val path   = new HadoopPath(file.location.path)
         val issues = scala.collection.mutable.ListBuffer[String]()
 
         Try(
           ParquetFileReader.open(HadoopInputFile.fromPath(path, hadoopConfig))
         ) match {
-          case scala.util.Failure(_: java.io.FileNotFoundException) =>
+          case scala.util.Failure(_: FileNotFoundException) =>
             issues += "File does not exist"
           case scala.util.Failure(ex) =>
             issues += s"File cannot be opened as Parquet: ${ex.getMessage}"
@@ -758,19 +759,18 @@ class HadoopParquetRepository(
                   issues += s"Cannot read file footer: ${ex.getMessage}"
                 case scala.util.Success(footer) =>
                   val schema = footer.getFileMetaData.getSchema
-                  if (schema.getColumns.isEmpty)
-                    issues += "Schema has no columns"
+                  if schema.getColumns.isEmpty then issues += "Schema has no columns"
 
                   val blocks = footer.getBlocks.asScala.toList
-                  if (blocks.isEmpty) issues += "File has no row groups"
+                  if blocks.isEmpty then issues += "File has no row groups"
 
                   val indicesToCheck = spotCheckIndices(blocks.size, deep)
-                  var readerBroken = false
+                  var readerBroken   = false
                   blocks.zipWithIndex.foreach { case (block, index) =>
-                    if (block.getRowCount <= 0)
+                    if block.getRowCount <= 0 then
                       issues += s"Row group $index has invalid row count: ${block.getRowCount}"
-                    if (!readerBroken) {
-                      if (indicesToCheck.contains(index)) {
+                    if !readerBroken then {
+                      if indicesToCheck.contains(index) then {
                         Try(r.readNextRowGroup()) match {
                           case scala.util.Failure(ex) =>
                             issues += s"Row group $index data is corrupt or truncated: ${ex.getMessage}"
@@ -797,13 +797,12 @@ class HadoopParquetRepository(
         issues.toList
       }
     }
-  }
 
   // Returns the set of row-group indices to decompress during validation.
   // In deep mode (or for small files), checks all groups.
   // Otherwise spot-checks first, middle, and last to bound I/O cost.
   private def spotCheckIndices(blockCount: Int, deep: Boolean): Set[Int] =
-    if (deep || blockCount <= 3) (0 until blockCount).toSet
+    if deep || blockCount <= 3 then (0 until blockCount).toSet
     else Set(0, blockCount / 2, blockCount - 1)
 
   def readSchemaFields(
@@ -811,11 +810,11 @@ class HadoopParquetRepository(
   ): Try[List[FieldSummary]] =
     setupHadoopConfiguration(file.location).flatMap { hadoopConfig =>
       Try {
-        val path = new HadoopPath(file.location.path)
+        val path        = new HadoopPath(file.location.path)
         val (schema, _) = getFooter(path, hadoopConfig)
         schema.getFields.asScala.toList.map { field =>
           val typeName =
-            if (field.isPrimitive) {
+            if field.isPrimitive then {
               val pf = field.asPrimitiveType()
               logicalTypeName(
                 pf.getPrimitiveTypeName,
@@ -823,66 +822,62 @@ class HadoopParquetRepository(
               )
             } else groupTypeCanonical(field.asGroupType())
           val optional =
-            field.getRepetition == org.apache.parquet.schema.Type.Repetition.OPTIONAL
+            field.getRepetition == Repetition.OPTIONAL
           FieldSummary(field.getName, typeName, optional)
         }
       }
     }
 
   private def logicalTypeName(
-      primitive: org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName,
-      annotation: org.apache.parquet.schema.LogicalTypeAnnotation
-  ): String = {
-    import org.apache.parquet.schema.LogicalTypeAnnotation
-    if (annotation == null) primitive.name()
+      primitive: PrimitiveTypeName,
+      annotation: LogicalTypeAnnotation
+  ): String =
+    if annotation == null then primitive.name()
     else
       annotation match {
-        case _: LogicalTypeAnnotation.DateLogicalTypeAnnotation => "DATE"
-        case ts: LogicalTypeAnnotation.TimestampLogicalTypeAnnotation =>
+        case _: DateLogicalTypeAnnotation => "DATE"
+        case ts: TimestampLogicalTypeAnnotation =>
           ts.getUnit match {
             case LogicalTypeAnnotation.TimeUnit.MICROS => "TIMESTAMP_MICROS"
             case LogicalTypeAnnotation.TimeUnit.NANOS  => "TIMESTAMP_NANOS"
             case _                                     => "TIMESTAMP_MILLIS"
           }
-        case _: LogicalTypeAnnotation.StringLogicalTypeAnnotation => "STRING"
-        case _: LogicalTypeAnnotation.EnumLogicalTypeAnnotation   => "STRING"
-        case _: LogicalTypeAnnotation.JsonLogicalTypeAnnotation   => "STRING"
-        case dec: LogicalTypeAnnotation.DecimalLogicalTypeAnnotation =>
+        case _: StringLogicalTypeAnnotation => "STRING"
+        case _: EnumLogicalTypeAnnotation   => "STRING"
+        case _: JsonLogicalTypeAnnotation   => "STRING"
+        case dec: DecimalLogicalTypeAnnotation =>
           s"DECIMAL(${dec.getPrecision},${dec.getScale})"
         case _ =>
           primitive match {
-            case org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName.INT96 =>
-              "TIMESTAMP_MICROS"
-            case org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY =>
-              "BINARY"
-            case _ => primitive.name()
+            case PrimitiveTypeName.INT96                => "TIMESTAMP_MICROS"
+            case PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY => "BINARY"
+            case _                                      => primitive.name()
           }
       }
-  }
 
   def deleteFile(location: StorageLocation): Try[Unit] =
     setupHadoopConfiguration(location).flatMap { hadoopConfig =>
       Try {
         val path = new HadoopPath(location.path)
-        val fs = path.getFileSystem(hadoopConfig)
-        if (!fs.delete(path, false) && fs.exists(path))
-          throw new java.io.IOException(s"Failed to delete ${location.path}")
+        val fs   = path.getFileSystem(hadoopConfig)
+        if !fs.delete(path, false) && fs.exists(path) then
+          throw new IOException(s"Failed to delete ${location.path}")
       }
     }
 
   def readStats(file: ParquetFile): Try[FileStats] =
     setupHadoopConfiguration(file.location).flatMap { hadoopConfig =>
       Try {
-        val path = new HadoopPath(file.location.path)
+        val path             = new HadoopPath(file.location.path)
         val (schema, blocks) = getFooter(path, hadoopConfig)
-        val totalRows = blocks.map(_.getRowCount).sum
+        val totalRows        = blocks.map(_.getRowCount).sum
 
         val columns = schema.getColumns.asScala.toList.map { colDescriptor =>
-          val colPath = colDescriptor.getPath.mkString(".")
-          val pt = colDescriptor.getPrimitiveType
-          val typeName = pt.getPrimitiveTypeName
+          val colPath     = colDescriptor.getPath.mkString(".")
+          val pt          = colDescriptor.getPrimitiveType
+          val typeName    = pt.getPrimitiveTypeName
           val logicalType = pt.getLogicalTypeAnnotation
-          val dataType = logicalTypeName(typeName, logicalType)
+          val dataType    = logicalTypeName(typeName, logicalType)
 
           val chunkStats = blocks
             .flatMap { block =>
@@ -894,228 +889,19 @@ class HadoopParquetRepository(
 
           val nullCount = {
             val counts = chunkStats.filter(_.isNumNullsSet).map(_.getNumNulls)
-            if (counts.nonEmpty) counts.sum else -1L
+            if counts.nonEmpty then counts.sum else -1L
           }
 
           val withValues =
             chunkStats.filter(s => !s.isEmpty && s.hasNonNullValue)
           val (minVal, maxVal) =
-            computeTypedMinMax(withValues, typeName, logicalType)
+            StatsComputer.computeTypedMinMax(withValues, typeName, logicalType)
 
           ColumnStats(colPath, dataType, nullCount, minVal, maxVal)
         }
 
         FileStats(columns, totalRows, blocks.size.toLong)
       }
-    }
-
-  private def numericMinMax[T: Ordering](
-      withValues: List[org.apache.parquet.column.statistics.Statistics[?]],
-      extract: PartialFunction[Any, T],
-      filter: T => Boolean = (_: T) => true
-  ): (Option[String], Option[String]) = {
-    val mins =
-      withValues.flatMap(s =>
-        Option(s.genericGetMin()).collect(extract).filter(filter)
-      )
-    val maxs =
-      withValues.flatMap(s =>
-        Option(s.genericGetMax()).collect(extract).filter(filter)
-      )
-    (mins.minOption.map(_.toString), maxs.maxOption.map(_.toString))
-  }
-
-  private def computeTypedMinMax(
-      withValues: List[org.apache.parquet.column.statistics.Statistics[?]],
-      typeName: PrimitiveTypeName,
-      logicalType: org.apache.parquet.schema.LogicalTypeAnnotation
-  ): (Option[String], Option[String]) = {
-    import org.apache.parquet.schema.LogicalTypeAnnotation
-    logicalType match {
-      case _: LogicalTypeAnnotation.DateLogicalTypeAnnotation =>
-        val (mn, mx) = numericMinMax[Int](
-          withValues,
-          { case n: java.lang.Integer => n.intValue() }
-        )
-        (
-          mn.map(v => java.time.LocalDate.ofEpochDay(v.toLong).toString),
-          mx.map(v => java.time.LocalDate.ofEpochDay(v.toLong).toString)
-        )
-
-      case ts: LogicalTypeAnnotation.TimestampLogicalTypeAnnotation =>
-        def rawToInstant(raw: String): String = {
-          val v = raw.toLong
-          ts.getUnit match {
-            case LogicalTypeAnnotation.TimeUnit.MICROS =>
-              java.time.Instant
-                .ofEpochSecond(
-                  Math.floorDiv(v, 1_000_000L),
-                  Math.floorMod(v, 1_000_000L) * 1000L
-                )
-                .toString
-            case LogicalTypeAnnotation.TimeUnit.NANOS =>
-              java.time.Instant
-                .ofEpochSecond(
-                  Math.floorDiv(v, 1_000_000_000L),
-                  Math.floorMod(v, 1_000_000_000L)
-                )
-                .toString
-            case _ => java.time.Instant.ofEpochMilli(v).toString
-          }
-        }
-        val (mn, mx) = numericMinMax[Long](
-          withValues,
-          { case n: java.lang.Long => n.longValue() }
-        )
-        (mn.map(rawToInstant), mx.map(rawToInstant))
-
-      case dec: LogicalTypeAnnotation.DecimalLogicalTypeAnnotation =>
-        val scale = dec.getScale
-        def applyScale(raw: String): String =
-          new java.math.BigDecimal(
-            new java.math.BigInteger(raw),
-            scale
-          ).toPlainString
-        if (typeName == PrimitiveTypeName.INT32) {
-          val (mn, mx) = numericMinMax[Int](
-            withValues,
-            { case n: java.lang.Integer => n.intValue() }
-          )
-          (mn.map(applyScale), mx.map(applyScale))
-        } else if (typeName == PrimitiveTypeName.INT64) {
-          val (mn, mx) = numericMinMax[Long](
-            withValues,
-            { case n: java.lang.Long => n.longValue() }
-          )
-          (mn.map(applyScale), mx.map(applyScale))
-        } else {
-          // BINARY / FIXED_LEN_BYTE_ARRAY DECIMAL: stats carry two's-complement unscaled bytes
-          def fromBin(v: Any): Option[scala.math.BigDecimal] =
-            PartialFunction.condOpt(v) {
-              case bin: org.apache.parquet.io.api.Binary =>
-                scala.math.BigDecimal(
-                  new java.math.BigDecimal(
-                    new java.math.BigInteger(bin.getBytes),
-                    scale
-                  )
-                )
-            }
-          val mins =
-            withValues.flatMap(s => Option(s.genericGetMin()).flatMap(fromBin))
-          val maxs =
-            withValues.flatMap(s => Option(s.genericGetMax()).flatMap(fromBin))
-          (
-            mins.minOption.map(_.underlying.toPlainString),
-            maxs.maxOption.map(_.underlying.toPlainString)
-          )
-        }
-
-      case _ =>
-        typeName match {
-          case PrimitiveTypeName.INT32 =>
-            numericMinMax[Int](
-              withValues,
-              { case n: java.lang.Integer => n.intValue() }
-            )
-          case PrimitiveTypeName.INT64 =>
-            numericMinMax[Long](
-              withValues,
-              { case n: java.lang.Long => n.longValue() }
-            )
-          case PrimitiveTypeName.FLOAT =>
-            numericMinMax[Float](
-              withValues,
-              { case n: java.lang.Float => n.floatValue() },
-              filter = v => !v.isNaN
-            )
-          case PrimitiveTypeName.DOUBLE =>
-            numericMinMax[Double](
-              withValues,
-              { case n: java.lang.Double => n.doubleValue() },
-              filter = v => !v.isNaN
-            )
-          case PrimitiveTypeName.BOOLEAN =>
-            val mins = withValues.flatMap(s =>
-              Option(s.genericGetMin()).collect { case b: java.lang.Boolean =>
-                b.booleanValue()
-              }
-            )
-            val maxs = withValues.flatMap(s =>
-              Option(s.genericGetMax()).collect { case b: java.lang.Boolean =>
-                b.booleanValue()
-              }
-            )
-            (mins.minOption.map(_.toString), maxs.maxOption.map(_.toString))
-          case PrimitiveTypeName.INT96 =>
-            // Most writers (Spark, Hive) do not emit min/max stats for INT96.
-            // When stats are present, decode each 12-byte Binary using the same
-            // Julian-day layout as the read path and format as ISO-8601 UTC.
-            def decodeInt96Stat(v: Any): Option[String] = v match {
-              case b: org.apache.parquet.io.api.Binary if b.length() == 12 =>
-                ParquetRecordDecoder.decodeInt96Binary(b.getBytes) match {
-                  case CellValue.Ts(inst) => Some(inst.toString)
-                  case _                  => None
-                }
-              case _ => None
-            }
-            val minStrs =
-              withValues.flatMap(s =>
-                Option(s.genericGetMin()).flatMap(decodeInt96Stat)
-              )
-            val maxStrs =
-              withValues.flatMap(s =>
-                Option(s.genericGetMax()).flatMap(decodeInt96Stat)
-              )
-            // ISO-8601 UTC strings sort lexicographically == chronologically
-            (minStrs.minOption, maxStrs.maxOption)
-          case _ =>
-            if (
-              typeName == PrimitiveTypeName.BINARY ||
-              typeName == PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY
-            ) {
-              // Compare Binary objects byte-by-byte (not as UTF-8 strings) so the
-              // cross-row-group min/max is correct even for non-UTF-8 binary data.
-              implicit val binOrd: Ordering[org.apache.parquet.io.api.Binary] =
-                (a, b) => java.util.Arrays.compare(a.getBytes, b.getBytes)
-              val mins = withValues.flatMap(s =>
-                Option(s.genericGetMin()).collect {
-                  case b: org.apache.parquet.io.api.Binary => b
-                }
-              )
-              val maxs = withValues.flatMap(s =>
-                Option(s.genericGetMax()).collect {
-                  case b: org.apache.parquet.io.api.Binary => b
-                }
-              )
-              (
-                mins.minOption.map(_.toStringUsingUTF8),
-                maxs.maxOption.map(_.toStringUsingUTF8)
-              )
-            } else {
-              val minVal = withValues
-                .flatMap(s =>
-                  Option(s.genericGetMin()).map(v => formatStatVal(v, typeName))
-                )
-                .minOption
-              val maxVal = withValues
-                .flatMap(s =>
-                  Option(s.genericGetMax()).map(v => formatStatVal(v, typeName))
-                )
-                .maxOption
-              (minVal, maxVal)
-            }
-        }
-    }
-  }
-
-  private def formatStatVal(value: Any, typeName: PrimitiveTypeName): String =
-    typeName match {
-      case PrimitiveTypeName.BINARY | PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY =>
-        value match {
-          case b: org.apache.parquet.io.api.Binary => b.toStringUsingUTF8
-          case other                               => other.toString
-        }
-      case _ => value.toString
     }
 
   private def setupHadoopConfiguration(
@@ -1160,7 +946,7 @@ class HadoopParquetRepository(
   private def calculateCompressionRatio(
       rowGroups: List[BlockMetaData]
   ): Option[Double] =
-    if (rowGroups.isEmpty) None
+    if rowGroups.isEmpty then None
     else {
       val (totalUncompressed, totalCompressed) = rowGroups.foldLeft((0L, 0L)) {
         case ((uncompressed, compressed), rowGroup) =>
@@ -1175,12 +961,12 @@ class HadoopParquetRepository(
     }
 
   private def groupTypeCanonical(
-      gt: org.apache.parquet.schema.GroupType
+      gt: GroupType
   ): String = {
     val fields = gt.getFields.asScala
       .map { f =>
         val t =
-          if (f.isPrimitive) f.asPrimitiveType().getPrimitiveTypeName.name()
+          if f.isPrimitive then f.asPrimitiveType().getPrimitiveTypeName.name()
           else groupTypeCanonical(f.asGroupType())
         s"${f.getName}:$t"
       }

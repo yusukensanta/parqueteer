@@ -1,17 +1,13 @@
 package io.github.yusukensanta.parqueteer.core.repositories
 
-import io.github.yusukensanta.parqueteer.core.models.{
-  CellValue,
-  ColumnInfo,
-  ParquetSchema
-}
+import io.github.yusukensanta.parqueteer.core.models.{CellValue, ColumnInfo, ParquetSchema}
 import org.apache.parquet.schema.{MessageType, MessageTypeParser}
 import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
 import org.apache.parquet.schema.LogicalTypeAnnotation
 import org.apache.parquet.schema.Type.Repetition
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import scala.jdk.CollectionConverters._
+import scala.jdk.CollectionConverters.*
 
 class ParquetSchemaBuilderTest extends AnyFlatSpec with Matchers {
 
@@ -353,7 +349,7 @@ class ParquetSchemaBuilderTest extends AnyFlatSpec with Matchers {
 
   it should "infer INT32 from CellValue.I32 values" in {
     val data = List(Map[String, CellValue]("count" -> CellValue.I32(42)))
-    val mt = ParquetSchemaBuilder.inferSchemaFromData(data)
+    val mt   = ParquetSchemaBuilder.inferSchemaFromData(data)
     fieldByName(
       mt,
       "count"
@@ -369,7 +365,7 @@ class ParquetSchemaBuilderTest extends AnyFlatSpec with Matchers {
 
   it should "infer DOUBLE from CellValue.F64 values" in {
     val data = List(Map[String, CellValue]("score" -> CellValue.F64(9.5)))
-    val mt = ParquetSchemaBuilder.inferSchemaFromData(data)
+    val mt   = ParquetSchemaBuilder.inferSchemaFromData(data)
     fieldByName(
       mt,
       "score"
@@ -378,7 +374,7 @@ class ParquetSchemaBuilderTest extends AnyFlatSpec with Matchers {
 
   it should "infer FLOAT from CellValue.F32 values" in {
     val data = List(Map[String, CellValue]("ratio" -> CellValue.F32(0.5f)))
-    val mt = ParquetSchemaBuilder.inferSchemaFromData(data)
+    val mt   = ParquetSchemaBuilder.inferSchemaFromData(data)
     fieldByName(
       mt,
       "ratio"
@@ -387,7 +383,7 @@ class ParquetSchemaBuilderTest extends AnyFlatSpec with Matchers {
 
   it should "infer BOOLEAN from CellValue.Bool values" in {
     val data = List(Map[String, CellValue]("active" -> CellValue.Bool(true)))
-    val mt = ParquetSchemaBuilder.inferSchemaFromData(data)
+    val mt   = ParquetSchemaBuilder.inferSchemaFromData(data)
     fieldByName(
       mt,
       "active"
@@ -400,7 +396,7 @@ class ParquetSchemaBuilderTest extends AnyFlatSpec with Matchers {
         "dob" -> CellValue.Date(java.time.LocalDate.of(1990, 1, 1))
       )
     )
-    val mt = ParquetSchemaBuilder.inferSchemaFromData(data)
+    val mt    = ParquetSchemaBuilder.inferSchemaFromData(data)
     val field = fieldByName(mt, "dob")
     field.getPrimitiveTypeName shouldBe PrimitiveTypeName.INT32
     field.getLogicalTypeAnnotation shouldBe LogicalTypeAnnotation.dateType()
@@ -412,7 +408,7 @@ class ParquetSchemaBuilderTest extends AnyFlatSpec with Matchers {
         "created_at" -> CellValue.Ts(java.time.Instant.now())
       )
     )
-    val mt = ParquetSchemaBuilder.inferSchemaFromData(data)
+    val mt    = ParquetSchemaBuilder.inferSchemaFromData(data)
     val field = fieldByName(mt, "created_at")
     field.getPrimitiveTypeName shouldBe PrimitiveTypeName.INT64
     field.getLogicalTypeAnnotation shouldBe a[
@@ -421,8 +417,8 @@ class ParquetSchemaBuilderTest extends AnyFlatSpec with Matchers {
   }
 
   it should "infer BINARY with string annotation from CellValue.Str values" in {
-    val data = List(Map[String, CellValue]("name" -> CellValue.Str("Alice")))
-    val mt = ParquetSchemaBuilder.inferSchemaFromData(data)
+    val data  = List(Map[String, CellValue]("name" -> CellValue.Str("Alice")))
+    val mt    = ParquetSchemaBuilder.inferSchemaFromData(data)
     val field = fieldByName(mt, "name")
     field.getPrimitiveTypeName shouldBe PrimitiveTypeName.BINARY
     field.getLogicalTypeAnnotation shouldBe LogicalTypeAnnotation.stringType()
@@ -431,7 +427,7 @@ class ParquetSchemaBuilderTest extends AnyFlatSpec with Matchers {
   it should "infer BINARY+DECIMAL for CellValue.Dec (not STRING or DOUBLE)" in {
     val data =
       List(Map[String, CellValue]("x" -> CellValue.Dec(BigDecimal(42))))
-    val mt = ParquetSchemaBuilder.inferSchemaFromData(data)
+    val mt    = ParquetSchemaBuilder.inferSchemaFromData(data)
     val field = fieldByName(mt, "x")
     field.getPrimitiveTypeName shouldBe PrimitiveTypeName.BINARY
     field.getLogicalTypeAnnotation shouldBe a[
@@ -442,7 +438,7 @@ class ParquetSchemaBuilderTest extends AnyFlatSpec with Matchers {
   it should "use OPTIONAL repetition for all inferred fields" in {
     val data = List(
       Map[String, CellValue](
-        "id" -> CellValue.I64(1L),
+        "id"   -> CellValue.I64(1L),
         "name" -> CellValue.Str("Bob")
       )
     )
@@ -454,7 +450,7 @@ class ParquetSchemaBuilderTest extends AnyFlatSpec with Matchers {
 
   it should "collect keys from all rows in the data list" in {
     val data = List(
-      Map[String, CellValue]("id" -> CellValue.I64(1L)),
+      Map[String, CellValue]("id"   -> CellValue.I64(1L)),
       Map[String, CellValue]("name" -> CellValue.Str("Alice"))
     )
     val mt = ParquetSchemaBuilder.inferSchemaFromData(data)
@@ -475,7 +471,7 @@ class ParquetSchemaBuilderTest extends AnyFlatSpec with Matchers {
   it should "infer BINARY for columns where all values are CellValue.Null" in {
     val data = List(
       Map[String, CellValue](
-        "id" -> CellValue.I64(1L),
+        "id"   -> CellValue.I64(1L),
         "blob" -> CellValue.Null
       )
     )
@@ -489,7 +485,7 @@ class ParquetSchemaBuilderTest extends AnyFlatSpec with Matchers {
 
   it should "name the resulting message type 'root'" in {
     val data = List(Map[String, CellValue]("col" -> CellValue.Str("val")))
-    val mt = ParquetSchemaBuilder.inferSchemaFromData(data)
+    val mt   = ParquetSchemaBuilder.inferSchemaFromData(data)
     mt.getName shouldBe "root"
   }
 
@@ -616,7 +612,7 @@ class ParquetSchemaBuilderTest extends AnyFlatSpec with Matchers {
     val data = List(
       Map[String, CellValue]("price" -> CellValue.Dec(BigDecimal("9.99")))
     )
-    val mt = ParquetSchemaBuilder.inferSchemaFromData(data)
+    val mt    = ParquetSchemaBuilder.inferSchemaFromData(data)
     val field = mt.getFields.get(0).asPrimitiveType
     field.getPrimitiveTypeName shouldBe PrimitiveTypeName.BINARY
     field.getLogicalTypeAnnotation shouldBe a[
@@ -629,7 +625,7 @@ class ParquetSchemaBuilderTest extends AnyFlatSpec with Matchers {
       Map[String, CellValue]("n" -> CellValue.Dec(BigDecimal("1.5"))),
       Map[String, CellValue]("n" -> CellValue.I64(2L))
     )
-    val mt = ParquetSchemaBuilder.inferSchemaFromData(data)
+    val mt    = ParquetSchemaBuilder.inferSchemaFromData(data)
     val field = mt.getFields.get(0).asPrimitiveType
     field.getPrimitiveTypeName shouldBe PrimitiveTypeName.BINARY
     field.getLogicalTypeAnnotation shouldBe a[
@@ -642,7 +638,7 @@ class ParquetSchemaBuilderTest extends AnyFlatSpec with Matchers {
       Map[String, CellValue]("v" -> CellValue.F64(1.5)),
       Map[String, CellValue]("v" -> CellValue.Dec(BigDecimal("9.99")))
     )
-    val mt = ParquetSchemaBuilder.inferSchemaFromData(data)
+    val mt    = ParquetSchemaBuilder.inferSchemaFromData(data)
     val field = mt.getFields.get(0).asPrimitiveType
     field.getPrimitiveTypeName shouldBe PrimitiveTypeName.BINARY
     field.getLogicalTypeAnnotation shouldBe a[
@@ -655,7 +651,7 @@ class ParquetSchemaBuilderTest extends AnyFlatSpec with Matchers {
       Map[String, CellValue]("x" -> CellValue.Dec(BigDecimal("1.5"))),
       Map[String, CellValue]("x" -> CellValue.Str("text"))
     )
-    val mt = ParquetSchemaBuilder.inferSchemaFromData(data)
+    val mt    = ParquetSchemaBuilder.inferSchemaFromData(data)
     val field = mt.getFields.get(0).asPrimitiveType
     field.getPrimitiveTypeName shouldBe PrimitiveTypeName.BINARY
     field.getLogicalTypeAnnotation shouldBe LogicalTypeAnnotation.stringType()
@@ -688,7 +684,7 @@ class ParquetSchemaBuilderTest extends AnyFlatSpec with Matchers {
         "m_col" -> CellValue.I64(2L)
       )
     )
-    val mt = ParquetSchemaBuilder.inferSchemaFromData(data)
+    val mt    = ParquetSchemaBuilder.inferSchemaFromData(data)
     val names = mt.getFields.asScala.map(_.getName).toList
     names shouldBe List("z_col", "a_col", "m_col")
   }

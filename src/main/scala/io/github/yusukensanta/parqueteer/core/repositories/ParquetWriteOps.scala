@@ -1,10 +1,6 @@
 package io.github.yusukensanta.parqueteer.core.repositories
 
-import io.github.yusukensanta.parqueteer.core.models.{
-  CellValue,
-  CompressionType,
-  ParqueteerError
-}
+import io.github.yusukensanta.parqueteer.core.models.{CellValue, CompressionType, ParqueteerError}
 import org.apache.parquet.hadoop.metadata.CompressionCodecName
 import org.apache.parquet.io.api.Binary
 import org.apache.parquet.schema.{LogicalTypeAnnotation, MessageType}
@@ -13,18 +9,25 @@ import org.apache.parquet.example.data.Group
 
 private[repositories] object ParquetWriteOps {
   private val logger = org.slf4j.LoggerFactory.getLogger(getClass)
+
   private val decimalCoercionWarnedCols =
     java.util.concurrent.ConcurrentHashMap.newKeySet[String]()
+
   private val longToDoubleWarnedCols =
     java.util.concurrent.ConcurrentHashMap.newKeySet[String]()
+
   private val intToFloatWarnedCols =
     java.util.concurrent.ConcurrentHashMap.newKeySet[String]()
+
   private val longToFloatWarnedCols =
     java.util.concurrent.ConcurrentHashMap.newKeySet[String]()
+
   private val doubleToFloatWarnedCols =
     java.util.concurrent.ConcurrentHashMap.newKeySet[String]()
+
   private val binaryMismatchWarnedCols =
     java.util.concurrent.ConcurrentHashMap.newKeySet[String]()
+
   // Parquet DECIMAL precision is bounded to [1, MaxDecimalPrecision]. Precompute
   // 10^p for each p so the per-row BINARY DECIMAL precision guard avoids
   // repeated allocation.  Array size is derived from the shared constant so the
@@ -40,7 +43,7 @@ private[repositories] object ParquetWriteOps {
       schema: MessageType
   ): Unit = {
     row.foreach { case (key, value) =>
-      if (value != CellValue.Null) {
+      if value != CellValue.Null then {
         val fieldIndex =
           try schema.getFieldIndex(key)
           catch {
@@ -65,16 +68,16 @@ private[repositories] object ParquetWriteOps {
                 val scale = dec.getScale
                 val scaled =
                   bd.setScale(scale, scala.math.BigDecimal.RoundingMode.HALF_UP)
-                val unscaled = scaled.underlying().unscaledValue()
+                val unscaled  = scaled.underlying().unscaledValue()
                 val precision = dec.getPrecision
-                if (precision >= decimalMaxUnscaled.length)
+                if precision >= decimalMaxUnscaled.length then
                   throw new IllegalArgumentException(
                     s"Column '$key': DECIMAL precision $precision exceeds the maximum " +
                       s"supported (${decimalMaxUnscaled.length - 1}). " +
                       "This Parquet file was written with a non-standard schema."
                   )
                 val maxUnscaled = decimalMaxUnscaled(precision)
-                if (unscaled.abs().compareTo(maxUnscaled) >= 0)
+                if unscaled.abs().compareTo(maxUnscaled) >= 0 then
                   throw new IllegalArgumentException(
                     s"Column '$key': DECIMAL value $bd (unscaled $unscaled) exceeds " +
                       s"declared precision $precision — value may have been rounded out of range. " +
@@ -106,7 +109,7 @@ private[repositories] object ParquetWriteOps {
                     )
                 }
               case _ =>
-                if (decimalCoercionWarnedCols.add(key))
+                if decimalCoercionWarnedCols.add(key) then
                   logger.warn(
                     s"Writing DECIMAL to non-DECIMAL column '$key' as DOUBLE — precision may be lost " +
                       "for values with more than 15 significant digits."
@@ -114,7 +117,7 @@ private[repositories] object ParquetWriteOps {
                 group.add(fieldIndex, bd.toDouble)
             }
           case _ if isBinaryField =>
-            if (binaryMismatchWarnedCols.add(key))
+            if binaryMismatchWarnedCols.add(key) then
               logger.warn(
                 s"Coercing ${value.getClass.getSimpleName} to string for BINARY column '$key' — schema type mismatch."
               )
@@ -124,10 +127,9 @@ private[repositories] object ParquetWriteOps {
               case PrimitiveTypeName.DOUBLE => group.add(fieldIndex, i.toDouble)
               case PrimitiveTypeName.FLOAT  =>
                 // Int values outside (-2^24, 2^24) cannot be represented exactly as Float (23-bit mantissa).
-                if (
-                  (i > 16777216 || i < -16777216) &&
+                if (i > 16777216 || i < -16777216) &&
                   intToFloatWarnedCols.add(key)
-                )
+                then
                   logger.warn(
                     s"Column '$key': Int value $i exceeds Float precision range (|value| > 2^24) — " +
                       "coercing to FLOAT loses precision. Consider using DOUBLE schema for this column."
@@ -140,10 +142,9 @@ private[repositories] object ParquetWriteOps {
             fieldType.getPrimitiveTypeName match {
               case PrimitiveTypeName.DOUBLE =>
                 // Long values outside (-2^53, 2^53) cannot be represented exactly as Double.
-                if (
-                  (l > 9007199254740992L || l < -9007199254740992L) &&
+                if (l > 9007199254740992L || l < -9007199254740992L) &&
                   longToDoubleWarnedCols.add(key)
-                )
+                then
                   logger.warn(
                     s"Column '$key': Long value $l exceeds Double precision range (|value| > 2^53) — " +
                       "coercing to DOUBLE loses precision. Schema widening produced DOUBLE from a " +
@@ -152,10 +153,9 @@ private[repositories] object ParquetWriteOps {
                 group.add(fieldIndex, l.toDouble)
               case PrimitiveTypeName.FLOAT =>
                 // Long values outside (-2^24, 2^24) cannot be represented exactly as Float (23-bit mantissa).
-                if (
-                  (l > 16777216L || l < -16777216L) &&
+                if (l > 16777216L || l < -16777216L) &&
                   longToFloatWarnedCols.add(key)
-                )
+                then
                   logger.warn(
                     s"Column '$key': Long value $l exceeds Float precision range (|value| > 2^24) — " +
                       "coercing to FLOAT loses precision. Consider using DOUBLE schema for this column."
@@ -164,24 +164,21 @@ private[repositories] object ParquetWriteOps {
               case _ => group.add(fieldIndex, l)
             }
           case CellValue.F64(d) =>
-            if (fieldType.getPrimitiveTypeName == PrimitiveTypeName.FLOAT) {
+            if fieldType.getPrimitiveTypeName == PrimitiveTypeName.FLOAT then {
               // Double values outside ±Float.MaxValue overflow to ±Infinity; NaN stays NaN.
-              if (
-                (d.isNaN || d > Float.MaxValue.toDouble || d < -Float.MaxValue.toDouble) &&
+              if (d.isNaN || d > Float.MaxValue.toDouble || d < -Float.MaxValue.toDouble) &&
                 doubleToFloatWarnedCols.add(key)
-              )
+              then
                 logger.warn(
                   s"Column '$key': Double value $d cannot be faithfully cast to Float — " +
                     "coercing to FLOAT produces NaN or ±Infinity. Consider using DOUBLE schema for this column."
                 )
               group.add(fieldIndex, d.toFloat)
-            } else
-              group.add(fieldIndex, d)
+            } else group.add(fieldIndex, d)
           case CellValue.F32(f) =>
-            if (fieldType.getPrimitiveTypeName == PrimitiveTypeName.DOUBLE)
+            if fieldType.getPrimitiveTypeName == PrimitiveTypeName.DOUBLE then
               group.add(fieldIndex, f.toDouble)
-            else
-              group.add(fieldIndex, f)
+            else group.add(fieldIndex, f)
           case CellValue.Bool(b) => group.add(fieldIndex, b)
           case CellValue.Date(d) =>
             val fieldName = schema.getType(fieldIndex).getName
@@ -235,7 +232,7 @@ private[repositories] object ParquetWriteOps {
 
   def convertCompressionType(
       compressionType: CompressionType
-  ): CompressionCodecName = {
+  ): CompressionCodecName =
     compressionType match {
       case CompressionType.Uncompressed => CompressionCodecName.UNCOMPRESSED
       case CompressionType.Snappy       => CompressionCodecName.SNAPPY
@@ -245,5 +242,4 @@ private[repositories] object ParquetWriteOps {
       case CompressionType.Lz4          => CompressionCodecName.LZ4
       case CompressionType.Zstd         => CompressionCodecName.ZSTD
     }
-  }
 }

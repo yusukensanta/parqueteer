@@ -6,7 +6,7 @@ import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
 import org.apache.parquet.schema.Type.Repetition
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import scala.jdk.CollectionConverters._
+import scala.jdk.CollectionConverters.*
 
 class FilterParserTest extends AnyFlatSpec with Matchers {
 
@@ -268,7 +268,7 @@ class FilterParserTest extends AnyFlatSpec with Matchers {
 
   // ── Error message quality ──────────────────────────────────────────────────
   "FilterParser error messages" should "include original expression in userMessage" in {
-    val expr = "age >"
+    val expr   = "age >"
     val result = FilterParser.parse(expr)
     result.isLeft shouldBe true
     result.left.toOption.get.userMessage should include(expr)
@@ -331,28 +331,28 @@ class FilterParserTest extends AnyFlatSpec with Matchers {
 
   // ── parseWithSchema ────────────────────────────────────────────────────────
   "FilterParser.parseWithSchema" should "succeed for INT32 column with integer value" in {
-    val s = schema("age" -> PrimitiveTypeName.INT32)
+    val s      = schema("age" -> PrimitiveTypeName.INT32)
     val result = FilterParser.parseWithSchema("age > 18", s)
     result shouldBe a[Right[?, ?]]
     result.exists(_ ne Filter.noopFilter) shouldBe true
   }
 
   it should "succeed for BINARY column with string value" in {
-    val s = schema("name" -> PrimitiveTypeName.BINARY)
+    val s      = schema("name" -> PrimitiveTypeName.BINARY)
     val result = FilterParser.parseWithSchema("""name = "Alice"""", s)
     result shouldBe a[Right[?, ?]]
     result.exists(_ ne Filter.noopFilter) shouldBe true
   }
 
   it should "succeed for INT64 column with BETWEEN" in {
-    val s = schema("ts" -> PrimitiveTypeName.INT64)
+    val s      = schema("ts" -> PrimitiveTypeName.INT64)
     val result = FilterParser.parseWithSchema("ts BETWEEN 1000 AND 9999", s)
     result shouldBe a[Right[?, ?]]
     result.exists(_ ne Filter.noopFilter) shouldBe true
   }
 
   it should "succeed for BOOLEAN column with equality" in {
-    val s = schema("active" -> PrimitiveTypeName.BOOLEAN)
+    val s      = schema("active" -> PrimitiveTypeName.BOOLEAN)
     val result = FilterParser.parseWithSchema("active = true", s)
     result shouldBe a[Right[?, ?]]
     result.exists(_ ne Filter.noopFilter) shouldBe true
@@ -360,7 +360,7 @@ class FilterParserTest extends AnyFlatSpec with Matchers {
 
   it should "succeed for multi-column AND expression" in {
     val s = schema(
-      "age" -> PrimitiveTypeName.INT32,
+      "age"    -> PrimitiveTypeName.INT32,
       "active" -> PrimitiveTypeName.BOOLEAN
     )
     val result =
@@ -370,7 +370,7 @@ class FilterParserTest extends AnyFlatSpec with Matchers {
   }
 
   it should "fail at parse time for IS NULL on column not present in schema" in {
-    val s = schema("age" -> PrimitiveTypeName.INT32)
+    val s      = schema("age" -> PrimitiveTypeName.INT32)
     val result = FilterParser.parseWithSchema("unknown_col IS NULL", s)
     result shouldBe a[Left[?, ?]]
     result.left.exists(_.message.contains("unknown_col")) shouldBe true
@@ -384,7 +384,7 @@ class FilterParserTest extends AnyFlatSpec with Matchers {
       .buildGroup(Repetition.OPTIONAL)
       .named("address")
       .asInstanceOf[org.apache.parquet.schema.Type]
-    val s = new MessageType("test", List(groupField).asJava)
+    val s      = new MessageType("test", List(groupField).asJava)
     val result = FilterParser.parseWithSchema("address IS NULL", s)
     result shouldBe a[Left[?, ?]]
     result.left.get.message should include("nested column")
@@ -575,7 +575,7 @@ class FilterParserTest extends AnyFlatSpec with Matchers {
   // ── FilterParseError exit code and FilterParseException routing ───────────
 
   "FilterParseError" should "have exit code 7" in {
-    val s = schema("age" -> PrimitiveTypeName.INT32)
+    val s      = schema("age" -> PrimitiveTypeName.INT32)
     val result = FilterParser.parseWithSchema("unknown IS NULL", s)
     result shouldBe a[Left[?, ?]]
     result.left.map(_.exitCode) shouldBe Left(7)

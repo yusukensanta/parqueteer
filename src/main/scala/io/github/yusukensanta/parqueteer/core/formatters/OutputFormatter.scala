@@ -3,8 +3,8 @@ package io.github.yusukensanta.parqueteer.core.formatters
 import io.github.yusukensanta.parqueteer.core.models.{
   CellValue,
   FileContent,
-  ParquetSchema,
-  FileMetadata
+  FileMetadata,
+  ParquetSchema
 }
 
 trait OutputFormatter {

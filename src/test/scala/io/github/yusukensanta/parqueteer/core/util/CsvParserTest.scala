@@ -7,10 +7,7 @@ import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 import org.scalacheck.Gen
 
-class CsvParserTest
-    extends AnyFlatSpec
-    with Matchers
-    with ScalaCheckPropertyChecks {
+class CsvParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks {
 
   // Generator: alpha-only strings that TypeInferrer won't re-infer as another type
   private val safeStr: Gen[String] = for {
@@ -198,7 +195,7 @@ class CsvParserTest
     val rows =
       List(
         Map(
-          "name" -> CellValue.Str("Smith, John"),
+          "name"  -> CellValue.Str("Smith, John"),
           "score" -> CellValue.Str("42")
         )
       )
@@ -211,7 +208,7 @@ class CsvParserTest
     val rows = List(
       Map(
         "greeting" -> CellValue.Str("こんにちは"),
-        "lang" -> CellValue.Str("日本語")
+        "lang"     -> CellValue.Str("日本語")
       )
     )
     val parsed = roundTrip(rows)
@@ -248,7 +245,7 @@ class CsvParserTest
 
   it should "preserve row count for multi-row input" in {
     val rowGen = for {
-      c <- colName
+      c  <- colName
       vs <- Gen.nonEmptyListOf(safeStr)
     } yield vs.map(v => Map(c -> CellValue.Str(v)))
     forAll(rowGen) { rows =>

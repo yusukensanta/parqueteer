@@ -1,6 +1,6 @@
 package io.github.yusukensanta.parqueteer.core.services
 
-import io.github.yusukensanta.parqueteer.core.models._
+import io.github.yusukensanta.parqueteer.core.models.*
 import io.github.yusukensanta.parqueteer.core.repositories.HadoopParquetRepository
 import io.github.yusukensanta.parqueteer.core.models.SchemaMode
 import org.scalatest.Tag
@@ -15,7 +15,7 @@ object MergeIntegrationTest extends Tag("IntegrationTest")
 
 class MergeIntegrationTest extends AnyFlatSpec with Matchers {
 
-  private val repo = new HadoopParquetRepository()
+  private val repo    = new HadoopParquetRepository()
   private val service = new ParquetService(repo)
 
   private def tempFile(): java.io.File = {
@@ -34,7 +34,7 @@ class MergeIntegrationTest extends AnyFlatSpec with Matchers {
 
   private def writeTempWithSchema(schema: MessageType): String = {
     import org.apache.parquet.hadoop.example.ExampleParquetWriter
-    val f = tempFile()
+    val f    = tempFile()
     val conf = new org.apache.hadoop.conf.Configuration()
     val writer = ExampleParquetWriter
       .builder(new org.apache.hadoop.fs.Path(f.getAbsolutePath))
@@ -49,6 +49,7 @@ class MergeIntegrationTest extends AnyFlatSpec with Matchers {
     Map("id" -> CellValue.I64(1L), "name" -> CellValue.Str("Alice")),
     Map("id" -> CellValue.I64(2L), "name" -> CellValue.Str("Bob"))
   )
+
   private val data2 = List(
     Map("id" -> CellValue.I64(3L), "name" -> CellValue.Str("Charlie")),
     Map("id" -> CellValue.I64(4L), "name" -> CellValue.Str("Dana"))
@@ -352,7 +353,7 @@ class MergeIntegrationTest extends AnyFlatSpec with Matchers {
     result.isRight shouldBe true
 
     val schema = repo.readSchema(ParquetFile(LocalPath(out))).get
-    val idCol = schema.columns.find(_.name == "id").get
+    val idCol  = schema.columns.find(_.name == "id").get
     idCol.isOptional shouldBe false
   }
 
@@ -386,10 +387,10 @@ class MergeIntegrationTest extends AnyFlatSpec with Matchers {
       service.mergeFiles(List(in1, in2), out, WriteConfig(), SchemaMode.Union)
     result.isRight shouldBe true
 
-    val schema = repo.readSchema(ParquetFile(LocalPath(out))).get
-    val idCol = schema.columns.find(_.name == "id").get
+    val schema  = repo.readSchema(ParquetFile(LocalPath(out))).get
+    val idCol   = schema.columns.find(_.name == "id").get
     val nameCol = schema.columns.find(_.name == "name").get
-    idCol.isOptional shouldBe false // required in both
+    idCol.isOptional shouldBe false  // required in both
     nameCol.isOptional shouldBe true // absent from in2
   }
 

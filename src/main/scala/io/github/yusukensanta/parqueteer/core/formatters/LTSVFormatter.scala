@@ -38,9 +38,7 @@ class LTSVFormatter extends OutputFormatter {
       .mkString("\t")
 
   private def sanitize(label: String): String =
-    label.map(c =>
-      if (c.isLetterOrDigit || c == '_' || c == '.' || c == '-') c else '_'
-    )
+    label.map(c => if c.isLetterOrDigit || c == '_' || c == '.' || c == '-' then c else '_')
 
   private def sanitizeValue(value: String): String =
     value.replace("\t", " ").replace("\r", "").replace("\n", " ")

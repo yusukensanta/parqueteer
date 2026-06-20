@@ -1,6 +1,6 @@
 package io.github.yusukensanta.parqueteer.core.formatters
 
-import io.github.yusukensanta.parqueteer.core.models._
+import io.github.yusukensanta.parqueteer.core.models.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -52,7 +52,7 @@ class PrettyFormatterTest extends AnyFlatSpec with Matchers {
       1L,
       isPartial = false
     )
-    val result = new PrettyFormatter(useColors = true).formatContent(c, None)
+    val result   = new PrettyFormatter(useColors = true).formatContent(c, None)
     val stripped = stripAnsi(result)
     stripped should include("│日本語│")
   }

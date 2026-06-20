@@ -2,13 +2,13 @@ package io.github.yusukensanta.parqueteer.core.formatters
 
 import io.github.yusukensanta.parqueteer.core.models.{
   CellValue,
+  ColumnInfo,
   FileContent,
-  ParquetSchema,
-  ColumnInfo
+  ParquetSchema
 }
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import io.circe.parser._
+import io.circe.parser.*
 
 class NDJSONFormatterTest extends AnyFlatSpec with Matchers {
 
@@ -18,12 +18,13 @@ class NDJSONFormatterTest extends AnyFlatSpec with Matchers {
     Map("id" -> CellValue.I64(1L), "name" -> CellValue.Str("Alice")),
     Map("id" -> CellValue.I64(2L), "name" -> CellValue.Str("Bob"))
   )
+
   private val content =
     FileContent(rows = rows, totalRows = 2L, isPartial = false)
 
   "NDJSONFormatter.formatContent" should "produce one JSON object per line" in {
     val result = formatter.formatContent(content, None)
-    val lines = result.split("\n").filter(_.nonEmpty)
+    val lines  = result.split("\n").filter(_.nonEmpty)
     lines should have length 2
     lines.foreach { line =>
       parse(line) match {
@@ -75,7 +76,7 @@ class NDJSONFormatterTest extends AnyFlatSpec with Matchers {
       totalRowCount = 100L
     )
     val result = formatter.formatSchema(schema)
-    val lines = result.split("\n").filter(_.nonEmpty)
+    val lines  = result.split("\n").filter(_.nonEmpty)
     lines should have length 2
     result should include("INT64")
     result should include("BINARY")
