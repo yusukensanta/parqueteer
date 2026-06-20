@@ -745,7 +745,9 @@ private[cli] object CommandExecutor {
           System.err.println(
             s"[verbose] ${CredentialRedactor.redactThrowable(cause)}"
           )
-          cause.getStackTrace.foreach(f => System.err.println(s"\tat $f"))
+          cause.getStackTrace.foreach(f =>
+            System.err.println(s"\tat ${CredentialRedactor.redact(f.toString)}")
+          )
         case _ => ()
       }
     error.exitCode
