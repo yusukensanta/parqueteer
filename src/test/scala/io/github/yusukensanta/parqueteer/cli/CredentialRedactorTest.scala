@@ -324,4 +324,55 @@ class CredentialRedactorTest extends AnyFlatSpec with Matchers with ScalaCheckPr
     result should not include "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9"
     result should include("[REDACTED]")
   }
+
+  // ── Security M2: broadened patterns ────────────────────────────────────
+
+  it should "redact Azure connection string AccountKey" in {
+    val input =
+      "DefaultEndpointsProtocol=https;AccountName=myaccount;AccountKey=xYzAbCdEfGhIjKlMnOpQrStUvWxYz1234567890+/==;EndpointSuffix=core.windows.net"
+    val result = CredentialRedactor.redact(input)
+    result should not include "xYzAbCdEfGhIjKlMnOpQrStUvWxYz1234567890"
+    result should include("AccountKey=[REDACTED]")
+  }
+
+  it should "redact generic password= in config dumps" in {
+    val input  = "database password=SuperSecret123!"
+    val result = CredentialRedactor.redact(input)
+    result should not include "SuperSecret123!"
+    result should include("password=[REDACTED]")
+  }
+
+  it should "redact generic secret_key= in error messages" in {
+    val input  = "failed: secret_key = wJalrXUtnFEMI/K7MDENG"
+    val result = CredentialRedactor.redact(input)
+    result should not include "wJalrXUtnFEMI"
+    result should include("secret_key = [REDACTED]")
+  }
+
+  it should "redact generic client_secret in error messages" in {
+    val input  = "client_secret:my-oauth-client-secret-value"
+    val result = CredentialRedactor.redact(input)
+    result should not include "my-oauth-client-secret-value"
+    result should include("client_secret:[REDACTED]")
+  }
+
+  it should "redact generic api_key in error messages" in {
+    val input  = "api_key=sk-1234567890abcdefghij"
+    val result = CredentialRedactor.redact(input)
+    result should not include "sk-1234567890abcdefghij"
+    result should include("api_key=[REDACTED]")
+  }
+
+  it should "redact GCP OAuth2 refresh token" in {
+    val input  = "token refresh failed: 1//0abcDEFghiJKLmnoPQRstUVwxyz-1234567890"
+    val result = CredentialRedactor.redact(input)
+    result should not include "1//0abcDEFghiJKLmnoPQRstUVwxyz-1234567890"
+    result should include("[REDACTED]")
+  }
+
+  it should "NOT redact non-secret text containing 1/ without double slash" in {
+    val input  = "rate is 1/100 per second"
+    val result = CredentialRedactor.redact(input)
+    result shouldBe input
+  }
 }

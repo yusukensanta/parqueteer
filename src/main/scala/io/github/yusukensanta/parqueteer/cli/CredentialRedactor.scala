@@ -34,7 +34,13 @@ private[cli] object CredentialRedactor {
     "()(AIza[A-Za-z0-9_-]{35,})".r,
     "()(ya29\\.[A-Za-z0-9_-]{20,})".r,
     // GCP service-account private_key value (JSON-escaped, single-line)
-    "(?i)(\"private_key\"\\s*:\\s*\")([^\"]{20,})".r
+    "(?i)(\"private_key\"\\s*:\\s*\")([^\"]{20,})".r,
+    // Azure connection string AccountKey
+    "(?i)(AccountKey=)[^;\\s]+".r,
+    // Generic password/token in key=value contexts (config dumps, error messages)
+    "(?i)((?:password|secret_key|client_secret|api_key)\\s*[=:]\\s*)\\S[^&\\n\\r]*".r,
+    // GCP OAuth2 refresh token (1//... pattern)
+    "()(1//[A-Za-z0-9_-]{20,})".r
   )
 
   def redact(s: String): String = {

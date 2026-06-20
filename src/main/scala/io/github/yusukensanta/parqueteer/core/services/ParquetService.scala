@@ -491,8 +491,9 @@ class ParquetService(
           DataFileReader.readLtsvFile(path, maxRows).toParqueteerError
         case fmt =>
           Left(
-            ParqueteerError.IOError(
-              new IllegalArgumentException(s"Unsupported input format: $fmt")
+            ParqueteerError.InvalidFormat(
+              path,
+              s"Unsupported input format: $fmt. Supported: json, ndjson, csv, ltsv"
             )
           )
       }

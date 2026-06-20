@@ -320,13 +320,15 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     result.toOption.get.head("name") shouldBe CellValue.Str("Alice")
   }
 
-  it should "return Left for unsupported format" in {
+  it should "return Left(InvalidFormat) for unsupported format" in {
     val service = new ParquetService(new FakeParquetRepository())
     val result  = service.readDataFile("/any/file.tsv", "tsv")
     result.isLeft shouldBe true
+    result.left.toOption.get shouldBe a[ParqueteerError.InvalidFormat]
     result.left.toOption.get.userMessage should include(
       "Unsupported input format"
     )
+    result.left.toOption.get.exitCode shouldBe 6
   }
 
   // ── stdin / pipe support (#42) ────────────────────────────────────────────
@@ -798,10 +800,11 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     writeResult.isRight shouldBe true
   }
 
-  it should "return Left for unsupported input format" in {
+  it should "return Left(InvalidFormat) for unsupported input format" in {
     val service = new ParquetService(new FakeParquetRepository())
     val result  = service.readDataFile("/tmp/file.tsv", "tsv")
     result.isLeft shouldBe true
+    result.left.toOption.get shouldBe a[ParqueteerError.InvalidFormat]
   }
 
   it should "wrap IllegalArgumentException from streamContent as ParseError(data), not IOError" in {
