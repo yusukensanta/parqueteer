@@ -33,6 +33,16 @@ object CloudCredentialManager {
    * given header. Used by both S3 and GCS credential managers — keeps the
    * "attempted strategies" error text consistent across providers.
    */
+  private[cloud] def requiredEnv(name: String): String =
+    sys.env
+      .get(name)
+      .filter(_.nonEmpty)
+      .getOrElse(
+        throw new RuntimeException(
+          s"$name is not set in the environment"
+        )
+      )
+
   private[cloud] def firstSuccess[A](
       header: String,
       strategies: List[() => Try[A]]

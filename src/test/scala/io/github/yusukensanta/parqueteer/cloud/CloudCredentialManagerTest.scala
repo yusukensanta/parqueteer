@@ -68,6 +68,19 @@ class CloudCredentialManagerTest extends AnyFlatSpec with Matchers {
     manager.get shouldBe a[S3CredentialManager]
   }
 
+  "CloudCredentialManager.requiredEnv" should "return the env var value when set" in {
+    assume(sys.env.contains("HOME"), "Skipped: HOME not set")
+    CloudCredentialManager.requiredEnv("HOME") shouldBe sys.env("HOME")
+  }
+
+  it should "throw RuntimeException when env var is not set" in {
+    val ex = intercept[RuntimeException] {
+      CloudCredentialManager.requiredEnv("PARQUETEER_TEST_NONEXISTENT_VAR_XYZ")
+    }
+    ex.getMessage should include("PARQUETEER_TEST_NONEXISTENT_VAR_XYZ")
+    ex.getMessage should include("is not set")
+  }
+
   // ── Hadoop config output (requires AWS_ACCESS_KEY_ID in env) ────────────
 
   "S3CredentialManager.configureHadoop" should "set fs.s3a.impl when credentials are available" in {

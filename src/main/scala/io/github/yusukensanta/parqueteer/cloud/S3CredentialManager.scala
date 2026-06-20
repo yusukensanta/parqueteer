@@ -8,7 +8,7 @@ import software.amazon.awssdk.auth.credentials.{
   InstanceProfileCredentialsProvider,
   ProfileCredentialsProvider
 }
-import scala.util.{Failure, Success, Try, Using}
+import scala.util.{Failure, Try, Using}
 
 private object S3Tuning {
   val MaxConnections        = "100"
@@ -44,7 +44,7 @@ class S3CredentialManager(profile: Option[String] = None) extends CloudCredentia
   ): Try[Configuration] =
     location match {
       case s3Location: S3Location =>
-        Try {
+        resolveCredentials().map { case (accessKey, secretKey, sessionToken) =>
           val conf = new Configuration()
 
           conf.set("fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
@@ -53,58 +53,45 @@ class S3CredentialManager(profile: Option[String] = None) extends CloudCredentia
             "org.apache.hadoop.fs.s3a.S3A"
           )
 
-          val credentials = resolveCredentials()
+          conf.set("fs.s3a.access.key", accessKey)
+          conf.set("fs.s3a.secret.key", secretKey)
+          sessionToken.foreach(token => conf.set("fs.s3a.session.token", token))
 
-          credentials match {
-            case Success((accessKey, secretKey, sessionToken)) =>
-              conf.set("fs.s3a.access.key", accessKey)
-              conf.set("fs.s3a.secret.key", secretKey)
-              sessionToken.foreach(token => conf.set("fs.s3a.session.token", token))
+          s3Location.region.foreach(region => conf.set("fs.s3a.endpoint.region", region))
 
-              s3Location.region.foreach(region => conf.set("fs.s3a.endpoint.region", region))
+          conf.set("fs.s3a.connection.maximum", S3Tuning.MaxConnections)
+          conf.set("fs.s3a.attempts.maximum", S3Tuning.MaxAttempts)
+          conf.set(
+            "fs.s3a.retry.throttle.limit",
+            S3Tuning.ThrottleRetryLimit
+          )
+          conf.set(
+            "fs.s3a.retry.throttle.interval",
+            S3Tuning.ThrottleRetryInterval
+          )
 
-              conf.set("fs.s3a.connection.maximum", S3Tuning.MaxConnections)
-              conf.set("fs.s3a.attempts.maximum", S3Tuning.MaxAttempts)
-              conf.set(
-                "fs.s3a.retry.throttle.limit",
-                S3Tuning.ThrottleRetryLimit
+          conf.set("fs.s3a.buffer.dir", sys.props("java.io.tmpdir"))
+          conf.set("fs.s3a.fast.upload", "true")
+          conf.set("fs.s3a.fast.upload.buffer", "disk")
+          conf.set("fs.s3a.multipart.size", S3Tuning.MultipartSize)
+          conf.set(
+            "fs.s3a.multipart.threshold",
+            S3Tuning.MultipartThreshold
+          )
+
+          sys.env.get("AWS_ENDPOINT_URL").foreach { rawEndpoint =>
+            val endpoint = if !rawEndpoint.contains("://") then {
+              Console.err.println(
+                "[parqueteer] warning: AWS_ENDPOINT_URL has no scheme; assuming https:// — prepend http:// or https:// to suppress this warning"
               )
-              conf.set(
-                "fs.s3a.retry.throttle.interval",
-                S3Tuning.ThrottleRetryInterval
-              )
-
-              conf.set("fs.s3a.buffer.dir", sys.props("java.io.tmpdir"))
-              conf.set("fs.s3a.fast.upload", "true")
-              conf.set("fs.s3a.fast.upload.buffer", "disk")
-              conf.set("fs.s3a.multipart.size", S3Tuning.MultipartSize)
-              conf.set(
-                "fs.s3a.multipart.threshold",
-                S3Tuning.MultipartThreshold
-              )
-
-              // Support custom S3-compatible endpoints (RustFS, LocalStack, etc.)
-              // AWS_ENDPOINT_URL is the standard override used by AWS CLI v2 and SDKs
-              sys.env.get("AWS_ENDPOINT_URL").foreach { rawEndpoint =>
-                val endpoint = if !rawEndpoint.contains("://") then {
-                  Console.err.println(
-                    "[parqueteer] warning: AWS_ENDPOINT_URL has no scheme; assuming http:// — prepend http:// or https:// to suppress this warning"
-                  )
-                  s"http://$rawEndpoint"
-                } else rawEndpoint
-                conf.set("fs.s3a.endpoint", endpoint)
-                conf.set("fs.s3a.path.style.access", "true")
-                if endpointDisablesSsl(endpoint) then
-                  conf.set("fs.s3a.connection.ssl.enabled", "false")
-              }
-
-              conf
-            case Failure(error) =>
-              throw new RuntimeException(
-                s"Failed to resolve S3 credentials: ${error.getMessage}",
-                error
-              )
+              s"https://$rawEndpoint"
+            } else rawEndpoint
+            conf.set("fs.s3a.endpoint", endpoint)
+            conf.set("fs.s3a.path.style.access", "true")
+            if endpointDisablesSsl(endpoint) then conf.set("fs.s3a.connection.ssl.enabled", "false")
           }
+
+          conf
         }
       case _ =>
         Failure(new IllegalArgumentException("Expected S3Location"))

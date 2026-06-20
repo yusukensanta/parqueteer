@@ -20,12 +20,8 @@ import org.apache.parquet.hadoop.ParquetWriter as HParquetWriter
 import org.apache.parquet.example.data.Group
 import org.apache.parquet.schema.{GroupType, MessageType}
 import org.apache.parquet.schema.Type.Repetition
-import org.apache.parquet.ParquetReadOptions
-import org.slf4j.LoggerFactory
-import scala.concurrent.{Await, ExecutionContext, ExecutionContextExecutorService, Future}
 import java.io.{FileNotFoundException, IOException}
 import java.nio.file.{Files, Paths}
-import java.util.concurrent.{Executors, TimeUnit, TimeoutException}
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong}
 import scala.util.{Success, Try, Using}
 import scala.jdk.CollectionConverters.*
@@ -83,12 +79,6 @@ object HadoopParquetRepository {
 
   private val shutdownHookRegistered =
     new AtomicBoolean(false)
-
-  // Keep type alias for source compatibility with code referencing HadoopParquetRepository.CacheStats
-  type CacheStats = ParquetRepository.CacheStats
-
-  val CacheStats: ParquetRepository.CacheStats.type =
-    ParquetRepository.CacheStats
 }
 
 // The Hadoop Configuration cache is keyed on storage location type + bucket/region.
@@ -99,8 +89,6 @@ class HadoopParquetRepository(
     region: Option[String] = None
 ) extends ParquetRepository {
 
-  private val logger =
-    LoggerFactory.getLogger(getClass)
   private val HadoopConfigCacheMaxSize = 64
   private val FooterCacheMaxSize       = 1024
 
@@ -216,8 +204,10 @@ class HadoopParquetRepository(
         val useParallel = config.parallelism > 1 && config.filter.isEmpty
         val (rows, hasMoreAfterLimit) =
           if useParallel then
-            // getFooter above is already cached; readParallel reuses it
-            (readParallel(hadoopPath, hadoopConfig, config), false)
+            (
+              ParallelRowGroupReader.read(hadoopPath, hadoopConfig, config, fileSchema, blocks),
+              false
+            )
           else {
             val path4s = Parquet4sPath(file.location.path)
             val rawBinaryFields =
@@ -322,141 +312,6 @@ class HadoopParquetRepository(
       if result.isFailure then footerCache.remove(cacheKey)
       result
     }
-
-  private def readParallel(
-      path: HadoopPath,
-      conf: Configuration,
-      config: ReadConfig
-  ): List[Map[String, CellValue]] = {
-    // getFooter is a cache hit here — readContent already called it
-    val (fileSchema, blocks) = getFooter(path, conf)
-
-    // Pre-select the minimum prefix of row groups needed to satisfy maxRows.
-    // Without this, all row groups are decoded before the limit is applied.
-    val selectedBlocks = config.maxRows match {
-      case None => blocks
-      case Some(limit) =>
-        var cumulative = 0L
-        blocks.takeWhile { block =>
-          if cumulative >= limit then false
-          else { cumulative += block.getRowCount; true }
-        }
-    }
-
-    val requestedSchema = config.columns match {
-      case Some(cols) if cols.nonEmpty =>
-        ParquetSchemaBuilder.projectSchema(fileSchema, cols)
-      case _ => fileSchema
-    }
-
-    val threadCount =
-      math.min(config.parallelism, math.max(1, selectedBlocks.size))
-    val rawEc = Executors.newFixedThreadPool(threadCount)
-
-    // True once shutdownNow() has been called; in that case awaitTermination
-    // may take the full 30s waiting for threads to respond to interrupt — not a bug.
-    var forciblyShutdown = false
-    try {
-      implicit val ec: ExecutionContextExecutorService =
-        ExecutionContext.fromExecutorService(rawEc)
-      val requestedNames =
-        requestedSchema.getColumns.asScala.map(_.getPath.mkString(".")).toSet
-      // Track how many null-fabricated rows are still allotted across all futures so
-      // total null-row allocations never exceed maxRows regardless of group count.
-      val nullRowsAllotted = new AtomicLong(
-        config.maxRows.getOrElse(Long.MaxValue)
-      )
-      val futures = selectedBlocks.map { block =>
-        Future {
-          val colChunks = block.getColumns.asScala.toList
-          val relevantChunks =
-            if requestedNames.isEmpty then colChunks
-            else colChunks.filter(c => requestedNames.contains(c.getPath.toDotString))
-          if relevantChunks.isEmpty then {
-            // Row group predates the requested columns (intra-file schema evolution).
-            // Emit null-valued rows to match the sequential path: the schema declares
-            // the columns optional, so absent values are Null, not omitted rows.
-            logger.warn(
-              s"Row group (${block.getRowCount} rows) has no chunks matching " +
-                s"requested columns $requestedNames — fabricating null rows for schema evolution."
-            )
-            val nullRow = requestedSchema.getColumns.asScala
-              .map(col => col.getPath.mkString(".") -> CellValue.Null)
-              .toMap
-            val rowCount = block.getRowCount
-            if rowCount > Int.MaxValue then
-              throw new IllegalStateException(
-                s"Row group has $rowCount rows — exceeds Int.MaxValue; use sequential read (--parallelism 1)"
-              )
-            // Atomically consume from the shared allotment so the SUM of null rows
-            // across all parallel futures never exceeds maxRows (per-group capping
-            // at the full limit would allow N×maxRows allocations before the global trim).
-            val prev =
-              nullRowsAllotted.getAndUpdate(r => r - rowCount.min(r))
-            val rowsToFabricate = rowCount.min(prev).toInt
-            List.fill(rowsToFabricate)(nullRow)
-          } else {
-            val rangeStart = relevantChunks.map(_.getStartingPos).min
-            val rangeEnd =
-              relevantChunks.map(c => c.getStartingPos + c.getTotalSize).max
-            val readOptions = ParquetReadOptions
-              .builder()
-              .withRange(rangeStart, rangeEnd)
-              .build()
-            Using.resource(
-              ParquetFileReader.open(
-                HadoopInputFile.fromPath(path, conf),
-                readOptions
-              )
-            ) { reader =>
-              val pageStore = reader.readNextRowGroup()
-              if pageStore == null then List.empty[Map[String, CellValue]]
-              else
-                ParquetRecordDecoder.decodePageStore(
-                  pageStore,
-                  fileSchema,
-                  requestedSchema
-                )
-            }
-          }
-        }
-      }
-      val allRows =
-        try Await.result(Future.sequence(futures), config.readTimeout).flatten
-        catch {
-          case _: TimeoutException =>
-            forciblyShutdown = true
-            ec.shutdownNow()
-            throw new RuntimeException(
-              s"parallel read timed out after ${config.readTimeout} — " +
-                "retry with --parallelism 1, or check network connectivity"
-            )
-          case t: Throwable =>
-            forciblyShutdown = true
-            ec.shutdownNow()
-            throw t
-        }
-      config.maxRows match {
-        case Some(limit) =>
-          if limit >= allRows.size.toLong then allRows
-          // limit < allRows.size (an Int), so limit fits in Int — safe narrowing.
-          else allRows.take(limit.toInt)
-        case None => allRows
-      }
-    } finally {
-      rawEc.shutdown()
-      // After shutdownNow() the pool may linger up to 30s draining interrupted tasks —
-      // that is expected; only warn when a graceful shutdown stalls unexpectedly.
-      if !forciblyShutdown && !rawEc.awaitTermination(
-          30,
-          TimeUnit.SECONDS
-        )
-      then
-        Console.err.println(
-          "[parqueteer] warning: parallel read executor did not terminate within 30s — some cloud connections may remain open"
-        )
-    }
-  }
 
   private def openParquetReader(
       path4s: Parquet4sPath,
@@ -652,8 +507,8 @@ class HadoopParquetRepository(
         Try(
           ParquetFileReader.open(HadoopInputFile.fromPath(path, hadoopConfig))
         ) match {
-          case scala.util.Failure(_: FileNotFoundException) =>
-            issues += "File does not exist"
+          case scala.util.Failure(ex: FileNotFoundException) =>
+            throw ex
           case scala.util.Failure(ex) =>
             issues += s"File cannot be opened as Parquet: ${ex.getMessage}"
           case scala.util.Success(reader) =>

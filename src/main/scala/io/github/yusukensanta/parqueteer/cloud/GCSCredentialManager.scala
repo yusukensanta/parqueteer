@@ -112,11 +112,7 @@ class GCSCredentialManager extends CloudCredentialManager {
   // I/O operation. Parsing and discarding credentials here would introduce a
   // TOCTOU window and double-parse with no benefit.
   private def tryServiceAccountFile(): Try[String] = Try {
-    val credPath = sys.env
-      .get("GOOGLE_APPLICATION_CREDENTIALS")
-      .getOrElse(
-        throw new RuntimeException("GOOGLE_APPLICATION_CREDENTIALS not set")
-      )
+    val credPath = CloudCredentialManager.requiredEnv("GOOGLE_APPLICATION_CREDENTIALS")
     if !Files.exists(Paths.get(credPath)) then
       throw new RuntimeException(
         s"GOOGLE_APPLICATION_CREDENTIALS file not found: $credPath"
