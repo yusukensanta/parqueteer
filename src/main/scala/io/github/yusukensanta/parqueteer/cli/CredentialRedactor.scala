@@ -1,6 +1,6 @@
 package io.github.yusukensanta.parqueteer.cli
 
-private[cli] object CredentialRedactor {
+private[parqueteer] object CredentialRedactor {
 
   private val patterns: Seq[scala.util.matching.Regex] = Seq(
     "(?i)(Authorization\\s*[:=]\\s*)\\S[^&\\n\\r]*".r,
@@ -43,19 +43,19 @@ private[cli] object CredentialRedactor {
     "()(1//[A-Za-z0-9_-]{20,})".r
   )
 
-  def redact(s: String): String = {
-    if s == null then return ""
-    patterns.foldLeft(s) { (acc, pattern) =>
-      pattern.replaceAllIn(
-        acc,
-        // group(1) is the prefix to preserve; patterns without a prefix use an empty capturing group
-        m =>
-          java.util.regex.Matcher.quoteReplacement(
-            Option(m.group(1)).getOrElse("") + "[REDACTED]"
-          )
-      )
-    }
-  }
+  def redact(s: String): String =
+    if s == null then ""
+    else
+      patterns.foldLeft(s) { (acc, pattern) =>
+        pattern.replaceAllIn(
+          acc,
+          // group(1) is the prefix to preserve; patterns without a prefix use an empty capturing group
+          m =>
+            java.util.regex.Matcher.quoteReplacement(
+              Option(m.group(1)).getOrElse("") + "[REDACTED]"
+            )
+        )
+      }
 
   private val MaxCauseChain = 20
 

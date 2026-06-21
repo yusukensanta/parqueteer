@@ -69,3 +69,7 @@ credentials.json
 *service-account*.json
 *.pem
 *.key
+*.p12
+*.pfx
+*.jks
+*.keystore

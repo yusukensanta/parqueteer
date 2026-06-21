@@ -46,7 +46,8 @@ jobs:
 
       - name: Setup sbt via Coursier
         run: |
-          curl -fL https://github.com/coursier/coursier/releases/latest/download/cs-x86_64-pc-linux.gz | gzip -d > cs
+          curl -fL https://github.com/coursier/coursier/releases/download/v2.1.24/cs-x86_64-pc-linux.gz | gzip -d > cs
+          echo '1517a0b6c4b9608dc45da8f34bc8290707ed50104ee92662f57808d2c012be54  cs' | sha256sum -c
           chmod +x cs
           ./cs setup --yes --jvm 21
           echo "$HOME/.local/share/coursier/bin" >> $GITHUB_PATH

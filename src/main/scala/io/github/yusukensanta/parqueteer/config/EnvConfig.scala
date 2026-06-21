@@ -5,6 +5,10 @@ import io.github.yusukensanta.parqueteer.core.models.OutputFormat
 
 object EnvConfig {
 
+  type EnvLookup = String => Option[String]
+
+  private[config] val defaultEnv: EnvLookup = sys.env.get
+
   val SupportedVars: List[String] = List(
     "PARQUETEER_CONFIG",
     "PARQUETEER_DEFAULT_FORMAT",
@@ -14,10 +18,13 @@ object EnvConfig {
     "NO_COLOR"
   )
 
-  def configPath: Option[String] = sys.env.get("PARQUETEER_CONFIG")
+  def configPath: Option[String] = defaultEnv("PARQUETEER_CONFIG")
 
   def parsedDefaultFormat: Option[OutputFormat] =
-    sys.env.get("PARQUETEER_DEFAULT_FORMAT").flatMap { s =>
+    parsedDefaultFormat(defaultEnv)
+
+  private[config] def parsedDefaultFormat(env: EnvLookup): Option[OutputFormat] =
+    env("PARQUETEER_DEFAULT_FORMAT").flatMap { s =>
       val parsed = s.toLowerCase match {
         case "table"    => Some(OutputFormat.Table)
         case "json"     => Some(OutputFormat.JSON)
@@ -35,10 +42,12 @@ object EnvConfig {
       parsed
     }
 
-  def parsedColorMode: ColorMode =
-    if sys.env.get("NO_COLOR").exists(_.nonEmpty) then ColorMode.Never
+  def parsedColorMode: ColorMode = parsedColorMode(defaultEnv)
+
+  private[config] def parsedColorMode(env: EnvLookup): ColorMode =
+    if env("NO_COLOR").exists(_.nonEmpty) then ColorMode.Never
     else
-      sys.env.get("PARQUETEER_COLOR") match {
+      env("PARQUETEER_COLOR") match {
         case None => ColorMode.Auto
         case Some(s) =>
           ColorMode.fromString(s) match {
@@ -51,13 +60,17 @@ object EnvConfig {
           }
       }
 
-  def verbose: Boolean =
-    sys.env.get("PARQUETEER_VERBOSE").exists { v =>
+  def verbose: Boolean = verbose(defaultEnv)
+
+  private[config] def verbose(env: EnvLookup): Boolean =
+    env("PARQUETEER_VERBOSE").exists { v =>
       Set("true", "1", "yes", "on").contains(v.toLowerCase)
     }
 
-  def parsedMaxRows: Option[Long] =
-    sys.env.get("PARQUETEER_MAX_ROWS").flatMap { raw =>
+  def parsedMaxRows: Option[Long] = parsedMaxRows(defaultEnv)
+
+  private[config] def parsedMaxRows(env: EnvLookup): Option[Long] =
+    env("PARQUETEER_MAX_ROWS").flatMap { raw =>
       val parsed = raw.toLongOption.filter(_ > 0)
       if parsed.isEmpty then
         System.err.println(
@@ -67,7 +80,7 @@ object EnvConfig {
     }
 
   def allSet: Map[String, String] =
-    SupportedVars.flatMap(k => sys.env.get(k).map(k -> _)).toMap
+    SupportedVars.flatMap(k => defaultEnv(k).map(k -> _)).toMap
 
   def buildInitialGlobalOptions: GlobalOptions =
     GlobalOptions(
