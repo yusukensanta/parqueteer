@@ -145,6 +145,34 @@ class ParquetService(
       )
     )
 
+  private[services] def describeSchemaMismatch(
+      expected: Set[(String, String, Boolean)],
+      actual: Set[(String, String, Boolean)]
+  ): String = {
+    val missing          = expected -- actual
+    val extra            = actual -- expected
+    val missingNames     = missing.map(_._1)
+    val extraNames       = extra.map(_._1)
+    val changedNames     = missingNames.intersect(extraNames)
+    val onlyMissingNames = missingNames -- changedNames
+    val onlyExtraNames   = extraNames -- changedNames
+    val fmt              = (t: String, o: Boolean) => if o then s"$t?" else t
+    val changedDetails = changedNames.toList.sorted.flatMap { name =>
+      for {
+        (_, ft, fo) <- missing.find(_._1 == name)
+        (_, tt, to) <- extra.find(_._1 == name)
+      } yield s"$name (${fmt(ft, fo)} → ${fmt(tt, to)})"
+    }
+    List(
+      if changedNames.nonEmpty then s"type/nullability changed: ${changedDetails.mkString(", ")}"
+      else "",
+      if onlyMissingNames.nonEmpty then s"missing: ${onlyMissingNames.toList.sorted.mkString(", ")}"
+      else "",
+      if onlyExtraNames.nonEmpty then s"extra: ${onlyExtraNames.toList.sorted.mkString(", ")}"
+      else ""
+    ).filter(_.nonEmpty).mkString("; ")
+  }
+
   /**
    * Combine per-file schemas under the chosen strategy:
    *   - Strict: every input must match the first file's schema exactly.
@@ -168,32 +196,8 @@ class ParquetService(
                 if s
                   .map(f => (f.name, f.dataType, f.isOptional))
                   .toSet != firstSet =>
-              val thisSet          = s.map(f => (f.name, f.dataType, f.isOptional)).toSet
-              val missing          = firstSet -- thisSet
-              val extra            = thisSet -- firstSet
-              val missingNames     = missing.map(_._1)
-              val extraNames       = extra.map(_._1)
-              val changedNames     = missingNames.intersect(extraNames)
-              val onlyMissingNames = missingNames -- changedNames
-              val onlyExtraNames   = extraNames -- changedNames
-              val fmt              = (t: String, o: Boolean) => if o then s"$t?" else t
-              val changedDetails = changedNames.toList.sorted.flatMap { name =>
-                for {
-                  (_, ft, fo) <- missing.find(_._1 == name)
-                  (_, tt, to) <- extra.find(_._1 == name)
-                } yield s"$name (${fmt(ft, fo)} → ${fmt(tt, to)})"
-              }
-              val diffMsg = List(
-                if changedNames.nonEmpty then
-                  s"type/nullability changed: ${changedDetails.mkString(", ")}"
-                else "",
-                if onlyMissingNames.nonEmpty then
-                  s"missing: ${onlyMissingNames.toList.sorted.mkString(", ")}"
-                else "",
-                if onlyExtraNames.nonEmpty then
-                  s"extra: ${onlyExtraNames.toList.sorted.mkString(", ")}"
-                else ""
-              ).filter(_.nonEmpty).mkString("; ")
+              val thisSet = s.map(f => (f.name, f.dataType, f.isOptional)).toSet
+              val diffMsg = describeSchemaMismatch(firstSet, thisSet)
               Left(
                 ParqueteerError.InvalidFormat(
                   inputPaths(i),
@@ -274,6 +278,18 @@ class ParquetService(
    */
   private class MergeStreamException(val error: ParqueteerError)
       extends RuntimeException(error.userMessage, null, true, false)
+
+  private def abortOnReadError(result: scala.util.Try[?]): Unit =
+    result match {
+      case scala.util.Failure(err) =>
+        throw new MergeStreamException(
+          scala.util
+            .Failure(err)
+            .toParqueteerError
+            .fold(identity, _ => ParqueteerError.IOError(err))
+        )
+      case _ =>
+    }
 
   private def deletePartialOutput(outputLocation: StorageLocation): Unit =
     repository.deleteFile(outputLocation) match {
@@ -372,14 +388,7 @@ class ParquetService(
                 }
                 write(builder.result())
               } match {
-              case scala.util.Failure(err) =>
-                throw new MergeStreamException(
-                  scala.util
-                    .Failure(err)
-                    .toParqueteerError
-                    .fold(identity, _ => ParqueteerError.IOError(err))
-                )
-              case _ =>
+              case result => abortOnReadError(result)
             }
           }
         }
@@ -428,14 +437,7 @@ class ParquetService(
             ParquetFile(inputLocation),
             ReadConfig(maxRows = conversionConfig.maxRows)
           )(write) match {
-          case scala.util.Failure(err) =>
-            throw new MergeStreamException(
-              scala.util
-                .Failure(err)
-                .toParqueteerError
-                .fold(identity, _ => ParqueteerError.IOError(err))
-            )
-          case _ =>
+          case result => abortOnReadError(result)
         }
       }
       count <- handleStreamWriteResult(outputLocation, writeResult)
@@ -502,10 +504,7 @@ class ParquetService(
       rows: List[Map[String, CellValue]],
       maxRows: Option[Long]
   ): List[Map[String, CellValue]] =
-    maxRows.fold(rows) { limit =>
-      // rows.length is Int-bounded; if limit >= length we keep all rows, otherwise limit.toInt is safe.
-      if limit >= rows.length.toLong then rows else rows.take(limit.toInt)
-    }
+    io.github.yusukensanta.parqueteer.core.util.RowLimiter.limitList(rows, maxRows)
 
   def validateFile(
       path: String,
