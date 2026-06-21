@@ -42,7 +42,8 @@ jobs:
 
       - name: Setup sbt via Coursier
         run: |
-          curl -fL https://github.com/coursier/coursier/releases/latest/download/cs-x86_64-pc-linux.gz | gzip -d > cs
+          curl -fL https://github.com/coursier/coursier/releases/download/v2.1.24/cs-x86_64-pc-linux.gz | gzip -d > cs
+          echo '1517a0b6c4b9608dc45da8f34bc8290707ed50104ee92662f57808d2c012be54  cs' | sha256sum -c
           chmod +x cs
           ./cs setup --yes --jvm ${{ matrix.java }}
           echo "$HOME/.local/share/coursier/bin" >> $GITHUB_PATH
@@ -86,7 +87,7 @@ jobs:
 
     services:
       rustfs:
-        image: rustfs/rustfs:latest
+        image: rustfs/rustfs@sha256:fa19210ac4697c79d7ccca1ec9b0eb91aebacc6691991ffb14014bb3c67e6cc3
         ports:
           - 9000:9000
         env:
@@ -113,7 +114,8 @@ jobs:
 
       - name: Setup sbt via Coursier
         run: |
-          curl -fL https://github.com/coursier/coursier/releases/latest/download/cs-x86_64-pc-linux.gz | gzip -d > cs
+          curl -fL https://github.com/coursier/coursier/releases/download/v2.1.24/cs-x86_64-pc-linux.gz | gzip -d > cs
+          echo '1517a0b6c4b9608dc45da8f34bc8290707ed50104ee92662f57808d2c012be54  cs' | sha256sum -c
           chmod +x cs
           ./cs setup --yes --jvm 21
           echo "$HOME/.local/share/coursier/bin" >> $GITHUB_PATH

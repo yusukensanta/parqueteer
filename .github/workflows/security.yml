@@ -4,6 +4,9 @@ name: Security Scan
 on:
   schedule:
     - cron: '0 3 * * 1'  # Every Monday at 03:00 UTC
+  pull_request:
+    branches: [main]
+    paths: ['build.sbt', 'project/**']
   workflow_dispatch:       # Allow manual trigger
 
 permissions:

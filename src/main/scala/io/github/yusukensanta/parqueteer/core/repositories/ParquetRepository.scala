@@ -502,12 +502,14 @@ class HadoopParquetRepository(
           case scala.util.Failure(ex: FileNotFoundException) =>
             throw ex
           case scala.util.Failure(ex) =>
-            issues += s"File cannot be opened as Parquet: ${ex.getMessage}"
+            issues += s"File cannot be opened as Parquet: ${io.github.yusukensanta.parqueteer.cli.CredentialRedactor
+                .redact(ex.getMessage)}"
           case scala.util.Success(reader) =>
             Using.resource(reader) { r =>
               Try(r.getFooter) match {
                 case scala.util.Failure(ex) =>
-                  issues += s"Cannot read file footer: ${ex.getMessage}"
+                  issues += s"Cannot read file footer: ${io.github.yusukensanta.parqueteer.cli.CredentialRedactor
+                      .redact(ex.getMessage)}"
                 case scala.util.Success(footer) =>
                   val schema = footer.getFileMetaData.getSchema
                   if schema.getColumns.isEmpty then issues += "Schema has no columns"
@@ -524,7 +526,8 @@ class HadoopParquetRepository(
                       if indicesToCheck.contains(index) then {
                         Try(r.readNextRowGroup()) match {
                           case scala.util.Failure(ex) =>
-                            issues += s"Row group $index data is corrupt or truncated: ${ex.getMessage}"
+                            issues += s"Row group $index data is corrupt or truncated: ${io.github.yusukensanta.parqueteer.cli.CredentialRedactor
+                                .redact(ex.getMessage)}"
                             readerBroken = true
                           case scala.util.Success(null) =>
                             issues += s"Row group $index returned no data (file may be truncated)"
@@ -534,7 +537,8 @@ class HadoopParquetRepository(
                       } else {
                         Try(r.skipNextRowGroup()) match {
                           case scala.util.Failure(ex) =>
-                            issues += s"Row group $index could not be skipped: ${ex.getMessage}"
+                            issues += s"Row group $index could not be skipped: ${io.github.yusukensanta.parqueteer.cli.CredentialRedactor
+                                .redact(ex.getMessage)}"
                             readerBroken = true
                           case _ =>
                         }

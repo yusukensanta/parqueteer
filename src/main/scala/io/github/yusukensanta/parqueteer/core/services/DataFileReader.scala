@@ -19,7 +19,9 @@ private[services] object DataFileReader {
   ): Try[List[Map[String, CellValue]]] =
     Using(scala.io.Source.fromFile(path, "UTF-8")) { source =>
       val iter = source.getLines()
-      parseNdjsonLines(maxRows.fold(iter)(iterTakeLong(iter, _)))
+      parseNdjsonLines(
+        io.github.yusukensanta.parqueteer.core.util.RowLimiter.limitIterator(iter, maxRows)
+      )
     }
 
   def readCsvFile(path: String): Try[List[Map[String, CellValue]]] =
@@ -39,7 +41,9 @@ private[services] object DataFileReader {
     Using(scala.io.Source.fromFile(path, "UTF-8")) { source =>
       val iter = source.getLines()
       LTSVParser
-        .parseLines(maxRows.fold(iter)(iterTakeLong(iter, _)))
+        .parseLines(
+          io.github.yusukensanta.parqueteer.core.util.RowLimiter.limitIterator(iter, maxRows)
+        )
         .toList
     }
 
@@ -184,15 +188,4 @@ private[services] object DataFileReader {
     if s.length <= ErrorPreviewMaxLen then s
     else s.take(ErrorPreviewMaxLen) + "…"
 
-  private[services] def iterTakeLong[A](iter: Iterator[A], n: Long): Iterator[A] =
-    new Iterator[A] {
-      private var remaining = n
-      def hasNext: Boolean  = remaining > 0 && iter.hasNext
-
-      def next(): A = {
-        if !hasNext then throw new NoSuchElementException("next on empty iterator")
-        remaining -= 1
-        iter.next()
-      }
-    }
 }

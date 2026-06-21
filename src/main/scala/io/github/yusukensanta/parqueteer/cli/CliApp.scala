@@ -100,11 +100,11 @@ object CliApp {
 
   private[cli] def detectSubcommandHelp(args: Array[String]): Option[String] = {
     val hasHelp = args.contains("--help") || args.contains("-h")
-    if !hasHelp then return None
-    // prefer longer match: "schema diff" over "schema"
-    knownCommands
-      .filter(commandMatches(_, args))
-      .maxByOption(_.length)
+    if !hasHelp then None
+    else
+      knownCommands
+        .filter(commandMatches(_, args))
+        .maxByOption(_.length)
   }
 
   private def run(config: ArgumentParser.Config): Int =

@@ -295,7 +295,8 @@ class ParquetService(
     repository.deleteFile(outputLocation) match {
       case scala.util.Failure(delErr) =>
         logger.warn(
-          s"Failed to delete partial output at ${outputLocation.path}: ${delErr.getMessage}. Partial file may remain."
+          s"Failed to delete partial output at ${outputLocation.path}: ${io.github.yusukensanta.parqueteer.cli.CredentialRedactor
+              .redact(delErr.getMessage)}. Partial file may remain."
         )
       case _ =>
     }
@@ -376,7 +377,7 @@ class ParquetService(
         .writeContentStream(outputLocation, explicitSchema, writeConfig) { write =>
           inputLocations.zipWithIndex.foreach { case (loc, i) =>
             onProgress(i + 1, inputLocations.size, inputPaths(i))
-            repository
+            val readResult = repository
               .streamContent(ParquetFile(loc), ReadConfig()) { row =>
                 val builder = scala.collection.immutable.ListMap
                   .newBuilder[String, CellValue]
@@ -387,9 +388,8 @@ class ParquetService(
                   j += 1
                 }
                 write(builder.result())
-              } match {
-              case result => abortOnReadError(result)
-            }
+              }
+            abortOnReadError(readResult)
           }
         }
 
@@ -432,13 +432,12 @@ class ParquetService(
         explicitSchema,
         conversionConfig.writeConfig
       ) { write =>
-        repository
+        val readResult = repository
           .streamContent(
             ParquetFile(inputLocation),
             ReadConfig(maxRows = conversionConfig.maxRows)
-          )(write) match {
-          case result => abortOnReadError(result)
-        }
+          )(write)
+        abortOnReadError(readResult)
       }
       count <- handleStreamWriteResult(outputLocation, writeResult)
     } yield count
@@ -473,21 +472,21 @@ class ParquetService(
     if path == "-" then
       DataFileReader
         .readFromStdin(inputFormat, stdin)
-        .map(applyMaxRowsLimit(_, maxRows))
+        .map(io.github.yusukensanta.parqueteer.core.util.RowLimiter.limitList(_, maxRows))
         .toParqueteerError
     else
       inputFormat.toLowerCase match {
         case "json" =>
           DataFileReader
             .readJsonFile(path)
-            .map(applyMaxRowsLimit(_, maxRows))
+            .map(io.github.yusukensanta.parqueteer.core.util.RowLimiter.limitList(_, maxRows))
             .toParqueteerError
         case "ndjson" =>
           DataFileReader.readNdjsonFile(path, maxRows).toParqueteerError
         case "csv" =>
           DataFileReader
             .readCsvFile(path)
-            .map(applyMaxRowsLimit(_, maxRows))
+            .map(io.github.yusukensanta.parqueteer.core.util.RowLimiter.limitList(_, maxRows))
             .toParqueteerError
         case "ltsv" =>
           DataFileReader.readLtsvFile(path, maxRows).toParqueteerError
@@ -499,12 +498,6 @@ class ParquetService(
             )
           )
       }
-
-  private def applyMaxRowsLimit(
-      rows: List[Map[String, CellValue]],
-      maxRows: Option[Long]
-  ): List[Map[String, CellValue]] =
-    io.github.yusukensanta.parqueteer.core.util.RowLimiter.limitList(rows, maxRows)
 
   def validateFile(
       path: String,

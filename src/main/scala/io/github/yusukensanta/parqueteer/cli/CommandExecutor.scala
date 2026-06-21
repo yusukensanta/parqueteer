@@ -269,34 +269,35 @@ private[cli] object CommandExecutor {
     val formatStr = InputFormat.toServiceString(inputFormat)
     checkOutputWritable(outputPath) match {
       case Left(err) =>
-        return reportError("Failed to write file", globalOptions)(err)
+        reportError("Failed to write file", globalOptions)(err)
       case Right(_) =>
-    }
-    if dryRun then {
-      service.readDataFile(inputPath, formatStr, maxRows = Some(1L)) match {
-        case Left(error) =>
-          reportError("Failed to read input file", globalOptions)(error)
-        case Right(rows) =>
-          val columns = rows.headOption.map(_.keys.toList).getOrElse(Nil)
-          println(s"Dry run: would write $outputPath")
-          println(s"  Input:       $inputPath ($formatStr)")
-          println(s"  Columns:     ${columns.mkString(", ")}")
-          println(s"  Compression: ${compression.toString.toLowerCase}")
-          0
-      }
-    } else {
-      service.readDataFile(inputPath, formatStr) match {
-        case Left(error) =>
-          reportError("Failed to read input file", globalOptions)(error)
-        case Right(inputData) =>
-          service.writeFile(outputPath, inputData, writeConfig) match {
-            case Right(_) =>
-              if showStatus(globalOptions) then println(s"Successfully wrote data to $outputPath")
-              0
+        if dryRun then {
+          service.readDataFile(inputPath, formatStr, maxRows = Some(1L)) match {
             case Left(error) =>
-              reportError("Failed to write file", globalOptions)(error)
+              reportError("Failed to read input file", globalOptions)(error)
+            case Right(rows) =>
+              val columns = rows.headOption.map(_.keys.toList).getOrElse(Nil)
+              println(s"Dry run: would write $outputPath")
+              println(s"  Input:       $inputPath ($formatStr)")
+              println(s"  Columns:     ${columns.mkString(", ")}")
+              println(s"  Compression: ${compression.toString.toLowerCase}")
+              0
           }
-      }
+        } else {
+          service.readDataFile(inputPath, formatStr) match {
+            case Left(error) =>
+              reportError("Failed to read input file", globalOptions)(error)
+            case Right(inputData) =>
+              service.writeFile(outputPath, inputData, writeConfig) match {
+                case Right(_) =>
+                  if showStatus(globalOptions) then
+                    println(s"Successfully wrote data to $outputPath")
+                  0
+                case Left(error) =>
+                  reportError("Failed to write file", globalOptions)(error)
+              }
+          }
+        }
     }
   }
 
@@ -520,26 +521,26 @@ private[cli] object CommandExecutor {
     val writeConfig = WriteConfig(compressionType = compression)
     checkOutputWritable(outputPath) match {
       case Left(err) =>
-        return reportError("Failed to merge", globalOptions)(err)
+        reportError("Failed to merge", globalOptions)(err)
       case Right(_) =>
-    }
-    val total = inputPaths.size
-    val onProgress: (Int, Int, String) => Unit = (i, n, path) =>
-      if !globalOptions.quiet then System.err.println(s"[$i/$n] Merging: $path")
+        val total = inputPaths.size
+        val onProgress: (Int, Int, String) => Unit = (i, n, path) =>
+          if !globalOptions.quiet then System.err.println(s"[$i/$n] Merging: $path")
 
-    service.mergeFiles(
-      inputPaths,
-      outputPath,
-      writeConfig,
-      schemaMode,
-      onProgress
-    ) match {
-      case Right(count) =>
-        if showStatus(globalOptions) then
-          println(s"Merged $total files ($count rows) → $outputPath")
-        0
-      case Left(error) =>
-        reportError("Failed to merge", globalOptions)(error)
+        service.mergeFiles(
+          inputPaths,
+          outputPath,
+          writeConfig,
+          schemaMode,
+          onProgress
+        ) match {
+          case Right(count) =>
+            if showStatus(globalOptions) then
+              println(s"Merged $total files ($count rows) → $outputPath")
+            0
+          case Left(error) =>
+            reportError("Failed to merge", globalOptions)(error)
+        }
     }
   }
 
@@ -688,19 +689,20 @@ private[cli] object CommandExecutor {
 
   private[cli] def checkOutputWritable(
       outputPath: String
-  ): Either[ParqueteerError, Unit] = {
-    if cloudUriPattern.findFirstIn(outputPath).isDefined then return Right(())
-    val parent = java.nio.file.Paths.get(outputPath).toAbsolutePath.getParent
-    if parent != null && parent.toFile.exists() && !parent.toFile.canWrite then
-      Left(
-        ParqueteerError.IOError(
-          new java.io.IOException(
-            s"Output directory is not writable: $parent"
+  ): Either[ParqueteerError, Unit] =
+    if cloudUriPattern.findFirstIn(outputPath).isDefined then Right(())
+    else {
+      val parent = java.nio.file.Paths.get(outputPath).toAbsolutePath.getParent
+      if parent != null && parent.toFile.exists() && !parent.toFile.canWrite then
+        Left(
+          ParqueteerError.IOError(
+            new java.io.IOException(
+              s"Output directory is not writable: $parent"
+            )
           )
         )
-      )
-    else Right(())
-  }
+      else Right(())
+    }
 
   private[cli] def runWithDeferredBegin(
       writer: RowStreamWriter,
