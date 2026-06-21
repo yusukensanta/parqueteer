@@ -29,17 +29,29 @@ class ParquetService(
       )
     else Right(())
 
+  private def validateFilter(
+      filter: Option[String]
+  ): Either[ParqueteerError, Unit] =
+    filter
+      .map(FilterParser.parse(_).map(_ => ()))
+      .getOrElse(Right(()))
+
+  private def prepareRead(
+      path: String,
+      readConfig: ReadConfig
+  ): Either[ParqueteerError, ParquetFile] =
+    for {
+      _        <- requireNotStdin(path)
+      _        <- validateFilter(readConfig.filter)
+      location <- parseLocation(path)
+    } yield ParquetFile(location)
+
   def readFile(
       path: String,
       readConfig: ReadConfig = ReadConfig()
   ): Either[ParqueteerError, ParquetFile] =
     for {
-      _ <- requireNotStdin(path)
-      _ <- readConfig.filter
-        .map(FilterParser.parse(_).map(_ => ()))
-        .getOrElse(Right(()))
-      location <- parseLocation(path)
-      file = ParquetFile(location)
+      file <- prepareRead(path, readConfig)
       schemaAndMeta <- repository
         .readFileInfo(file)
         .toParqueteerError
@@ -59,12 +71,7 @@ class ParquetService(
       readConfig: ReadConfig
   )(process: Map[String, CellValue] => Unit): Either[ParqueteerError, Long] =
     for {
-      _ <- requireNotStdin(path)
-      _ <- readConfig.filter
-        .map(FilterParser.parse(_).map(_ => ()))
-        .getOrElse(Right(()))
-      location <- parseLocation(path)
-      file = ParquetFile(location)
+      file <- prepareRead(path, readConfig)
       count <- repository
         .streamContent(file, readConfig)(
           process

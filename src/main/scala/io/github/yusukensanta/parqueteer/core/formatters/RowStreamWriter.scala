@@ -13,6 +13,30 @@ trait RowStreamWriter {
 object RowStreamWriter {
   private val SampleSize = 50
 
+  private def discoverColumns(
+      rows: Iterable[Map[String, CellValue]]
+  ): List[String] = {
+    val seen = scala.collection.mutable.LinkedHashSet.empty[String]
+    rows.foreach(_.keysIterator.foreach(seen += _))
+    seen.toList
+  }
+
+  private def warnUnseenColumns(
+      rowKeys: Set[String],
+      knownColumns: Set[String],
+      formatLabel: String
+  ): Boolean = {
+    val unseen = rowKeys -- knownColumns
+    if unseen.nonEmpty then {
+      Console.err.println(
+        s"[parqueteer] warning: $formatLabel output drops columns first seen after the $SampleSize-row " +
+          s"sample window: ${unseen.toList.sorted.mkString(", ")}. " +
+          "Use --output-format ndjson to preserve all columns."
+      )
+      true
+    } else false
+  }
+
   def apply(format: OutputFormat, out: PrintStream): RowStreamWriter =
     format match {
       case OutputFormat.NDJSON | OutputFormat.Pretty =>
@@ -63,9 +87,7 @@ object RowStreamWriter {
 
     override def writeRow(row: Map[String, CellValue]): Unit = {
       if columns.isEmpty then {
-        val seen = scala.collection.mutable.LinkedHashSet.empty[String]
-        row.keysIterator.foreach(seen += _)
-        columns = seen.toList
+        columns = discoverColumns(List(row))
         columnsSet = columns.toSet
         out.print(
           columns
@@ -73,13 +95,7 @@ object RowStreamWriter {
             .mkString(",") + CSVFormatter.Newline
         )
       } else if !warnedUnseen then {
-        val unseen = row.keySet -- columnsSet
-        if unseen.nonEmpty then {
-          Console.err.println(
-            s"[parqueteer] warning: CSV writer dropping unseen column keys: ${unseen.mkString(", ")}"
-          )
-          warnedUnseen = true
-        }
+        warnedUnseen = warnUnseenColumns(row.keySet, columnsSet, "CSV")
       }
       out.print(
         columns
@@ -101,11 +117,7 @@ object RowStreamWriter {
     private var warnedUnseen            = false
 
     private def flushSample(): Unit = {
-      columns = {
-        val seen = scala.collection.mutable.LinkedHashSet.empty[String]
-        sample.foreach(_.keysIterator.foreach(seen += _))
-        seen.toList
-      }
+      columns = discoverColumns(sample)
       columnsSet = columns.toSet
       widths = tf.calculateColumnWidths(columns, sample.toList)
       out.println(tf.drawTopBorder(widths))
@@ -127,17 +139,7 @@ object RowStreamWriter {
         sample += row
         if sample.size >= SampleSize then flushSample()
       } else {
-        if !warnedUnseen then {
-          val unseen = row.keySet -- columnsSet
-          if unseen.nonEmpty then {
-            Console.err.println(
-              s"[parqueteer] warning: table output drops columns first seen after the ${SampleSize}-row " +
-                s"sample window: ${unseen.toList.sorted.mkString(", ")}. " +
-                "Use --output-format ndjson to preserve all columns."
-            )
-            warnedUnseen = true
-          }
-        }
+        if !warnedUnseen then warnedUnseen = warnUnseenColumns(row.keySet, columnsSet, "table")
         out.println(
           tf.drawRow(
             columns.map(c => row.getOrElse(c, CellValue.Null).safeDisplay),
@@ -183,11 +185,7 @@ object RowStreamWriter {
     private def cell(v: CellValue): String = escapeStr(v.display)
 
     private def flushSample(): Unit = {
-      columns = {
-        val seen = scala.collection.mutable.LinkedHashSet.empty[String]
-        sample.foreach(_.keysIterator.foreach(seen += _))
-        seen.toList
-      }
+      columns = discoverColumns(sample)
       columnsSet = columns.toSet
       out.println("| " + columns.map(escapeStr).mkString(" | ") + " |")
       out.println("| " + columns.map(_ => "---").mkString(" | ") + " |")
@@ -206,17 +204,7 @@ object RowStreamWriter {
         sample += row
         if sample.size >= SampleSize then flushSample()
       } else {
-        if !warnedUnseen then {
-          val unseen = row.keySet -- columnsSet
-          if unseen.nonEmpty then {
-            Console.err.println(
-              s"[parqueteer] warning: markdown output drops columns first seen after the ${SampleSize}-row " +
-                s"sample window: ${unseen.toList.sorted.mkString(", ")}. " +
-                "Use --output-format ndjson to preserve all columns."
-            )
-            warnedUnseen = true
-          }
-        }
+        if !warnedUnseen then warnedUnseen = warnUnseenColumns(row.keySet, columnsSet, "markdown")
         out.println(
           "| " + columns
             .map(c => cell(row.getOrElse(c, CellValue.Null)))

@@ -720,7 +720,8 @@ private[cli] object CommandExecutor {
       case Some(ex) if result.isRight => Left(ParqueteerError.IOError(ex))
       case Some(ex) =>
         System.err.println(
-          s"[parqueteer] warning: error flushing output: ${ex.getMessage}"
+          s"[parqueteer] warning: error flushing output: ${CredentialRedactor
+              .redact(Option(ex.getMessage).getOrElse(ex.getClass.getSimpleName))}"
         )
         result
       case None => result

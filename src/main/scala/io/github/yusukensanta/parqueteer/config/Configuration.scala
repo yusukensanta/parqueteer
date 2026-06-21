@@ -145,7 +145,10 @@ class ConfigurationManager {
       )
     } else {
       parseConfigFile(configFile).map(_ => List.empty).recover { case ex =>
-        List(ex.getMessage)
+        List(
+          io.github.yusukensanta.parqueteer.cli.CredentialRedactor
+            .redact(Option(ex.getMessage).getOrElse("parse error"))
+        )
       }
     }
   }

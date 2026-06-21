@@ -64,9 +64,10 @@ jobs:
         run: sbt clean test
 
       - name: Build universal distributions
+        env:
+          VERSION: ${{ steps.version.outputs.VERSION }}
         run: |
-          # Override version to match git tag
-          sbt 'set version := "${{ steps.version.outputs.VERSION }}"' \
+          sbt "set version := \"${VERSION}\"" \
               Universal/packageBin \
               Universal/packageZipTarball
 

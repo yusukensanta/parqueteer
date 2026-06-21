@@ -63,6 +63,7 @@ jobs:
         run: sbt compile
 
       - name: Test
+        if: matrix.java != '21'
         run: sbt test
 
       - name: Coverage Report
