@@ -256,20 +256,12 @@ class HadoopParquetRepository(
       result
     }
 
-  // Apply the optional row-limit to any IterableOnce source. Centralizes the
-  // `Some(limit) => take | None => iter` dance so callers can chain transforms.
   private def applyMaxRows[A](
       source: IterableOnce[A],
       maxRows: Option[Long]
   ): Iterator[A] =
-    maxRows.fold(source.iterator) { n =>
-      val base  = source.iterator
-      var taken = 0L
-      new Iterator[A] {
-        def hasNext: Boolean = taken < n && base.hasNext
-        def next(): A        = { val v = base.next(); taken += 1; v }
-      }
-    }
+    io.github.yusukensanta.parqueteer.core.util.RowLimiter
+      .limitIterator(source, maxRows)
 
   def streamContent(
       file: ParquetFile,

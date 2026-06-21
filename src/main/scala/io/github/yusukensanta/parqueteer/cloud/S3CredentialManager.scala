@@ -23,17 +23,28 @@ private object S3Tuning {
 // closed exactly once on JVM exit (same pattern as Hadoop FileSystem.closeAll).
 private object S3CredentialProviders {
 
-  lazy val default: DefaultCredentialsProvider =
-    DefaultCredentialsProvider.create()
+  @volatile private var defaultInitialized: Boolean         = false
+  @volatile private var instanceProfileInitialized: Boolean = false
 
-  lazy val instanceProfile: InstanceProfileCredentialsProvider =
-    InstanceProfileCredentialsProvider.create()
+  lazy val default: DefaultCredentialsProvider = {
+    val p = DefaultCredentialsProvider.create()
+    defaultInitialized = true
+    p
+  }
+
+  lazy val instanceProfile: InstanceProfileCredentialsProvider = {
+    val p = InstanceProfileCredentialsProvider.create()
+    instanceProfileInitialized = true
+    p
+  }
 
   Runtime.getRuntime.addShutdownHook(new Thread(() => {
-    try default.close()
-    catch { case _: Exception => () }
-    try instanceProfile.close()
-    catch { case _: Exception => () }
+    if defaultInitialized then
+      try default.close()
+      catch { case _: Exception => () }
+    if instanceProfileInitialized then
+      try instanceProfile.close()
+      catch { case _: Exception => () }
   }))
 }
 

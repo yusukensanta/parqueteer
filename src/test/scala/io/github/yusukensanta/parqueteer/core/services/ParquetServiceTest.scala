@@ -1142,6 +1142,44 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     result.left.toOption.get.userMessage should include("id")
   }
 
+  // ── describeSchemaMismatch ──────────────────────────────────────────────
+  "describeSchemaMismatch" should "report type change" in {
+    val expected = Set(("age", "INT32", false))
+    val actual   = Set(("age", "INT64", false))
+    val service  = new ParquetService(new FakeParquetRepository())
+    val result   = service.describeSchemaMismatch(expected, actual)
+    result should include("type/nullability changed")
+    result should include("age")
+    result should include("INT32")
+    result should include("INT64")
+  }
+
+  it should "report missing fields" in {
+    val expected = Set(("a", "INT32", false), ("b", "INT32", false))
+    val actual   = Set(("a", "INT32", false))
+    val service  = new ParquetService(new FakeParquetRepository())
+    val result   = service.describeSchemaMismatch(expected, actual)
+    result should include("missing")
+    result should include("b")
+  }
+
+  it should "report extra fields" in {
+    val expected = Set(("a", "INT32", false))
+    val actual   = Set(("a", "INT32", false), ("c", "INT64", true))
+    val service  = new ParquetService(new FakeParquetRepository())
+    val result   = service.describeSchemaMismatch(expected, actual)
+    result should include("extra")
+    result should include("c")
+  }
+
+  it should "report nullability change with ? suffix" in {
+    val expected = Set(("x", "INT32", false))
+    val actual   = Set(("x", "INT32", true))
+    val service  = new ParquetService(new FakeParquetRepository())
+    val result   = service.describeSchemaMismatch(expected, actual)
+    result should include("INT32?")
+  }
+
   // ── M-C: merge schema compressionType is empty (not from WriteConfig) ─────
   it should "set compressionType to empty string in merge schema (not coupling to WriteConfig)" in {
     val repo = new FakeParquetRepository(

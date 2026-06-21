@@ -86,12 +86,8 @@ private[repositories] object ParallelRowGroupReader {
             ec.shutdownNow()
             throw t
         }
-      config.maxRows match {
-        case Some(limit) =>
-          if limit >= allRows.size.toLong then allRows
-          else allRows.take(limit.toInt)
-        case None => allRows
-      }
+      io.github.yusukensanta.parqueteer.core.util.RowLimiter
+        .limitList(allRows, config.maxRows)
     } finally {
       rawEc.shutdown()
       if !forciblyShutdown && !rawEc.awaitTermination(

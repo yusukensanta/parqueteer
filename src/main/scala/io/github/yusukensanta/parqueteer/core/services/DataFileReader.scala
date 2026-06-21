@@ -123,7 +123,7 @@ private[services] object DataFileReader {
             array.toList.map { elem =>
               jsonObjectToRow(
                 elem,
-                s"Each element of the JSON array must be an object, got: ${elem.noSpaces}"
+                s"Each element of the JSON array must be an object, got: ${truncate(elem.noSpaces)}"
               )
             }
           case None =>
@@ -155,7 +155,7 @@ private[services] object DataFileReader {
           case Right(json) =>
             jsonObjectToRow(
               json,
-              s"Each NDJSON line must be a JSON object, got: ${json.noSpaces}"
+              s"Each NDJSON line must be a JSON object, got: ${truncate(json.noSpaces)}"
             )
         }
       }
@@ -177,6 +177,12 @@ private[services] object DataFileReader {
       content: String
   ): List[Map[String, CellValue]] =
     CsvParser.parse(content)
+
+  private val ErrorPreviewMaxLen = 80
+
+  private def truncate(s: String): String =
+    if s.length <= ErrorPreviewMaxLen then s
+    else s.take(ErrorPreviewMaxLen) + "…"
 
   private[services] def iterTakeLong[A](iter: Iterator[A], n: Long): Iterator[A] =
     new Iterator[A] {

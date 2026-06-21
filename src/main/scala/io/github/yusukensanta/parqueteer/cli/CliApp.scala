@@ -62,7 +62,7 @@ object CliApp {
     }
   }
 
-  private def shouldShowVersion(args: Array[String]): Boolean =
+  private[cli] def shouldShowVersion(args: Array[String]): Boolean =
     args.contains("--version") || args.contains("-V")
 
   private def showVersion(): Unit = {
@@ -74,7 +74,7 @@ object CliApp {
     println(s"Scala ${BuildInfo.scalaVersion} · Java $javaVersion$vendorSuffix")
   }
 
-  private val knownCommands = Set(
+  private[cli] val knownCommands = Set(
     "read",
     "info",
     "write",
@@ -92,13 +92,13 @@ object CliApp {
   private def commandMatches(cmd: String, args: Array[String]): Boolean =
     cmd.split(' ').forall(args.contains)
 
-  private def shouldShowTopLevelHelp(args: Array[String]): Boolean = {
+  private[cli] def shouldShowTopLevelHelp(args: Array[String]): Boolean = {
     val hasHelp    = args.contains("--help") || args.contains("-h")
     val hasCommand = knownCommands.exists(commandMatches(_, args))
     hasHelp && !hasCommand
   }
 
-  private def detectSubcommandHelp(args: Array[String]): Option[String] = {
+  private[cli] def detectSubcommandHelp(args: Array[String]): Option[String] = {
     val hasHelp = args.contains("--help") || args.contains("-h")
     if !hasHelp then return None
     // prefer longer match: "schema diff" over "schema"
