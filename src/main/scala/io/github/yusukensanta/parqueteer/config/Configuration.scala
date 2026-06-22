@@ -121,13 +121,15 @@ class ConfigurationManager {
                 case Right(config) => config
                 case Left(error) =>
                   throw new RuntimeException(
-                    s"Failed to parse configuration: ${error.getMessage}",
+                    s"Failed to parse configuration: ${io.github.yusukensanta.parqueteer.cli.CredentialRedactor
+                        .redact(error.getMessage)}",
                     error
                   )
               }
             case Left(error) =>
               throw new RuntimeException(
-                s"Invalid YAML syntax: ${error.getMessage}",
+                s"Invalid YAML syntax: ${io.github.yusukensanta.parqueteer.cli.CredentialRedactor
+                    .redact(error.getMessage)}",
                 error
               )
           }
