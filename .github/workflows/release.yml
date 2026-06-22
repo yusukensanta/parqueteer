@@ -39,8 +39,9 @@ jobs:
           echo "Extracted version: $VERSION"
 
       - name: Show version info
+        env:
+          TAG_VERSION: ${{ steps.version.outputs.VERSION }}
         run: |
-          TAG_VERSION="${{ steps.version.outputs.VERSION }}"
           echo "Tag version: $TAG_VERSION"
           echo "Note: Using sbt-ci-release for automatic version management from git tags"
 
@@ -80,8 +81,9 @@ jobs:
 
       - name: Prepare release artifacts
         id: artifacts
+        env:
+          VERSION: ${{ steps.version.outputs.VERSION }}
         run: |
-          VERSION="${{ steps.version.outputs.VERSION }}"
           echo "TGZ_FILE=target/universal/parqueteer-${VERSION}.tgz" >> $GITHUB_OUTPUT
           echo "ZIP_FILE=target/universal/parqueteer-${VERSION}.zip" >> $GITHUB_OUTPUT
           echo "CHECKSUMS=target/universal/checksums.txt" >> $GITHUB_OUTPUT

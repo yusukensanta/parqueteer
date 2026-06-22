@@ -311,11 +311,14 @@ class ParquetService(
   // True when the writer never created the output file (pre-existence check),
   // so we must NOT delete a file this operation didn't write.
   private def isOutputAlreadyExistsError(ex: Throwable): Boolean =
-    ex.isInstanceOf[org.apache.hadoop.fs.FileAlreadyExistsException] ||
-      ex.isInstanceOf[java.nio.file.FileAlreadyExistsException] ||
-      Option(ex.getMessage).exists(m =>
-        m.contains("already exists") || m.contains("File already exists")
-      )
+    ex match {
+      case _: org.apache.hadoop.fs.FileAlreadyExistsException => true
+      case _: java.nio.file.FileAlreadyExistsException        => true
+      case _ =>
+        Option(ex.getMessage).exists(m =>
+          m.contains("already exists") || m.contains("File already exists")
+        )
+    }
 
   private def handleStreamWriteResult(
       outputLocation: StorageLocation,

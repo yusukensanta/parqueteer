@@ -31,27 +31,32 @@ object ParqueteerError:
     val userMessage =
       s"""Invalid filter expression: "$expression"\n$message\nRun with --help to see supported filter syntax."""
 
+  private def redact(s: String): String =
+    io.github.yusukensanta.parqueteer.cli.CredentialRedactor.redact(s)
+
   case class CloudAuthError(provider: String, message: String) extends ParqueteerError:
     val exitCode = 5
 
     val userMessage =
-      s"Cloud authentication failed ($provider): $message\nCheck your credentials and environment variables."
+      s"Cloud authentication failed ($provider): ${redact(message)}\nCheck your credentials and environment variables."
 
   case class InvalidFormat(format: String, message: String) extends ParqueteerError:
     val exitCode = 6
 
     val userMessage =
-      s"""Unsupported format: "$format"\n$message\nRun with --help to see supported formats."""
+      s"""Unsupported format: "$format"\n${redact(
+          message
+        )}\nRun with --help to see supported formats."""
 
   case class IOError(cause: Throwable) extends ParqueteerError:
     val exitCode = 1
 
     val userMessage =
-      s"I/O error: ${Option(cause.getMessage).getOrElse(cause.getClass.getSimpleName)}"
+      s"I/O error: ${redact(Option(cause.getMessage).getOrElse(cause.getClass.getSimpleName))}"
 
   case class ParseError(format: String, message: String) extends ParqueteerError:
     val exitCode    = 2
-    val userMessage = s"Parse error ($format): $message"
+    val userMessage = s"Parse error ($format): ${redact(message)}"
 
   class CloudAuthException(
       val provider: String,

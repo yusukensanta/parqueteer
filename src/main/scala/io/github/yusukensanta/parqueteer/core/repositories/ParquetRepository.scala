@@ -152,7 +152,7 @@ class HadoopParquetRepository(
       case S3Location(bucket, _, r) =>
         s"s3:$bucket:${r.orElse(region).getOrElse("")}"
       case GCSLocation(bucket, _) =>
-        s"gcs:${profile.getOrElse("")}:$bucket"
+        s"gcs:$bucket"
       case AzureLocation(account, cont, _) =>
         s"azure:${profile.getOrElse("")}:$account/$cont"
     }
@@ -658,7 +658,12 @@ class HadoopParquetRepository(
                   case _                => "cloud storage"
                 }
                 scala.util.Failure(
-                  new CloudAuthException(providerName, e.getMessage, e)
+                  new CloudAuthException(
+                    providerName,
+                    io.github.yusukensanta.parqueteer.cli.CredentialRedactor
+                      .redact(Option(e.getMessage).getOrElse(e.getClass.getSimpleName)),
+                    e
+                  )
                 )
             }
           case None => Success(new Configuration())
