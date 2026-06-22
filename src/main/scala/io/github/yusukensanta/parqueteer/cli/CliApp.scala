@@ -120,7 +120,8 @@ object CliApp {
             case scala.util.Failure(e) =>
               if !config.globalOptions.quiet then
                 System.err.println(
-                  s"[parqueteer] warning: could not load config: ${e.getMessage}; using defaults"
+                  s"[parqueteer] warning: could not load config: ${CredentialRedactor
+                      .redact(Option(e.getMessage).getOrElse("unknown error"))}; using defaults"
                 )
               AppConfig()
           }

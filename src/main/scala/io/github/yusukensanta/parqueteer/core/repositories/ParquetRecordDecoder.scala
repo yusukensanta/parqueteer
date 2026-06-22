@@ -293,16 +293,18 @@ private[repositories] object ParquetRecordDecoder {
   ): CellValue = {
     val outerGroup   = group.getGroup(fieldIndex, 0)
     val elementCount = outerGroup.getFieldRepetitionCount(0)
-    if elementCount == 0 then return CellValue.Str("[]")
-    val repeatedType = listGroupType.getType(0).asGroupType()
-    val elemType     = repeatedType.getType(0)
-    val elements = (0 until elementCount).map { j =>
-      val wrapper = outerGroup.getGroup(0, j)
-      if wrapper.getFieldRepetitionCount(0) > 0 && elemType.isPrimitive then
-        wrapper.getValueToString(0, 0)
-      else "null"
+    if elementCount == 0 then CellValue.Str("[]")
+    else {
+      val repeatedType = listGroupType.getType(0).asGroupType()
+      val elemType     = repeatedType.getType(0)
+      val elements = (0 until elementCount).map { j =>
+        val wrapper = outerGroup.getGroup(0, j)
+        if wrapper.getFieldRepetitionCount(0) > 0 && elemType.isPrimitive then
+          wrapper.getValueToString(0, 0)
+        else "null"
+      }
+      CellValue.Str(elements.mkString("[", ", ", "]"))
     }
-    CellValue.Str(elements.mkString("[", ", ", "]"))
   }
 
   def decodeGroup(

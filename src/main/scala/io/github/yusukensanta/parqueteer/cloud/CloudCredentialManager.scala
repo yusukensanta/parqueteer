@@ -47,20 +47,24 @@ object CloudCredentialManager {
       header: String,
       strategies: List[() => Try[A]]
   ): Try[A] = {
-    val failures             = scala.collection.mutable.ListBuffer.empty[String]
-    var lastCause: Throwable = null
-    val it                   = strategies.iterator
-    while it.hasNext do
+    val failures              = scala.collection.mutable.ListBuffer.empty[String]
+    var lastCause: Throwable  = null
+    var found: Option[Try[A]] = None
+    val it                    = strategies.iterator
+    while found.isEmpty && it.hasNext do
       it.next()() match {
-        case s @ Success(_) => return s
+        case s @ Success(_) => found = Some(s)
         case Failure(err) =>
-          failures += Option(err.getMessage).getOrElse(err.getClass.getName)
+          failures += io.github.yusukensanta.parqueteer.cli.CredentialRedactor
+            .redact(Option(err.getMessage).getOrElse(err.getClass.getName))
           lastCause = err
       }
-    Failure(
-      new RuntimeException(
-        s"$header\n${failures.mkString("\n")}",
-        lastCause
+    found.getOrElse(
+      Failure(
+        new RuntimeException(
+          s"$header\n${failures.mkString("\n")}",
+          lastCause
+        )
       )
     )
   }

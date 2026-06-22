@@ -201,25 +201,27 @@ class TableFormatter extends OutputFormatter {
   private[formatters] def formatValue(value: CellValue): String =
     value.safeDisplay
 
-  private[formatters] def truncate(str: String, maxWidth: Int): String = {
-    if maxWidth <= 0 then return ""
-    if displayWidth(str) <= maxWidth then return str
-    if maxWidth <= 3 then return ".".repeat(maxWidth)
+  private[formatters] def truncate(str: String, maxWidth: Int): String =
+    if maxWidth <= 0 then ""
+    else if displayWidth(str) <= maxWidth then str
+    else if maxWidth <= 3 then ".".repeat(maxWidth)
     else {
-      val sb = new java.lang.StringBuilder
-      var w  = 0
-      var i  = 0
-      while i < str.length do {
+      val sb   = new java.lang.StringBuilder
+      var w    = 0
+      var i    = 0
+      var done = false
+      while !done && i < str.length do {
         val cp  = str.codePointAt(i)
         val cpw = if isWideCodePoint(cp) then 2 else 1
-        if w + cpw + 3 > maxWidth then { sb.append("..."); return sb.toString }
-        sb.appendCodePoint(cp)
-        w += cpw
-        i += Character.charCount(cp)
+        if w + cpw + 3 > maxWidth then { sb.append("..."); done = true }
+        else {
+          sb.appendCodePoint(cp)
+          w += cpw
+          i += Character.charCount(cp)
+        }
       }
       sb.toString
     }
-  }
 
   private def padRight(str: String, width: Int): String =
     str + " " * (width - displayWidth(str))
