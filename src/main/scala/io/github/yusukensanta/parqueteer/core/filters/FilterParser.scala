@@ -19,7 +19,7 @@ object FilterParser {
 
   // Per-(col, op) dedup set: emit each DECIMAL-column advisory at most once per JVM.
   private[filters] val warnedDecimalFilters =
-    java.util.concurrent.ConcurrentHashMap.newKeySet[String]()
+    io.github.yusukensanta.parqueteer.core.util.BoundedWarnSet()
 
   def parse(
       filterExpr: String

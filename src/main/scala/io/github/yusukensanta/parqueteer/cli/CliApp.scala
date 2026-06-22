@@ -148,7 +148,7 @@ object CliApp {
         }
     }
 
-  private def applyAppConfig(
+  private[cli] def applyAppConfig(
       opts: GlobalOptions,
       appConfig: AppConfig
   ): GlobalOptions = {
@@ -159,7 +159,7 @@ object CliApp {
     )
   }
 
-  private def applyAppConfigToCommand(
+  private[cli] def applyAppConfigToCommand(
       cmd: Command,
       appConfig: AppConfig
   ): Command = {

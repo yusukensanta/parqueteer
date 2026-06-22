@@ -153,6 +153,7 @@ jobs:
           retention-days: 30
 
       - name: Update Homebrew Tap
+        continue-on-error: true
         env:
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           VERSION: ${{ steps.version.outputs.VERSION }}
@@ -198,6 +199,7 @@ jobs:
           git push
 
       - name: Trigger portfolio sync
+        continue-on-error: true
         env:
           PORTFOLIO_DISPATCH_TOKEN: ${{ secrets.PORTFOLIO_DISPATCH_TOKEN }}
           VERSION: ${{ steps.version.outputs.VERSION }}

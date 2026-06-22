@@ -362,9 +362,7 @@ class HadoopParquetRepository(
         val inputFile            = HadoopInputFile.fromStatus(fileStatus, hadoopConfig)
         val footerBytes          = FooterReader.readFooterBytes(inputFile)
         val (version, createdBy) = FooterReader.parseRawMeta(footerBytes)
-        val meta                 = FooterReader.parseFooter(footerBytes)
-        val blocks               = meta.getBlocks.asScala.toList
-        val msgSchema            = meta.getFileMetaData.getSchema
+        val (msgSchema, blocks)  = getFooter(path, hadoopConfig)
         val ratio                = calculateCompressionRatio(blocks)
         val parsedSchema         = FooterReader.buildParquetSchema(msgSchema, blocks)
         val codecs               = parsedSchema.columns.map(_.compressionType).distinct
@@ -395,7 +393,6 @@ class HadoopParquetRepository(
             uncompressedBytes = block.getTotalByteSize
           )
         }
-        footerCache.put(path.toString, (msgSchema, blocks))
         (parsedSchema, metadata, rowGroups)
       }
     }

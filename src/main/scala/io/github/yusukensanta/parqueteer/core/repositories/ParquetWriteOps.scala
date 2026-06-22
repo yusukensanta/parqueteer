@@ -11,22 +11,22 @@ private[repositories] object ParquetWriteOps {
   private val logger = org.slf4j.LoggerFactory.getLogger(getClass)
 
   private val decimalCoercionWarnedCols =
-    java.util.concurrent.ConcurrentHashMap.newKeySet[String]()
+    io.github.yusukensanta.parqueteer.core.util.BoundedWarnSet()
 
   private val longToDoubleWarnedCols =
-    java.util.concurrent.ConcurrentHashMap.newKeySet[String]()
+    io.github.yusukensanta.parqueteer.core.util.BoundedWarnSet()
 
   private val intToFloatWarnedCols =
-    java.util.concurrent.ConcurrentHashMap.newKeySet[String]()
+    io.github.yusukensanta.parqueteer.core.util.BoundedWarnSet()
 
   private val longToFloatWarnedCols =
-    java.util.concurrent.ConcurrentHashMap.newKeySet[String]()
+    io.github.yusukensanta.parqueteer.core.util.BoundedWarnSet()
 
   private val doubleToFloatWarnedCols =
-    java.util.concurrent.ConcurrentHashMap.newKeySet[String]()
+    io.github.yusukensanta.parqueteer.core.util.BoundedWarnSet()
 
   private val binaryMismatchWarnedCols =
-    java.util.concurrent.ConcurrentHashMap.newKeySet[String]()
+    io.github.yusukensanta.parqueteer.core.util.BoundedWarnSet()
 
   // Parquet DECIMAL precision is bounded to [1, MaxDecimalPrecision]. Precompute
   // 10^p for each p so the per-row BINARY DECIMAL precision guard avoids
