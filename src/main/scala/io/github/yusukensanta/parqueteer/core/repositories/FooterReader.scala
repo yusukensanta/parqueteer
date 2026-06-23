@@ -121,7 +121,7 @@ private[repositories] object FooterReader {
           s"DECIMAL(${dec.getPrecision},${dec.getScale})"
         case _ =>
           primitive match {
-            case PrimitiveTypeName.INT96                => "TIMESTAMP_MICROS"
+            case PrimitiveTypeName.INT96                => "TIMESTAMP(INT96)"
             case PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY => "BINARY"
             case _                                      => primitive.name()
           }

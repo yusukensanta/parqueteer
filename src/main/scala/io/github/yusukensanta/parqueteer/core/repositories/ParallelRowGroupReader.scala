@@ -10,15 +10,26 @@ import org.apache.parquet.ParquetReadOptions
 import org.apache.parquet.schema.MessageType
 import org.slf4j.LoggerFactory
 import scala.concurrent.{Await, ExecutionContext, ExecutionContextExecutorService, Future}
-import java.util.concurrent.{Executors, TimeUnit, TimeoutException}
+import java.util.concurrent.{Executors, TimeoutException}
 import java.util.concurrent.atomic.AtomicLong
 import scala.jdk.CollectionConverters.*
 import scala.util.Using
 
 private[repositories] object ParallelRowGroupReader {
 
-  private val MaxParallelism = 64
-  private val logger         = LoggerFactory.getLogger(getClass)
+  private val logger = LoggerFactory.getLogger(getClass)
+
+  private val sharedPool: java.util.concurrent.ExecutorService = {
+    val factory = new java.util.concurrent.ThreadFactory {
+      private val counter = new java.util.concurrent.atomic.AtomicInteger(0)
+      override def newThread(r: Runnable): Thread = {
+        val t = new Thread(r, s"parqueteer-parallel-read-${counter.getAndIncrement()}")
+        t.setDaemon(true)
+        t
+      }
+    }
+    Executors.newCachedThreadPool(factory)
+  }
 
   def read(
       path: HadoopPath,
@@ -43,62 +54,37 @@ private[repositories] object ParallelRowGroupReader {
       case _ => fileSchema
     }
 
-    val threadCount =
-      math
-        .min(config.parallelism, math.max(1, selectedBlocks.size))
-        .min(MaxParallelism)
-    val rawEc = Executors.newFixedThreadPool(threadCount)
-
-    var forciblyShutdown = false
-    try {
-      implicit val ec: ExecutionContextExecutorService =
-        ExecutionContext.fromExecutorService(rawEc)
-      val requestedNames =
-        requestedSchema.getColumns.asScala.map(_.getPath.mkString(".")).toSet
-      val nullRowsAllotted = new AtomicLong(
-        config.maxRows.getOrElse(Long.MaxValue)
-      )
-      val futures = selectedBlocks.map { block =>
-        Future {
-          readBlock(
-            path,
-            conf,
-            block,
-            fileSchema,
-            requestedSchema,
-            requestedNames,
-            nullRowsAllotted
-          )
-        }
+    implicit val ec: ExecutionContextExecutorService =
+      ExecutionContext.fromExecutorService(sharedPool)
+    val requestedNames =
+      requestedSchema.getColumns.asScala.map(_.getPath.mkString(".")).toSet
+    val nullRowsAllotted = new AtomicLong(
+      config.maxRows.getOrElse(Long.MaxValue)
+    )
+    val futures = selectedBlocks.map { block =>
+      Future {
+        readBlock(
+          path,
+          conf,
+          block,
+          fileSchema,
+          requestedSchema,
+          requestedNames,
+          nullRowsAllotted
+        )
       }
-      val allRows =
-        try Await.result(Future.sequence(futures), config.readTimeout).flatten
-        catch {
-          case _: TimeoutException =>
-            forciblyShutdown = true
-            ec.shutdownNow()
-            throw new RuntimeException(
-              s"parallel read timed out after ${config.readTimeout} — " +
-                "retry with --parallelism 1, or check network connectivity"
-            )
-          case t: Throwable =>
-            forciblyShutdown = true
-            ec.shutdownNow()
-            throw t
-        }
-      io.github.yusukensanta.parqueteer.core.util.RowLimiter
-        .limitList(allRows, config.maxRows)
-    } finally {
-      rawEc.shutdown()
-      if !forciblyShutdown && !rawEc.awaitTermination(
-          30,
-          TimeUnit.SECONDS
-        )
-      then
-        Console.err.println(
-          "[parqueteer] warning: parallel read executor did not terminate within 30s — some cloud connections may remain open"
-        )
     }
+    val allRows =
+      try Await.result(Future.sequence(futures), config.readTimeout).flatten
+      catch {
+        case _: TimeoutException =>
+          throw new RuntimeException(
+            s"parallel read timed out after ${config.readTimeout} — " +
+              "retry with --parallelism 1, or check network connectivity"
+          )
+      }
+    io.github.yusukensanta.parqueteer.core.util.RowLimiter
+      .limitList(allRows, config.maxRows)
   }
 
   private def readBlock(

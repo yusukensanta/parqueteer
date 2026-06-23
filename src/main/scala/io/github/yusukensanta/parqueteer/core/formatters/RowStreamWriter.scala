@@ -81,28 +81,44 @@ object RowStreamWriter {
   }
 
   private class CSVRowStreamWriter(out: PrintStream) extends RowStreamWriter {
+
+    private val sample: scala.collection.mutable.ListBuffer[Map[String, CellValue]] =
+      scala.collection.mutable.ListBuffer.empty
     private var columns: List[String]   = Nil
     private var columnsSet: Set[String] = Set.empty
+    private var flushed                 = false
     private var warnedUnseen            = false
 
-    override def writeRow(row: Map[String, CellValue]): Unit = {
-      if columns.isEmpty then {
-        columns = discoverColumns(List(row))
-        columnsSet = columns.toSet
-        out.print(
-          columns
-            .map(CSVFormatter.escapeField)
-            .mkString(",") + CSVFormatter.Newline
-        )
-      } else if !warnedUnseen then {
-        warnedUnseen = warnUnseenColumns(row.keySet, columnsSet, "CSV")
-      }
+    private def emitRow(row: Map[String, CellValue]): Unit =
       out.print(
         columns
           .map(c => CSVFormatter.escapeField(row.get(c).fold("")(_.safeDisplay)))
           .mkString(",") + CSVFormatter.Newline
       )
+
+    private def flushSample(): Unit = {
+      columns = discoverColumns(sample)
+      columnsSet = columns.toSet
+      out.print(
+        columns
+          .map(CSVFormatter.escapeField)
+          .mkString(",") + CSVFormatter.Newline
+      )
+      sample.foreach(emitRow)
+      flushed = true
     }
+
+    override def writeRow(row: Map[String, CellValue]): Unit =
+      if !flushed then {
+        sample += row
+        if sample.size >= SampleSize then flushSample()
+      } else {
+        if !warnedUnseen then warnedUnseen = warnUnseenColumns(row.keySet, columnsSet, "CSV")
+        emitRow(row)
+      }
+
+    override def end(): Unit =
+      if !flushed && sample.nonEmpty then flushSample()
   }
 
   private class TableRowStreamWriter(out: PrintStream) extends RowStreamWriter {

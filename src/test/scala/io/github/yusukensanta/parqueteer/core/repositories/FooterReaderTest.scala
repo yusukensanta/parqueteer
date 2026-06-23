@@ -67,11 +67,11 @@ class FooterReaderTest extends AnyFlatSpec with Matchers {
     ) shouldBe "DECIMAL(10,2)"
   }
 
-  it should "return TIMESTAMP_MICROS for INT96 with unrecognized annotation" in {
+  it should "return TIMESTAMP(INT96) for INT96 with unrecognized annotation" in {
     FooterReader.logicalTypeName(
       PrimitiveTypeName.INT96,
       LogicalTypeAnnotation.intType(32, true)
-    ) shouldBe "TIMESTAMP_MICROS"
+    ) shouldBe "TIMESTAMP(INT96)"
   }
 
   it should "return BINARY for FIXED_LEN_BYTE_ARRAY with unrecognized annotation" in {

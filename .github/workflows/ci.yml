@@ -9,6 +9,7 @@ on:
       - '**/*.scala'
       - '**/*.sbt'
       - 'project/**'
+      - '.github/workflows/**'
 
 permissions:
   contents: read

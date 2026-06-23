@@ -30,7 +30,7 @@ private[repositories] object ParquetRecordDecoder {
     org.slf4j.LoggerFactory.getLogger(getClass)
 
   private val warnedVariants =
-    java.util.concurrent.ConcurrentHashMap.newKeySet[String]()
+    io.github.yusukensanta.parqueteer.core.util.BoundedWarnSet()
 
   private def epochPlusSafe(l: Long, unit: ChronoUnit): CellValue =
     try CellValue.Ts(java.time.Instant.EPOCH.plus(l, unit))
