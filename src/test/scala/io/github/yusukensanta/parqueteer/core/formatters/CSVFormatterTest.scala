@@ -144,21 +144,27 @@ class CSVFormatterTest extends AnyFlatSpec with Matchers {
       rows = List(
         Map("cmd" -> CellValue.Str("=SUM(A1:A10)")),
         Map("cmd" -> CellValue.Str("+malicious()")),
-        Map("cmd" -> CellValue.Str("-1+1")),
+        Map("cmd" -> CellValue.Str("-cmd()")),
         Map("cmd" -> CellValue.Str("@SUM(1+1)")),
-        Map("cmd" -> CellValue.Str("safe value"))
+        Map("cmd" -> CellValue.Str("safe value")),
+        Map("cmd" -> CellValue.Str("-42")),
+        Map("cmd" -> CellValue.Str("-1+1"))
       ),
-      totalRows = 5L,
+      totalRows = 7L,
       isPartial = false
     )
     val result = formatter.formatContent(injectionContent, None)
     result should include("'=SUM(A1:A10)")
     result should include("'+malicious()")
-    result should include("'-1+1")
+    result should include("'-cmd()")
     result should include("'@SUM(1+1)")
     result should include("safe value")
     result should not include ",=SUM"
     result should not include "\r\n=SUM"
+    result should include("-42")
+    result should not include "'-42"
+    result should include("-1+1")
+    result should not include "'-1+1"
   }
 
   "CSVFormatter.formatSchema" should "include header with Column Name and Data Type" in {
