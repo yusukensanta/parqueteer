@@ -16,8 +16,9 @@ object CSVFormatter {
     val firstSig = field.dropWhile(_ == ' ')
     val sanitized =
       if firstSig.nonEmpty && (firstSig.charAt(0) match {
-          case '=' | '+' | '-' | '@' | '\t' | '\r' => true
-          case _                                   => false
+          case '=' | '+' | '@' | '\t' | '\r' => true
+          case '-'                           => firstSig.length < 2 || !firstSig.charAt(1).isDigit
+          case _                             => false
         })
       then "'" + field
       else field

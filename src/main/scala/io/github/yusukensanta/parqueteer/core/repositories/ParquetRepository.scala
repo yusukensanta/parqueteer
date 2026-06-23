@@ -357,15 +357,31 @@ class HadoopParquetRepository(
   ): Try[(ParquetSchema, FileMetadata, List[RowGroupInfo])] =
     setupHadoopConfiguration(file.location).flatMap { hadoopConfig =>
       Try {
-        val path                 = new HadoopPath(file.location.path)
-        val fileStatus           = path.getFileSystem(hadoopConfig).getFileStatus(path)
-        val inputFile            = HadoopInputFile.fromStatus(fileStatus, hadoopConfig)
-        val footerBytes          = FooterReader.readFooterBytes(inputFile)
-        val (version, createdBy) = FooterReader.parseRawMeta(footerBytes)
-        val (msgSchema, blocks)  = getFooter(path, hadoopConfig)
-        val ratio                = calculateCompressionRatio(blocks)
-        val parsedSchema         = FooterReader.buildParquetSchema(msgSchema, blocks)
-        val codecs               = parsedSchema.columns.map(_.compressionType).distinct
+        val path       = new HadoopPath(file.location.path)
+        val fileStatus = path.getFileSystem(hadoopConfig).getFileStatus(path)
+        val key        = path.toString
+        val (msgSchema, blocks, version, createdBy) =
+          Option(footerCache.get(key)) match {
+            case Some((cachedSchema, cachedBlocks)) =>
+              footerCacheHits.incrementAndGet()
+              val inputFile = HadoopInputFile.fromStatus(fileStatus, hadoopConfig)
+              val rawBytes  = FooterReader.readFooterBytes(inputFile)
+              val (ver, by) = FooterReader.parseRawMeta(rawBytes)
+              (cachedSchema, cachedBlocks, ver, by)
+            case None =>
+              footerCacheMisses.incrementAndGet()
+              val inputFile   = HadoopInputFile.fromStatus(fileStatus, hadoopConfig)
+              val footerBytes = FooterReader.readFooterBytes(inputFile)
+              val (ver, by)   = FooterReader.parseRawMeta(footerBytes)
+              val meta        = FooterReader.parseFooter(footerBytes)
+              val schema      = meta.getFileMetaData.getSchema
+              val blks        = meta.getBlocks.asScala.toList
+              footerCache.put(key, (schema, blks))
+              (schema, blks, ver, by)
+          }
+        val ratio        = calculateCompressionRatio(blocks)
+        val parsedSchema = FooterReader.buildParquetSchema(msgSchema, blocks)
+        val codecs       = parsedSchema.columns.map(_.compressionType).distinct
         val codec =
           if codecs.isEmpty then None
           else if codecs.size == 1 then Some(codecs.head)

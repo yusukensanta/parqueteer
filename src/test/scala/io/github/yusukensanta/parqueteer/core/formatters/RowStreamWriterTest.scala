@@ -354,4 +354,32 @@ class RowStreamWriterTest extends AnyFlatSpec with Matchers {
     val dataLine = out.split("\r?\n").last
     dataLine shouldBe "  hello"
   }
+
+  it should "not prefix negative numbers (CWE-1236 false positive fix)" in {
+    val row      = Map("x" -> CellValue.I64(-42L))
+    val out      = run(OutputFormat.CSV, List(row))
+    val dataLine = out.split("\r?\n").last
+    dataLine shouldBe "-42"
+  }
+
+  it should "not prefix negative decimal numbers" in {
+    val row      = Map("x" -> CellValue.F64(-3.14))
+    val out      = run(OutputFormat.CSV, List(row))
+    val dataLine = out.split("\r?\n").last
+    dataLine shouldBe "-3.14"
+  }
+
+  it should "prefix '-cmd' style values with apostrophe" in {
+    val row      = Map("x" -> CellValue.Str("-cmd"))
+    val out      = run(OutputFormat.CSV, List(row))
+    val dataLine = out.split("\r?\n").last
+    dataLine shouldBe "'-cmd"
+  }
+
+  it should "not prefix bare '-' with apostrophe" in {
+    val row      = Map("x" -> CellValue.Str("-"))
+    val out      = run(OutputFormat.CSV, List(row))
+    val dataLine = out.split("\r?\n").last
+    dataLine shouldBe "'-"
+  }
 }

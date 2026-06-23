@@ -9,7 +9,7 @@ import org.apache.parquet.hadoop.util.HadoopInputFile
 import org.apache.parquet.ParquetReadOptions
 import org.apache.parquet.schema.MessageType
 import org.slf4j.LoggerFactory
-import scala.concurrent.{Await, ExecutionContext, ExecutionContextExecutorService, Future}
+import scala.concurrent.{Await, ExecutionContext, Future}
 import java.util.concurrent.{Executors, TimeoutException}
 import java.util.concurrent.atomic.AtomicLong
 import scala.jdk.CollectionConverters.*
@@ -54,8 +54,8 @@ private[repositories] object ParallelRowGroupReader {
       case _ => fileSchema
     }
 
-    implicit val ec: ExecutionContextExecutorService =
-      ExecutionContext.fromExecutorService(sharedPool)
+    implicit val ec: ExecutionContext =
+      ExecutionContext.fromExecutor(sharedPool)
     val requestedNames =
       requestedSchema.getColumns.asScala.map(_.getPath.mkString(".")).toSet
     val nullRowsAllotted = new AtomicLong(
