@@ -302,7 +302,7 @@ class ParquetService(
     repository.deleteFile(outputLocation) match {
       case scala.util.Failure(delErr) =>
         logger.warn(
-          s"Failed to delete partial output at ${outputLocation.path}: ${io.github.yusukensanta.parqueteer.cli.CredentialRedactor
+          s"Failed to delete partial output at ${outputLocation.path}: ${io.github.yusukensanta.parqueteer.core.util.CredentialRedactor
               .redact(delErr.getMessage)}. Partial file may remain."
         )
       case _ =>
