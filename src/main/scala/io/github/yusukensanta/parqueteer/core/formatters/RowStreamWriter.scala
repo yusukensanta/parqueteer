@@ -31,7 +31,7 @@ object RowStreamWriter {
       Console.err.println(
         s"[parqueteer] warning: $formatLabel output drops columns first seen after the $SampleSize-row " +
           s"sample window: ${unseen.toList.sorted.mkString(", ")}. " +
-          "Use --output-format ndjson to preserve all columns."
+          "Use --format ndjson to preserve all columns."
       )
       true
     } else false

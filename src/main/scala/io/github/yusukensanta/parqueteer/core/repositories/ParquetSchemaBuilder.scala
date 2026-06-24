@@ -6,6 +6,7 @@ import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
 import scala.jdk.CollectionConverters.*
 
 private[repositories] object ParquetSchemaBuilder {
+  private val logger = org.slf4j.LoggerFactory.getLogger(getClass)
 
   def projectSchema(
       fileSchema: MessageType,
@@ -62,8 +63,11 @@ private[repositories] object ParquetSchemaBuilder {
               if widened == TypeRank.String && prev != TypeRank.String && warnedWiden
                   .add(k)
               then
-                Console.err.println(
-                  s"[parqueteer] warning: column '$k' has mixed types ($prev and $r) — falling back to STRING"
+                logger.warn(
+                  "column '{}' has mixed types ({} and {}) — falling back to STRING",
+                  k,
+                  prev,
+                  r
                 )
               Some(widened)
             case None => Some(r)

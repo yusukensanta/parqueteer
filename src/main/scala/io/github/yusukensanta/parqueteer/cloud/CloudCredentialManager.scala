@@ -55,7 +55,7 @@ object CloudCredentialManager {
       it.next()() match {
         case s @ Success(_) => found = Some(s)
         case Failure(err) =>
-          failures += io.github.yusukensanta.parqueteer.cli.CredentialRedactor
+          failures += io.github.yusukensanta.parqueteer.core.util.CredentialRedactor
             .redact(Option(err.getMessage).getOrElse(err.getClass.getName))
           lastCause = err
       }
