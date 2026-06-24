@@ -62,8 +62,8 @@ class MarkdownFormatter extends OutputFormatter {
     sb.append(s"- **File Size:** ${metadata.fileSize} bytes\n")
     metadata.createdAt.foreach(t => sb.append(s"- **Created:** $t\n"))
     metadata.modifiedAt.foreach(t => sb.append(s"- **Modified:** $t\n"))
-    sb.append(s"- **Parquet Version:** ${metadata.version}\n")
-    metadata.createdBy.foreach(c => sb.append(s"- **Created By:** $c\n"))
+    sb.append(s"- **Parquet Version:** ${escapeCell(metadata.version)}\n")
+    metadata.createdBy.foreach(c => sb.append(s"- **Created By:** ${escapeCell(c)}\n"))
     metadata.compressionRatio.foreach(r => sb.append(f"- **Compression Ratio:** $r%.2f\n"))
     sb.toString
   }

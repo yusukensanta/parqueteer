@@ -55,7 +55,7 @@ class GCSCredentialManager extends CloudCredentialManager {
               conf.set("google.cloud.auth.service.account.enable", "false")
               logger.warn(
                 "Using application default credentials: {}",
-                io.github.yusukensanta.parqueteer.cli.CredentialRedactor
+                io.github.yusukensanta.parqueteer.core.util.CredentialRedactor
                   .redact(Option(error.getMessage).getOrElse(""))
               )
           }

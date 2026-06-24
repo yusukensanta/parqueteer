@@ -32,7 +32,7 @@ object ParqueteerError:
       s"""Invalid filter expression: "$expression"\n$message\nRun with --help to see supported filter syntax."""
 
   private def redact(s: String): String =
-    io.github.yusukensanta.parqueteer.cli.CredentialRedactor.redact(s)
+    io.github.yusukensanta.parqueteer.core.util.CredentialRedactor.redact(s)
 
   case class CloudAuthError(provider: String, message: String) extends ParqueteerError:
     val exitCode = 5

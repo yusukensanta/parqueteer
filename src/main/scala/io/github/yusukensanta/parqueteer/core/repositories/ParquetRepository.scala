@@ -106,22 +106,21 @@ class HadoopParquetRepository(
       }
     )
 
-  // Caches (MessageType, blocks) per file path for the lifetime of this repository instance.
-  // Bounded LRU: evicts the least-recently-used entry when size exceeds FooterCacheMaxSize so
-  // large multi-file merges don't grow the cache unboundedly.
-  private val footerCache: java.util.Map[String, (MessageType, List[BlockMetaData])] =
+  private type FooterEntry = (MessageType, List[BlockMetaData], String, String)
+
+  // Caches (MessageType, blocks, version, createdBy) per file path for the lifetime of this
+  // repository instance. Bounded LRU: evicts the least-recently-used entry when size exceeds
+  // FooterCacheMaxSize so large multi-file merges don't grow the cache unboundedly.
+  private val footerCache: java.util.Map[String, FooterEntry] =
     java.util.Collections.synchronizedMap(
-      new java.util.LinkedHashMap[String, (MessageType, List[BlockMetaData])](
+      new java.util.LinkedHashMap[String, FooterEntry](
         16,
         0.75f,
         true
       ) {
 
         override def removeEldestEntry(
-            eldest: java.util.Map.Entry[
-              String,
-              (MessageType, List[BlockMetaData])
-            ]
+            eldest: java.util.Map.Entry[String, FooterEntry]
         ): Boolean = size() > FooterCacheMaxSize
       }
     )
@@ -171,7 +170,7 @@ class HadoopParquetRepository(
   private def getFooter(
       path: HadoopPath,
       conf: Configuration
-  ): (MessageType, List[BlockMetaData]) = {
+  ): FooterEntry = {
     val key = path.toString
     Option(footerCache.get(key)) match {
       case Some(cached) =>
@@ -180,9 +179,10 @@ class HadoopParquetRepository(
       case None =>
         footerCacheMisses.incrementAndGet()
         val footerBytes = FooterReader.readFooterBytes(HadoopInputFile.fromPath(path, conf))
-        val meta        = FooterReader.parseFooter(footerBytes)
+        val (version, createdBy) = FooterReader.parseRawMeta(footerBytes)
+        val meta                 = FooterReader.parseFooter(footerBytes)
         val entry =
-          (meta.getFileMetaData.getSchema, meta.getBlocks.asScala.toList)
+          (meta.getFileMetaData.getSchema, meta.getBlocks.asScala.toList, version, createdBy)
         footerCache.put(key, entry)
         entry
     }
@@ -194,9 +194,9 @@ class HadoopParquetRepository(
     setupHadoopConfiguration(file.location).flatMap { hadoopConfig =>
       val cacheKey = new HadoopPath(file.location.path).toString
       val result = Try {
-        val hadoopPath           = new HadoopPath(file.location.path)
-        val (fileSchema, blocks) = getFooter(hadoopPath, hadoopConfig)
-        val totalRows            = blocks.map(_.getRowCount).sum
+        val hadoopPath                 = new HadoopPath(file.location.path)
+        val (fileSchema, blocks, _, _) = getFooter(hadoopPath, hadoopConfig)
+        val totalRows                  = blocks.map(_.getRowCount).sum
 
         // filter forces sequential: parquet4s evaluates predicates during
         // deserialization, not at page-selection time, so parallel reads can't
@@ -270,9 +270,9 @@ class HadoopParquetRepository(
     setupHadoopConfiguration(file.location).flatMap { hadoopConfig =>
       val cacheKey = new HadoopPath(file.location.path).toString
       val result = Try {
-        val path4s          = Parquet4sPath(file.location.path)
-        val hadoopPath      = new HadoopPath(file.location.path)
-        val (fileSchema, _) = getFooter(hadoopPath, hadoopConfig)
+        val path4s                = Parquet4sPath(file.location.path)
+        val hadoopPath            = new HadoopPath(file.location.path)
+        val (fileSchema, _, _, _) = getFooter(hadoopPath, hadoopConfig)
         val rawBinaryFields =
           ParquetRecordDecoder.rawBinaryFieldsFor(fileSchema)
         val int96Fields =
@@ -346,8 +346,8 @@ class HadoopParquetRepository(
   def readSchema(file: ParquetFile): Try[ParquetSchema] =
     setupHadoopConfiguration(file.location).flatMap { hadoopConfig =>
       Try {
-        val path                = new HadoopPath(file.location.path)
-        val (msgSchema, blocks) = getFooter(path, hadoopConfig)
+        val path                      = new HadoopPath(file.location.path)
+        val (msgSchema, blocks, _, _) = getFooter(path, hadoopConfig)
         FooterReader.buildParquetSchema(msgSchema, blocks)
       }
     }
@@ -359,27 +359,8 @@ class HadoopParquetRepository(
       Try {
         val path       = new HadoopPath(file.location.path)
         val fileStatus = path.getFileSystem(hadoopConfig).getFileStatus(path)
-        val key        = path.toString
-        val (msgSchema, blocks, version, createdBy) =
-          Option(footerCache.get(key)) match {
-            case Some((cachedSchema, cachedBlocks)) =>
-              footerCacheHits.incrementAndGet()
-              val inputFile = HadoopInputFile.fromStatus(fileStatus, hadoopConfig)
-              val rawBytes  = FooterReader.readFooterBytes(inputFile)
-              val (ver, by) = FooterReader.parseRawMeta(rawBytes)
-              (cachedSchema, cachedBlocks, ver, by)
-            case None =>
-              footerCacheMisses.incrementAndGet()
-              val inputFile   = HadoopInputFile.fromStatus(fileStatus, hadoopConfig)
-              val footerBytes = FooterReader.readFooterBytes(inputFile)
-              val (ver, by)   = FooterReader.parseRawMeta(footerBytes)
-              val meta        = FooterReader.parseFooter(footerBytes)
-              val schema      = meta.getFileMetaData.getSchema
-              val blks        = meta.getBlocks.asScala.toList
-              footerCache.put(key, (schema, blks))
-              (schema, blks, ver, by)
-          }
-        val ratio        = calculateCompressionRatio(blocks)
+        val (msgSchema, blocks, version, createdBy) = getFooter(path, hadoopConfig)
+        val ratio                                   = calculateCompressionRatio(blocks)
         val parsedSchema = FooterReader.buildParquetSchema(msgSchema, blocks)
         val codecs       = parsedSchema.columns.map(_.compressionType).distinct
         val codec =
@@ -515,13 +496,13 @@ class HadoopParquetRepository(
           case scala.util.Failure(ex: FileNotFoundException) =>
             throw ex
           case scala.util.Failure(ex) =>
-            issues += s"File cannot be opened as Parquet: ${io.github.yusukensanta.parqueteer.cli.CredentialRedactor
+            issues += s"File cannot be opened as Parquet: ${io.github.yusukensanta.parqueteer.core.util.CredentialRedactor
                 .redact(ex.getMessage)}"
           case scala.util.Success(reader) =>
             Using.resource(reader) { r =>
               Try(r.getFooter) match {
                 case scala.util.Failure(ex) =>
-                  issues += s"Cannot read file footer: ${io.github.yusukensanta.parqueteer.cli.CredentialRedactor
+                  issues += s"Cannot read file footer: ${io.github.yusukensanta.parqueteer.core.util.CredentialRedactor
                       .redact(ex.getMessage)}"
                 case scala.util.Success(footer) =>
                   val schema = footer.getFileMetaData.getSchema
@@ -539,7 +520,7 @@ class HadoopParquetRepository(
                       if indicesToCheck.contains(index) then {
                         Try(r.readNextRowGroup()) match {
                           case scala.util.Failure(ex) =>
-                            issues += s"Row group $index data is corrupt or truncated: ${io.github.yusukensanta.parqueteer.cli.CredentialRedactor
+                            issues += s"Row group $index data is corrupt or truncated: ${io.github.yusukensanta.parqueteer.core.util.CredentialRedactor
                                 .redact(ex.getMessage)}"
                             readerBroken = true
                           case scala.util.Success(null) =>
@@ -550,7 +531,7 @@ class HadoopParquetRepository(
                       } else {
                         Try(r.skipNextRowGroup()) match {
                           case scala.util.Failure(ex) =>
-                            issues += s"Row group $index could not be skipped: ${io.github.yusukensanta.parqueteer.cli.CredentialRedactor
+                            issues += s"Row group $index could not be skipped: ${io.github.yusukensanta.parqueteer.core.util.CredentialRedactor
                                 .redact(ex.getMessage)}"
                             readerBroken = true
                           case _ =>
@@ -578,8 +559,8 @@ class HadoopParquetRepository(
   ): Try[List[FieldSummary]] =
     setupHadoopConfiguration(file.location).flatMap { hadoopConfig =>
       Try {
-        val path        = new HadoopPath(file.location.path)
-        val (schema, _) = getFooter(path, hadoopConfig)
+        val path              = new HadoopPath(file.location.path)
+        val (schema, _, _, _) = getFooter(path, hadoopConfig)
         schema.getFields.asScala.toList.map { field =>
           val typeName =
             if field.isPrimitive then {
@@ -609,9 +590,9 @@ class HadoopParquetRepository(
   def readStats(file: ParquetFile): Try[FileStats] =
     setupHadoopConfiguration(file.location).flatMap { hadoopConfig =>
       Try {
-        val path             = new HadoopPath(file.location.path)
-        val (schema, blocks) = getFooter(path, hadoopConfig)
-        val totalRows        = blocks.map(_.getRowCount).sum
+        val path                   = new HadoopPath(file.location.path)
+        val (schema, blocks, _, _) = getFooter(path, hadoopConfig)
+        val totalRows              = blocks.map(_.getRowCount).sum
 
         val columns = schema.getColumns.asScala.toList.map { colDescriptor =>
           val colPath     = colDescriptor.getPath.mkString(".")
@@ -673,7 +654,7 @@ class HadoopParquetRepository(
                 scala.util.Failure(
                   new CloudAuthException(
                     providerName,
-                    io.github.yusukensanta.parqueteer.cli.CredentialRedactor
+                    io.github.yusukensanta.parqueteer.core.util.CredentialRedactor
                       .redact(Option(e.getMessage).getOrElse(e.getClass.getSimpleName)),
                     e
                   )

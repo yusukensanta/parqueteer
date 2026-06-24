@@ -579,17 +579,18 @@ class ParquetSchemaBuilderTest extends AnyFlatSpec with Matchers {
     fieldByName(mt, "n").getPrimitiveTypeName shouldBe PrimitiveTypeName.INT64
   }
 
-  it should "print a warning to stderr when column has mixed incompatible types" in {
+  it should "log a warning when column has mixed incompatible types" in {
     val data = List(
       Map[String, CellValue]("x" -> CellValue.I64(1L)),
       Map[String, CellValue]("x" -> CellValue.Str("hello"))
     )
     val errCapture = new java.io.ByteArrayOutputStream()
-    Console.withErr(errCapture) {
-      ParquetSchemaBuilder.inferSchemaFromData(data)
-    }
+    val oldErr     = System.err
+    System.setErr(new java.io.PrintStream(errCapture))
+    try ParquetSchemaBuilder.inferSchemaFromData(data)
+    finally System.setErr(oldErr)
     val output = errCapture.toString
-    output should include("warning")
+    output should include("WARN")
     output should include("x")
     output should include("STRING")
   }
@@ -601,10 +602,11 @@ class ParquetSchemaBuilderTest extends AnyFlatSpec with Matchers {
       Map[String, CellValue]("x" -> CellValue.Str("b"))
     )
     val errCapture = new java.io.ByteArrayOutputStream()
-    Console.withErr(errCapture) {
-      ParquetSchemaBuilder.inferSchemaFromData(data)
-    }
-    val warnCount = errCapture.toString.split('\n').count(_.contains("warning"))
+    val oldErr     = System.err
+    System.setErr(new java.io.PrintStream(errCapture))
+    try ParquetSchemaBuilder.inferSchemaFromData(data)
+    finally System.setErr(oldErr)
+    val warnCount = errCapture.toString.split('\n').count(_.contains("WARN"))
     warnCount shouldBe 1
   }
 

@@ -64,7 +64,8 @@ object ShellCompletions {
       |           COMPREPLY+=($(compgen -f -- "$cur")) ; return ;;
       |      esac ;;
       |    validate)
-      |      COMPREPLY=($(compgen -f -X '!*.parquet' -- "$cur")) ; return ;;
+      |      COMPREPLY=($(compgen -W "--verbose --deep" -- "$cur"))
+      |           COMPREPLY+=($(compgen -f -X '!*.parquet' -- "$cur")) ; return ;;
       |    convert)
       |      case "$prev" in
       |        --compression) COMPREPLY=($(compgen -W "$compressions" -- "$cur")) ; return ;;
@@ -167,6 +168,8 @@ object ShellCompletions {
       |            ':output parquet file:_files -g "*.parquet"' ;;
       |        validate)
       |          _arguments \
+      |            '--verbose[Show detailed validation output]' \
+      |            '--deep[Deep validation (read all row groups)]' \
       |            ':parquet file:_files -g "*.parquet"' ;;
       |        convert)
       |          _arguments \
@@ -230,6 +233,10 @@ object ShellCompletions {
       |complete -c parqueteer -n '__fish_seen_subcommand_from convert' -l compression -f -a 'none snappy gzip lzo brotli lz4 zstd' -d 'Compression type'
       |complete -c parqueteer -n '__fish_seen_subcommand_from convert' -l limit       -s n -d 'Maximum rows'
       |complete -c parqueteer -n '__fish_seen_subcommand_from convert' -l dry-run     -f -d 'Preview only'
+      |
+      |# validate
+      |complete -c parqueteer -n '__fish_seen_subcommand_from validate' -l verbose -f -d 'Show detailed validation output'
+      |complete -c parqueteer -n '__fish_seen_subcommand_from validate' -l deep    -f -d 'Deep validation (read all row groups)'
       |
       |# schema (inspect single file)
       |complete -c parqueteer -n '__fish_seen_subcommand_from schema' -l format -f -a 'table json' -d 'Output format'
