@@ -391,7 +391,10 @@ object ArgumentParser {
               if List("strict", "union").contains(x.toLowerCase) then success
               else failure(s"Unknown schema-mode: $x. Use strict or union")
             )
-            .text("Schema compatibility mode: strict (default) or union")
+            .text("Schema compatibility mode: strict (default) or union"),
+          opt[Unit]("dry-run")
+            .action((_, c) => updateCmd[MergeCommand](c, _.copy(dryRun = true)))
+            .text("Show what would be merged without writing output")
         ),
       cmd("stats")
         .text(

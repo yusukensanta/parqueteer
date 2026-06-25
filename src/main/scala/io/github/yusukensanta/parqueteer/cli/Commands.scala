@@ -78,7 +78,8 @@ case class MergeCommand(
     inputPaths: List[String] = List.empty,
     outputPath: String = "",
     compression: CompressionType = CompressionType.Snappy,
-    schemaMode: SchemaMode = SchemaMode.Strict
+    schemaMode: SchemaMode = SchemaMode.Strict,
+    dryRun: Boolean = false
 ) extends Command
 
 case class StatsCommand(

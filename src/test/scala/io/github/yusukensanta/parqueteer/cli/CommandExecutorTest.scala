@@ -335,8 +335,27 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
       "s3://bucket/merged.parquet",
       CompressionType.Snappy,
       SchemaMode.Strict,
+      dryRun = false,
       quietOpts
     )
+  }
+
+  it should "show dry-run summary without writing" in {
+    val out = new java.io.ByteArrayOutputStream()
+    Console.withOut(new java.io.PrintStream(out)) {
+      CommandExecutor.executeMerge(
+        newService(),
+        List("/tmp/a.parquet", "/tmp/b.parquet"),
+        "s3://bucket/merged.parquet",
+        CompressionType.Snappy,
+        SchemaMode.Strict,
+        dryRun = true,
+        quietOpts
+      )
+    }
+    val output = out.toString("UTF-8")
+    output should include("Dry run")
+    output should include("2 files")
   }
 
   // ── executeRead branch coverage ────────────────────────────────────────
@@ -477,5 +496,54 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
     }
     code should not be 0
     stderr should include("deep cause")
+  }
+
+  // ── execute dispatch MergeCommand with dryRun ──────────────────────────
+
+  it should "dispatch MergeCommand with dry-run" in {
+    val out = new ByteArrayOutputStream()
+    Console.withOut(new PrintStream(out)) {
+      CommandExecutor.execute(
+        MergeCommand(
+          List("/tmp/a.parquet", "/tmp/b.parquet"),
+          "s3://bucket/out.parquet",
+          dryRun = true
+        ),
+        newService(),
+        quietOpts
+      )
+    }
+    out.toString("UTF-8") should include("Dry run")
+  }
+
+  // ── ProgressRowStreamWriter ────────────────────────────────────────────
+
+  "ProgressRowStreamWriter" should "emit progress at configured interval" in {
+    val errBuf = new ByteArrayOutputStream()
+    val errPs  = new PrintStream(errBuf)
+    val delegate = new io.github.yusukensanta.parqueteer.core.formatters.RowStreamWriter {
+      override def writeRow(row: Map[String, CellValue]): Unit = ()
+    }
+    val pw = new ProgressRowStreamWriter(delegate, errPs, intervalRows = 5)
+    pw.begin()
+    (1 to 12).foreach(_ => pw.writeRow(Map.empty))
+    pw.end()
+    val stderr = errBuf.toString("UTF-8")
+    stderr should include("5 rows")
+    stderr should include("10 rows")
+    stderr should include("done")
+  }
+
+  it should "not emit done if count below interval" in {
+    val errBuf = new ByteArrayOutputStream()
+    val errPs  = new PrintStream(errBuf)
+    val delegate = new io.github.yusukensanta.parqueteer.core.formatters.RowStreamWriter {
+      override def writeRow(row: Map[String, CellValue]): Unit = ()
+    }
+    val pw = new ProgressRowStreamWriter(delegate, errPs, intervalRows = 100)
+    pw.begin()
+    (1 to 5).foreach(_ => pw.writeRow(Map.empty))
+    pw.end()
+    errBuf.toString("UTF-8") shouldBe empty
   }
 }
