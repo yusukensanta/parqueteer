@@ -108,13 +108,14 @@ private[cli] object CommandExecutor {
       case CountCommand(filePath, format) =>
         executeCount(service, filePath, format, globalOptions)
 
-      case MergeCommand(inputPaths, outputPath, compression, schemaMode) =>
+      case MergeCommand(inputPaths, outputPath, compression, schemaMode, dryRun) =>
         executeMerge(
           service,
           inputPaths,
           outputPath,
           compression,
           schemaMode,
+          dryRun,
           globalOptions
         )
 
@@ -164,12 +165,16 @@ private[cli] object CommandExecutor {
       )
 
     if effectiveStreaming then {
-      val writer =
+      val baseWriter =
         if globalOptions.quiet then
           new RowStreamWriter {
             override def writeRow(row: Map[String, CellValue]): Unit = ()
           }
         else RowStreamWriter(format, System.out)
+      val writer =
+        if globalOptions.verbose && !globalOptions.quiet then
+          new ProgressRowStreamWriter(baseWriter, System.err)
+        else baseWriter
       val result =
         runWithDeferredBegin(writer, service.streamRead(filePath, readConfig))
       val stdoutError = System.out.checkError()
@@ -518,6 +523,7 @@ private[cli] object CommandExecutor {
       outputPath: String,
       compression: CompressionType,
       schemaMode: SchemaMode,
+      dryRun: Boolean,
       globalOptions: GlobalOptions
   ): Int = {
     val writeConfig = WriteConfig(compressionType = compression)
@@ -525,25 +531,59 @@ private[cli] object CommandExecutor {
       case Left(err) =>
         reportError("Failed to merge", globalOptions)(err)
       case Right(_) =>
-        val total = inputPaths.size
-        val onProgress: (Int, Int, String) => Unit = (i, n, path) =>
-          if !globalOptions.quiet then System.err.println(s"[$i/$n] Merging: $path")
+        if dryRun then
+          executeMergeDryRun(
+            service,
+            inputPaths,
+            outputPath,
+            compression,
+            schemaMode,
+            globalOptions
+          )
+        else {
+          val onProgress: (Int, Int, String) => Unit = (i, n, path) =>
+            if !globalOptions.quiet then System.err.println(s"[$i/$n] Merging: $path")
 
-        service.mergeFiles(
-          inputPaths,
-          outputPath,
-          writeConfig,
-          schemaMode,
-          onProgress
-        ) match {
-          case Right(count) =>
-            if showStatus(globalOptions) then
-              println(s"Merged $total files ($count rows) → $outputPath")
-            0
-          case Left(error) =>
-            reportError("Failed to merge", globalOptions)(error)
+          service.mergeFiles(
+            inputPaths,
+            outputPath,
+            writeConfig,
+            schemaMode,
+            onProgress
+          ) match {
+            case Right(count) =>
+              if showStatus(globalOptions) then
+                println(s"Merged ${inputPaths.size} files ($count rows) → $outputPath")
+              0
+            case Left(error) =>
+              reportError("Failed to merge", globalOptions)(error)
+          }
         }
     }
+  }
+
+  private def executeMergeDryRun(
+      service: ParquetService,
+      inputPaths: List[String],
+      outputPath: String,
+      compression: CompressionType,
+      schemaMode: SchemaMode,
+      globalOptions: GlobalOptions
+  ): Int = {
+    println(s"Dry run: would merge ${inputPaths.size} files → $outputPath")
+    println(s"  Schema mode:  $schemaMode")
+    println(s"  Compression:  ${compression.toString.toLowerCase}")
+    inputPaths.zipWithIndex.foreach { (path, i) =>
+      service.getFileInfo(path) match {
+        case Right(file) =>
+          val rows = file.schema.map(_.totalRowCount).getOrElse(0L)
+          val cols = file.schema.map(_.columns.size).getOrElse(0)
+          println(s"  [${i + 1}/${inputPaths.size}] $path ($rows rows, $cols columns)")
+        case Left(error) =>
+          println(s"  [${i + 1}/${inputPaths.size}] $path — error: ${error.userMessage}")
+      }
+    }
+    0
   }
 
   private[cli] def executeSchemaInfo(
@@ -734,4 +774,25 @@ private[cli] object CommandExecutor {
 
   private[cli] def showStatus(opts: GlobalOptions): Boolean =
     !opts.quiet && isStdoutTTY
+}
+
+private[cli] class ProgressRowStreamWriter(
+    delegate: RowStreamWriter,
+    err: java.io.PrintStream,
+    intervalRows: Long = 10000
+) extends RowStreamWriter {
+  private var count: Long = 0L
+
+  override def begin(): Unit = delegate.begin()
+
+  override def writeRow(row: Map[String, CellValue]): Unit = {
+    delegate.writeRow(row)
+    count += 1
+    if count % intervalRows == 0 then err.print(s"\r[parqueteer] streamed $count rows...")
+  }
+
+  override def end(): Unit = {
+    if count >= intervalRows then err.println(s"\r[parqueteer] streamed $count rows — done")
+    delegate.end()
+  }
 }

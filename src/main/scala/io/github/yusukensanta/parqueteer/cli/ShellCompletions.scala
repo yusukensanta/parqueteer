@@ -73,6 +73,14 @@ object ShellCompletions {
       |        *) COMPREPLY=($(compgen -W "--compression --limit --dry-run" -- "$cur"))
       |           COMPREPLY+=($(compgen -f -- "$cur")) ; return ;;
       |      esac ;;
+      |    merge)
+      |      case "$prev" in
+      |        --compression|-c) COMPREPLY=($(compgen -W "$compressions" -- "$cur")) ; return ;;
+      |        --schema-mode) COMPREPLY=($(compgen -W "strict union" -- "$cur")) ; return ;;
+      |        --output|-o) COMPREPLY=($(compgen -f -- "$cur")) ; return ;;
+      |        *) COMPREPLY=($(compgen -W "--output --compression --schema-mode --dry-run" -- "$cur"))
+      |           COMPREPLY+=($(compgen -f -X '!*.parquet' -- "$cur")) ; return ;;
+      |      esac ;;
       |    config)
       |      COMPREPLY=($(compgen -W "--validate" -- "$cur")) ; return ;;
       |    completions)
@@ -178,6 +186,13 @@ object ShellCompletions {
       |            '--dry-run[Preview only]' \
       |            ':input file:_files' \
       |            ':output file:_files' ;;
+      |        merge)
+      |          _arguments \
+      |            '(-o --output)'{-o,--output}'[Output file]:output file:_files -g "*.parquet"' \
+      |            '(-c --compression)'{-c,--compression}'[Compression]:type:('"${compressions[*]}"')' \
+      |            '--schema-mode[Schema mode]:mode:(strict union)' \
+      |            '--dry-run[Preview only]' \
+      |            '*:input parquet files:_files -g "*.parquet"' ;;
       |        config)
       |          _arguments \
       |            '--validate[Validate configuration]' ;;
@@ -233,6 +248,12 @@ object ShellCompletions {
       |complete -c parqueteer -n '__fish_seen_subcommand_from convert' -l compression -f -a 'none snappy gzip lzo brotli lz4 zstd' -d 'Compression type'
       |complete -c parqueteer -n '__fish_seen_subcommand_from convert' -l limit       -s n -d 'Maximum rows'
       |complete -c parqueteer -n '__fish_seen_subcommand_from convert' -l dry-run     -f -d 'Preview only'
+      |
+      |# merge
+      |complete -c parqueteer -n '__fish_seen_subcommand_from merge' -l output      -s o -d 'Output file'
+      |complete -c parqueteer -n '__fish_seen_subcommand_from merge' -l compression -s c -f -a 'none snappy gzip lzo brotli lz4 zstd' -d 'Compression type'
+      |complete -c parqueteer -n '__fish_seen_subcommand_from merge' -l schema-mode -f -a 'strict union' -d 'Schema mode'
+      |complete -c parqueteer -n '__fish_seen_subcommand_from merge' -l dry-run     -f -d 'Preview only'
       |
       |# validate
       |complete -c parqueteer -n '__fish_seen_subcommand_from validate' -l verbose -f -d 'Show detailed validation output'

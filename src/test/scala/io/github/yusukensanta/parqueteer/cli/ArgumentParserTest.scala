@@ -354,6 +354,23 @@ class ArgumentParserTest extends AnyFlatSpec with Matchers {
     result shouldBe None
   }
 
+  it should "parse --dry-run flag" in {
+    val args = Array(
+      "merge",
+      "a.parquet",
+      "b.parquet",
+      "--output",
+      "out.parquet",
+      "--dry-run"
+    )
+    val result =
+      OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
+    result shouldBe defined
+    result.get.command.get
+      .asInstanceOf[MergeCommand]
+      .dryRun shouldBe true
+  }
+
   "ArgumentParser schema" should "parse schema command with default format" in {
     val args = Array("schema", "/tmp/test.parquet")
     val result =
