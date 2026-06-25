@@ -338,4 +338,144 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
       quietOpts
     )
   }
+
+  // ── executeRead branch coverage ────────────────────────────────────────
+
+  "executeRead" should "warn and fallback parallelism when filter is set with parallel > 1" in {
+    val (code, stderr) = captureStderr {
+      CommandExecutor.executeRead(
+        newService(),
+        "/tmp/test.parquet",
+        maxRows = None,
+        columns = None,
+        filter = Some("id > 0"),
+        format = OutputFormat.Table,
+        parallelism = 4,
+        streaming = false,
+        defaultOpts
+      )
+    }
+    code shouldBe 0
+    stderr should include("--filter disables parallel mode")
+  }
+
+  it should "suppress filter-parallel warning when quiet" in {
+    val (code, stderr) = captureStderr {
+      CommandExecutor.executeRead(
+        newService(),
+        "/tmp/test.parquet",
+        maxRows = None,
+        columns = None,
+        filter = Some("id > 0"),
+        format = OutputFormat.Table,
+        parallelism = 4,
+        streaming = false,
+        quietOpts
+      )
+    }
+    code shouldBe 0
+    stderr should not include "--filter disables parallel mode"
+  }
+
+  it should "use streaming for NDJSON format" in {
+    CommandExecutor.executeRead(
+      newService(),
+      "/tmp/test.parquet",
+      maxRows = None,
+      columns = None,
+      filter = None,
+      format = OutputFormat.NDJSON,
+      parallelism = 1,
+      streaming = false,
+      quietOpts
+    ) shouldBe 0
+  }
+
+  it should "use streaming when streaming flag is set" in {
+    CommandExecutor.executeRead(
+      newService(),
+      "/tmp/test.parquet",
+      maxRows = None,
+      columns = None,
+      filter = None,
+      format = OutputFormat.CSV,
+      parallelism = 1,
+      streaming = true,
+      quietOpts
+    ) shouldBe 0
+  }
+
+  // ── execute dispatch coverage ──────────────────────────────────────────
+
+  "execute" should "dispatch ReadCommand" in {
+    CommandExecutor.execute(
+      ReadCommand("/tmp/test.parquet"),
+      newService(),
+      quietOpts
+    ) shouldBe 0
+  }
+
+  it should "dispatch InfoCommand" in {
+    CommandExecutor.execute(
+      InfoCommand("/tmp/test.parquet"),
+      newService(),
+      quietOpts
+    ) shouldBe 0
+  }
+
+  it should "dispatch ValidateCommand" in {
+    CommandExecutor.execute(
+      ValidateCommand("/tmp/test.parquet"),
+      newService(),
+      quietOpts
+    ) shouldBe 0
+  }
+
+  it should "dispatch SchemaCommand" in {
+    CommandExecutor.execute(
+      SchemaCommand("/tmp/test.parquet"),
+      newService(),
+      quietOpts
+    ) shouldBe 0
+  }
+
+  it should "dispatch StatsCommand" in {
+    CommandExecutor.execute(
+      StatsCommand("/tmp/test.parquet"),
+      newService(),
+      quietOpts
+    ) shouldBe 0
+  }
+
+  it should "dispatch CountCommand" in {
+    CommandExecutor.execute(
+      CountCommand("/tmp/test.parquet"),
+      newService(),
+      quietOpts
+    ) shouldBe 0
+  }
+
+  // ── reportError branch coverage ────────────────────────────────────────
+
+  it should "suppress error output when quiet" in {
+    val (code, stderr) = captureStderr {
+      CommandExecutor.reportError("Err", quietOpts)(
+        ParqueteerError.FileNotFound("/x")
+      )
+    }
+    code shouldBe 3
+    stderr should include("/x")
+  }
+
+  "reportError" should "show stack trace for verbose non-quiet" in {
+    val verboseOpts = GlobalOptions(verbose = true, quiet = false)
+    val cause       = new RuntimeException("deep cause")
+    val (code, stderr) = captureStderr {
+      CommandExecutor.reportError("Err", verboseOpts)(
+        ParqueteerError.IOError(cause)
+      )
+    }
+    code should not be 0
+    stderr should include("deep cause")
+  }
 }

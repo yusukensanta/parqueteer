@@ -92,8 +92,8 @@ class S3CredentialManager(profile: Option[String] = None) extends CloudCredentia
 
           sys.env.get("AWS_ENDPOINT_URL").foreach { rawEndpoint =>
             val endpoint = if !rawEndpoint.contains("://") then {
-              Console.err.println(
-                "[parqueteer] warning: AWS_ENDPOINT_URL has no scheme; assuming https:// — prepend http:// or https:// to suppress this warning"
+              io.github.yusukensanta.parqueteer.core.util.Warnings.emit(
+                "AWS_ENDPOINT_URL has no scheme; assuming https:// — prepend http:// or https:// to suppress this warning"
               )
               s"https://$rawEndpoint"
             } else rawEndpoint

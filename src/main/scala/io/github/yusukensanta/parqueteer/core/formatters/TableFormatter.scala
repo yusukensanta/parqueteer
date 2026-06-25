@@ -20,8 +20,8 @@ class TableFormatter extends OutputFormatter {
     else {
       val (rows, effectiveContent) =
         if content.rows.size > MaxTableRows then {
-          Console.err.println(
-            s"[parqueteer] warning: ${content.rows.size} rows exceeds table limit ($MaxTableRows). " +
+          io.github.yusukensanta.parqueteer.core.util.Warnings.emit(
+            s"${content.rows.size} rows exceeds table limit ($MaxTableRows). " +
               s"Showing first $MaxTableRows rows. Use --limit N to cap output, or --format json for large datasets."
           )
           val truncated = content.rows.take(MaxTableRows)

@@ -1,7 +1,13 @@
 package io.github.yusukensanta.parqueteer.cli
 
 import scopt.OParser
-import io.github.yusukensanta.parqueteer.core.models.{CompressionType, OutputFormat, SchemaMode}
+import io.github.yusukensanta.parqueteer.core.models.{
+  ColorMode,
+  CompressionType,
+  GlobalOptions,
+  OutputFormat,
+  SchemaMode
+}
 import io.github.yusukensanta.parqueteer.config.EnvConfig
 
 object ArgumentParser {

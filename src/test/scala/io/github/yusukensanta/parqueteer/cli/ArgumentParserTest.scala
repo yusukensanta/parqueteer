@@ -1,6 +1,11 @@
 package io.github.yusukensanta.parqueteer.cli
 
-import io.github.yusukensanta.parqueteer.core.models.{CompressionType, OutputFormat, SchemaMode}
+import io.github.yusukensanta.parqueteer.core.models.{
+  ColorMode,
+  CompressionType,
+  OutputFormat,
+  SchemaMode
+}
 
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
