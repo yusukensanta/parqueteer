@@ -83,6 +83,29 @@ jobs:
       - name: Check formatting
         run: sbt scalafmtCheckAll
 
+      - name: Generate dependency snapshot (SBOM)
+        if: matrix.java == '21'
+        run: |
+          sbt 'dependencyTree / toFile target/dependency-tree.txt' || \
+            sbt dependencyTree > target/dependency-tree.txt 2>&1
+
+      - name: Upload dependency snapshot
+        if: matrix.java == '21'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: dependency-snapshot
+          path: target/dependency-tree.txt
+          if-no-files-found: ignore
+
+      - name: Check architecture boundaries
+        run: |
+          VIOLATIONS=$(grep -rn 'cli\.' src/main/scala/io/github/yusukensanta/parqueteer/core/ src/main/scala/io/github/yusukensanta/parqueteer/cloud/ 2>/dev/null || true)
+          if [ -n "$VIOLATIONS" ]; then
+            echo "::error::Architecture violation: core/cloud layers must not reference cli package"
+            echo "$VIOLATIONS"
+            exit 1
+          fi
+
   s3-integration:
     name: S3 Integration Tests (RustFS)
     runs-on: ubuntu-latest

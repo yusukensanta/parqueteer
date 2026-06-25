@@ -1,6 +1,6 @@
 package io.github.yusukensanta.parqueteer.config
 
-import io.github.yusukensanta.parqueteer.cli.ColorMode
+import io.github.yusukensanta.parqueteer.core.models.ColorMode
 import io.github.yusukensanta.parqueteer.core.models.OutputFormat
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers

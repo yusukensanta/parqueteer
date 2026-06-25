@@ -1,6 +1,6 @@
 package io.github.yusukensanta.parqueteer.config
 
-import io.github.yusukensanta.parqueteer.cli.{ColorMode, GlobalOptions}
+import io.github.yusukensanta.parqueteer.core.models.{ColorMode, GlobalOptions}
 import io.github.yusukensanta.parqueteer.core.models.OutputFormat
 
 object EnvConfig {
@@ -36,8 +36,8 @@ object EnvConfig {
         case _          => None
       }
       if parsed.isEmpty then
-        System.err.println(
-          s"[parqueteer] warning: PARQUETEER_DEFAULT_FORMAT=$s is not a recognized format; ignoring"
+        io.github.yusukensanta.parqueteer.core.util.Warnings.emit(
+          s"PARQUETEER_DEFAULT_FORMAT=$s is not a recognized format; ignoring"
         )
       parsed
     }
@@ -53,8 +53,8 @@ object EnvConfig {
           ColorMode.fromString(s) match {
             case Some(mode) => mode
             case None =>
-              System.err.println(
-                s"[parqueteer] warning: PARQUETEER_COLOR=$s is not recognized (auto/always/never); ignoring"
+              io.github.yusukensanta.parqueteer.core.util.Warnings.emit(
+                s"PARQUETEER_COLOR=$s is not recognized (auto/always/never); ignoring"
               )
               ColorMode.Auto
           }
@@ -73,8 +73,8 @@ object EnvConfig {
     env("PARQUETEER_MAX_ROWS").flatMap { raw =>
       val parsed = raw.toLongOption.filter(_ > 0)
       if parsed.isEmpty then
-        System.err.println(
-          s"[parqueteer] warning: PARQUETEER_MAX_ROWS=$raw is not a positive integer; ignoring"
+        io.github.yusukensanta.parqueteer.core.util.Warnings.emit(
+          s"PARQUETEER_MAX_ROWS=$raw is not a positive integer; ignoring"
         )
       parsed
     }

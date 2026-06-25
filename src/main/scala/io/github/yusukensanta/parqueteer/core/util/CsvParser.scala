@@ -17,8 +17,8 @@ object CsvParser {
         val normalized =
           if values.length == headers.length + 1 && values.last.isEmpty then {
             if !trailingCommaWarned then {
-              Console.err.println(
-                s"[parqueteer] warning: CSV row ${idx + 2} has a trailing comma — extra empty field ignored. Suppress with a consistent schema."
+              Warnings.emit(
+                s"CSV row ${idx + 2} has a trailing comma — extra empty field ignored. Suppress with a consistent schema."
               )
               trailingCommaWarned = true
             }

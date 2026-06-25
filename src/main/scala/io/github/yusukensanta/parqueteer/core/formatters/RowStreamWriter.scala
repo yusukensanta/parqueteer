@@ -28,8 +28,8 @@ object RowStreamWriter {
   ): Boolean = {
     val unseen = rowKeys -- knownColumns
     if unseen.nonEmpty then {
-      Console.err.println(
-        s"[parqueteer] warning: $formatLabel output drops columns first seen after the $SampleSize-row " +
+      io.github.yusukensanta.parqueteer.core.util.Warnings.emit(
+        s"$formatLabel output drops columns first seen after the $SampleSize-row " +
           s"sample window: ${unseen.toList.sorted.mkString(", ")}. " +
           "Use --format ndjson to preserve all columns."
       )

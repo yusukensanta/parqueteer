@@ -39,8 +39,8 @@ object LTSVParser {
           scala.collection.mutable.LinkedHashMap.empty[String, CellValue]
         pairs.foreach { case (label, value) =>
           if lhm.contains(label) then
-            Console.err.println(
-              s"[parqueteer] warning: LTSV line ${lineIdx + 1}: duplicate label '$label' — last value wins"
+            Warnings.emit(
+              s"LTSV line ${lineIdx + 1}: duplicate label '$label' — last value wins"
             )
           lhm(label) = value
         }

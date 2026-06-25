@@ -3,8 +3,10 @@ package io.github.yusukensanta.parqueteer.cli
 import io.github.yusukensanta.parqueteer.core.services.ParquetService
 import io.github.yusukensanta.parqueteer.core.models.{
   CellValue,
+  ColorMode,
   CompressionType,
   ConversionConfig,
+  GlobalOptions,
   OutputFormat,
   ParqueteerError,
   ReadConfig,

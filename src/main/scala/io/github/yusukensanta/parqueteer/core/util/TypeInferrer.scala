@@ -70,8 +70,8 @@ object TypeInferrer {
         val inst =
           LocalDateTime.parse(s.replace(" ", "T")).toInstant(ZoneOffset.UTC)
         if spaceTsWarnOnce.compareAndSet(false, true) then
-          Console.err.println(
-            s"[parqueteer] warning: space-delimited datetime '$s' treated as UTC; use ISO-8601 ('T' separator) for unambiguous timestamps"
+          Warnings.emit(
+            s"space-delimited datetime '$s' treated as UTC; use ISO-8601 ('T' separator) for unambiguous timestamps"
           )
         inst
       })

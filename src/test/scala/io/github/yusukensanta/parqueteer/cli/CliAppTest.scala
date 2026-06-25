@@ -1,6 +1,7 @@
 package io.github.yusukensanta.parqueteer.cli
 
 import io.github.yusukensanta.parqueteer.config.{AppConfig, CloudConfig, OutputConfig, S3Config}
+import io.github.yusukensanta.parqueteer.core.models.GlobalOptions
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
