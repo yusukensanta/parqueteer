@@ -49,15 +49,16 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-java21-sbt-
 
-      - name: Resolve dependencies
-        run: sbt update
+      - name: Generate POM for dependency scanning
+        # makePom resolves transitive deps and writes target/scala-*/parqueteer_3-*.pom
+        run: sbt makePom
 
       - name: Run Trivy vulnerability scanner
         # aquasecurity/trivy-action@v0.36.0
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
         with:
           scan-type: 'fs'
-          scan-ref: '/home/runner/.cache/coursier'
+          scan-ref: 'target'
           format: 'sarif'
           output: 'trivy-results.sarif'
           severity: 'HIGH,CRITICAL'
