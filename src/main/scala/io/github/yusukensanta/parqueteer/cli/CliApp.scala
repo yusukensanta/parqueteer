@@ -2,7 +2,7 @@ package io.github.yusukensanta.parqueteer.cli
 
 import io.github.yusukensanta.parqueteer.core.services.ParquetService
 import io.github.yusukensanta.parqueteer.core.repositories.HadoopParquetRepository
-import io.github.yusukensanta.parqueteer.core.models.GlobalOptions
+import io.github.yusukensanta.parqueteer.core.models.{GlobalOptions, ParqueteerError}
 import io.github.yusukensanta.parqueteer.config.{AppConfig, ConfigurationManager, EnvConfig}
 import scopt.OParser
 import org.slf4j.LoggerFactory
@@ -145,7 +145,7 @@ object CliApp {
             )
             if config.globalOptions.verbose then
               System.err.println(CredentialRedactor.redactThrowable(e))
-            1
+            ParqueteerError.IOError(e).exitCode
         }
     }
 

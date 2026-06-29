@@ -108,7 +108,10 @@ object ArgumentParser {
                 )
                   .contains(x.toLowerCase)
               then success
-              else failure(s"Invalid format: $x")
+              else
+                failure(
+                  s"Invalid --format: $x. Use table, json, csv, pretty, markdown, ndjson, or ltsv"
+                )
             )
             .text(
               "Output format: table, json, csv, pretty, markdown, ndjson, ltsv (default: table)"
@@ -154,7 +157,7 @@ object ArgumentParser {
             .action((x, c) => updateCmd[InfoCommand](c, _.copy(format = parseOutputFormat(x))))
             .validate(x =>
               if List("table", "json").contains(x.toLowerCase) then success
-              else failure(s"Invalid format: $x. Use table or json")
+              else failure(s"Invalid --format: $x. Use table or json")
             )
             .text("Output format: table, json (default: table)"),
           opt[Unit]("verbose")
@@ -185,7 +188,7 @@ object ArgumentParser {
             )
             .validate(x =>
               if List("json", "ndjson", "csv", "ltsv").contains(x.toLowerCase) then success
-              else failure(s"Invalid input format: $x")
+              else failure(s"Invalid --input-format: $x. Use json, ndjson, csv, or ltsv")
             )
             .text("Input file format: json, ndjson, csv, ltsv (default: json)"),
           opt[String]("compression")
@@ -198,7 +201,8 @@ object ArgumentParser {
             )
             .validate(x =>
               if validCompressions.contains(x.toLowerCase) then success
-              else failure(s"Unknown compression: $x")
+              else
+                failure(s"Invalid --compression: $x. Use snappy, gzip, zstd, lz4, brotli, or none")
             )
             .text(
               "Compression type: none, snappy, gzip, lzo, brotli, lz4, zstd"
@@ -298,7 +302,7 @@ object ArgumentParser {
             .action((x, c) => updateCmd[SchemaCommand](c, _.copy(format = parseOutputFormat(x))))
             .validate(x =>
               if List("table", "json").contains(x.toLowerCase) then success
-              else failure(s"Invalid format: $x. Use table or json")
+              else failure(s"Invalid --format: $x. Use table or json")
             )
             .text("Output format: table, json (default: table)"),
           cmd("diff")
@@ -336,7 +340,7 @@ object ArgumentParser {
                 )
                 .validate(x =>
                   if List("table", "json").contains(x.toLowerCase) then success
-                  else failure(s"Invalid format: $x. Use table or json")
+                  else failure(s"Invalid --format: $x. Use table or json")
                 )
                 .text("Output format: table, json (default: table)")
             )
@@ -370,7 +374,8 @@ object ArgumentParser {
             )
             .validate(x =>
               if validCompressions.contains(x.toLowerCase) then success
-              else failure(s"Unknown compression: $x")
+              else
+                failure(s"Invalid --compression: $x. Use snappy, gzip, zstd, lz4, brotli, or none")
             )
             .text("Output compression (default: snappy)"),
           opt[String]("schema-mode")
@@ -382,14 +387,14 @@ object ArgumentParser {
                   case "strict" => SchemaMode.Strict
                   case other =>
                     throw new IllegalArgumentException(
-                      s"Unknown schema-mode: $other"
+                      s"Invalid --schema-mode: $other. Use strict or union"
                     )
                 })
               )
             )
             .validate(x =>
               if List("strict", "union").contains(x.toLowerCase) then success
-              else failure(s"Unknown schema-mode: $x. Use strict or union")
+              else failure(s"Invalid --schema-mode: $x. Use strict or union")
             )
             .text("Schema compatibility mode: strict (default) or union"),
           opt[Unit]("dry-run")
@@ -422,7 +427,7 @@ object ArgumentParser {
             .action((x, c) => updateCmd[StatsCommand](c, _.copy(format = parseOutputFormat(x))))
             .validate(x =>
               if List("table", "json").contains(x.toLowerCase) then success
-              else failure(s"Invalid format: $x. Use table or json")
+              else failure(s"Invalid --format: $x. Use table or json")
             )
             .text("Output format: table, json (default: table)")
         ),
@@ -439,7 +444,7 @@ object ArgumentParser {
             .action((x, c) => updateCmd[CountCommand](c, _.copy(format = parseOutputFormat(x))))
             .validate(x =>
               if List("table", "json").contains(x.toLowerCase) then success
-              else failure(s"Invalid format: $x. Use table or json")
+              else failure(s"Invalid --format: $x. Use table or json")
             )
             .text(
               "Output format: table (plain integer) or json (default: table)"

@@ -10,7 +10,7 @@ import software.amazon.awssdk.auth.credentials.{
 }
 import scala.util.{Failure, Try, Using}
 
-private object S3Tuning {
+private[cloud] object S3Tuning {
   val MaxConnections        = "100"
   val MaxAttempts           = "3"
   val ThrottleRetryLimit    = "20"
@@ -49,6 +49,8 @@ private object S3CredentialProviders {
 }
 
 class S3CredentialManager(profile: Option[String] = None) extends CloudCredentialManager {
+
+  protected[cloud] def env(key: String): Option[String] = sys.env.get(key)
 
   override def configureHadoop(
       location: StorageLocation
@@ -90,7 +92,7 @@ class S3CredentialManager(profile: Option[String] = None) extends CloudCredentia
             S3Tuning.MultipartThreshold
           )
 
-          sys.env.get("AWS_ENDPOINT_URL").foreach { rawEndpoint =>
+          env("AWS_ENDPOINT_URL").foreach { rawEndpoint =>
             val endpoint = if !rawEndpoint.contains("://") then {
               io.github.yusukensanta.parqueteer.core.util.Warnings.emit(
                 "AWS_ENDPOINT_URL has no scheme; assuming https:// — prepend http:// or https:// to suppress this warning"
@@ -129,29 +131,26 @@ class S3CredentialManager(profile: Option[String] = None) extends CloudCredentia
     )
   }
 
-  private def tryEnvironmentVariables(): Try[(String, String, Option[String])] =
+  private[cloud] def tryEnvironmentVariables(): Try[(String, String, Option[String])] =
     Try {
-      val accessKey = sys.env
-        .get("AWS_ACCESS_KEY_ID")
-        .orElse(sys.env.get("AWS_ACCESS_KEY"))
+      val accessKey = env("AWS_ACCESS_KEY_ID")
+        .orElse(env("AWS_ACCESS_KEY"))
         .getOrElse(
           throw new RuntimeException(
             "AWS_ACCESS_KEY_ID not found in environment"
           )
         )
 
-      val secretKey = sys.env
-        .get("AWS_SECRET_ACCESS_KEY")
-        .orElse(sys.env.get("AWS_SECRET_KEY"))
+      val secretKey = env("AWS_SECRET_ACCESS_KEY")
+        .orElse(env("AWS_SECRET_KEY"))
         .getOrElse(
           throw new RuntimeException(
             "AWS_SECRET_ACCESS_KEY not found in environment"
           )
         )
 
-      val sessionToken = sys.env
-        .get("AWS_SESSION_TOKEN")
-        .orElse(sys.env.get("AWS_SECURITY_TOKEN"))
+      val sessionToken = env("AWS_SESSION_TOKEN")
+        .orElse(env("AWS_SECURITY_TOKEN"))
 
       (accessKey, secretKey, sessionToken)
     }
@@ -183,7 +182,7 @@ class S3CredentialManager(profile: Option[String] = None) extends CloudCredentia
       explicitProfile: Option[String]
   ): Try[(String, String, Option[String])] = {
     val profileName = explicitProfile
-      .orElse(sys.env.get("AWS_PROFILE"))
+      .orElse(env("AWS_PROFILE"))
       .getOrElse("default")
     Try {
       Using.resource(ProfileCredentialsProvider.create(profileName)) { provider =>

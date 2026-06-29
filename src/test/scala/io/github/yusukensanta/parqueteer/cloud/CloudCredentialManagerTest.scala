@@ -280,6 +280,285 @@ class CloudCredentialManagerTest extends AnyFlatSpec with Matchers {
     ) shouldBe "SharedKey"
   }
 
+  // ── AzureCredentialManager env-injectable tests ────────────────────────
+
+  "AzureCredentialManager" should "cover managed_identity with optional AZURE_TENANT_ID and AZURE_CLIENT_ID" in {
+    val loc = AzureLocation("acct", "ctr", "blob")
+    val mgr = new AzureCredentialManager {
+      override def env(key: String): Option[String] = key match {
+        case "AZURE_AUTH_METHOD" => None
+        case "AZURE_TENANT_ID"   => Some("tenant-123")
+        case "AZURE_CLIENT_ID"   => Some("client-abc")
+        case _                   => None
+      }
+    }
+    val result = mgr.configureHadoop(loc)
+    result.isSuccess shouldBe true
+    val conf = result.get
+    conf.get("fs.azure.account.auth.type.acct.dfs.core.windows.net") shouldBe "OAuth"
+    conf.get("fs.azure.account.oauth2.msi.tenant.acct.dfs.core.windows.net") shouldBe "tenant-123"
+    conf.get("fs.azure.account.oauth2.client.id.acct.dfs.core.windows.net") shouldBe "client-abc"
+  }
+
+  it should "cover managed_identity without optional env vars" in {
+    val loc = AzureLocation("acct", "ctr", "blob")
+    val mgr = new AzureCredentialManager {
+      override def env(key: String): Option[String] = key match {
+        case "AZURE_AUTH_METHOD" => None
+        case _                   => None
+      }
+    }
+    val result = mgr.configureHadoop(loc)
+    result.isSuccess shouldBe true
+    result.get.get("fs.azure.account.auth.type.acct.dfs.core.windows.net") shouldBe "OAuth"
+  }
+
+  it should "cover service_principal when all required env vars are set" in {
+    val loc = AzureLocation("acct", "ctr", "blob")
+    val mgr = new AzureCredentialManager {
+      override def env(key: String): Option[String] = key match {
+        case "AZURE_AUTH_METHOD"   => Some("service_principal")
+        case "AZURE_CLIENT_ID"     => Some("cid")
+        case "AZURE_CLIENT_SECRET" => Some("csec")
+        case "AZURE_TENANT_ID"     => Some("tid")
+        case _                     => None
+      }
+    }
+    val result = mgr.configureHadoop(loc)
+    result.isSuccess shouldBe true
+    val conf = result.get
+    conf.get("fs.azure.account.auth.type.acct.dfs.core.windows.net") shouldBe "OAuth"
+    conf.get("fs.azure.account.oauth2.client.id.acct.dfs.core.windows.net") shouldBe "cid"
+    conf.get("fs.azure.account.oauth2.client.secret.acct.dfs.core.windows.net") shouldBe "csec"
+    conf.get("fs.azure.account.oauth2.client.endpoint.acct.dfs.core.windows.net") should include(
+      "tid"
+    )
+  }
+
+  it should "return Failure for service_principal when AZURE_CLIENT_ID is missing" in {
+    val loc = AzureLocation("acct", "ctr", "blob")
+    val mgr = new AzureCredentialManager {
+      override def env(key: String): Option[String] = key match {
+        case "AZURE_AUTH_METHOD" => Some("service_principal")
+        case _                   => None
+      }
+    }
+    val result = mgr.configureHadoop(loc)
+    result.isFailure shouldBe true
+    result.failed.get.getMessage should include("AZURE_CLIENT_ID")
+  }
+
+  it should "cover shared_key when AZURE_STORAGE_KEY is set" in {
+    val loc = AzureLocation("acct", "ctr", "blob")
+    val mgr = new AzureCredentialManager {
+      override def env(key: String): Option[String] = key match {
+        case "AZURE_AUTH_METHOD" => Some("shared_key")
+        case "AZURE_STORAGE_KEY" => Some("the-key")
+        case _                   => None
+      }
+    }
+    val result = mgr.configureHadoop(loc)
+    result.isSuccess shouldBe true
+    val conf = result.get
+    conf.get("fs.azure.account.auth.type.acct.dfs.core.windows.net") shouldBe "SharedKey"
+    conf.get("fs.azure.account.key.acct.dfs.core.windows.net") shouldBe "the-key"
+  }
+
+  it should "return Failure for shared_key when AZURE_STORAGE_KEY is missing" in {
+    val loc = AzureLocation("acct", "ctr", "blob")
+    val mgr = new AzureCredentialManager {
+      override def env(key: String): Option[String] = key match {
+        case "AZURE_AUTH_METHOD" => Some("shared_key")
+        case _                   => None
+      }
+    }
+    mgr.configureHadoop(loc).isFailure shouldBe true
+  }
+
+  it should "cover sas_token when AZURE_STORAGE_SAS_TOKEN is set" in {
+    val loc = AzureLocation("acct", "ctr", "blob")
+    val mgr = new AzureCredentialManager {
+      override def env(key: String): Option[String] = key match {
+        case "AZURE_AUTH_METHOD"       => Some("sas_token")
+        case "AZURE_STORAGE_SAS_TOKEN" => Some("sv=2023&...")
+        case _                         => None
+      }
+    }
+    val result = mgr.configureHadoop(loc)
+    result.isSuccess shouldBe true
+    val conf = result.get
+    conf.get("fs.azure.account.auth.type.acct.dfs.core.windows.net") shouldBe "SAS"
+    conf.get("fs.azure.sas.fixed.token.ctr.acct.dfs.core.windows.net") shouldBe "sv=2023&..."
+  }
+
+  it should "return Failure for unknown AZURE_AUTH_METHOD" in {
+    val loc = AzureLocation("acct", "ctr", "blob")
+    val mgr = new AzureCredentialManager {
+      override def env(key: String): Option[String] = key match {
+        case "AZURE_AUTH_METHOD" => Some("kerberos")
+        case _                   => None
+      }
+    }
+    val result = mgr.configureHadoop(loc)
+    result.isFailure shouldBe true
+    result.failed.get.getMessage should include("Unknown Azure auth method")
+    result.failed.get.getMessage should include("kerberos")
+  }
+
+  // ── S3CredentialManager env-injectable tests ───────────────────────────
+
+  "S3CredentialManager.tryEnvironmentVariables" should "succeed with AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY injected" in {
+    val mgr = new S3CredentialManager {
+      override def env(key: String): Option[String] = key match {
+        case "AWS_ACCESS_KEY_ID"     => Some("TESTKEY")
+        case "AWS_SECRET_ACCESS_KEY" => Some("TESTSECRET")
+        case _                       => None
+      }
+    }
+    val result = mgr.tryEnvironmentVariables()
+    result.isSuccess shouldBe true
+    val (accessKey, secretKey, sessionToken) = result.get
+    accessKey shouldBe "TESTKEY"
+    secretKey shouldBe "TESTSECRET"
+    sessionToken shouldBe None
+  }
+
+  it should "succeed with legacy AWS_ACCESS_KEY and AWS_SECRET_KEY env vars" in {
+    val mgr = new S3CredentialManager {
+      override def env(key: String): Option[String] = key match {
+        case "AWS_ACCESS_KEY" => Some("LEGACYKEY")
+        case "AWS_SECRET_KEY" => Some("LEGACYSEC")
+        case _                => None
+      }
+    }
+    val result = mgr.tryEnvironmentVariables()
+    result.isSuccess shouldBe true
+    result.get._1 shouldBe "LEGACYKEY"
+    result.get._2 shouldBe "LEGACYSEC"
+  }
+
+  it should "include session token when AWS_SESSION_TOKEN is present" in {
+    val mgr = new S3CredentialManager {
+      override def env(key: String): Option[String] = key match {
+        case "AWS_ACCESS_KEY_ID"     => Some("KEY")
+        case "AWS_SECRET_ACCESS_KEY" => Some("SEC")
+        case "AWS_SESSION_TOKEN"     => Some("TOK")
+        case _                       => None
+      }
+    }
+    val result = mgr.tryEnvironmentVariables()
+    result.isSuccess shouldBe true
+    result.get._3 shouldBe Some("TOK")
+  }
+
+  it should "include session token from AWS_SECURITY_TOKEN when AWS_SESSION_TOKEN absent" in {
+    val mgr = new S3CredentialManager {
+      override def env(key: String): Option[String] = key match {
+        case "AWS_ACCESS_KEY_ID"     => Some("KEY")
+        case "AWS_SECRET_ACCESS_KEY" => Some("SEC")
+        case "AWS_SECURITY_TOKEN"    => Some("SECTOK")
+        case _                       => None
+      }
+    }
+    val result = mgr.tryEnvironmentVariables()
+    result.isSuccess shouldBe true
+    result.get._3 shouldBe Some("SECTOK")
+  }
+
+  it should "return Failure when AWS_ACCESS_KEY_ID is absent" in {
+    val mgr = new S3CredentialManager {
+      override def env(key: String): Option[String] = None
+    }
+    val result = mgr.tryEnvironmentVariables()
+    result.isFailure shouldBe true
+    result.failed.get.getMessage should include("AWS_ACCESS_KEY_ID")
+  }
+
+  it should "return Failure when AWS_SECRET_ACCESS_KEY is absent but access key is present" in {
+    val mgr = new S3CredentialManager {
+      override def env(key: String): Option[String] = key match {
+        case "AWS_ACCESS_KEY_ID" => Some("KEY")
+        case _                   => None
+      }
+    }
+    val result = mgr.tryEnvironmentVariables()
+    result.isFailure shouldBe true
+    result.failed.get.getMessage should include("AWS_SECRET_ACCESS_KEY")
+  }
+
+  "S3CredentialManager.configureHadoop" should "set all tuning constants in Hadoop config when credentials available" in {
+    val mgr = new S3CredentialManager {
+      override def env(key: String): Option[String] = key match {
+        case "AWS_ACCESS_KEY_ID"     => Some("KEY")
+        case "AWS_SECRET_ACCESS_KEY" => Some("SEC")
+        case _                       => None
+      }
+    }
+    val result = mgr.configureHadoop(S3Location("bucket", "key"))
+    result.isSuccess shouldBe true
+    val conf = result.get
+    conf.get("fs.s3a.connection.maximum") shouldBe S3Tuning.MaxConnections
+    conf.get("fs.s3a.attempts.maximum") shouldBe S3Tuning.MaxAttempts
+    conf.get("fs.s3a.retry.throttle.limit") shouldBe S3Tuning.ThrottleRetryLimit
+    conf.get("fs.s3a.retry.throttle.interval") shouldBe S3Tuning.ThrottleRetryInterval
+    conf.get("fs.s3a.fast.upload") shouldBe "true"
+  }
+
+  it should "set region when S3Location has a region" in {
+    val mgr = new S3CredentialManager {
+      override def env(key: String): Option[String] = key match {
+        case "AWS_ACCESS_KEY_ID"     => Some("KEY")
+        case "AWS_SECRET_ACCESS_KEY" => Some("SEC")
+        case _                       => None
+      }
+    }
+    val result = mgr.configureHadoop(S3Location("bucket", "key", region = Some("ap-northeast-1")))
+    result.isSuccess shouldBe true
+    result.get.get("fs.s3a.endpoint.region") shouldBe "ap-northeast-1"
+  }
+
+  it should "add https:// prefix and emit warning when AWS_ENDPOINT_URL has no scheme" in {
+    val mgr = new S3CredentialManager {
+      override def env(key: String): Option[String] = key match {
+        case "AWS_ACCESS_KEY_ID"     => Some("KEY")
+        case "AWS_SECRET_ACCESS_KEY" => Some("SEC")
+        case "AWS_ENDPOINT_URL"      => Some("localhost:9000")
+        case _                       => None
+      }
+    }
+    val result = mgr.configureHadoop(S3Location("bucket", "key"))
+    result.isSuccess shouldBe true
+    result.get.get("fs.s3a.endpoint") shouldBe "https://localhost:9000"
+  }
+
+  it should "set ssl.enabled=false when AWS_ENDPOINT_URL is http://" in {
+    val mgr = new S3CredentialManager {
+      override def env(key: String): Option[String] = key match {
+        case "AWS_ACCESS_KEY_ID"     => Some("KEY")
+        case "AWS_SECRET_ACCESS_KEY" => Some("SEC")
+        case "AWS_ENDPOINT_URL"      => Some("http://localhost:9000")
+        case _                       => None
+      }
+    }
+    val result = mgr.configureHadoop(S3Location("bucket", "key"))
+    result.isSuccess shouldBe true
+    result.get.get("fs.s3a.connection.ssl.enabled") shouldBe "false"
+  }
+
+  it should "NOT set ssl.enabled when AWS_ENDPOINT_URL is https://" in {
+    val mgr = new S3CredentialManager {
+      override def env(key: String): Option[String] = key match {
+        case "AWS_ACCESS_KEY_ID"     => Some("KEY")
+        case "AWS_SECRET_ACCESS_KEY" => Some("SEC")
+        case "AWS_ENDPOINT_URL"      => Some("https://minio.example.com")
+        case _                       => None
+      }
+    }
+    val result = mgr.configureHadoop(S3Location("bucket", "key"))
+    result.isSuccess shouldBe true
+    result.get.get("fs.s3a.connection.ssl.enabled") should not be "false"
+  }
+
   it should "set per-account auth.type=SAS and ABFS fixed-token key for sas_token" in {
     assume(
       sys.env.contains("AZURE_AUTH_METHOD") &&

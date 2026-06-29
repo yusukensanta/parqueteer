@@ -1,6 +1,6 @@
 package io.github.yusukensanta.parqueteer.core.formatters
 
-import io.github.yusukensanta.parqueteer.core.models.{CellValue, FileContent}
+import io.github.yusukensanta.parqueteer.core.models.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -121,5 +121,72 @@ class LTSVFormatterTest extends AnyFlatSpec with Matchers {
   it should "produce empty string for empty rows" in {
     val content = FileContent(rows = Nil, totalRows = 0L)
     fmt.formatContent(content, None) shouldBe ""
+  }
+
+  "LTSVFormatter.formatSchema" should "produce one LTSV line per column" in {
+    val schema = ParquetSchema(
+      columns = List(
+        ColumnInfo("user_id", "INT64", isOptional = false, 1, 0, "SNAPPY"),
+        ColumnInfo("email", "BINARY", isOptional = true, 1, 0, "ZSTD")
+      ),
+      rowGroupCount = 1L,
+      totalRowCount = 10L
+    )
+    val lines = fmt.formatSchema(schema).split("\n")
+    lines should have length 2
+    lines(0) should include("name:user_id")
+    lines(0) should include("type:INT64")
+    lines(0) should include("optional:false")
+    lines(0) should include("compression:SNAPPY")
+    lines(1) should include("name:email")
+    lines(1) should include("type:BINARY")
+    lines(1) should include("optional:true")
+    lines(1) should include("compression:ZSTD")
+  }
+
+  it should "sanitize column names with spaces in LTSV labels" in {
+    val schema = ParquetSchema(
+      columns = List(ColumnInfo("bad col!", "INT64", isOptional = false, 1, 0, "SNAPPY")),
+      rowGroupCount = 1L,
+      totalRowCount = 1L
+    )
+    val result = fmt.formatSchema(schema)
+    result should not include " "
+    result should not include "!"
+    result should include("name:")
+  }
+
+  "LTSVFormatter.formatMetadata" should "include all fields as LTSV key-value pairs" in {
+    import java.time.Instant
+    val meta = FileMetadata(
+      fileSize = 4096L,
+      createdAt = Some(Instant.parse("2024-01-01T00:00:00Z")),
+      modifiedAt = Some(Instant.parse("2024-06-01T00:00:00Z")),
+      compressionRatio = Some(2.5),
+      version = "2.0",
+      createdBy = Some("parquet-mr")
+    )
+    val result = fmt.formatMetadata(meta)
+    result should include("file_size:4096")
+    result should include("version:2.0")
+    result should include("created_by:parquet-mr")
+    result should include("compression_ratio:2.5")
+    result should include("\t")
+  }
+
+  it should "emit empty strings for absent optional fields" in {
+    val meta = FileMetadata(
+      fileSize = 100L,
+      createdAt = None,
+      modifiedAt = None,
+      compressionRatio = None,
+      version = "1.0",
+      createdBy = None
+    )
+    val result = fmt.formatMetadata(meta)
+    result should include("file_size:100")
+    result should include("created_at:")
+    result should include("created_by:")
+    result should include("compression_ratio:")
   }
 }

@@ -178,4 +178,46 @@ class CSVFormatterTest extends AnyFlatSpec with Matchers {
     result should include("name")
     result should include("BINARY")
   }
+
+  it should "include Optional column in schema rows" in {
+    val result = formatter.formatSchema(sampleSchema)
+    result should include("Yes")
+    result should include("No")
+  }
+
+  "CSVFormatter.formatMetadata" should "include property header and file size" in {
+    import java.time.Instant
+    val meta = FileMetadata(
+      fileSize = 2048L,
+      createdAt = Some(Instant.parse("2024-01-01T00:00:00Z")),
+      modifiedAt = Some(Instant.parse("2024-06-15T00:00:00Z")),
+      compressionRatio = None,
+      version = "2.0",
+      createdBy = Some("test-writer")
+    )
+    val result = formatter.formatMetadata(meta)
+    result should include("Property")
+    result should include("Value")
+    result should include("File Size")
+    result should include("2048")
+    result should include("Version")
+    result should include("2.0")
+    result should include("Created At")
+    result should include("Modified At")
+  }
+
+  it should "omit Created At and Modified At rows when fields are None" in {
+    val meta = FileMetadata(
+      fileSize = 512L,
+      createdAt = None,
+      modifiedAt = None,
+      compressionRatio = None,
+      version = "1.0",
+      createdBy = None
+    )
+    val result = formatter.formatMetadata(meta)
+    result should include("File Size")
+    result should not include "Created At"
+    result should not include "Modified At"
+  }
 }

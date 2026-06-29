@@ -215,10 +215,72 @@ class RowStreamWriterTest extends AnyFlatSpec with Matchers {
     out should not include "\r\n"
   }
 
-  // ── Schema drift ─────────────────────────────────────────────────────────────
+  // ── Schema drift / unseen-column warning ─────────────────────────────────────
   // CSV/Table/Markdown all use a 50-row sample window and include all keys seen
   // during sampling; the unseen-key warning only fires for rows arriving after
-  // the flush.
+  // the flush (>= 50 rows have already been buffered and written).
+
+  private def captureStderr[A](block: => A): (A, String) = {
+    val baos = new java.io.ByteArrayOutputStream()
+    val ps   = new PrintStream(baos)
+    val old  = System.err
+    System.setErr(ps)
+    try {
+      val result = block; ps.flush(); (result, baos.toString("UTF-8"))
+    } finally System.setErr(old)
+  }
+
+  private def runWithStderr(
+      format: OutputFormat,
+      rows: List[Map[String, CellValue]]
+  ): (String, String) = {
+    val outBuf = new java.io.ByteArrayOutputStream()
+    val outPs  = new PrintStream(outBuf, true, "UTF-8")
+    val (_, err) = captureStderr {
+      val w = RowStreamWriter(format, outPs)
+      w.begin()
+      rows.foreach(w.writeRow)
+      w.end()
+      outPs.flush()
+    }
+    (outBuf.toString("UTF-8"), err)
+  }
+
+  private def rowsWithLateColumn(n: Int): List[Map[String, CellValue]] = {
+    val baseRows = (1 to n).map(i => Map("a" -> CellValue.I64(i.toLong))).toList
+    val lateRow  = Map("a" -> CellValue.I64(99L), "b" -> CellValue.Str("new"))
+    baseRows :+ lateRow
+  }
+
+  "RowStreamWriter CSV" should "emit WARN when a new column appears after the 50-row sample window" in {
+    val (_, stderr) = runWithStderr(OutputFormat.CSV, rowsWithLateColumn(50))
+    stderr should include("WARN")
+    stderr should include("b")
+    stderr should include("CSV")
+    stderr should include("--format ndjson")
+  }
+
+  it should "emit the warning only once even for multiple unseen-column rows" in {
+    val rows = rowsWithLateColumn(50) ++ List(
+      Map("a" -> CellValue.I64(100L), "c" -> CellValue.Str("another"))
+    )
+    val (_, stderr) = runWithStderr(OutputFormat.CSV, rows)
+    stderr.count(_.toString.contains("WARN")) should be <= 3
+  }
+
+  "RowStreamWriter Table" should "emit WARN when a new column appears after the 50-row sample window" in {
+    val (_, stderr) = runWithStderr(OutputFormat.Table, rowsWithLateColumn(50))
+    stderr should include("WARN")
+    stderr should include("b")
+    stderr should include("table")
+  }
+
+  "RowStreamWriter Markdown" should "emit WARN when a new column appears after the 50-row sample window" in {
+    val (_, stderr) = runWithStderr(OutputFormat.Markdown, rowsWithLateColumn(50))
+    stderr should include("WARN")
+    stderr should include("b")
+    stderr should include("markdown")
+  }
 
   "RowStreamWriter CSV" should "include extra keys that appear within the sample window" in {
     val r1    = Map("a" -> CellValue.I64(1L))

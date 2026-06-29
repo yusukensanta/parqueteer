@@ -6,6 +6,15 @@ import scala.util.{Failure, Try}
 
 class AzureCredentialManager extends CloudCredentialManager {
 
+  protected[cloud] def env(key: String): Option[String] = sys.env.get(key)
+
+  private def requiredEnv(key: String): String =
+    env(key)
+      .filter(_.nonEmpty)
+      .getOrElse(
+        throw new RuntimeException(s"$key is not set in the environment")
+      )
+
   override def configureHadoop(
       location: StorageLocation
   ): Try[Configuration] =
@@ -23,7 +32,7 @@ class AzureCredentialManager extends CloudCredentialManager {
 
           // Configure based on authentication method
           val authMethod =
-            sys.env.get("AZURE_AUTH_METHOD").getOrElse("managed_identity")
+            env("AZURE_AUTH_METHOD").getOrElse("managed_identity")
 
           authMethod match {
             case "managed_identity" =>
@@ -64,7 +73,7 @@ class AzureCredentialManager extends CloudCredentialManager {
     )
 
     // Optional: Set tenant ID if provided
-    sys.env.get("AZURE_TENANT_ID").foreach { tenantId =>
+    env("AZURE_TENANT_ID").foreach { tenantId =>
       conf.set(
         s"fs.azure.account.oauth2.msi.tenant.${location.account}.dfs.core.windows.net",
         tenantId
@@ -72,7 +81,7 @@ class AzureCredentialManager extends CloudCredentialManager {
     }
 
     // Optional: Set client ID for user-assigned managed identity
-    sys.env.get("AZURE_CLIENT_ID").foreach { clientId =>
+    env("AZURE_CLIENT_ID").foreach { clientId =>
       conf.set(
         s"fs.azure.account.oauth2.client.id.${location.account}.dfs.core.windows.net",
         clientId
@@ -84,9 +93,9 @@ class AzureCredentialManager extends CloudCredentialManager {
       conf: Configuration,
       location: AzureLocation
   ): Unit = {
-    val clientId     = CloudCredentialManager.requiredEnv("AZURE_CLIENT_ID")
-    val clientSecret = CloudCredentialManager.requiredEnv("AZURE_CLIENT_SECRET")
-    val tenantId     = CloudCredentialManager.requiredEnv("AZURE_TENANT_ID")
+    val clientId     = requiredEnv("AZURE_CLIENT_ID")
+    val clientSecret = requiredEnv("AZURE_CLIENT_SECRET")
+    val tenantId     = requiredEnv("AZURE_TENANT_ID")
 
     conf.set(
       s"fs.azure.account.auth.type.${location.account}.dfs.core.windows.net",
@@ -114,7 +123,7 @@ class AzureCredentialManager extends CloudCredentialManager {
       conf: Configuration,
       location: AzureLocation
   ): Unit = {
-    val accountKey = CloudCredentialManager.requiredEnv("AZURE_STORAGE_KEY")
+    val accountKey = requiredEnv("AZURE_STORAGE_KEY")
 
     // Explicit per-account auth type overrides the global OAuth default set above.
     conf.set(
@@ -131,7 +140,7 @@ class AzureCredentialManager extends CloudCredentialManager {
       conf: Configuration,
       location: AzureLocation
   ): Unit = {
-    val sasToken = CloudCredentialManager.requiredEnv("AZURE_STORAGE_SAS_TOKEN")
+    val sasToken = requiredEnv("AZURE_STORAGE_SAS_TOKEN")
 
     // Explicit per-account auth type overrides the global OAuth default set above.
     conf.set(

@@ -546,4 +546,284 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
     pw.end()
     errBuf.toString("UTF-8") shouldBe empty
   }
+
+  // ── executeWrite ───────────────────────────────────────────────────────
+
+  "executeWrite" should "show dry-run preview without writing" in {
+    val tmpFile = java.nio.file.Files.createTempFile("pqt-test", ".json")
+    try {
+      java.nio.file.Files.writeString(tmpFile, """[{"id":1,"name":"Alice"}]""")
+      val out = new ByteArrayOutputStream()
+      Console.withOut(new PrintStream(out)) {
+        CommandExecutor.executeWrite(
+          newService(),
+          "s3://bucket/out.parquet",
+          tmpFile.toString,
+          InputFormat.Json,
+          CompressionType.Snappy,
+          rowGroupSize = None,
+          dryRun = true,
+          quietOpts
+        )
+      }
+      val output = out.toString("UTF-8")
+      output should include("Dry run")
+      output should include("s3://bucket/out.parquet")
+      output should include("id")
+    } finally java.nio.file.Files.deleteIfExists(tmpFile)
+  }
+
+  it should "return error when dry-run input file not found" in {
+    val (code, stderr) = captureStderr {
+      CommandExecutor.executeWrite(
+        newService(),
+        "s3://bucket/out.parquet",
+        "/nonexistent/input.json",
+        InputFormat.Json,
+        CompressionType.Snappy,
+        rowGroupSize = None,
+        dryRun = true,
+        quietOpts
+      )
+    }
+    code should not be 0
+    stderr should include("Failed to read input file")
+  }
+
+  // ── executeConvert ─────────────────────────────────────────────────────
+
+  "executeConvert" should "show dry-run preview for non-parquet input" in {
+    val out = new ByteArrayOutputStream()
+    Console.withOut(new PrintStream(out)) {
+      CommandExecutor.executeConvert(
+        newService(),
+        "input.csv",
+        "output.parquet",
+        CompressionType.Zstd,
+        maxRows = None,
+        dryRun = true,
+        quietOpts
+      )
+    }
+    val output = out.toString("UTF-8")
+    output should include("Dry run")
+    output should include("input.csv")
+    output should include("output.parquet")
+    output should include("csv")
+  }
+
+  it should "show dry-run preview for parquet input" in {
+    val out = new ByteArrayOutputStream()
+    Console.withOut(new PrintStream(out)) {
+      CommandExecutor.executeConvert(
+        newService(),
+        "input.parquet",
+        "output.parquet",
+        CompressionType.Snappy,
+        maxRows = None,
+        dryRun = true,
+        quietOpts
+      )
+    }
+    val output = out.toString("UTF-8")
+    output should include("Dry run")
+    output should include("input.parquet")
+    output should include("output.parquet")
+  }
+
+  it should "return non-zero for unsupported conversion extension pair" in {
+    val (code, stderr) = captureStderr {
+      CommandExecutor.executeConvert(
+        newService(),
+        "input.txt",
+        "output.xml",
+        CompressionType.Snappy,
+        maxRows = None,
+        dryRun = false,
+        quietOpts
+      )
+    }
+    code should not be 0
+    stderr should include("Unsupported conversion")
+  }
+
+  // ── execute dispatch new branches ──────────────────────────────────────
+
+  "execute" should "dispatch WriteCommand with dryRun = true" in {
+    val tmpFile = java.nio.file.Files.createTempFile("pqt-test", ".json")
+    try {
+      java.nio.file.Files.writeString(tmpFile, """[{"x":1}]""")
+      val out = new ByteArrayOutputStream()
+      val code = Console.withOut(new PrintStream(out)) {
+        CommandExecutor.execute(
+          WriteCommand(tmpFile.toString, "s3://b/o.parquet", dryRun = true),
+          newService(),
+          quietOpts
+        )
+      }
+      code shouldBe 0
+      out.toString("UTF-8") should include("Dry run")
+    } finally java.nio.file.Files.deleteIfExists(tmpFile)
+  }
+
+  it should "dispatch ConvertCommand with dryRun = true" in {
+    val out = new ByteArrayOutputStream()
+    val code = Console.withOut(new PrintStream(out)) {
+      CommandExecutor.execute(
+        ConvertCommand("input.csv", "output.parquet", dryRun = true),
+        newService(),
+        quietOpts
+      )
+    }
+    code shouldBe 0
+    out.toString("UTF-8") should include("Dry run")
+  }
+
+  it should "dispatch SchemaDiffCommand and return 0 for identical schemas" in {
+    CommandExecutor.execute(
+      SchemaDiffCommand("/tmp/a.parquet", "/tmp/b.parquet"),
+      newService(),
+      quietOpts
+    ) shouldBe 0
+  }
+
+  it should "dispatch ConfigCommand" in {
+    CommandExecutor.execute(
+      ConfigCommand(validate = false),
+      newService(),
+      quietOpts
+    ) shouldBe 0
+  }
+
+  it should "dispatch ConfigCommand validate" in {
+    CommandExecutor.execute(
+      ConfigCommand(validate = true),
+      newService(),
+      quietOpts
+    ) shouldBe 0
+  }
+
+  // ── executeSchemaDiff ──────────────────────────────────────────────────
+
+  "executeSchemaDiff" should "return 0 when schemas are identical" in {
+    CommandExecutor.executeSchemaDiff(
+      newService(),
+      SchemaDiffCommand("/tmp/a.parquet", "/tmp/b.parquet"),
+      quietOpts
+    ) shouldBe 0
+  }
+
+  it should "return error code when schema read fails" in {
+    val repo = new FakeParquetRepository(
+      schemaResult = scala.util.Failure(new java.io.FileNotFoundException("/nope")),
+      metadataResult = scala.util.Failure(new java.io.FileNotFoundException("/nope"))
+    )
+    val (code, stderr) = captureStderr {
+      CommandExecutor.executeSchemaDiff(
+        newService(repo),
+        SchemaDiffCommand("/nope", "/nope"),
+        quietOpts
+      )
+    }
+    code should not be 0
+    stderr should include("Failed to diff schemas")
+  }
+
+  it should "output JSON diff when format is JSON" in {
+    val out = new ByteArrayOutputStream()
+    Console.withOut(new PrintStream(out)) {
+      CommandExecutor.executeSchemaDiff(
+        newService(),
+        SchemaDiffCommand("/tmp/a.parquet", "/tmp/b.parquet", OutputFormat.JSON),
+        defaultOpts
+      )
+    }
+    out.toString("UTF-8") should include("{")
+  }
+
+  it should "output table diff when format is Table" in {
+    val out = new ByteArrayOutputStream()
+    Console.withOut(new PrintStream(out)) {
+      CommandExecutor.executeSchemaDiff(
+        newService(),
+        SchemaDiffCommand("/tmp/a.parquet", "/tmp/b.parquet", OutputFormat.Table),
+        defaultOpts
+      )
+    }
+    out.toString("UTF-8") should not be empty
+  }
+
+  // ── executeConfig ──────────────────────────────────────────────────────
+
+  "executeConfig" should "return 0 for non-validate" in {
+    CommandExecutor.executeConfig(ConfigCommand(validate = false), quietOpts) shouldBe 0
+  }
+
+  it should "return 0 for validate with no config file" in {
+    CommandExecutor.executeConfig(
+      ConfigCommand(validate = true),
+      GlobalOptions(quiet = true, configPath = Some("/nonexistent/config.yaml"))
+    ) shouldBe 0
+  }
+
+  // ── runWithDeferredBegin ───────────────────────────────────────────────
+
+  "runWithDeferredBegin" should "call begin before first row and end after all rows" in {
+    val calls = scala.collection.mutable.ListBuffer.empty[String]
+    val writer = new io.github.yusukensanta.parqueteer.core.formatters.RowStreamWriter {
+      override def begin(): Unit                               = calls += "begin"
+      override def writeRow(row: Map[String, CellValue]): Unit = calls += "row"
+      override def end(): Unit                                 = calls += "end"
+    }
+    val result = CommandExecutor.runWithDeferredBegin(
+      writer,
+      process => { process(Map.empty); process(Map.empty); Right(2L) }
+    )
+    result shouldBe Right(2L)
+    calls.toList shouldBe List("begin", "row", "row", "end")
+  }
+
+  it should "call begin and end even with no rows on success" in {
+    val calls = scala.collection.mutable.ListBuffer.empty[String]
+    val writer = new io.github.yusukensanta.parqueteer.core.formatters.RowStreamWriter {
+      override def begin(): Unit                               = calls += "begin"
+      override def writeRow(row: Map[String, CellValue]): Unit = calls += "row"
+      override def end(): Unit                                 = calls += "end"
+    }
+    val result = CommandExecutor.runWithDeferredBegin(
+      writer,
+      _ => Right(0L)
+    )
+    result shouldBe Right(0L)
+    calls.toList shouldBe List("begin", "end")
+  }
+
+  it should "propagate read error without calling begin or end" in {
+    val calls = scala.collection.mutable.ListBuffer.empty[String]
+    val writer = new io.github.yusukensanta.parqueteer.core.formatters.RowStreamWriter {
+      override def begin(): Unit                               = calls += "begin"
+      override def writeRow(row: Map[String, CellValue]): Unit = calls += "row"
+      override def end(): Unit                                 = calls += "end"
+    }
+    val err = ParqueteerError.FileNotFound("/x")
+    val result = CommandExecutor.runWithDeferredBegin(
+      writer,
+      _ => Left(err)
+    )
+    result shouldBe Left(err)
+    calls should not contain "begin"
+    calls should not contain "end"
+  }
+
+  it should "return Left when end() throws and read succeeded" in {
+    val writer = new io.github.yusukensanta.parqueteer.core.formatters.RowStreamWriter {
+      override def writeRow(row: Map[String, CellValue]): Unit = ()
+      override def end(): Unit = throw new java.io.IOException("flush failed")
+    }
+    val result = CommandExecutor.runWithDeferredBegin(
+      writer,
+      process => { process(Map.empty); Right(1L) }
+    )
+    result.isLeft shouldBe true
+  }
 }

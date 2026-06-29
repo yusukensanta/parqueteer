@@ -138,7 +138,7 @@ private[cli] object CommandExecutor {
       if filter.isDefined && parallelism > 1 then {
         if !globalOptions.quiet then
           System.err.println(
-            "Warning: --filter disables parallel mode; falling back to sequential read."
+            "[parqueteer] warning: --filter disables parallel mode; falling back to sequential read."
           )
         1
       } else parallelism
@@ -155,13 +155,13 @@ private[cli] object CommandExecutor {
 
     if effectiveStreaming && effectiveParallelism > 1 && !globalOptions.quiet then
       System.err.println(
-        s"Warning: --parallelism $effectiveParallelism is ignored in streaming mode; streaming is always sequential."
+        s"[parqueteer] warning: --parallelism $effectiveParallelism is ignored in streaming mode; streaming is always sequential."
       )
 
     if effectiveStreaming && format == OutputFormat.Pretty && !globalOptions.quiet
     then
       System.err.println(
-        "Warning: --format pretty is not supported in streaming mode; falling back to ndjson."
+        "[parqueteer] warning: --format pretty is not supported in streaming mode; falling back to ndjson."
       )
 
     if effectiveStreaming then {
@@ -593,7 +593,7 @@ private[cli] object CommandExecutor {
   ): Int =
     if cmd.filePath.isEmpty then {
       System.err.println(
-        "Error: schema requires a file path, or use 'schema diff FILE1 FILE2'"
+        "[parqueteer] error: schema requires a file path, or use 'schema diff FILE1 FILE2'"
       )
       2
     } else
@@ -672,7 +672,7 @@ private[cli] object CommandExecutor {
         if !globalOptions.quiet then println(ShellCompletions.fish)
         0
       case other =>
-        System.err.println(s"Unsupported shell: $other")
+        System.err.println(s"[parqueteer] error: Unsupported shell: $other. Use bash, zsh, or fish")
         1
     }
 
