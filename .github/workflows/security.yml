@@ -50,8 +50,11 @@ jobs:
             ${{ runner.os }}-java21-sbt-
 
       - name: Generate POM for dependency scanning
-        # makePom resolves transitive deps and writes target/scala-*/parqueteer_3-*.pom
-        run: sbt makePom
+        # makePom writes target/scala-*/parqueteer_3-*.pom; copy to pom.xml so
+        # Trivy's Maven scanner picks it up (it only detects files named pom.xml)
+        run: |
+          sbt makePom
+          cp target/scala-*/*.pom target/pom.xml
 
       - name: Run Trivy vulnerability scanner
         # aquasecurity/trivy-action@v0.36.0
