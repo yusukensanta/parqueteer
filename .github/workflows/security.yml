@@ -34,7 +34,7 @@ jobs:
         # dependency-check/Dependency-Check_Action@main (pinned 2026-06-21)
         uses: dependency-check/Dependency-Check_Action@1e54355a8b4c8abaa8cc7d0b70aa655a3bb15a6c
         env:
-          JAVA_HOME: ""
+          JAVA_HOME: /opt/java/openjdk
         with:
           project: 'parqueteer'
           path: '.'
