@@ -22,12 +22,42 @@ jobs:
         # actions/checkout@v6.0.2
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
 
+      - name: Setup Java
+        # actions/setup-java@v5.2.0
+        uses: actions/setup-java@ad2b38190b15e4d6bdf0c97fb4fca8412226d287
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+          cache: 'sbt'
+
+      - name: Setup sbt via Coursier
+        run: |
+          curl -fL https://github.com/coursier/coursier/releases/download/v2.1.24/cs-x86_64-pc-linux.gz | gzip -d > cs
+          echo '1517a0b6c4b9608dc45da8f34bc8290707ed50104ee92662f57808d2c012be54  cs' | sha256sum -c
+          chmod +x cs
+          ./cs setup --yes --jvm 21
+          echo "$HOME/.local/share/coursier/bin" >> $GITHUB_PATH
+
+      - name: Cache sbt dependencies
+        # actions/cache@v5
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae
+        with:
+          path: |
+            ~/.sbt
+            ~/.cache/coursier
+          key: ${{ runner.os }}-java21-sbt-${{ hashFiles('**/build.sbt', 'project/**') }}
+          restore-keys: |
+            ${{ runner.os }}-java21-sbt-
+
+      - name: Resolve dependencies
+        run: sbt update
+
       - name: Run Trivy vulnerability scanner
         # aquasecurity/trivy-action@v0.36.0
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
         with:
           scan-type: 'fs'
-          scan-ref: '.'
+          scan-ref: '/home/runner/.cache/coursier'
           format: 'sarif'
           output: 'trivy-results.sarif'
           severity: 'HIGH,CRITICAL'
