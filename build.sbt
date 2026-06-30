@@ -175,6 +175,14 @@ lazy val root = (project in file("."))
         // commons-lang3 required by hadoop-aws 3.5.0 S3AUtils at S3AFileSystem.initialize()
         "org.apache.commons" % "commons-lang3" % "3.18.0",
 
+        // Jackson pinned explicitly so the generated POM (used by Trivy) shows the
+        // patched version rather than Hadoop's older transitive declaration.
+        // CVE-2026-54512 + CVE-2026-54513 (HIGH) fixed in 2.18.8; keep all three
+        // jackson-core artifacts aligned to prevent version skew.
+        "com.fasterxml.jackson.core" % "jackson-core"        % "2.18.8",
+        "com.fasterxml.jackson.core" % "jackson-databind"    % "2.18.8",
+        "com.fasterxml.jackson.core" % "jackson-annotations" % "2.18.8",
+
         // Testing
         "org.scalatest"     %% "scalatest"       % scalatestVersion           % Test,
         "org.scalamock"     %% "scalamock"       % scalamockVersion           % Test,
@@ -211,11 +219,12 @@ lazy val root = (project in file("."))
         "org.xerial.snappy" % "snappy-java" % "1.1.10.8", // CVE-2023-43642 + CVE-2023-34455; 1.1.10.8 is current clean release
         "com.nimbusds" % "nimbus-jose-jwt" % "10.9.1", // CVE-2025-53864 — deeply nested JSON DoS (fixed >=10.0.2; 10.9.1 is current)
         "net.minidev" % "json-smart" % "2.6.0", // CVE-2024-57699 — nested JSON stack exhaustion DoS (nimbus transitive)
-        // GHSA-72hv-8253-57qq (async parser DoS) fixed in jackson-core 2.18.6;
+        // GHSA-72hv-8253-57qq (async parser DoS) fixed in 2.18.6;
+        // CVE-2026-54512 + CVE-2026-54513 (HIGH) fixed in 2.18.8;
         // pin all three Jackson artifacts together to prevent version skew.
-        "com.fasterxml.jackson.core" % "jackson-core"        % "2.18.6",
-        "com.fasterxml.jackson.core" % "jackson-databind"    % "2.18.6",
-        "com.fasterxml.jackson.core" % "jackson-annotations" % "2.18.6"
+        "com.fasterxml.jackson.core" % "jackson-core"        % "2.18.8",
+        "com.fasterxml.jackson.core" % "jackson-databind"    % "2.18.8",
+        "com.fasterxml.jackson.core" % "jackson-annotations" % "2.18.8"
       )
     },
     assembly / assemblyMergeStrategy := {
