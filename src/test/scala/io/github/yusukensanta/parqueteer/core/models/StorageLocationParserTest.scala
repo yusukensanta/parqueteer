@@ -31,6 +31,13 @@ class StorageLocationParserTest extends AnyFlatSpec with Matchers {
     result shouldBe Right(LocalPath("/local/path/to/file.parquet"))
   }
 
+  it should "normalize dot-dot segments in local paths" in {
+    StorageLocationParser.parse("/tmp/data/../file.parquet") shouldBe
+      Right(LocalPath("/tmp/file.parquet"))
+    StorageLocationParser.parse("/tmp/./data/file.parquet") shouldBe
+      Right(LocalPath("/tmp/data/file.parquet"))
+  }
+
   it should "return error for unsupported URLs" in {
     val result = StorageLocationParser.parse("ftp://example.com/file.parquet")
     result.isLeft shouldBe true

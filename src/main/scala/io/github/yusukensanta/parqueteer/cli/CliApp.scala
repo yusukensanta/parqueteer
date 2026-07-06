@@ -130,7 +130,8 @@ object CliApp {
           val effectiveCmd = applyAppConfigToCommand(cmd, appConfig)
           val repository = new HadoopParquetRepository(
             profile = opts.profile,
-            region = opts.region
+            region = opts.region,
+            s3EndpointUrl = opts.s3EndpointUrl
           )
           val service = new ParquetService(repository)
           CommandExecutor.execute(effectiveCmd, service, opts)
@@ -156,7 +157,8 @@ object CliApp {
     val s3 = appConfig.cloud.s3
     opts.copy(
       profile = opts.profile.orElse(s3.profile),
-      region = opts.region.orElse(s3.defaultRegion)
+      region = opts.region.orElse(s3.defaultRegion),
+      s3EndpointUrl = opts.s3EndpointUrl.orElse(s3.endpointUrl)
     )
   }
 

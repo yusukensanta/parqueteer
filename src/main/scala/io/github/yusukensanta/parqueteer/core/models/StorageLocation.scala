@@ -69,7 +69,7 @@ object StorageLocationParser {
           s"Malformed URL '$typo'. Did you mean '${typo.replaceFirst(":/", "://")}'?"
         )
       case localPath if !localPath.contains("://") =>
-        Right(LocalPath(localPath))
+        Right(LocalPath(java.nio.file.Paths.get(localPath).normalize().toString))
       case unsupported =>
         Left(s"Unsupported storage location format: $unsupported")
     }

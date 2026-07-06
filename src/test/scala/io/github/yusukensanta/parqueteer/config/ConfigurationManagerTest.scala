@@ -70,6 +70,91 @@ class ConfigurationManagerTest extends AnyFlatSpec with Matchers {
     tempDir.delete()
   }
 
+  it should "warn about use_ssl: false (dead security field)" in {
+    val manager    = new ConfigurationManager()
+    val tempDir    = File.newTemporaryDirectory()
+    val configFile = tempDir / "config.yaml"
+    configFile.write(
+      """|cloud:
+         |  s3:
+         |    defaultRegion: "us-east-1"
+         |    useSsl: false
+         |    bufferSize: "64MB"
+         |    multipartThreshold: "100MB"
+         |  gcs:
+         |    bufferSize: "64MB"
+         |    chunkSize: "32MB"
+         |  azure:
+         |    authMethod: "managed_identity"
+         |    bufferSize: "64MB"
+         |output:
+         |  defaultFormat: "table"
+         |  maxRows: 1000
+         |  precision: 2
+         |  showNulls: true
+         |  colorOutput: true
+         |performance:
+         |  readBufferSize: "64MB"
+         |  writeBufferSize: "64MB"
+         |  maxConcurrency: 4
+         |  enableCaching: true
+         |  cacheSize: "256MB"
+         |logging:
+         |  level: "INFO"
+         |  enableConsole: true
+         |  enableStructured: false
+         |""".stripMargin
+    )
+
+    val result = manager.validate(Some(configFile.pathAsString))
+    result.isSuccess shouldBe true
+    result.get.exists(_.contains("use_ssl")) shouldBe true
+
+    tempDir.delete()
+  }
+
+  it should "warn about non-default performance fields" in {
+    val manager    = new ConfigurationManager()
+    val tempDir    = File.newTemporaryDirectory()
+    val configFile = tempDir / "config.yaml"
+    configFile.write(
+      """|cloud:
+         |  s3:
+         |    useSsl: true
+         |    bufferSize: "64MB"
+         |    multipartThreshold: "100MB"
+         |  gcs:
+         |    bufferSize: "64MB"
+         |    chunkSize: "32MB"
+         |  azure:
+         |    authMethod: "managed_identity"
+         |    bufferSize: "64MB"
+         |output:
+         |  defaultFormat: "table"
+         |  maxRows: 1000
+         |  precision: 2
+         |  showNulls: true
+         |  colorOutput: true
+         |performance:
+         |  readBufferSize: "64MB"
+         |  writeBufferSize: "64MB"
+         |  maxConcurrency: 8
+         |  enableCaching: true
+         |  cacheSize: "256MB"
+         |logging:
+         |  level: "INFO"
+         |  enableConsole: true
+         |  enableStructured: false
+         |""".stripMargin
+    )
+
+    val result = manager.validate(Some(configFile.pathAsString))
+    result.isSuccess shouldBe true
+    result.get.exists(_.contains("max_concurrency")) shouldBe true
+
+    tempDir.delete()
+  }
+
   it should "parse auto-generated snake_case config (roundtrip)" in {
     val manager    = new ConfigurationManager()
     val tempDir    = File.newTemporaryDirectory()

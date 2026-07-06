@@ -19,18 +19,6 @@ private[repositories] object ParallelRowGroupReader {
 
   private val logger = LoggerFactory.getLogger(getClass)
 
-  private val sharedPool: java.util.concurrent.ExecutorService = {
-    val factory = new java.util.concurrent.ThreadFactory {
-      private val counter = new java.util.concurrent.atomic.AtomicInteger(0)
-      override def newThread(r: Runnable): Thread = {
-        val t = new Thread(r, s"parqueteer-parallel-read-${counter.getAndIncrement()}")
-        t.setDaemon(true)
-        t
-      }
-    }
-    Executors.newCachedThreadPool(factory)
-  }
-
   def read(
       path: HadoopPath,
       conf: Configuration,
@@ -54,37 +42,48 @@ private[repositories] object ParallelRowGroupReader {
       case _ => fileSchema
     }
 
-    implicit val ec: ExecutionContext =
-      ExecutionContext.fromExecutor(sharedPool)
-    val requestedNames =
-      requestedSchema.getColumns.asScala.map(_.getPath.mkString(".")).toSet
-    val nullRowsAllotted = new AtomicLong(
-      config.maxRows.getOrElse(Long.MaxValue)
+    val pool = Executors.newFixedThreadPool(
+      config.parallelism.max(1),
+      new java.util.concurrent.ThreadFactory {
+        private val counter = new java.util.concurrent.atomic.AtomicInteger(0)
+        override def newThread(r: Runnable): Thread =
+          val t = new Thread(r, s"parqueteer-parallel-read-${counter.getAndIncrement()}")
+          t.setDaemon(true)
+          t
+      }
     )
-    val futures = selectedBlocks.map { block =>
-      Future {
-        readBlock(
-          path,
-          conf,
-          block,
-          fileSchema,
-          requestedSchema,
-          requestedNames,
-          nullRowsAllotted
-        )
-      }
-    }
-    val allRows =
-      try Await.result(Future.sequence(futures), config.readTimeout).flatten
-      catch {
-        case _: TimeoutException =>
-          throw new RuntimeException(
-            s"parallel read timed out after ${config.readTimeout} — " +
-              "retry with --parallelism 1, or check network connectivity"
+    try {
+      implicit val ec: ExecutionContext = ExecutionContext.fromExecutor(pool)
+      val requestedNames =
+        requestedSchema.getColumns.asScala.map(_.getPath.mkString(".")).toSet
+      val nullRowsAllotted = new AtomicLong(
+        config.maxRows.getOrElse(Long.MaxValue)
+      )
+      val futures = selectedBlocks.map { block =>
+        Future {
+          readBlock(
+            path,
+            conf,
+            block,
+            fileSchema,
+            requestedSchema,
+            requestedNames,
+            nullRowsAllotted
           )
+        }
       }
-    io.github.yusukensanta.parqueteer.core.util.RowLimiter
-      .limitList(allRows, config.maxRows)
+      val allRows =
+        try Await.result(Future.sequence(futures), config.readTimeout).flatten
+        catch {
+          case _: TimeoutException =>
+            throw new RuntimeException(
+              s"parallel read timed out after ${config.readTimeout} — " +
+                "retry with --parallelism 1, or check network connectivity"
+            )
+        }
+      io.github.yusukensanta.parqueteer.core.util.RowLimiter
+        .limitList(allRows, config.maxRows)
+    } finally pool.shutdown()
   }
 
   private def readBlock(

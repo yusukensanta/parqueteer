@@ -494,10 +494,7 @@ class ParquetService(
         case "ndjson" =>
           DataFileReader.readNdjsonFile(path, maxRows).toParqueteerError
         case "csv" =>
-          DataFileReader
-            .readCsvFile(path)
-            .map(io.github.yusukensanta.parqueteer.core.util.RowLimiter.limitList(_, maxRows))
-            .toParqueteerError
+          DataFileReader.readCsvFile(path, maxRows).toParqueteerError
         case "ltsv" =>
           DataFileReader.readLtsvFile(path, maxRows).toParqueteerError
         case fmt =>

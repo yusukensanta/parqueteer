@@ -24,14 +24,16 @@ private[services] object DataFileReader {
       )
     }
 
-  def readCsvFile(path: String): Try[List[Map[String, CellValue]]] =
+  def readCsvFile(
+      path: String,
+      maxRows: Option[Long] = None
+  ): Try[List[Map[String, CellValue]]] =
     Try {
       import better.files.*
-      parseCsvContent(
-        File(path).contentAsString(using
-          java.nio.charset.StandardCharsets.UTF_8
-        )
-      )
+      val content = File(path).contentAsString(using java.nio.charset.StandardCharsets.UTF_8)
+      io.github.yusukensanta.parqueteer.core.util.RowLimiter
+        .limitIterator(CsvParser.parseStream(content), maxRows)
+        .toList
     }
 
   def readLtsvFile(

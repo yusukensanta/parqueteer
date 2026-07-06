@@ -17,5 +17,6 @@ case class GlobalOptions(
     configPath: Option[String] = None,
     profile: Option[String] = None,
     region: Option[String] = None,
+    s3EndpointUrl: Option[String] = None,
     colorMode: ColorMode = ColorMode.Auto
 )

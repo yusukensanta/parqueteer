@@ -68,6 +68,17 @@ class CloudCredentialManagerTest extends AnyFlatSpec with Matchers {
     manager.get shouldBe a[S3CredentialManager]
   }
 
+  it should "wire s3EndpointUrl override into S3CredentialManager" in {
+    val location = S3Location("bucket", "key")
+    val manager = CloudCredentialManager.forLocation(
+      location,
+      s3EndpointUrl = Some("http://localhost:9000")
+    )
+    manager shouldBe defined
+    val mgr = manager.get.asInstanceOf[S3CredentialManager]
+    mgr.env("AWS_ENDPOINT_URL") shouldBe Some("http://localhost:9000")
+  }
+
   "CloudCredentialManager.requiredEnv" should "return the env var value when set" in {
     assume(sys.env.contains("HOME"), "Skipped: HOME not set")
     CloudCredentialManager.requiredEnv("HOME") shouldBe sys.env("HOME")
@@ -557,6 +568,18 @@ class CloudCredentialManagerTest extends AnyFlatSpec with Matchers {
     val result = mgr.configureHadoop(S3Location("bucket", "key"))
     result.isSuccess shouldBe true
     result.get.get("fs.s3a.connection.ssl.enabled") should not be "false"
+  }
+
+  it should "use endpointOverride from constructor when set, regardless of env" in {
+    // endpointOverride takes priority: env() returns override, not sys.env fallback
+    val mgr = new S3CredentialManager(endpointOverride = Some("http://config-host:9000"))
+    mgr.env("AWS_ENDPOINT_URL") shouldBe Some("http://config-host:9000")
+  }
+
+  it should "fall back to sys.env when endpointOverride is None" in {
+    // Without endpointOverride, non-endpoint keys are unaffected
+    val mgr = new S3CredentialManager(endpointOverride = None)
+    mgr.env("AWS_ACCESS_KEY_ID") shouldBe sys.env.get("AWS_ACCESS_KEY_ID")
   }
 
   it should "set per-account auth.type=SAS and ABFS fixed-token key for sas_token" in {

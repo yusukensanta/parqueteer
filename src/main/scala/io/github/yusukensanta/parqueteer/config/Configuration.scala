@@ -146,13 +146,32 @@ class ConfigurationManager {
         )
       )
     } else {
-      parseConfigFile(configFile).map(_ => List.empty).recover { case ex =>
+      parseConfigFile(configFile).map(deadFieldWarnings).recover { case ex =>
         List(
           io.github.yusukensanta.parqueteer.core.util.CredentialRedactor
             .redact(Option(ex.getMessage).getOrElse("parse error"))
         )
       }
     }
+  }
+
+  private def deadFieldWarnings(cfg: AppConfig): List[String] = {
+    val warnings = List.newBuilder[String]
+    val s3       = cfg.cloud.s3
+    if !s3.useSsl then
+      warnings += "cloud.s3.use_ssl: false has no effect — SSL is controlled by the endpoint URL scheme (use http:// prefix in endpoint_url to disable SSL)"
+    if s3.bufferSize != "64MB" then
+      warnings += s"cloud.s3.buffer_size: '${s3.bufferSize}' is not yet implemented; set fs.s3a.buffer.dir via HADOOP_CONF_DIR instead"
+    if s3.multipartThreshold != "100MB" then
+      warnings += s"cloud.s3.multipart_threshold: '${s3.multipartThreshold}' is not yet implemented"
+    val perf = cfg.performance
+    if perf.maxConcurrency != 4 then
+      warnings += s"performance.max_concurrency: ${perf.maxConcurrency} is not yet implemented; use --parallelism flag per command instead"
+    if perf.readBufferSize != "64MB" then
+      warnings += s"performance.read_buffer_size: '${perf.readBufferSize}' is not yet implemented"
+    if perf.writeBufferSize != "64MB" then
+      warnings += s"performance.write_buffer_size: '${perf.writeBufferSize}' is not yet implemented"
+    warnings.result()
   }
 
   def resolvedConfigPath(configPath: Option[String]): String =

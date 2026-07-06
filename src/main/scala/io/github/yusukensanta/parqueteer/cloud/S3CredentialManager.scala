@@ -48,9 +48,15 @@ private object S3CredentialProviders {
   }))
 }
 
-class S3CredentialManager(profile: Option[String] = None) extends CloudCredentialManager {
+class S3CredentialManager(
+    profile: Option[String] = None,
+    endpointOverride: Option[String] = None
+) extends CloudCredentialManager {
 
-  protected[cloud] def env(key: String): Option[String] = sys.env.get(key)
+  protected[cloud] def env(key: String): Option[String] = key match {
+    case "AWS_ENDPOINT_URL" => endpointOverride.orElse(sys.env.get(key))
+    case _                  => sys.env.get(key)
+  }
 
   override def configureHadoop(
       location: StorageLocation

@@ -86,7 +86,8 @@ object HadoopParquetRepository {
 // Callers that rotate credentials mid-process must create a new repository instance.
 class HadoopParquetRepository(
     profile: Option[String] = None,
-    region: Option[String] = None
+    region: Option[String] = None,
+    s3EndpointUrl: Option[String] = None
 ) extends ParquetRepository {
 
   private val HadoopConfigCacheMaxSize = 64
@@ -641,7 +642,7 @@ class HadoopParquetRepository(
           case _                         => location
         }
         val result = CloudCredentialManager
-          .forLocation(effectiveLocation, profile) match {
+          .forLocation(effectiveLocation, profile, s3EndpointUrl) match {
           case Some(credManager) =>
             credManager.configureHadoop(effectiveLocation).recoverWith {
               case e if !e.isInstanceOf[CloudAuthException] =>

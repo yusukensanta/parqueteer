@@ -18,10 +18,11 @@ object CloudCredentialManager {
 
   def forLocation(
       location: StorageLocation,
-      profile: Option[String] = None
+      profile: Option[String] = None,
+      s3EndpointUrl: Option[String] = None
   ): Option[CloudCredentialManager] =
     location match {
-      case _: S3Location    => Some(new S3CredentialManager(profile))
+      case _: S3Location    => Some(new S3CredentialManager(profile, s3EndpointUrl))
       case _: GCSLocation   => Some(new GCSCredentialManager)
       case _: AzureLocation => Some(new AzureCredentialManager)
       case _: LocalPath     => None

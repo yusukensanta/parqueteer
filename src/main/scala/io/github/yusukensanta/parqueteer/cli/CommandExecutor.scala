@@ -297,8 +297,7 @@ private[cli] object CommandExecutor {
             case Right(inputData) =>
               service.writeFile(outputPath, inputData, writeConfig) match {
                 case Right(_) =>
-                  if showStatus(globalOptions) then
-                    println(s"Successfully wrote data to $outputPath")
+                  if !globalOptions.quiet then println(s"Successfully wrote data to $outputPath")
                   0
                 case Left(error) =>
                   reportError("Failed to write file", globalOptions)(error)
@@ -365,8 +364,7 @@ private[cli] object CommandExecutor {
     else
       performConvert(service, inputPath, outputPath, conversionConfig) match {
         case Right(_) =>
-          if showStatus(globalOptions) then
-            println(s"Successfully converted $inputPath to $outputPath")
+          if !globalOptions.quiet then println(s"Successfully converted $inputPath to $outputPath")
           0
         case Left(error) =>
           reportError("Failed to convert file", globalOptions)(error)
@@ -552,7 +550,7 @@ private[cli] object CommandExecutor {
             onProgress
           ) match {
             case Right(count) =>
-              if showStatus(globalOptions) then
+              if !globalOptions.quiet then
                 println(s"Merged ${inputPaths.size} files ($count rows) → $outputPath")
               0
             case Left(error) =>
