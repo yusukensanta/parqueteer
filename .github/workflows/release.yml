@@ -6,7 +6,9 @@ on:
       - 'v*'  # Trigger on version tags (v1.0.0, v2.1.3, etc.)
 
 permissions:
-  contents: write  # Required for creating releases
+  contents: write     # Required for creating releases
+  attestations: write # Required to publish build provenance attestations
+  id-token: write     # Required for Sigstore OIDC signing in attest-build-provenance
 
 concurrency:
   group: release
@@ -64,13 +66,67 @@ jobs:
       - name: Run tests
         run: sbt clean test
 
-      - name: Build universal distributions
+      - name: Install strip-nondeterminism
+        run: sudo apt-get update -qq && sudo apt-get install -y strip-nondeterminism
+
+      - name: Build reproducible universal distributions
         env:
           VERSION: ${{ steps.version.outputs.VERSION }}
         run: |
-          sbt "set version := \"${VERSION}\"" \
-              Universal/packageBin \
-              Universal/packageZipTarball
+          set -euo pipefail
+
+          # Tie all timestamps to the tagged commit, not build wall-clock, so
+          # the archive is a pure function of the source rather than of when
+          # CI happened to run.
+          SOURCE_DATE_EPOCH=$(git log -1 --format=%ct HEAD)
+          echo "SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH}"
+
+          build_dist() {
+            local outdir="$1"
+            local pkgdir="${outdir}/parqueteer-${VERSION}"
+
+            sbt "set version := \"${VERSION}\"" clean Universal/stage
+
+            # Only our own jar carries build-time timestamps in its zip
+            # entries; third-party deps are immutable, version-pinned
+            # Maven Central artifacts and are already byte-fixed.
+            # Native-packager names our jar "<organization>.parqueteer-<version>.jar".
+            strip-nondeterminism target/universal/stage/lib/*parqueteer-*.jar
+
+            rm -rf "${pkgdir}"
+            mkdir -p "${pkgdir}"
+            cp -a target/universal/stage/. "${pkgdir}/"
+            find "${pkgdir}" -exec touch -h -d "@${SOURCE_DATE_EPOCH}" {} +
+
+            (cd "${outdir}" && \
+              tar --sort=name --mtime="@${SOURCE_DATE_EPOCH}" --owner=0 --group=0 --numeric-owner \
+                  -cf - "parqueteer-${VERSION}" | gzip -n -9 > "parqueteer-${VERSION}.tgz")
+
+            (cd "${outdir}" && \
+              find "parqueteer-${VERSION}" | LC_ALL=C sort | zip -X -q "parqueteer-${VERSION}.zip" -@)
+          }
+
+          build_dist target/dist-a
+          build_dist target/dist-b
+
+          echo "Pass A:"; sha256sum target/dist-a/parqueteer-${VERSION}.tgz target/dist-a/parqueteer-${VERSION}.zip
+          echo "Pass B:"; sha256sum target/dist-b/parqueteer-${VERSION}.tgz target/dist-b/parqueteer-${VERSION}.zip
+
+          if ! diff <(sha256sum target/dist-a/parqueteer-${VERSION}.tgz | cut -d' ' -f1) \
+                    <(sha256sum target/dist-b/parqueteer-${VERSION}.tgz | cut -d' ' -f1); then
+            echo "::error::tgz is NOT reproducible between independent builds"
+            exit 1
+          fi
+          if ! diff <(sha256sum target/dist-a/parqueteer-${VERSION}.zip | cut -d' ' -f1) \
+                    <(sha256sum target/dist-b/parqueteer-${VERSION}.zip | cut -d' ' -f1); then
+            echo "::error::zip is NOT reproducible between independent builds"
+            exit 1
+          fi
+          echo "Reproducibility verified: both builds produced byte-identical archives."
+
+          mkdir -p target/universal
+          cp target/dist-a/parqueteer-${VERSION}.tgz target/universal/
+          cp target/dist-a/parqueteer-${VERSION}.zip target/universal/
 
       - name: Generate checksums
         run: |
@@ -78,6 +134,14 @@ jobs:
           sha256sum *.tgz *.zip > checksums.txt
           echo "Generated checksums:"
           cat checksums.txt
+
+      - name: Generate build provenance attestation
+        # actions/attest-build-provenance@v4.1.1
+        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373
+        with:
+          subject-path: |
+            target/universal/*.tgz
+            target/universal/*.zip
 
       - name: Prepare release artifacts
         id: artifacts
@@ -136,6 +200,11 @@ jobs:
             ### Verify Download
             ```bash
             sha256sum -c checksums.txt
+            ```
+
+            For stronger verification independent of this release page (Sigstore-backed build provenance):
+            ```bash
+            gh attestation verify parqueteer-${{ steps.version.outputs.VERSION }}.tgz --owner yusukensanta
             ```
 
             ## What's Changed
