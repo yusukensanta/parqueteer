@@ -108,18 +108,16 @@ class CliAppTest extends AnyFlatSpec with Matchers {
   }
 
   it should "wire s3EndpointUrl from config when CLI does not set it" in {
-    val appCfg = AppConfig(cloud =
-      CloudConfig(s3 = S3Config(endpointUrl = Some("http://minio:9000")))
-    )
+    val appCfg =
+      AppConfig(cloud = CloudConfig(s3 = S3Config(endpointUrl = Some("http://minio:9000"))))
     val result = CliApp.applyAppConfig(GlobalOptions(), appCfg)
     result.s3EndpointUrl shouldBe Some("http://minio:9000")
   }
 
   it should "prefer CLI s3EndpointUrl over config" in {
-    val opts   = GlobalOptions(s3EndpointUrl = Some("http://cli-host:9000"))
-    val appCfg = AppConfig(cloud =
-      CloudConfig(s3 = S3Config(endpointUrl = Some("http://config-host:9000")))
-    )
+    val opts = GlobalOptions(s3EndpointUrl = Some("http://cli-host:9000"))
+    val appCfg =
+      AppConfig(cloud = CloudConfig(s3 = S3Config(endpointUrl = Some("http://config-host:9000"))))
     val result = CliApp.applyAppConfig(opts, appCfg)
     result.s3EndpointUrl shouldBe Some("http://cli-host:9000")
   }
