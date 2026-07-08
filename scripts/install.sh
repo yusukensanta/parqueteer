@@ -111,6 +111,49 @@ get_latest_version() {
     echo -e "${GREEN}✓${NC} Latest version: $VERSION"
 }
 
+# Verify downloaded tgz against the release's published checksums.txt
+verify_checksum() {
+    local tmp_dir="$1"
+    local tmp_file="$2"
+    local checksums_url="https://github.com/$REPO/releases/download/v${VERSION}/checksums.txt"
+    local checksums_file="$tmp_dir/checksums.txt"
+    local archive_name="parqueteer-${VERSION}.tgz"
+
+    echo -e "${BLUE}Verifying checksum...${NC}"
+
+    if ! curl -fsSL "$checksums_url" -o "$checksums_file"; then
+        echo -e "${RED}✗${NC} Failed to download checksums.txt"
+        rm -rf "$tmp_dir"
+        exit 1
+    fi
+
+    local expected_sha
+    expected_sha=$(grep " $archive_name\$" "$checksums_file" | cut -d' ' -f1)
+
+    if [ -z "$expected_sha" ]; then
+        echo -e "${RED}✗${NC} No checksum entry found for $archive_name"
+        rm -rf "$tmp_dir"
+        exit 1
+    fi
+
+    local actual_sha
+    if command -v sha256sum &> /dev/null; then
+        actual_sha=$(sha256sum "$tmp_file" | cut -d' ' -f1)
+    else
+        actual_sha=$(shasum -a 256 "$tmp_file" | cut -d' ' -f1)
+    fi
+
+    if [ "$expected_sha" != "$actual_sha" ]; then
+        echo -e "${RED}✗${NC} Checksum verification failed!"
+        echo "  Expected: $expected_sha"
+        echo "  Actual:   $actual_sha"
+        rm -rf "$tmp_dir"
+        exit 1
+    fi
+
+    echo -e "${GREEN}✓${NC} Checksum verified"
+}
+
 # Download and extract
 download_and_extract() {
     local download_url="https://github.com/$REPO/releases/download/v${VERSION}/parqueteer-${VERSION}.tgz"
@@ -126,6 +169,8 @@ download_and_extract() {
     fi
 
     echo -e "${GREEN}✓${NC} Downloaded successfully"
+
+    verify_checksum "$tmp_dir" "$tmp_file"
 
     echo -e "${BLUE}Extracting to $INSTALL_DIR...${NC}"
 
