@@ -185,25 +185,38 @@ The project will build fine with any recent versions.
 parqueteer/
 ├── src/main/scala/io/github/yusukensanta/parqueteer/
 │   ├── cli/
-│   │   ├── CliApp.scala              # Entry point, command dispatch
-│   │   ├── ArgumentParser.scala      # CLI flag/subcommand parsing
-│   │   ├── Commands.scala            # Command ADT definitions
-│   │   ├── CliOutputFormatter.scala  # Presentation layer (table/json/csv/ltsv)
-│   │   ├── HelpFormatter.scala       # --help text generation
-│   │   ├── ShellCompletions.scala    # bash/zsh/fish completion scripts
-│   │   └── CredentialRedactor.scala  # Scrubs secrets from error messages
+│   │   ├── CliApp.scala               # Entry point, command dispatch
+│   │   ├── ArgumentParser.scala       # CLI flag/subcommand parsing
+│   │   ├── Commands.scala             # Command ADT definitions
+│   │   ├── CommandExecutor.scala      # Wires parsed commands to core services
+│   │   ├── CliOutputFormatter.scala   # Presentation layer (table/json/csv/ltsv)
+│   │   ├── ConfigCommandRenderer.scala # `parqueteer config` output rendering
+│   │   ├── HelpFormatter.scala        # --help text generation
+│   │   ├── ShellCompletions.scala     # bash/zsh/fish completion scripts
+│   │   └── CredentialRedactor.scala   # Scrubs secrets from CLI error output
 │   ├── config/
 │   │   ├── Configuration.scala       # Config case classes with Circe given instances
 │   │   └── EnvConfig.scala           # Environment variable resolution
+│   ├── cloud/
+│   │   ├── CloudCredentialManager.scala # Shared credential-resolution contract
+│   │   ├── S3CredentialManager.scala
+│   │   ├── AzureCredentialManager.scala
+│   │   └── GCSCredentialManager.scala
 │   └── core/
-│       ├── models/                   # Domain model (CellValue, ParquetFile, etc.)
+│       ├── models/                   # Domain model (CellValue, ParquetFile, ParqueteerError, …)
 │       ├── services/
 │       │   └── ParquetService.scala  # Business logic, Either-based API
 │       ├── repositories/
-│       │   ├── ParquetRepository.scala    # Parquet I/O orchestration
-│       │   ├── ParquetRecordDecoder.scala # Row → Map decoding
-│       │   ├── ParquetSchemaBuilder.scala # Schema construction
-│       │   └── ParquetWriteOps.scala      # Write/convert operations
+│       │   ├── ParquetRepository.scala        # Parquet I/O orchestration
+│       │   ├── ParquetRecordDecoder.scala      # Row → Map decoding
+│       │   ├── ParquetSchemaBuilder.scala      # Schema construction
+│       │   ├── ParquetWriteOps.scala           # Write/convert operations
+│       │   ├── FooterReader.scala              # Cached footer/metadata reads
+│       │   ├── ParallelRowGroupReader.scala    # `--parallel` row group reads
+│       │   └── StatsComputer.scala             # `stats` command column statistics
+│       ├── filters/
+│       │   └── FilterParser.scala    # SQL-like `--filter` expression parsing
+│       ├── formatters/               # Output formatters (table/json/csv/markdown/ndjson/ltsv/pretty)
 │       └── util/                     # Shared utilities (SizeParser, FileExtension, …)
 ├── src/test/scala/         # Mirror structure of main
 ├── project/                # sbt build configuration

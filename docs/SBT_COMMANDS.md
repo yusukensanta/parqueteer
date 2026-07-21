@@ -390,10 +390,18 @@ sbt "show assembly / fullClasspath"         # Show what's included
 ```
 
 ### sbt-native-packager
+This project currently enables only `JavaAppPackaging` (see `build.sbt`), which
+provides the `stage` and `universal:*` tasks below. The `debian`/`rpm`/`windows`/
+`docker` targets require enabling `DebianPlugin`/`RpmPlugin`/`WindowsPlugin`/
+`DockerPlugin` respectively via `enablePlugins(...)` first — they are not
+available out of the box today.
+
 ```bash
 sbt stage                   # Staged application
 sbt universal:packageBin    # ZIP distribution
 sbt universal:packageZipTarball  # .tgz distribution
+
+# Require enabling the corresponding plugin first (not enabled by default):
 sbt debian:packageBin       # .deb package (Linux)
 sbt rpm:packageBin          # .rpm package (RedHat)
 sbt windows:packageBin      # .msi installer (Windows)
