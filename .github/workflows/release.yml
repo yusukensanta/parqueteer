@@ -92,6 +92,13 @@ jobs:
           SOURCE_DATE_EPOCH=$(git log -1 --format=%ct HEAD)
           echo "SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH}"
 
+          # Pass A and Pass B archives must live outside sbt's own `target/`
+          # directory: each pass runs `sbt clean`, which wipes the whole
+          # target tree, so a dist dir nested inside it gets deleted by the
+          # second pass's clean before the two archives can be compared.
+          DIST_A="${RUNNER_TEMP}/dist-a"
+          DIST_B="${RUNNER_TEMP}/dist-b"
+
           build_dist() {
             local outdir="$1"
             local pkgdir="${outdir}/parqueteer-${VERSION}"
@@ -117,27 +124,27 @@ jobs:
               find "parqueteer-${VERSION}" | LC_ALL=C sort | zip -X -q "parqueteer-${VERSION}.zip" -@)
           }
 
-          build_dist target/dist-a
-          build_dist target/dist-b
+          build_dist "${DIST_A}"
+          build_dist "${DIST_B}"
 
-          echo "Pass A:"; sha256sum target/dist-a/parqueteer-${VERSION}.tgz target/dist-a/parqueteer-${VERSION}.zip
-          echo "Pass B:"; sha256sum target/dist-b/parqueteer-${VERSION}.tgz target/dist-b/parqueteer-${VERSION}.zip
+          echo "Pass A:"; sha256sum "${DIST_A}/parqueteer-${VERSION}.tgz" "${DIST_A}/parqueteer-${VERSION}.zip"
+          echo "Pass B:"; sha256sum "${DIST_B}/parqueteer-${VERSION}.tgz" "${DIST_B}/parqueteer-${VERSION}.zip"
 
-          if ! diff <(sha256sum target/dist-a/parqueteer-${VERSION}.tgz | cut -d' ' -f1) \
-                    <(sha256sum target/dist-b/parqueteer-${VERSION}.tgz | cut -d' ' -f1); then
+          if ! diff <(sha256sum "${DIST_A}/parqueteer-${VERSION}.tgz" | cut -d' ' -f1) \
+                    <(sha256sum "${DIST_B}/parqueteer-${VERSION}.tgz" | cut -d' ' -f1); then
             echo "::error::tgz is NOT reproducible between independent builds"
             exit 1
           fi
-          if ! diff <(sha256sum target/dist-a/parqueteer-${VERSION}.zip | cut -d' ' -f1) \
-                    <(sha256sum target/dist-b/parqueteer-${VERSION}.zip | cut -d' ' -f1); then
+          if ! diff <(sha256sum "${DIST_A}/parqueteer-${VERSION}.zip" | cut -d' ' -f1) \
+                    <(sha256sum "${DIST_B}/parqueteer-${VERSION}.zip" | cut -d' ' -f1); then
             echo "::error::zip is NOT reproducible between independent builds"
             exit 1
           fi
           echo "Reproducibility verified: both builds produced byte-identical archives."
 
           mkdir -p target/universal
-          cp target/dist-a/parqueteer-${VERSION}.tgz target/universal/
-          cp target/dist-a/parqueteer-${VERSION}.zip target/universal/
+          cp "${DIST_A}/parqueteer-${VERSION}.tgz" target/universal/
+          cp "${DIST_A}/parqueteer-${VERSION}.zip" target/universal/
 
       - name: Generate checksums
         run: |
