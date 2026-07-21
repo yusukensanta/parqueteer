@@ -221,11 +221,11 @@ parqueteer-0.10.x/
 **User experience**:
 ```bash
 # Download
-wget https://github.com/yusukensanta/parqueteer/releases/download/v0.1.0/parqueteer-0.1.0.zip
+wget https://github.com/yusukensanta/parqueteer/releases/download/v0.10.x/parqueteer-0.10.x.zip
 
 # Extract
-unzip parqueteer-0.1.0.zip
-cd parqueteer-0.1.0/
+unzip parqueteer-0.10.x.zip
+cd parqueteer-0.10.x/
 
 # Run (clean output!)
 bin/parqueteer --help
