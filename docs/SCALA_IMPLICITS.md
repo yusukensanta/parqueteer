@@ -89,26 +89,24 @@ When you call `toJson("hello")`, the compiler:
 
 ## Actual parqueteer Example
 
-### From `cli/CliOutputFormatter.scala` (illustrative — Scala 3 `given` style)
+### From `core/formatters/JSONFormatter.scala`
 
-The codebase encodes Parquet rows to JSON using a `given` chain (Scala 3 style):
+The codebase encodes several types to JSON using real `given` instances (Scala 3 style):
 
 ```scala
-// Given instances — compiler resolves these automatically
-given Encoder[CellValue] = Encoder.instance {
-  case CellValue.Null    => Json.Null
-  case CellValue.Str(s)  => Json.fromString(s)
-  case CellValue.I32(i)  => Json.fromInt(i)
-  case CellValue.I64(l)  => Json.fromLong(l)
-  // ... more cases
-}
+given Encoder[ColumnInfo] =
+  deriveEncoder[ColumnInfo]
 
-given Encoder[Map[String, CellValue]] = Encoder.instance { row =>
-  Json.obj(row.map { case (k, v) => k -> v.asJson }.toSeq*)
-}
+given Encoder[ParquetSchema] =
+  deriveEncoder[ParquetSchema]
+
+given Encoder[Instant] =
+  Encoder.encodeString.contramap(_.toString)
 ```
 
-**Key point**: the `Map` encoder depends on the `CellValue` encoder — the compiler resolves the `CellValue` given automatically when encoding each value.
+**Key point**: `deriveEncoder` uses Circe's semi-automatic derivation, resolving field encoders (like the `Instant` given above) implicitly at the derivation site.
+
+`CellValue` — the per-cell row type — is the one place this codebase deliberately does *not* use a `given`/typeclass encoder. `core/util/JsonEncoder.encode` is a plain pattern-matching function instead, because JSON's NaN/Infinity handling needs explicit branching (see the comment at the top of that file) that doesn't fit cleanly into typeclass dispatch.
 
 ---
 
