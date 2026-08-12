@@ -978,6 +978,26 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
     afterSecond.footerMisses shouldBe 1L
   }
 
+  "HadoopParquetRepository.deleteFile" should "invalidate the footer cache so a later write+read at the same path is not served stale metadata" taggedAs IntegrationTest in {
+    val freshRepo = new HadoopParquetRepository()
+    val loc       = LocalPath(tempFile().getAbsolutePath)
+
+    freshRepo.writeContent(loc, List(Map("x" -> CellValue.I64(1L))), None).get
+    freshRepo.readContent(ParquetFile(loc), ReadConfig()).get.rows should have size 1
+
+    freshRepo.deleteFile(loc).get
+    freshRepo
+      .writeContent(
+        loc,
+        List(Map("x" -> CellValue.I64(1L)), Map("x" -> CellValue.I64(2L))),
+        None
+      )
+      .get
+
+    val result = freshRepo.readContent(ParquetFile(loc), ReadConfig()).get
+    result.rows should have size 2
+  }
+
   "HadoopParquetRepository.writeContent" should "infer schema from all rows (not just first 1000), so late-appearing columns are included" taggedAs IntegrationTest in {
     val loc = LocalPath(tempFile().getAbsolutePath)
     // Rows 1..1000 have only "id". Row 1001 introduces "extra".

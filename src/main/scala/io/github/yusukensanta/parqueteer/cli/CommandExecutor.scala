@@ -470,49 +470,60 @@ private[cli] object CommandExecutor {
       )
     else
       checkOutputWritable(outputPath).flatMap { _ =>
-        scala.util
-          .Try {
-            import better.files.*
-            val preExisted = File(outputPath).exists
-            val outFile =
-              File(outputPath).createIfNotExists(createParents = true)
-            (
-              preExisted,
-              outFile,
-              new java.io.PrintStream(outFile.newOutputStream)
+        // Mirror the parquet-to-parquet path's overwrite guard: refuse to silently
+        // truncate an existing output file instead of only checking the parent
+        // directory is writable.
+        if better.files.File(outputPath).exists then
+          Left(
+            ParqueteerError.InvalidFormat(
+              outputPath,
+              s"Output file already exists: $outputPath. Remove it first or choose a different output path."
             )
-          }
-          .toEither
-          .left
-          .map(ParqueteerError.IOError.apply)
-          .flatMap { case (preExisted, outFile, ps) =>
-            val writer = RowStreamWriter(outFormat, ps)
-            var failed = true
-            try {
-              val result = runWithDeferredBegin(
-                writer,
-                service.streamRead(
-                  inputPath,
-                  ReadConfig(maxRows = conversionConfig.maxRows)
-                )
+          )
+        else
+          scala.util
+            .Try {
+              import better.files.*
+              val outFile =
+                File(outputPath).createIfNotExists(createParents = true)
+              (
+                outFile,
+                new java.io.PrintStream(outFile.newOutputStream)
               )
-              val writeError = ps.checkError()
-              failed = result.isLeft || writeError
-              if writeError && result.isRight then
-                Left(
-                  ParqueteerError.IOError(
-                    new java.io.IOException(
-                      "Output stream write error (disk full or broken pipe)"
-                    )
+            }
+            .toEither
+            .left
+            .map(ParqueteerError.IOError.apply)
+            .flatMap { case (outFile, ps) =>
+              val writer = RowStreamWriter(outFormat, ps)
+              var failed = true
+              try {
+                val result = runWithDeferredBegin(
+                  writer,
+                  service.streamRead(
+                    inputPath,
+                    ReadConfig(maxRows = conversionConfig.maxRows)
                   )
                 )
-              else result.map(_ => ())
-            } finally {
-              ps.close()
-              if failed && !preExisted then
-                scala.util.Try(outFile.delete(swallowIOExceptions = true))
+                val writeError = ps.checkError()
+                failed = result.isLeft || writeError
+                if writeError && result.isRight then
+                  Left(
+                    ParqueteerError.IOError(
+                      new java.io.IOException(
+                        "Output stream write error (disk full or broken pipe)"
+                      )
+                    )
+                  )
+                else result.map(_ => ())
+              } finally {
+                ps.close()
+                // We already verified the file didn't pre-exist, so any file at
+                // outputPath now was created by this run and is safe to remove
+                // on failure.
+                if failed then scala.util.Try(outFile.delete(swallowIOExceptions = true))
+              }
             }
-          }
       }
 
   private[cli] def executeMerge(

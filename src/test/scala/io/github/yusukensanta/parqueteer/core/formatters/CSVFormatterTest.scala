@@ -148,9 +148,11 @@ class CSVFormatterTest extends AnyFlatSpec with Matchers {
         Map("cmd" -> CellValue.Str("@SUM(1+1)")),
         Map("cmd" -> CellValue.Str("safe value")),
         Map("cmd" -> CellValue.Str("-42")),
-        Map("cmd" -> CellValue.Str("-1+1"))
+        Map("cmd" -> CellValue.Str("-3.14")),
+        Map("cmd" -> CellValue.Str("-1+1")),
+        Map("cmd" -> CellValue.Str("-2+cmd|' /C calc'!A0"))
       ),
-      totalRows = 7L,
+      totalRows = 9L,
       isPartial = false
     )
     val result = formatter.formatContent(injectionContent, None)
@@ -163,8 +165,13 @@ class CSVFormatterTest extends AnyFlatSpec with Matchers {
     result should not include "\r\n=SUM"
     result should include("-42")
     result should not include "'-42"
-    result should include("-1+1")
-    result should not include "'-1+1"
+    result should include("-3.14")
+    result should not include "'-3.14"
+    // "-1+1" and "-2+cmd|..." start with -digit but are NOT plain numbers —
+    // must be escaped, or a formula payload disguised as a negative number
+    // (e.g. "-2+cmd|' /C calc'!A0") slips past the guard unescaped.
+    result should include("'-1+1")
+    result should include("'-2+cmd|' /C calc'!A0")
   }
 
   "CSVFormatter.formatSchema" should "include header with Column Name and Data Type" in {

@@ -432,7 +432,10 @@ class HadoopParquetRepository(
       config: WriteConfig = WriteConfig()
   ): Try[Unit] =
     setupHadoopConfiguration(location).flatMap { hadoopConfig =>
-      Try {
+      // A successful (or partial) write changes the file on disk, so any cached
+      // footer for this path is stale regardless of outcome — evict it.
+      val cacheKey = new HadoopPath(location.path).toString
+      val result = Try {
         val parquetSchema = schema match {
           case Some(ps) => ParquetSchemaBuilder.buildMessageType(ps)
           case None     =>
@@ -453,6 +456,8 @@ class HadoopParquetRepository(
           }
         }
       }
+      footerCache.remove(cacheKey)
+      result
     }
 
   def writeContentStream(
@@ -461,7 +466,10 @@ class HadoopParquetRepository(
       config: WriteConfig = WriteConfig()
   )(feed: (Map[String, CellValue] => Unit) => Unit): Try[Long] =
     setupHadoopConfiguration(location).flatMap { hadoopConfig =>
-      Try {
+      // Same rationale as writeContent: the file on disk changes regardless of
+      // outcome, so any cached footer for this path must be evicted.
+      val cacheKey = new HadoopPath(location.path).toString
+      val result = Try {
         val parquetSchema = ParquetSchemaBuilder.buildMessageType(schema)
 
         var count   = 0L
@@ -480,6 +488,8 @@ class HadoopParquetRepository(
           .get
         count
       }
+      footerCache.remove(cacheKey)
+      result
     }
 
   def validateFile(
@@ -580,12 +590,15 @@ class HadoopParquetRepository(
 
   def deleteFile(location: StorageLocation): Try[Unit] =
     setupHadoopConfiguration(location).flatMap { hadoopConfig =>
-      Try {
+      val cacheKey = new HadoopPath(location.path).toString
+      val result = Try {
         val path = new HadoopPath(location.path)
         val fs   = path.getFileSystem(hadoopConfig)
         if !fs.delete(path, false) && fs.exists(path) then
           throw new IOException(s"Failed to delete ${location.path}")
       }
+      footerCache.remove(cacheKey)
+      result
     }
 
   def readStats(file: ParquetFile): Try[FileStats] =
