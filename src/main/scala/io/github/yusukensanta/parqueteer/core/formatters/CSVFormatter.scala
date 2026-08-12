@@ -10,6 +10,11 @@ import io.github.yusukensanta.parqueteer.core.models.{
 object CSVFormatter {
   private[formatters] val Newline = "\r\n"
 
+  // A leading '-' is only safe unescaped if the WHOLE value is a plain negative
+  // number (not just "starts with -digit") — "-2+cmd|..." also starts with a
+  // digit but is a formula-injection payload, not a number.
+  private val NegativeNumberPattern = """^-\d+(\.\d+)?([eE][+-]?\d+)?$""".r
+
   private[formatters] def escapeField(field: String): String = {
     // CWE-1236: prefix formula-trigger chars. Also check first non-whitespace char
     // because spreadsheets trim leading spaces before formula evaluation.
@@ -17,7 +22,7 @@ object CSVFormatter {
     val sanitized =
       if firstSig.nonEmpty && (firstSig.charAt(0) match {
           case '=' | '+' | '@' | '\t' | '\r' => true
-          case '-'                           => firstSig.length < 2 || !firstSig.charAt(1).isDigit
+          case '-'                           => !NegativeNumberPattern.matches(firstSig)
           case _                             => false
         })
       then "'" + field

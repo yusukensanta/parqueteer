@@ -297,6 +297,13 @@ private[repositories] object ParquetRecordDecoder {
     else {
       val repeatedType = listGroupType.getType(0).asGroupType()
       val elemType     = repeatedType.getType(0)
+      val name         = listGroupType.getName
+      if !elemType.isPrimitive && warnedVariants.add(s"list-nested-element:$name") then
+        logger.warn(
+          s"Column '$name' is a LIST of a non-primitive type (STRUCT/MAP/LIST) — " +
+            "emitting Null for every element. Nested list elements are readable but " +
+            "not round-trippable: convert and merge will reject files containing them."
+        )
       val elements = (0 until elementCount).map { j =>
         val wrapper = outerGroup.getGroup(0, j)
         if wrapper.getFieldRepetitionCount(0) > 0 && elemType.isPrimitive then

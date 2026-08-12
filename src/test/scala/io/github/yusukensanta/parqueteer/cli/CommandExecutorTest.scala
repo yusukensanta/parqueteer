@@ -320,6 +320,22 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
     result.left.toOption.get.userMessage should include("Unsupported conversion")
   }
 
+  it should "refuse to overwrite an existing file when converting parquet to a text format" in {
+    val tmpFile = java.nio.file.Files.createTempFile("pqt-convert-guard", ".csv")
+    try {
+      java.nio.file.Files.writeString(tmpFile, "PREEXISTING")
+      val result = CommandExecutor.performConvert(
+        newService(),
+        "input.parquet",
+        tmpFile.toString,
+        ConversionConfig()
+      )
+      result.isLeft shouldBe true
+      result.left.toOption.get.userMessage should include("already exists")
+      java.nio.file.Files.readString(tmpFile) shouldBe "PREEXISTING"
+    } finally java.nio.file.Files.deleteIfExists(tmpFile)
+  }
+
   // ── showStatus ─────────────────────────────────────────────────────────
 
   "showStatus" should "return false when quiet" in {

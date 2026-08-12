@@ -177,11 +177,12 @@ lazy val root = (project in file("."))
 
         // Jackson pinned explicitly so the generated POM (used by Trivy) shows the
         // patched version rather than Hadoop's older transitive declaration.
-        // CVE-2026-54512 + CVE-2026-54513 (HIGH) fixed in 2.18.8; keep all three
-        // jackson-core artifacts aligned to prevent version skew.
-        "com.fasterxml.jackson.core" % "jackson-core"        % "2.18.8",
-        "com.fasterxml.jackson.core" % "jackson-databind"    % "2.18.8",
-        "com.fasterxml.jackson.core" % "jackson-annotations" % "2.18.8",
+        // CVE-2026-54512 + CVE-2026-54513 (HIGH) fixed in 2.18.8;
+        // GHSA-mhm7-754m-9p8w + CVE-2026-54515 + CVE-2026-59889 (MEDIUM) fixed in 2.18.9;
+        // keep all three jackson-core artifacts aligned to prevent version skew.
+        "com.fasterxml.jackson.core" % "jackson-core"        % "2.18.9",
+        "com.fasterxml.jackson.core" % "jackson-databind"    % "2.18.9",
+        "com.fasterxml.jackson.core" % "jackson-annotations" % "2.18.9",
 
         // Testing
         "org.scalatest"     %% "scalatest"       % scalatestVersion           % Test,
@@ -221,10 +222,25 @@ lazy val root = (project in file("."))
         "net.minidev" % "json-smart" % "2.6.0", // CVE-2024-57699 — nested JSON stack exhaustion DoS (nimbus transitive)
         // GHSA-72hv-8253-57qq (async parser DoS) fixed in 2.18.6;
         // CVE-2026-54512 + CVE-2026-54513 (HIGH) fixed in 2.18.8;
+        // GHSA-mhm7-754m-9p8w + CVE-2026-54515 + CVE-2026-59889 (MEDIUM) fixed in 2.18.9;
         // pin all three Jackson artifacts together to prevent version skew.
-        "com.fasterxml.jackson.core" % "jackson-core"        % "2.18.8",
-        "com.fasterxml.jackson.core" % "jackson-databind"    % "2.18.8",
-        "com.fasterxml.jackson.core" % "jackson-annotations" % "2.18.8"
+        "com.fasterxml.jackson.core" % "jackson-core"        % "2.18.9",
+        "com.fasterxml.jackson.core" % "jackson-databind"    % "2.18.9",
+        "com.fasterxml.jackson.core" % "jackson-annotations" % "2.18.9",
+        // io.opentelemetry.* pulled transitively via google-cloud-storage/gcs-connector.
+        // CVE-2026-45292 (MEDIUM) — unbounded memory allocation parsing oversized W3C
+        // baggage headers; fixed in 1.62.0. Pinned to 1.64.0 (current clean release);
+        // all modules below share opentelemetry-java's lockstep release train, so they
+        // must move together to avoid binary-incompatible api/sdk skew.
+        "io.opentelemetry" % "opentelemetry-api"                              % "1.64.0",
+        "io.opentelemetry" % "opentelemetry-common"                          % "1.64.0",
+        "io.opentelemetry" % "opentelemetry-context"                         % "1.64.0",
+        "io.opentelemetry" % "opentelemetry-sdk"                             % "1.64.0",
+        "io.opentelemetry" % "opentelemetry-sdk-common"                      % "1.64.0",
+        "io.opentelemetry" % "opentelemetry-sdk-extension-autoconfigure-spi" % "1.64.0",
+        "io.opentelemetry" % "opentelemetry-sdk-logs"                        % "1.64.0",
+        "io.opentelemetry" % "opentelemetry-sdk-metrics"                     % "1.64.0",
+        "io.opentelemetry" % "opentelemetry-sdk-trace"                       % "1.64.0"
       )
     },
     assembly / assemblyMergeStrategy := {

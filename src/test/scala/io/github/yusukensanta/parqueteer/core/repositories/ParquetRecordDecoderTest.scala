@@ -643,6 +643,31 @@ class ParquetRecordDecoderTest extends AnyFlatSpec with Matchers {
     result("nums") shouldBe CellValue.Str("[1, 2, 3]")
   }
 
+  it should "decode a LIST<STRUCT> field as Null placeholders per element (with a one-time warning)" in {
+    val schema = MessageTypeParser.parseMessageType(
+      """message root {
+        |  optional group items (LIST) {
+        |    repeated group list {
+        |      optional group element {
+        |        optional binary name (STRING);
+        |      }
+        |    }
+        |  }
+        |}""".stripMargin
+    )
+    val group         = new SimpleGroupFactory(schema).newGroup()
+    val listContainer = group.addGroup("items")
+    val elem1         = listContainer.addGroup("list").addGroup("element")
+    elem1.append("name", Binary.fromString("a"))
+    val elem2 = listContainer.addGroup("list").addGroup("element")
+    elem2.append("name", Binary.fromString("b"))
+    val result = ParquetRecordDecoder.decodeGroup(group, schema)
+    // Element data isn't round-trippable yet, but this must stay a visible
+    // per-element placeholder (not a silently-dropped/empty list) so callers
+    // can tell real data was present and lost.
+    result("items") shouldBe CellValue.Str("[null, null]")
+  }
+
   // ── INT96 decoding (shared helper + schema detection) ─────────────────────
 
   "ParquetRecordDecoder.decodeInt96Binary" should "decode INT96 bytes to CellValue.Ts with nanosecond precision" in {
