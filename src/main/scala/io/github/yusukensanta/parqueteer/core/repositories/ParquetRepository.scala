@@ -13,7 +13,7 @@ import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path as HadoopPath}
 import org.apache.parquet.hadoop.ParquetFileReader
 import org.apache.parquet.hadoop.example.ExampleParquetWriter
-import org.apache.parquet.hadoop.metadata.BlockMetaData
+import org.apache.parquet.hadoop.metadata.{BlockMetaData, ColumnChunkMetaData}
 import org.apache.parquet.hadoop.util.HadoopInputFile
 import org.apache.parquet.example.data.simple.SimpleGroupFactory
 import org.apache.parquet.hadoop.ParquetWriter as HParquetWriter
@@ -608,6 +608,16 @@ class HadoopParquetRepository(
         val (schema, blocks, _, _) = getFooter(path, hadoopConfig)
         val totalRows              = blocks.map(_.getRowCount).sum
 
+        // Build each block's column-name -> chunk index once (O(blocks * columns)),
+        // so per-column stats lookup below is O(1) instead of a linear .find over
+        // every block's columns for every schema column (O(columns^2 * blocks)).
+        val blockColumnsByPath: List[Map[String, ColumnChunkMetaData]] =
+          blocks.map { block =>
+            block.getColumns.asScala.iterator
+              .map(c => c.getPath.toDotString -> c)
+              .toMap
+          }
+
         val columns = schema.getColumns.asScala.toList.map { colDescriptor =>
           val colPath     = colDescriptor.getPath.mkString(".")
           val pt          = colDescriptor.getPrimitiveType
@@ -615,12 +625,9 @@ class HadoopParquetRepository(
           val logicalType = pt.getLogicalTypeAnnotation
           val dataType    = FooterReader.logicalTypeName(typeName, logicalType)
 
-          val chunkStats = blocks
-            .flatMap { block =>
-              block.getColumns.asScala
-                .find(_.getPath.toDotString == colPath)
-                .map(_.getStatistics)
-            }
+          val chunkStats = blockColumnsByPath
+            .flatMap(_.get(colPath))
+            .map(_.getStatistics)
             .filter(_ != null)
 
           val nullCount = {
