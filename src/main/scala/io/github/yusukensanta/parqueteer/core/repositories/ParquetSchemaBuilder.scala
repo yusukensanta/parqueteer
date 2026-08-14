@@ -41,9 +41,12 @@ private[repositories] object ParquetSchemaBuilder {
   // Helper to infer schema from data
   private[repositories] val MaxDecimalPrecision = 38
 
-  def inferSchemaFromData(data: List[Map[String, CellValue]]): MessageType = {
-    if data.isEmpty then throw new IllegalArgumentException("Cannot infer schema from empty data")
+  def inferSchemaFromData(data: List[Map[String, CellValue]]): MessageType =
+    inferSchemaFromRows(data.iterator)
 
+  // Same fold as inferSchemaFromData, generalized to an Iterator so two-pass
+  // streaming writers can infer a schema without ever materializing a List.
+  def inferSchemaFromRows(rows: Iterator[Map[String, CellValue]]): MessageType = {
     // Single pass: accumulate per-column TypeRank from non-null values only.
     // seenKeys tracks all keys (including null-only columns) for schema output.
     val seenKeys  = scala.collection.mutable.LinkedHashSet.empty[String]
@@ -52,7 +55,9 @@ private[repositories] object ParquetSchemaBuilder {
     val decimalMetaByKey =
       scala.collection.mutable.HashMap.empty[String, (Int, Int)]
     val warnedWiden = scala.collection.mutable.Set.empty[String]
-    data.foreach { row =>
+    var sawAnyRow   = false
+    rows.foreach { row =>
+      sawAnyRow = true
       row.foreach { case (k, v) =>
         seenKeys.add(k)
         if v != CellValue.Null then {
@@ -85,6 +90,7 @@ private[repositories] object ParquetSchemaBuilder {
         }
       }
     }
+    if !sawAnyRow then throw new IllegalArgumentException("Cannot infer schema from empty data")
 
     val builder = Types.buildMessage()
     seenKeys.toList.foreach { key =>

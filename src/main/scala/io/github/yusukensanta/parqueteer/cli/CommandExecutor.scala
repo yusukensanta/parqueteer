@@ -291,17 +291,12 @@ private[cli] object CommandExecutor {
               0
           }
         } else {
-          service.readDataFile(inputPath, formatStr) match {
+          service.streamWriteDataFile(inputPath, formatStr, outputPath, writeConfig) match {
+            case Right(_) =>
+              if !globalOptions.quiet then println(s"Successfully wrote data to $outputPath")
+              0
             case Left(error) =>
-              reportError("Failed to read input file", globalOptions)(error)
-            case Right(inputData) =>
-              service.writeFile(outputPath, inputData, writeConfig) match {
-                case Right(_) =>
-                  if !globalOptions.quiet then println(s"Successfully wrote data to $outputPath")
-                  0
-                case Left(error) =>
-                  reportError("Failed to write file", globalOptions)(error)
-              }
+              reportError("Failed to write file", globalOptions)(error)
           }
         }
     }
@@ -440,8 +435,14 @@ private[cli] object CommandExecutor {
           .map(_ => ())
       case (ext @ ("json" | "ndjson" | "csv" | "ltsv"), "parquet") =>
         service
-          .readDataFile(inputPath, ext)
-          .flatMap(data => service.writeFile(outputPath, data, conversionConfig.writeConfig))
+          .streamWriteDataFile(
+            inputPath,
+            ext,
+            outputPath,
+            conversionConfig.writeConfig,
+            conversionConfig.maxRows
+          )
+          .map(_ => ())
       case _ =>
         Left(
           ParqueteerError.InvalidFormat(

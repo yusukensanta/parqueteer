@@ -22,7 +22,8 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
       schemaFieldsResult: Try[List[FieldSummary]] = Success(
         defaultSchemaFields
       ),
-      deleteResult: Try[Unit] = Success(())
+      deleteResult: Try[Unit] = Success(()),
+      inferSchemaResult: Try[ParquetSchema] = Success(defaultSchema)
   ) extends ParquetRepository {
 
     override def readContent(
@@ -82,6 +83,10 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
         file: ParquetFile
     ): Try[List[FieldSummary]] = schemaFieldsResult
     override def deleteFile(location: StorageLocation): Try[Unit] = deleteResult
+
+    override def inferSchemaFromRows(
+        rows: Iterator[Map[String, CellValue]]
+    ): Try[ParquetSchema] = { val _ = rows; inferSchemaResult }
   }
 
   // ── Shared fixtures ──────────────────────────────────────────────────────
