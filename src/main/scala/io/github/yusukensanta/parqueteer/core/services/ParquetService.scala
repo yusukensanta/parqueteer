@@ -506,6 +506,88 @@ class ParquetService(
           )
       }
 
+  /**
+   * Writes a (non-parquet) data file to parquet with bounded memory for NDJSON,
+   * LTSV, and CSV inputs: a first pass folds over the source to infer a schema
+   * without collecting rows into a List, then a second pass re-opens the same
+   * source and streams rows straight into the writer. JSON-array input (a
+   * whole-tree parse) and stdin (single-pass, can't be reopened) fall back to
+   * the fully-buffered readDataFile + writeFile path unchanged.
+   */
+  def streamWriteDataFile(
+      inputPath: String,
+      inputFormat: String,
+      outputPath: String,
+      writeConfig: WriteConfig = WriteConfig(),
+      maxRows: Option[Long] = None
+  ): Either[ParqueteerError, Long] =
+    if inputPath == "-" then
+      bufferedWriteDataFile(inputPath, inputFormat, outputPath, writeConfig, maxRows)
+    else
+      inputFormat.toLowerCase match {
+        case "ndjson" =>
+          for {
+            outputLocation <- parseLocation(outputPath)
+            schema <- DataFileReader
+              .withNdjsonRows(inputPath, maxRows)(repository.inferSchemaFromRows)
+              .flatten
+              .toParqueteerError
+            writeResult = DataFileReader
+              .withNdjsonRows(inputPath, maxRows) { rows =>
+                repository.writeContentStream(outputLocation, schema, writeConfig)(feed =>
+                  rows.foreach(feed)
+                )
+              }
+              .flatten
+            count <- handleStreamWriteResult(outputLocation, writeResult)
+          } yield count
+        case "ltsv" =>
+          for {
+            outputLocation <- parseLocation(outputPath)
+            schema <- DataFileReader
+              .withLtsvRows(inputPath, maxRows)(repository.inferSchemaFromRows)
+              .flatten
+              .toParqueteerError
+            writeResult = DataFileReader
+              .withLtsvRows(inputPath, maxRows) { rows =>
+                repository.writeContentStream(outputLocation, schema, writeConfig)(feed =>
+                  rows.foreach(feed)
+                )
+              }
+              .flatten
+            count <- handleStreamWriteResult(outputLocation, writeResult)
+          } yield count
+        case "csv" =>
+          for {
+            outputLocation <- parseLocation(outputPath)
+            schema <- DataFileReader
+              .withCsvRows(inputPath, maxRows)(repository.inferSchemaFromRows)
+              .flatten
+              .toParqueteerError
+            writeResult = DataFileReader
+              .withCsvRows(inputPath, maxRows) { rows =>
+                repository.writeContentStream(outputLocation, schema, writeConfig)(feed =>
+                  rows.foreach(feed)
+                )
+              }
+              .flatten
+            count <- handleStreamWriteResult(outputLocation, writeResult)
+          } yield count
+        case _ => bufferedWriteDataFile(inputPath, inputFormat, outputPath, writeConfig, maxRows)
+      }
+
+  private def bufferedWriteDataFile(
+      inputPath: String,
+      inputFormat: String,
+      outputPath: String,
+      writeConfig: WriteConfig,
+      maxRows: Option[Long]
+  ): Either[ParqueteerError, Long] =
+    for {
+      data <- readDataFile(inputPath, inputFormat, maxRows = maxRows)
+      _    <- writeFile(outputPath, data, writeConfig)
+    } yield data.size.toLong
+
   def validateFile(
       path: String,
       deep: Boolean = false

@@ -42,10 +42,11 @@ class ParquetRepositoryTraitTest extends AnyFlatSpec with Matchers {
       )(
           feed: (Map[String, CellValue] => Unit) => Unit
       ) = Try(???)
-      def validateFile(f: ParquetFile, deep: Boolean) = Try(???)
-      def readSchemaFields(f: ParquetFile)            = Try(???)
-      def deleteFile(l: StorageLocation)              = Try(???)
-      def readStats(f: ParquetFile)                   = Try(???)
+      def validateFile(f: ParquetFile, deep: Boolean)                 = Try(???)
+      def readSchemaFields(f: ParquetFile)                            = Try(???)
+      def deleteFile(l: StorageLocation)                              = Try(???)
+      def readStats(f: ParquetFile)                                   = Try(???)
+      def inferSchemaFromRows(rows: Iterator[Map[String, CellValue]]) = Try(???)
     }
     val stats = stub.cacheStats()
     stats shouldBe ParquetRepository.CacheStats(0L, 0L, 0L, 0L)

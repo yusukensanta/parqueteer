@@ -66,6 +66,10 @@ class SchemaDiffTest extends AnyFlatSpec with Matchers {
 
     override def readStats(file: ParquetFile): Try[FileStats] =
       Success(FileStats(List.empty, 0L, 0L))
+
+    override def inferSchemaFromRows(
+        rows: Iterator[Map[String, CellValue]]
+    ): Try[ParquetSchema] = { val _ = rows; Success(schema1) }
   }
 
   // ── Tests ─────────────────────────────────────────────────────────────────

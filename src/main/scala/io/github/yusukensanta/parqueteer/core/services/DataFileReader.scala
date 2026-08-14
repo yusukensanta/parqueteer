@@ -17,36 +17,54 @@ private[services] object DataFileReader {
       path: String,
       maxRows: Option[Long]
   ): Try[List[Map[String, CellValue]]] =
-    Using(scala.io.Source.fromFile(path, "UTF-8")) { source =>
-      val iter = source.getLines()
-      parseNdjsonLines(
-        io.github.yusukensanta.parqueteer.core.util.RowLimiter.limitIterator(iter, maxRows)
-      )
-    }
+    withNdjsonRows(path, maxRows)(_.toList)
 
   def readCsvFile(
       path: String,
       maxRows: Option[Long] = None
   ): Try[List[Map[String, CellValue]]] =
-    Try {
-      import better.files.*
-      val content = File(path).contentAsString(using java.nio.charset.StandardCharsets.UTF_8)
-      io.github.yusukensanta.parqueteer.core.util.RowLimiter
-        .limitIterator(CsvParser.parseStream(content), maxRows)
-        .toList
-    }
+    withCsvRows(path, maxRows)(_.toList)
 
   def readLtsvFile(
       path: String,
       maxRows: Option[Long]
   ): Try[List[Map[String, CellValue]]] =
+    withLtsvRows(path, maxRows)(_.toList)
+
+  // ── Streaming (two-pass write) helpers ──────────────────────────────────
+  //
+  // Each opens its source fresh and hands the caller a row Iterator scoped to
+  // the callback — used twice per two-pass write (once to infer a schema,
+  // once to stream rows into the writer) so both passes see identical rows
+  // under identical maxRows limiting.
+
+  def withNdjsonRows[A](path: String, maxRows: Option[Long])(
+      f: Iterator[Map[String, CellValue]] => A
+  ): Try[A] =
     Using(scala.io.Source.fromFile(path, "UTF-8")) { source =>
-      val iter = source.getLines()
-      LTSVParser
-        .parseLines(
-          io.github.yusukensanta.parqueteer.core.util.RowLimiter.limitIterator(iter, maxRows)
-        )
-        .toList
+      val limited = io.github.yusukensanta.parqueteer.core.util.RowLimiter
+        .limitIterator(source.getLines(), maxRows)
+      f(parseNdjsonLinesIterator(limited))
+    }
+
+  def withLtsvRows[A](path: String, maxRows: Option[Long])(
+      f: Iterator[Map[String, CellValue]] => A
+  ): Try[A] =
+    Using(scala.io.Source.fromFile(path, "UTF-8")) { source =>
+      val limited = io.github.yusukensanta.parqueteer.core.util.RowLimiter
+        .limitIterator(source.getLines(), maxRows)
+      f(LTSVParser.parseLines(limited))
+    }
+
+  def withCsvRows[A](path: String, maxRows: Option[Long])(
+      f: Iterator[Map[String, CellValue]] => A
+  ): Try[A] =
+    Try {
+      import better.files.*
+      val content = File(path).contentAsString(using java.nio.charset.StandardCharsets.UTF_8)
+      val limited = io.github.yusukensanta.parqueteer.core.util.RowLimiter
+        .limitIterator(CsvParser.parseStream(content), maxRows)
+      f(limited)
     }
 
   def readFromStdin(
@@ -143,11 +161,11 @@ private[services] object DataFileReader {
   def parseNdjsonContent(
       content: String
   ): List[Map[String, CellValue]] =
-    parseNdjsonLines(content.linesIterator)
+    parseNdjsonLinesIterator(content.linesIterator).toList
 
-  private def parseNdjsonLines(
+  private def parseNdjsonLinesIterator(
       lines: Iterator[String]
-  ): List[Map[String, CellValue]] = {
+  ): Iterator[Map[String, CellValue]] = {
     import io.circe.parser.*
     lines
       .map(_.trim)
@@ -165,7 +183,6 @@ private[services] object DataFileReader {
             )
         }
       }
-      .toList
   }
 
   private def jsonObjectToRow(

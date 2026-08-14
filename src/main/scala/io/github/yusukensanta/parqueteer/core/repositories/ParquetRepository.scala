@@ -56,6 +56,15 @@ trait ParquetRepository {
       schema: ParquetSchema,
       config: WriteConfig
   )(feed: (Map[String, CellValue] => Unit) => Unit): Try[Long]
+
+  // Infers a ParquetSchema from a single pass over rows, without ever materializing
+  // them into a List — the schema-inference half of a two-pass streaming write
+  // (infer, then writeContentStream). See HadoopParquetRepository for the bridge
+  // through the internal MessageType-based inference used by writeContent.
+  def inferSchemaFromRows(
+      rows: Iterator[Map[String, CellValue]]
+  ): Try[ParquetSchema]
+
   def validateFile(file: ParquetFile, deep: Boolean = false): Try[List[String]]
   def readSchemaFields(file: ParquetFile): Try[List[FieldSummary]]
   def deleteFile(location: StorageLocation): Try[Unit]
@@ -491,6 +500,16 @@ class HadoopParquetRepository(
       footerCache.remove(cacheKey)
       result
     }
+
+  def inferSchemaFromRows(
+      rows: Iterator[Map[String, CellValue]]
+  ): Try[ParquetSchema] =
+    Try(
+      FooterReader.buildParquetSchema(
+        ParquetSchemaBuilder.inferSchemaFromRows(rows),
+        Nil
+      )
+    )
 
   def validateFile(
       file: ParquetFile,

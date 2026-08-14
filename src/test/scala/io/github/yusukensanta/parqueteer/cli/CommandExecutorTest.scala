@@ -19,7 +19,8 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
       writeResult: Try[Unit] = Success(()),
       statsResult: Try[FileStats] = Success(defaultStats),
       schemaFieldsResult: Try[List[FieldSummary]] = Success(List.empty),
-      deleteResult: Try[Unit] = Success(())
+      deleteResult: Try[Unit] = Success(()),
+      inferSchemaResult: Try[ParquetSchema] = Success(defaultSchema)
   ) extends ParquetRepository {
 
     override def readContent(file: ParquetFile, config: ReadConfig): Try[FileContent] =
@@ -61,6 +62,10 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
     override def readStats(file: ParquetFile): Try[FileStats]                 = statsResult
     override def readSchemaFields(file: ParquetFile): Try[List[FieldSummary]] = schemaFieldsResult
     override def deleteFile(location: StorageLocation): Try[Unit]             = deleteResult
+
+    override def inferSchemaFromRows(
+        rows: Iterator[Map[String, CellValue]]
+    ): Try[ParquetSchema] = { val _ = rows; inferSchemaResult }
   }
 
   private val defaultContent = FileContent(

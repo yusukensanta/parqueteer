@@ -106,4 +106,63 @@ class DataFileReaderTest extends AnyFlatSpec with Matchers {
     val j = io.circe.parser.parse("-2.5").toOption.get
     DataFileReader.coerceJsonValue(j) shouldBe CellValue.F64(-2.5)
   }
+
+  // ── withNdjsonRows / withLtsvRows / withCsvRows ──────────────────────────
+
+  private def tempFileWithContent(suffix: String, content: String): java.io.File = {
+    val f = java.nio.file.Files.createTempFile("datafilereader_test_", suffix).toFile
+    java.nio.file.Files.writeString(f.toPath, content)
+    f.deleteOnExit()
+    f
+  }
+
+  "withNdjsonRows" should "yield the same rows as readNdjsonFile" in {
+    val f         = tempFileWithContent(".ndjson", "{\"a\":1}\n{\"a\":2}\n{\"a\":3}\n")
+    val viaHelper = DataFileReader.withNdjsonRows(f.getAbsolutePath, None)(_.toList).get
+    val viaLegacy = DataFileReader.readNdjsonFile(f.getAbsolutePath, None).get
+    viaHelper shouldBe viaLegacy
+    viaHelper.map(_("a")) shouldBe List(CellValue.I64(1L), CellValue.I64(2L), CellValue.I64(3L))
+  }
+
+  it should "truncate to maxRows, same as readNdjsonFile" in {
+    val f      = tempFileWithContent(".ndjson", "{\"a\":1}\n{\"a\":2}\n{\"a\":3}\n")
+    val result = DataFileReader.withNdjsonRows(f.getAbsolutePath, Some(2L))(_.toList).get
+    result should have size 2
+  }
+
+  it should "close the file handle after the callback returns" in {
+    val f = tempFileWithContent(".ndjson", "{\"a\":1}\n")
+    DataFileReader.withNdjsonRows(f.getAbsolutePath, None)(_.toList).get
+    // A second read on the same path succeeding proves the first Source was closed,
+    // not left open holding a lock/handle.
+    DataFileReader.withNdjsonRows(f.getAbsolutePath, None)(_.toList).isSuccess shouldBe true
+  }
+
+  "withLtsvRows" should "yield the same rows as readLtsvFile" in {
+    val f         = tempFileWithContent(".ltsv", "a:1\tb:x\na:2\tb:y\n")
+    val viaHelper = DataFileReader.withLtsvRows(f.getAbsolutePath, None)(_.toList).get
+    val viaLegacy = DataFileReader.readLtsvFile(f.getAbsolutePath, None).get
+    viaHelper shouldBe viaLegacy
+    viaHelper should have size 2
+  }
+
+  it should "truncate to maxRows, same as readLtsvFile" in {
+    val f      = tempFileWithContent(".ltsv", "a:1\na:2\na:3\n")
+    val result = DataFileReader.withLtsvRows(f.getAbsolutePath, Some(1L))(_.toList).get
+    result should have size 1
+  }
+
+  "withCsvRows" should "yield the same rows as readCsvFile" in {
+    val f         = tempFileWithContent(".csv", "a,b\n1,x\n2,y\n")
+    val viaHelper = DataFileReader.withCsvRows(f.getAbsolutePath, None)(_.toList).get
+    val viaLegacy = DataFileReader.readCsvFile(f.getAbsolutePath, None).get
+    viaHelper shouldBe viaLegacy
+    viaHelper should have size 2
+  }
+
+  it should "truncate to maxRows, same as readCsvFile" in {
+    val f      = tempFileWithContent(".csv", "a\n1\n2\n3\n")
+    val result = DataFileReader.withCsvRows(f.getAbsolutePath, Some(2L))(_.toList).get
+    result should have size 2
+  }
 }

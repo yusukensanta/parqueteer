@@ -701,4 +701,53 @@ class ParquetSchemaBuilderTest extends AnyFlatSpec with Matchers {
       ParquetSchemaBuilder.inferSchemaFromData(data)
     }
   }
+
+  // ── inferSchemaFromRows ──────────────────────────────────────────────────
+
+  "ParquetSchemaBuilder.inferSchemaFromRows" should "throw on an empty iterator" in {
+    an[IllegalArgumentException] should be thrownBy {
+      ParquetSchemaBuilder.inferSchemaFromRows(Iterator.empty)
+    }
+  }
+
+  it should "produce the same schema as inferSchemaFromData for an equivalent iterator" in {
+    // Mixed types, a decimal column, and a null-only column — exercises every
+    // branch of the fold (TypeRank widening, decimal scale/precision tracking,
+    // seenKeys for null-only columns) to prove the List/Iterator wrapper delegation
+    // is behavior-preserving, not just "compiles."
+    val data = List(
+      Map[String, CellValue](
+        "id"     -> CellValue.I64(1L),
+        "amount" -> CellValue.Dec(BigDecimal("1.50"))
+      ),
+      Map[String, CellValue](
+        "id"     -> CellValue.I32(2),
+        "amount" -> CellValue.Dec(BigDecimal("12.345"))
+      ),
+      Map[String, CellValue]("id" -> CellValue.I64(3L), "note" -> CellValue.Null)
+    )
+    val fromList = ParquetSchemaBuilder.inferSchemaFromData(data)
+    val fromIter = ParquetSchemaBuilder.inferSchemaFromRows(data.iterator)
+    fromIter shouldBe fromList
+  }
+
+  it should "infer schema from a column that only appears in a later row, same as the List-based fold" in {
+    // This is the entire reason inferSchemaFromData scans all rows instead of a
+    // sample — must still hold when folding over an Iterator for two-pass streaming.
+    val rows = (Map[String, CellValue]("id" -> CellValue.I64(1L)) +:
+      List.fill(50)(Map[String, CellValue]("id" -> CellValue.I64(2L))) :+
+      Map[String, CellValue]("id" -> CellValue.I64(3L), "extra" -> CellValue.Str("late"))).iterator
+    val mt    = ParquetSchemaBuilder.inferSchemaFromRows(rows)
+    val names = mt.getFields.asScala.map(_.getName).toList
+    names should contain("extra")
+  }
+
+  it should "widen a column's type across the full iterator, same as the List-based fold" in {
+    val rows = List(
+      Map[String, CellValue]("x" -> CellValue.I32(1)),
+      Map[String, CellValue]("x" -> CellValue.I64(Int.MaxValue.toLong + 1))
+    ).iterator
+    val mt = ParquetSchemaBuilder.inferSchemaFromRows(rows)
+    fieldByName(mt, "x").getPrimitiveTypeName shouldBe PrimitiveTypeName.INT64
+  }
 }
