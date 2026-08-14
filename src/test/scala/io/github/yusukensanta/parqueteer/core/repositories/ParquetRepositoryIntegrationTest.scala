@@ -757,6 +757,37 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
     idStats.maxValue.get shouldBe "200"
   }
 
+  it should "attribute stats to the correct column when multiple columns span multiple row groups" taggedAs IntegrationTest in {
+    // Regression guard for the per-block column lookup: with several columns and
+    // several row groups, a bug that mismatches a chunk's stats to the wrong
+    // column would show up as cross-wired min/max/nullCount between columns.
+    val data = (1 to 300).toList.map(i =>
+      Map[String, CellValue](
+        "id"    -> CellValue.I64(i.toLong),
+        "score" -> CellValue.F64(i.toDouble / 2),
+        "label" -> CellValue.Str(f"item_$i%03d")
+      )
+    )
+    val loc = LocalPath(tempFile().getAbsolutePath)
+    repo
+      .writeContent(loc, data, None, WriteConfig(rowGroupSize = 1024L))
+      .isSuccess shouldBe true
+
+    val result = repo.readStats(ParquetFile(loc))
+    result.isSuccess shouldBe true
+    val stats = result.get
+    stats.rowGroupCount should be > 1L
+
+    val byName = stats.columns.map(c => c.name -> c).toMap
+    byName("id").minValue.get shouldBe "1"
+    byName("id").maxValue.get shouldBe "300"
+    byName("score").minValue.get shouldBe "0.5"
+    byName("score").maxValue.get shouldBe "150.0"
+    byName("label").minValue.get shouldBe "item_001"
+    byName("label").maxValue.get shouldBe "item_300"
+    stats.columns.foreach(_.nullCount shouldBe 0L)
+  }
+
   it should "return min/max for BINARY-encoded DECIMAL columns" taggedAs IntegrationTest in {
     val data = List(
       Map[String, CellValue]("amount" -> CellValue.Dec(BigDecimal("123.45"))),
