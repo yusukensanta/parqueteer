@@ -184,6 +184,25 @@ lazy val root = (project in file("."))
         "com.fasterxml.jackson.core" % "jackson-databind"    % "2.18.9",
         "com.fasterxml.jackson.core" % "jackson-annotations" % "2.18.9",
 
+        // io.opentelemetry.* pulled transitively via google-cloud-storage/gcs-connector.
+        // Declared explicitly (not just in dependencyOverrides below) for the same
+        // reason as Jackson above: the generated POM Trivy scans only lists direct
+        // libraryDependencies entries, not dependencyOverrides, so an override-only
+        // pin is invisible to the scanner even though it's the version actually
+        // resolved on the classpath. CVE-2026-45292 (MEDIUM) fixed in 1.62.0; pinned
+        // to 1.64.0 (current clean release). All modules share opentelemetry-java's
+        // lockstep release train and must move together to avoid binary-incompatible
+        // api/sdk skew.
+        "io.opentelemetry" % "opentelemetry-api"                              % "1.64.0",
+        "io.opentelemetry" % "opentelemetry-common"                          % "1.64.0",
+        "io.opentelemetry" % "opentelemetry-context"                         % "1.64.0",
+        "io.opentelemetry" % "opentelemetry-sdk"                             % "1.64.0",
+        "io.opentelemetry" % "opentelemetry-sdk-common"                      % "1.64.0",
+        "io.opentelemetry" % "opentelemetry-sdk-extension-autoconfigure-spi" % "1.64.0",
+        "io.opentelemetry" % "opentelemetry-sdk-logs"                        % "1.64.0",
+        "io.opentelemetry" % "opentelemetry-sdk-metrics"                     % "1.64.0",
+        "io.opentelemetry" % "opentelemetry-sdk-trace"                       % "1.64.0",
+
         // Testing
         "org.scalatest"     %% "scalatest"       % scalatestVersion           % Test,
         "org.scalamock"     %% "scalamock"       % scalamockVersion           % Test,
