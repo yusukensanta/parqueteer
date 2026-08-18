@@ -59,11 +59,11 @@ private[services] object DataFileReader {
   def withCsvRows[A](path: String, maxRows: Option[Long])(
       f: Iterator[Map[String, CellValue]] => A
   ): Try[A] =
-    Try {
-      import better.files.*
-      val content = File(path).contentAsString(using java.nio.charset.StandardCharsets.UTF_8)
+    Using(scala.io.Source.fromFile(path, "UTF-8")) { source =>
+      val records = CsvParser.parseRecordsIncremental(source.getLines())
+      val rows    = CsvParser.rowsToMaps(records)
       val limited = io.github.yusukensanta.parqueteer.core.util.RowLimiter
-        .limitIterator(CsvParser.parseStream(content), maxRows)
+        .limitIterator(rows, maxRows)
       f(limited)
     }
 

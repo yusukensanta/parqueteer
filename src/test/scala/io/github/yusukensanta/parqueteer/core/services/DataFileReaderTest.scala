@@ -165,4 +165,17 @@ class DataFileReaderTest extends AnyFlatSpec with Matchers {
     val result = DataFileReader.withCsvRows(f.getAbsolutePath, Some(2L))(_.toList).get
     result should have size 2
   }
+
+  it should "correctly parse a quoted field containing a newline read from disk" in {
+    val f      = tempFileWithContent(".csv", "a,b\n1,\"line1\nline2\"\n3,4\n")
+    val result = DataFileReader.withCsvRows(f.getAbsolutePath, None)(_.toList).get
+    result should have size 2
+    result(0)("b") shouldBe CellValue.Str("line1\nline2")
+  }
+
+  it should "close the file handle after the callback returns" in {
+    val f = tempFileWithContent(".csv", "a\n1\n")
+    DataFileReader.withCsvRows(f.getAbsolutePath, None)(_.toList).get
+    DataFileReader.withCsvRows(f.getAbsolutePath, None)(_.toList).isSuccess shouldBe true
+  }
 }
