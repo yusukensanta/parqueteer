@@ -7,18 +7,30 @@ object CsvParser {
   def parse(content: String): List[Map[String, CellValue]] =
     parseStream(content).toList
 
-  def parseStream(content: String): Iterator[Map[String, CellValue]] = {
-    val records = parseRfc4180(content)
-    if records.isEmpty then Iterator.empty
+  def parseStream(content: String): Iterator[Map[String, CellValue]] =
+    rowsToMaps(parseRfc4180(content).iterator)
+
+  /**
+   * Converts a header row + data rows into typed record maps. Shared by the
+   * whole-content path (`parseRfc4180(content).iterator`) and the streaming
+   * path (`parseRecordsIncremental`) so both apply identical header/trailing
+   * comma/field-count handling.
+   */
+  def rowsToMaps(
+      records: Iterator[Array[String]]
+  ): Iterator[Map[String, CellValue]] =
+    if !records.hasNext then Iterator.empty
     else {
-      val headers             = records.head
+      val headers             = records.next()
       var trailingCommaWarned = false
-      records.iterator.drop(1).zipWithIndex.map { case (values, idx) =>
+      var rowNum              = 1
+      records.map { values =>
+        rowNum += 1
         val normalized =
           if values.length == headers.length + 1 && values.last.isEmpty then {
             if !trailingCommaWarned then {
               Warnings.emit(
-                s"CSV row ${idx + 2} has a trailing comma — extra empty field ignored. Suppress with a consistent schema."
+                s"CSV row $rowNum has a trailing comma — extra empty field ignored. Suppress with a consistent schema."
               )
               trailingCommaWarned = true
             }
@@ -26,7 +38,7 @@ object CsvParser {
           } else values
         if normalized.length != headers.length then
           throw new IllegalArgumentException(
-            s"Row ${idx + 2} has ${normalized.length} fields, expected ${headers.length}"
+            s"Row $rowNum has ${normalized.length} fields, expected ${headers.length}"
           )
         scala.collection.immutable.ListMap.from(
           headers.zip(normalized).map { case (h, v) =>
@@ -35,7 +47,51 @@ object CsvParser {
         )
       }
     }
-  }
+
+  /**
+   * Parses CSV rows from a line iterator (e.g. `Source.fromFile(path).getLines()`)
+   * instead of a fully-materialized String, so callers can stream a file
+   * without loading it whole. `getLines()` strips line terminators, which
+   * would corrupt a quoted field containing a literal newline — those need
+   * to be re-joined across line-iterator calls before being handed to
+   * `parseRfc4180`, which already implements the full RFC 4180 state
+   * machine (quote/escape/delimiter handling) correctly for a complete
+   * chunk of text.
+   */
+  def parseRecordsIncremental(lines: Iterator[String]): Iterator[Array[String]] =
+    new Iterator[Array[String]] {
+      private var pending: List[Array[String]] = Nil
+      private var carry: String                = ""
+
+      private def fill(): Unit =
+        while pending.isEmpty && lines.hasNext do {
+          val line      = lines.next()
+          val candidate = if carry.isEmpty then line else carry + "\n" + line
+          try {
+            pending = parseRfc4180(candidate + "\n")
+            carry = ""
+          } catch {
+            case e: IllegalArgumentException
+                if e.getMessage != null &&
+                  e.getMessage.startsWith("Unterminated quoted field") =>
+              carry = candidate
+          }
+        }
+        // Input exhausted with an unresolved quoted field: no more lines will
+        // arrive to close it, so surface the same error `parseRfc4180` would
+        // raise for whole-content input, instead of silently dropping it.
+        if pending.isEmpty && carry.nonEmpty && !lines.hasNext then parseRfc4180(carry + "\n"): Unit
+
+      def hasNext: Boolean = { fill(); pending.nonEmpty }
+
+      def next(): Array[String] = {
+        fill()
+        if pending.isEmpty then throw new NoSuchElementException("next on empty iterator")
+        val row = pending.head
+        pending = pending.tail
+        row
+      }
+    }
 
   def parseRfc4180(content: String): List[Array[String]] = {
     val records = scala.collection.mutable.ListBuffer.empty[Array[String]]

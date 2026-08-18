@@ -252,4 +252,51 @@ class CsvParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChe
       roundTrip(rows) should have size rows.size
     }
   }
+
+  // ── parseRecordsIncremental: streaming path (H4) ─────────────────────────
+  // `linesOf` mirrors what scala.io.Source.getLines() hands the real caller:
+  // line terminators stripped, no trailing empty element.
+
+  private def linesOf(content: String): Iterator[String] = content.linesIterator
+
+  "CsvParser.parseRecordsIncremental" should "match parseRfc4180 for single-line rows" in {
+    val content = "a,b\n1,2\n3,4\n"
+    val viaIncremental =
+      CsvParser.parseRecordsIncremental(linesOf(content)).map(_.toList).toList
+    val viaWhole = CsvParser.parseRfc4180(content).map(_.toList)
+    viaIncremental shouldBe viaWhole
+  }
+
+  it should "rejoin a quoted field containing a newline split across lines" in {
+    val content = "a,b\n1,\"line1\nline2\"\n3,4\n"
+    val records = CsvParser.parseRecordsIncremental(linesOf(content)).toList
+    records should have size 3
+    records(1)(1) shouldBe "line1\nline2"
+  }
+
+  it should "rejoin a quoted field spanning more than two lines" in {
+    val content = "a\n\"x\ny\nz\"\n"
+    val records = CsvParser.parseRecordsIncremental(linesOf(content)).toList
+    records should have size 2
+    records(1)(0) shouldBe "x\ny\nz"
+  }
+
+  it should "propagate a real syntax error instead of buffering forever" in {
+    // "x"y after the closing quote is malformed (RFC 4180 §2.5), not "more input needed"
+    val content = "a,b\n\"x\"y,z\n"
+    an[IllegalArgumentException] should be thrownBy {
+      CsvParser.parseRecordsIncremental(linesOf(content)).toList
+    }
+  }
+
+  it should "throw for a quote left unterminated at end of input" in {
+    val content = "a,b\n1,\"unterminated\n"
+    an[IllegalArgumentException] should be thrownBy {
+      CsvParser.parseRecordsIncremental(linesOf(content)).toList
+    }
+  }
+
+  it should "return no records for empty input" in {
+    CsvParser.parseRecordsIncremental(Iterator.empty).toList shouldBe empty
+  }
 }

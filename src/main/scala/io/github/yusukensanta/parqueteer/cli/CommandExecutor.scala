@@ -489,7 +489,9 @@ private[cli] object CommandExecutor {
                 File(outputPath).createIfNotExists(createParents = true)
               (
                 outFile,
-                new java.io.PrintStream(outFile.newOutputStream)
+                new java.io.PrintStream(
+                  new java.io.BufferedOutputStream(outFile.newOutputStream, 1 << 16)
+                )
               )
             }
             .toEither

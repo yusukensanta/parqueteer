@@ -19,11 +19,24 @@ object CliApp {
     // Force UTF-8 for stdout/stderr regardless of platform locale.
     // The launcher scripts also pass -Dfile.encoding=UTF-8 / -Dstdout.encoding=UTF-8
     // so this backstop only matters when the JAR is invoked directly via `java -jar`.
-    val utf8    = java.nio.charset.StandardCharsets.UTF_8
-    val utf8Out = new java.io.PrintStream(System.out, true, utf8)
+    //
+    // stdout is buffered (autoFlush=false) since row-streaming commands (read, convert)
+    // write one line per record; unbuffered+autoflush was one syscall per row. A shutdown
+    // hook flushes it on every exit path, including System.exit and uncaught exceptions.
+    // stderr stays unbuffered/autoflush: it carries progress/warnings that must not lag.
+    val utf8 = java.nio.charset.StandardCharsets.UTF_8
+    val utf8Out = new java.io.PrintStream(
+      new java.io.BufferedOutputStream(
+        new java.io.FileOutputStream(java.io.FileDescriptor.out),
+        1 << 16
+      ),
+      false,
+      utf8
+    )
     val utf8Err = new java.io.PrintStream(System.err, true, utf8)
     System.setOut(utf8Out)
     System.setErr(utf8Err)
+    Runtime.getRuntime.addShutdownHook(new Thread(() => utf8Out.flush()))
     Console.withOut(utf8Out) {
       Console.withErr(utf8Err) {
         mainImpl(args)
