@@ -17,6 +17,9 @@ class MarkdownFormatter extends OutputFormatter {
     else {
       val columns = extractColumns(content.rows, schema)
       val sb      = new StringBuilder()
+      // One pass over each row's own entries instead of columns.length separate
+      // row.get lookups (each O(row.size) on a ListMap) — see RowStreamWriter.projectRow.
+      val columnIndex = columns.iterator.zipWithIndex.toMap
 
       sb.append("| ")
         .append(columns.map(escapeCell).mkString(" | "))
@@ -26,8 +29,9 @@ class MarkdownFormatter extends OutputFormatter {
         .append(" |\n")
 
       content.rows.foreach { row =>
-        val values =
-          columns.map(col => escapeCell(row.get(col).fold("")(_.display)))
+        val cells = new Array[CellValue](columns.length)
+        row.foreach { case (k, v) => columnIndex.get(k).foreach(idx => cells(idx) = v) }
+        val values = cells.iterator.map(v => escapeCell(if v == null then "" else v.display)).toList
         sb.append("| ").append(values.mkString(" | ")).append(" |\n")
       }
 

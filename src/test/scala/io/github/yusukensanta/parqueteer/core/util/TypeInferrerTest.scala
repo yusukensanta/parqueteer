@@ -64,6 +64,11 @@ class TypeInferrerTest extends AnyFlatSpec with Matchers with ScalaCheckProperty
     TypeInferrer.inferCsvValue("01234") shouldBe CellValue.Str("01234")
   }
 
+  it should "preserve a bare zero as I64, but negative zero as Str" in {
+    TypeInferrer.inferCsvValue("0") shouldBe CellValue.I64(0L)
+    TypeInferrer.inferCsvValue("-0") shouldBe CellValue.Str("-0")
+  }
+
   it should "keep plain strings as CellValue.Str" in {
     TypeInferrer.inferCsvValue("hello") shouldBe CellValue.Str("hello")
     TypeInferrer.inferCsvValue("New York") shouldBe CellValue.Str("New York")

@@ -41,10 +41,9 @@ class JSONFormatter extends OutputFormatter {
     metadata.asJson.noSpaces
 
   private def encodeRow(row: Map[String, CellValue]): Json =
-    Json.fromFields(row.map { case (key, value) =>
-      key -> io.github.yusukensanta.parqueteer.core.util.JsonEncoder
-        .encode(value)
-    })
+    Json.fromFields(
+      row.view.mapValues(io.github.yusukensanta.parqueteer.core.util.JsonEncoder.encode)
+    )
 }
 
 object JSONFormatter {

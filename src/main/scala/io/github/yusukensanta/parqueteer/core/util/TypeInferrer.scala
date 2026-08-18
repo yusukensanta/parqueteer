@@ -39,12 +39,16 @@ object TypeInferrer {
         .map(bd => CellValue.Dec(scala.math.BigDecimal(bd)))
         .getOrElse(CellValue.Str(s))
     else if IntPattern.matcher(s).matches() then
-      Try(s.toLong)
-        .filter(
-          _.toString == s
-        ) // rejects leading-zero strings ("007" → Str, not I64)
-        .map(CellValue.I64.apply)
-        .getOrElse(CellValue.Str(s))
+      val negative = s.charAt(0) == '-'
+      val digits   = if negative then s.substring(1) else s
+      // Leading zero (other than a bare "0") or "-0" must stay Str: a
+      // round-trip through Long can't reproduce either (Long has no
+      // negative zero and drops leading zeros) — IDs/ZIP codes like "007"
+      // rely on this. Checked directly on `s` instead of parsing then
+      // comparing against `.toString`, which allocates on every row.
+      if (digits.length > 1 && digits.charAt(0) == '0') || (negative && digits == "0")
+      then CellValue.Str(s)
+      else Try(s.toLong).map(CellValue.I64.apply).getOrElse(CellValue.Str(s))
     else CellValue.Str(s)
   }
 

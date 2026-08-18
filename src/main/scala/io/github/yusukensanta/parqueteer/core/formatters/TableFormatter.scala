@@ -33,8 +33,16 @@ class TableFormatter extends OutputFormatter {
 
       // Pre-format all cell values once: calculateColumnWidths and drawRow both
       // need the formatted string, so computing it twice per cell is wasteful.
-      val fmtRows =
-        rows.map(row => columns.map(col => row.get(col).map(formatValue).getOrElse("null")))
+      //
+      // Projecting via columnIndex + one pass over each row's own entries is
+      // O(row.size) per row; the equivalent columns.map(row.get) is O(columns.length
+      // * row.size) since each row.get on a ListMap is itself O(row.size).
+      val columnIndex = columns.iterator.zipWithIndex.toMap
+      val fmtRows = rows.map { row =>
+        val values = new Array[CellValue](columns.length)
+        row.foreach { case (k, v) => columnIndex.get(k).foreach(idx => values(idx) = v) }
+        values.iterator.map(v => if v == null then "null" else formatValue(v)).toList
+      }
       val columnWidths = {
         val ws = columns.map(c => displayWidth(c)).toArray
         fmtRows.foreach(vs =>
@@ -160,11 +168,14 @@ class TableFormatter extends OutputFormatter {
       columns: List[String],
       rows: List[Map[String, CellValue]]
   ): List[Int] = {
-    val widths = columns.map(c => displayWidth(c)).toArray
+    val widths      = columns.map(c => displayWidth(c)).toArray
+    val columnIndex = columns.iterator.zipWithIndex.toMap
     rows.foreach { row =>
-      columns.zipWithIndex.foreach { case (col, i) =>
-        val w = row.get(col).map(v => displayWidth(formatValue(v))).getOrElse(0)
-        if w > widths(i) then widths(i) = w
+      row.foreach { case (k, v) =>
+        columnIndex.get(k).foreach { i =>
+          val w = displayWidth(formatValue(v))
+          if w > widths(i) then widths(i) = w
+        }
       }
     }
     widths

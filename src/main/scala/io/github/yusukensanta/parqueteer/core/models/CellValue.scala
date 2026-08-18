@@ -15,7 +15,9 @@ enum CellValue:
   case Date(d: java.time.LocalDate)
   case Ts(i: java.time.Instant)
   case Dec(bd: BigDecimal)
-  case Bytes(b: Array[Byte])
+  // ArraySeq (not Array[Byte]) so the compiler-generated equals/hashCode compare
+  // contents instead of reference identity — Array's default equals doesn't.
+  case Bytes(b: scala.collection.immutable.ArraySeq[Byte])
 
 object CellValue:
 
@@ -36,7 +38,7 @@ object CellValue:
       case Date(d)  => d.toString
       case Ts(i)    => i.toString
       case Dec(bd)  => bd.underlying.stripTrailingZeros.toPlainString
-      case Bytes(b) => java.util.Base64.getEncoder.encodeToString(b)
+      case Bytes(b) => java.util.Base64.getEncoder.encodeToString(b.toArray)
     // Safe for terminal output: strips ESC and other control codes that can
     // embed ANSI/OSC sequences from attacker-controlled string data.
     def safeDisplay: String = sanitizeTerminal(v.display)

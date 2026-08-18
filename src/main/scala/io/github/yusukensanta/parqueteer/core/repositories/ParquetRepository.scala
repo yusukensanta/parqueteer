@@ -13,7 +13,7 @@ import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path as HadoopPath}
 import org.apache.parquet.hadoop.ParquetFileReader
 import org.apache.parquet.hadoop.example.ExampleParquetWriter
-import org.apache.parquet.hadoop.metadata.{BlockMetaData, ColumnChunkMetaData}
+import org.apache.parquet.hadoop.metadata.{BlockMetaData, ColumnChunkMetaData, ParquetMetadata}
 import org.apache.parquet.hadoop.util.HadoopInputFile
 import org.apache.parquet.example.data.simple.SimpleGroupFactory
 import org.apache.parquet.hadoop.ParquetWriter as HParquetWriter
@@ -91,8 +91,11 @@ object HadoopParquetRepository {
 }
 
 // The Hadoop Configuration cache is keyed on storage location type + bucket/region.
-// It does not incorporate credential env vars (AWS_ACCESS_KEY_ID, etc.).
-// Callers that rotate credentials mid-process must create a new repository instance.
+// For S3, the cached Configuration holds a credentials-*provider* class name
+// (fs.s3a.aws.credentials.provider), not resolved key/secret/session-token
+// values — S3A instantiates and re-invokes that provider per request, so env
+// var rotation and short-lived session/IMDS token refresh both work correctly
+// without needing a new repository instance mid-process.
 class HadoopParquetRepository(
     profile: Option[String] = None,
     region: Option[String] = None,
@@ -116,7 +119,11 @@ class HadoopParquetRepository(
       }
     )
 
-  private type FooterEntry = (MessageType, List[BlockMetaData], String, String)
+  // The 5th field (raw ParquetMetadata) is the same footer object schema/blocks
+  // were derived from — kept so callers that need to open a ParquetFileReader
+  // (e.g. the parallel reader) can pass it in directly instead of triggering
+  // another footer read+parse per row group.
+  private type FooterEntry = (MessageType, List[BlockMetaData], String, String, ParquetMetadata)
 
   // Caches (MessageType, blocks, version, createdBy) per file path for the lifetime of this
   // repository instance. Bounded LRU: evicts the least-recently-used entry when size exceeds
@@ -192,7 +199,7 @@ class HadoopParquetRepository(
         val (version, createdBy) = FooterReader.parseRawMeta(footerBytes)
         val meta                 = FooterReader.parseFooter(footerBytes)
         val entry =
-          (meta.getFileMetaData.getSchema, meta.getBlocks.asScala.toList, version, createdBy)
+          (meta.getFileMetaData.getSchema, meta.getBlocks.asScala.toList, version, createdBy, meta)
         footerCache.put(key, entry)
         entry
     }
@@ -201,12 +208,12 @@ class HadoopParquetRepository(
   // ── Public API ────────────────────────────────────────────────────────────
 
   def readContent(file: ParquetFile, config: ReadConfig): Try[FileContent] =
-    setupHadoopConfiguration(file.location).flatMap { hadoopConfig =>
+    withHadoopConfig(file.location) { hadoopConfig =>
       val cacheKey = new HadoopPath(file.location.path).toString
       val result = Try {
-        val hadoopPath                 = new HadoopPath(file.location.path)
-        val (fileSchema, blocks, _, _) = getFooter(hadoopPath, hadoopConfig)
-        val totalRows                  = blocks.map(_.getRowCount).sum
+        val hadoopPath                             = new HadoopPath(file.location.path)
+        val (fileSchema, blocks, _, _, footerMeta) = getFooter(hadoopPath, hadoopConfig)
+        val totalRows                              = blocks.map(_.getRowCount).sum
 
         // filter forces sequential: parquet4s evaluates predicates during
         // deserialization, not at page-selection time, so parallel reads can't
@@ -215,7 +222,14 @@ class HadoopParquetRepository(
         val (rows, hasMoreAfterLimit) =
           if useParallel then
             (
-              ParallelRowGroupReader.read(hadoopPath, hadoopConfig, config, fileSchema, blocks),
+              ParallelRowGroupReader.read(
+                hadoopPath,
+                hadoopConfig,
+                config,
+                fileSchema,
+                blocks,
+                footerMeta
+              ),
               false
             )
           else {
@@ -277,12 +291,12 @@ class HadoopParquetRepository(
       file: ParquetFile,
       config: ReadConfig
   )(process: Map[String, CellValue] => Unit): Try[Long] =
-    setupHadoopConfiguration(file.location).flatMap { hadoopConfig =>
+    withHadoopConfig(file.location) { hadoopConfig =>
       val cacheKey = new HadoopPath(file.location.path).toString
       val result = Try {
-        val path4s                = Parquet4sPath(file.location.path)
-        val hadoopPath            = new HadoopPath(file.location.path)
-        val (fileSchema, _, _, _) = getFooter(hadoopPath, hadoopConfig)
+        val path4s                   = Parquet4sPath(file.location.path)
+        val hadoopPath               = new HadoopPath(file.location.path)
+        val (fileSchema, _, _, _, _) = getFooter(hadoopPath, hadoopConfig)
         val rawBinaryFields =
           ParquetRecordDecoder.rawBinaryFieldsFor(fileSchema)
         val int96Fields =
@@ -354,10 +368,10 @@ class HadoopParquetRepository(
   }
 
   def readSchema(file: ParquetFile): Try[ParquetSchema] =
-    setupHadoopConfiguration(file.location).flatMap { hadoopConfig =>
+    withHadoopConfig(file.location) { hadoopConfig =>
       Try {
-        val path                      = new HadoopPath(file.location.path)
-        val (msgSchema, blocks, _, _) = getFooter(path, hadoopConfig)
+        val path                         = new HadoopPath(file.location.path)
+        val (msgSchema, blocks, _, _, _) = getFooter(path, hadoopConfig)
         FooterReader.buildParquetSchema(msgSchema, blocks)
       }
     }
@@ -365,12 +379,12 @@ class HadoopParquetRepository(
   def readFileInfo(
       file: ParquetFile
   ): Try[(ParquetSchema, FileMetadata, List[RowGroupInfo])] =
-    setupHadoopConfiguration(file.location).flatMap { hadoopConfig =>
+    withHadoopConfig(file.location) { hadoopConfig =>
       Try {
         val path       = new HadoopPath(file.location.path)
         val fileStatus = path.getFileSystem(hadoopConfig).getFileStatus(path)
-        val (msgSchema, blocks, version, createdBy) = getFooter(path, hadoopConfig)
-        val ratio                                   = calculateCompressionRatio(blocks)
+        val (msgSchema, blocks, version, createdBy, _) = getFooter(path, hadoopConfig)
+        val ratio                                      = calculateCompressionRatio(blocks)
         val parsedSchema = FooterReader.buildParquetSchema(msgSchema, blocks)
         val codecs       = parsedSchema.columns.map(_.compressionType).distinct
         val codec =
@@ -440,7 +454,7 @@ class HadoopParquetRepository(
       schema: Option[ParquetSchema],
       config: WriteConfig = WriteConfig()
   ): Try[Unit] =
-    setupHadoopConfiguration(location).flatMap { hadoopConfig =>
+    withHadoopConfig(location) { hadoopConfig =>
       // A successful (or partial) write changes the file on disk, so any cached
       // footer for this path is stale regardless of outcome — evict it.
       val cacheKey = new HadoopPath(location.path).toString
@@ -474,7 +488,7 @@ class HadoopParquetRepository(
       schema: ParquetSchema,
       config: WriteConfig = WriteConfig()
   )(feed: (Map[String, CellValue] => Unit) => Unit): Try[Long] =
-    setupHadoopConfiguration(location).flatMap { hadoopConfig =>
+    withHadoopConfig(location) { hadoopConfig =>
       // Same rationale as writeContent: the file on disk changes regardless of
       // outcome, so any cached footer for this path must be evicted.
       val cacheKey = new HadoopPath(location.path).toString
@@ -515,7 +529,7 @@ class HadoopParquetRepository(
       file: ParquetFile,
       deep: Boolean = false
   ): Try[List[String]] =
-    setupHadoopConfiguration(file.location).flatMap { hadoopConfig =>
+    withHadoopConfig(file.location) { hadoopConfig =>
       Try {
         val path   = new HadoopPath(file.location.path)
         val issues = scala.collection.mutable.ListBuffer[String]()
@@ -587,10 +601,10 @@ class HadoopParquetRepository(
   def readSchemaFields(
       file: ParquetFile
   ): Try[List[FieldSummary]] =
-    setupHadoopConfiguration(file.location).flatMap { hadoopConfig =>
+    withHadoopConfig(file.location) { hadoopConfig =>
       Try {
-        val path              = new HadoopPath(file.location.path)
-        val (schema, _, _, _) = getFooter(path, hadoopConfig)
+        val path                 = new HadoopPath(file.location.path)
+        val (schema, _, _, _, _) = getFooter(path, hadoopConfig)
         schema.getFields.asScala.toList.map { field =>
           val typeName =
             if field.isPrimitive then {
@@ -608,7 +622,7 @@ class HadoopParquetRepository(
     }
 
   def deleteFile(location: StorageLocation): Try[Unit] =
-    setupHadoopConfiguration(location).flatMap { hadoopConfig =>
+    withHadoopConfig(location) { hadoopConfig =>
       val cacheKey = new HadoopPath(location.path).toString
       val result = Try {
         val path = new HadoopPath(location.path)
@@ -621,11 +635,11 @@ class HadoopParquetRepository(
     }
 
   def readStats(file: ParquetFile): Try[FileStats] =
-    setupHadoopConfiguration(file.location).flatMap { hadoopConfig =>
+    withHadoopConfig(file.location) { hadoopConfig =>
       Try {
-        val path                   = new HadoopPath(file.location.path)
-        val (schema, blocks, _, _) = getFooter(path, hadoopConfig)
-        val totalRows              = blocks.map(_.getRowCount).sum
+        val path                      = new HadoopPath(file.location.path)
+        val (schema, blocks, _, _, _) = getFooter(path, hadoopConfig)
+        val totalRows                 = blocks.map(_.getRowCount).sum
 
         // Build each block's column-name -> chunk index once (O(blocks * columns)),
         // so per-column stats lookup below is O(1) instead of a linear .find over
@@ -666,6 +680,18 @@ class HadoopParquetRepository(
       }
     }
 
+  private def providerNameFor(location: StorageLocation): String = location match {
+    case _: S3Location    => "S3"
+    case _: GCSLocation   => "GCS"
+    case _: AzureLocation => "Azure"
+    case _                => "cloud storage"
+  }
+
+  private def isCloudLocation(location: StorageLocation): Boolean = location match {
+    case _: S3Location | _: GCSLocation | _: AzureLocation => true
+    case _                                                 => false
+  }
+
   private def setupHadoopConfiguration(
       location: StorageLocation
   ): Try[Configuration] = {
@@ -685,15 +711,9 @@ class HadoopParquetRepository(
           case Some(credManager) =>
             credManager.configureHadoop(effectiveLocation).recoverWith {
               case e if !e.isInstanceOf[CloudAuthException] =>
-                val providerName = effectiveLocation match {
-                  case _: S3Location    => "S3"
-                  case _: GCSLocation   => "GCS"
-                  case _: AzureLocation => "Azure"
-                  case _                => "cloud storage"
-                }
                 scala.util.Failure(
                   new CloudAuthException(
-                    providerName,
+                    providerNameFor(effectiveLocation),
                     io.github.yusukensanta.parqueteer.core.util.CredentialRedactor
                       .redact(Option(e.getMessage).getOrElse(e.getClass.getSimpleName)),
                     e
@@ -709,6 +729,29 @@ class HadoopParquetRepository(
         result.map(new Configuration(_))
     }
   }
+
+  // Credential *resolution* is no longer eager (S3A resolves/refreshes its own
+  // provider chain per request — see S3CredentialManager) — an invalid or
+  // unauthorized identity now only surfaces once Hadoop actually attempts a
+  // cloud operation, as java.nio.file.AccessDeniedException, not at
+  // setupHadoopConfiguration time. Reclassify it as CloudAuthException here so
+  // the CLI still reports "cloud authentication failed" instead of a raw I/O
+  // error — scoped to cloud locations only, so a real local-filesystem
+  // permission error isn't mislabeled as a cloud auth failure.
+  private def withHadoopConfig[A](
+      location: StorageLocation
+  )(f: Configuration => Try[A]): Try[A] =
+    setupHadoopConfiguration(location).flatMap(f).recoverWith {
+      case e: java.nio.file.AccessDeniedException if isCloudLocation(location) =>
+        scala.util.Failure(
+          new CloudAuthException(
+            providerNameFor(location),
+            io.github.yusukensanta.parqueteer.core.util.CredentialRedactor
+              .redact(Option(e.getMessage).getOrElse(e.getClass.getSimpleName)),
+            e
+          )
+        )
+    }
 
   private def calculateCompressionRatio(
       rowGroups: List[BlockMetaData]

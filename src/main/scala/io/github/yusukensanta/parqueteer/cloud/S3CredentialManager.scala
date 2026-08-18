@@ -2,13 +2,7 @@ package io.github.yusukensanta.parqueteer.cloud
 
 import io.github.yusukensanta.parqueteer.core.models.{S3Location, StorageLocation}
 import org.apache.hadoop.conf.Configuration
-import software.amazon.awssdk.auth.credentials.{
-  AwsSessionCredentials,
-  DefaultCredentialsProvider,
-  InstanceProfileCredentialsProvider,
-  ProfileCredentialsProvider
-}
-import scala.util.{Failure, Try, Using}
+import scala.util.{Failure, Try}
 
 private[cloud] object S3Tuning {
   val MaxConnections        = "100"
@@ -19,33 +13,21 @@ private[cloud] object S3Tuning {
   val MultipartThreshold    = "100m"
 }
 
-// Process-wide singletons so background IMDS refresh threads are shared and
-// closed exactly once on JVM exit (same pattern as Hadoop FileSystem.closeAll).
-private object S3CredentialProviders {
+// AWS SDK v2 credential provider class names, tried by S3A in this order until
+// one resolves. S3A instantiates and calls each *itself*, per S3 request, so
+// short-lived session/IMDS tokens refresh automatically instead of being
+// resolved once here and baked into a Configuration for the process lifetime.
+private[cloud] object S3ProviderChain {
+  val Simple      = "org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider"
+  val EnvVar      = "software.amazon.awssdk.auth.credentials.EnvironmentVariableCredentialsProvider"
+  val Profile     = "software.amazon.awssdk.auth.credentials.ProfileCredentialsProvider"
+  val IamInstance = "org.apache.hadoop.fs.s3a.auth.IAMInstanceCredentialsProvider"
 
-  @volatile private var defaultInitialized: Boolean         = false
-  @volatile private var instanceProfileInitialized: Boolean = false
-
-  lazy val default: DefaultCredentialsProvider = {
-    val p = DefaultCredentialsProvider.create()
-    defaultInitialized = true
-    p
-  }
-
-  lazy val instanceProfile: InstanceProfileCredentialsProvider = {
-    val p = InstanceProfileCredentialsProvider.create()
-    instanceProfileInitialized = true
-    p
-  }
-
-  Runtime.getRuntime.addShutdownHook(new Thread(() => {
-    if defaultInitialized then
-      try default.close()
-      catch { case _: Exception => () }
-    if instanceProfileInitialized then
-      try instanceProfile.close()
-      catch { case _: Exception => () }
-  }))
+  // Default chain when no explicit --profile is given: static config (never
+  // populated by this app, but honors any Configuration a caller pre-seeds),
+  // then env vars, then a named profile via AWS_PROFILE/aws.profile, then
+  // EC2/ECS instance credentials.
+  val default: String = List(Simple, EnvVar, Profile, IamInstance).mkString(",")
 }
 
 class S3CredentialManager(
@@ -63,7 +45,7 @@ class S3CredentialManager(
   ): Try[Configuration] =
     location match {
       case s3Location: S3Location =>
-        resolveCredentials().map { case (accessKey, secretKey, sessionToken) =>
+        Try {
           val conf = new Configuration()
 
           conf.set("fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
@@ -72,9 +54,19 @@ class S3CredentialManager(
             "org.apache.hadoop.fs.s3a.S3A"
           )
 
-          conf.set("fs.s3a.access.key", accessKey)
-          conf.set("fs.s3a.secret.key", secretKey)
-          sessionToken.foreach(token => conf.set("fs.s3a.session.token", token))
+          // --profile pins S3A to just the profile provider. AWS SDK v2's
+          // ProfileCredentialsProvider takes no config of its own — it reads
+          // the "aws.profile" system property (falling back to AWS_PROFILE,
+          // then "default"), so an explicit --profile is passed through that
+          // way. Safe here because parqueteer is a single-command-per-process
+          // CLI, not a long-running multi-tenant service.
+          profile match {
+            case Some(p) =>
+              System.setProperty("aws.profile", p)
+              conf.set("fs.s3a.aws.credentials.provider", S3ProviderChain.Profile)
+            case None =>
+              conf.set("fs.s3a.aws.credentials.provider", S3ProviderChain.default)
+          }
 
           s3Location.region.foreach(region => conf.set("fs.s3a.endpoint.region", region))
 
@@ -118,91 +110,4 @@ class S3CredentialManager(
 
   private[cloud] def endpointDisablesSsl(endpoint: String): Boolean =
     endpoint.toLowerCase(java.util.Locale.ROOT).startsWith("http://")
-
-  private def resolveCredentials(): Try[(String, String, Option[String])] = {
-    val strategies: List[() => Try[(String, String, Option[String])]] =
-      profile match {
-        case Some(p) => List(() => tryProfile(Some(p)))
-        case None =>
-          List(
-            () => tryEnvironmentVariables(),
-            () => tryDefaultCredentialsProvider(),
-            () => tryInstanceProfile(),
-            () => tryProfile(None)
-          )
-      }
-    CloudCredentialManager.firstSuccess(
-      "No S3 credentials found. Attempted strategies:",
-      strategies
-    )
-  }
-
-  private[cloud] def tryEnvironmentVariables(): Try[(String, String, Option[String])] =
-    Try {
-      val accessKey = env("AWS_ACCESS_KEY_ID")
-        .orElse(env("AWS_ACCESS_KEY"))
-        .getOrElse(
-          throw new RuntimeException(
-            "AWS_ACCESS_KEY_ID not found in environment"
-          )
-        )
-
-      val secretKey = env("AWS_SECRET_ACCESS_KEY")
-        .orElse(env("AWS_SECRET_KEY"))
-        .getOrElse(
-          throw new RuntimeException(
-            "AWS_SECRET_ACCESS_KEY not found in environment"
-          )
-        )
-
-      val sessionToken = env("AWS_SESSION_TOKEN")
-        .orElse(env("AWS_SECURITY_TOKEN"))
-
-      (accessKey, secretKey, sessionToken)
-    }
-
-  private def tryDefaultCredentialsProvider(): Try[(String, String, Option[String])] =
-    Try {
-      val credentials = S3CredentialProviders.default.resolveCredentials()
-      val sessionToken = credentials match {
-        case sessionCreds: AwsSessionCredentials =>
-          Some(sessionCreds.sessionToken())
-        case _ => None
-      }
-      (credentials.accessKeyId(), credentials.secretAccessKey(), sessionToken)
-    }
-
-  private[cloud] def tryInstanceProfile(): Try[(String, String, Option[String])] =
-    Try {
-      val credentials =
-        S3CredentialProviders.instanceProfile.resolveCredentials()
-      val sessionToken = credentials match {
-        case sessionCreds: AwsSessionCredentials =>
-          Some(sessionCreds.sessionToken())
-        case _ => None
-      }
-      (credentials.accessKeyId(), credentials.secretAccessKey(), sessionToken)
-    }
-
-  private def tryProfile(
-      explicitProfile: Option[String]
-  ): Try[(String, String, Option[String])] = {
-    val profileName = explicitProfile
-      .orElse(env("AWS_PROFILE"))
-      .getOrElse("default")
-    Try {
-      Using.resource(ProfileCredentialsProvider.create(profileName)) { provider =>
-        val credentials = provider.resolveCredentials()
-        val sessionToken = credentials match {
-          case s: AwsSessionCredentials => Some(s.sessionToken())
-          case _                        => None
-        }
-        (
-          credentials.accessKeyId(),
-          credentials.secretAccessKey(),
-          sessionToken
-        )
-      }
-    }
-  }
 }

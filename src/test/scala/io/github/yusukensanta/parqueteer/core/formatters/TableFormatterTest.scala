@@ -426,4 +426,21 @@ class TableFormatterTest extends AnyFlatSpec with Matchers {
       widths.distinct should have size 1
     }
   }
+
+  // ── Schema evolution: rows with different key sets ──────────────────────
+
+  it should "render \"null\" for a row missing a column present in another row" in {
+    val content = FileContent(
+      rows = List(
+        Map("a" -> CellValue.I64(1L)),
+        Map("a" -> CellValue.I64(2L), "b" -> CellValue.Str("x"))
+      ),
+      totalRows = 2L,
+      isPartial = false
+    )
+    val lines = formatter.formatContent(content, None).split("\n")
+    // header + separator + 2 data rows + bottom border, before the summary line
+    lines(3) should (include("1") and include("null"))
+    lines(4) should (include("2") and include("x"))
+  }
 }

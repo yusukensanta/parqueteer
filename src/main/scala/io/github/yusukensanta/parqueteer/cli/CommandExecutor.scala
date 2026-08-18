@@ -195,7 +195,7 @@ private[cli] object CommandExecutor {
             val useColors = globalOptions.colorMode match {
               case ColorMode.Never  => false
               case ColorMode.Always => true
-              case ColorMode.Auto   => System.console() != null
+              case ColorMode.Auto   => isStdoutTTY
             }
             val formatter = OutputFormatter(format, useColors)
             val output = file.content match {
@@ -474,7 +474,8 @@ private[cli] object CommandExecutor {
         // Mirror the parquet-to-parquet path's overwrite guard: refuse to silently
         // truncate an existing output file instead of only checking the parent
         // directory is writable.
-        if better.files.File(outputPath).exists then
+        val outFilePath = java.nio.file.Paths.get(outputPath)
+        if java.nio.file.Files.exists(outFilePath) then
           Left(
             ParqueteerError.InvalidFormat(
               outputPath,
@@ -484,13 +485,13 @@ private[cli] object CommandExecutor {
         else
           scala.util
             .Try {
-              import better.files.*
-              val outFile =
-                File(outputPath).createIfNotExists(createParents = true)
+              import java.nio.file.Files
+              Option(outFilePath.getParent).foreach(Files.createDirectories(_))
+              Files.createFile(outFilePath)
               (
-                outFile,
+                outFilePath,
                 new java.io.PrintStream(
-                  new java.io.BufferedOutputStream(outFile.newOutputStream, 1 << 16)
+                  new java.io.BufferedOutputStream(Files.newOutputStream(outFilePath), 1 << 16)
                 )
               )
             }
@@ -524,7 +525,7 @@ private[cli] object CommandExecutor {
                 // We already verified the file didn't pre-exist, so any file at
                 // outputPath now was created by this run and is safe to remove
                 // on failure.
-                if failed then scala.util.Try(outFile.delete(swallowIOExceptions = true))
+                if failed then scala.util.Try(java.nio.file.Files.deleteIfExists(outFile))
               }
             }
       }
@@ -747,7 +748,13 @@ private[cli] object CommandExecutor {
     if cloudUriPattern.findFirstIn(outputPath).isDefined then Right(())
     else {
       val parent = java.nio.file.Paths.get(outputPath).toAbsolutePath.getParent
-      if parent != null && parent.toFile.exists() && !parent.toFile.canWrite then
+      // Files.isWritable performs a real access() check via the filesystem
+      // provider and respects POSIX ACLs; java.io.File#canWrite does not.
+      // This is still check-then-act (the real write can still fail after
+      // this passes) — it's a fail-fast UX nicety, not a security boundary.
+      if parent != null && java.nio.file.Files.exists(parent) &&
+        !java.nio.file.Files.isWritable(parent)
+      then
         Left(
           ParqueteerError.IOError(
             new java.io.IOException(
@@ -782,7 +789,21 @@ private[cli] object CommandExecutor {
     }
   }
 
-  private def isStdoutTTY: Boolean = System.console() != null
+  // Since JDK 22, System.console() always returns a non-null Console even when
+  // streams are redirected/piped (JLine became the default provider) — the old
+  // `System.console() != null` check would leak ANSI colors into redirected
+  // output on 22+. Console.isTerminal() (also added in 22) gives the accurate
+  // answer, but this project compiles against JDK 17/21 stdlib, so it can't be
+  // called directly; reflection lets it work correctly at runtime on any JDK.
+  // On JDK <22, `console() != null` already meant a real terminal, so a missing
+  // isTerminal() method (NoSuchMethodException) safely falls back to `true`.
+  private def isStdoutTTY: Boolean = {
+    val console = System.console()
+    console != null && {
+      try console.getClass.getMethod("isTerminal").invoke(console).asInstanceOf[Boolean]
+      catch case _: NoSuchMethodException => true
+    }
+  }
 
   private[cli] def showStatus(opts: GlobalOptions): Boolean =
     !opts.quiet && isStdoutTTY

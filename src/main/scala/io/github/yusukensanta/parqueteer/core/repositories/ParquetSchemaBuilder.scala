@@ -12,17 +12,25 @@ private[repositories] object ParquetSchemaBuilder {
       fileSchema: MessageType,
       columns: List[String]
   ): MessageType = {
-    val columnSet = columns.toSet
+    val columnSet   = columns.toSet
+    val schemaNames = fileSchema.getFields.asScala.map(_.getName).toSet
     val fields = fileSchema.getFields.asScala
       .filter(f => columnSet.contains(f.getName))
       .toList
     if fields.isEmpty then {
-      val available = fileSchema.getFields.asScala.map(_.getName).mkString(", ")
+      val available = schemaNames.mkString(", ")
       throw new IllegalArgumentException(
         s"None of the requested columns exist in the file: ${columns
             .mkString(", ")}. Available columns: $available"
       )
     }
+    val unmatched = columns.filterNot(schemaNames.contains)
+    if unmatched.nonEmpty then
+      logger.warn(
+        "--columns requested {} which do not exist in the file and will be silently dropped; available columns: {}",
+        unmatched.mkString(", "),
+        schemaNames.mkString(", ")
+      )
     new MessageType("root", fields.asJava)
   }
 
@@ -135,6 +143,8 @@ private[repositories] object ParquetSchemaBuilder {
     annotation.foldLeft(base)(_.as(_)).named(name)
   }
 
+  private val decimalPattern = """^DECIMAL\((\d+),\s*(\d+)\)$""".r
+
   private def mapDeclaredType(
       dataType: String
   ): (PrimitiveTypeName, Option[LogicalTypeAnnotation]) =
@@ -164,7 +174,6 @@ private[repositories] object ParquetSchemaBuilder {
             "Use BINARY for variable-length byte fields."
         )
       case t if t.startsWith("DECIMAL") =>
-        val decimalPattern = """^DECIMAL\((\d+),\s*(\d+)\)$""".r
         t match {
           case decimalPattern(pStr, sStr) =>
             val precision = pStr.toInt

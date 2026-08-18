@@ -21,6 +21,26 @@ object RowStreamWriter {
     seen.toList
   }
 
+  private def indexColumns(columns: List[String]): Map[String, Int] =
+    columns.iterator.zipWithIndex.toMap
+
+  // Projects a row onto a fixed column list in one pass instead of doing
+  // columns.length separate row.get/getOrElse lookups (each O(row.size) on a
+  // ListMap, so O(columns.length * row.size) total). Missing columns are left
+  // as `null` (a real absence marker, distinct from a present CellValue.Null)
+  // so each caller can pick its own missing-value rendering.
+  private def projectRow(
+      row: Map[String, CellValue],
+      nameToIndex: Map[String, Int],
+      numCols: Int
+  ): Array[CellValue] = {
+    val values = new Array[CellValue](numCols)
+    row.foreach { case (k, v) =>
+      nameToIndex.get(k).foreach(idx => values(idx) = v)
+    }
+    values
+  }
+
   private def warnUnseenColumns(
       rowKeys: Set[String],
       knownColumns: Set[String],
@@ -84,21 +104,25 @@ object RowStreamWriter {
 
     private val sample: scala.collection.mutable.ListBuffer[Map[String, CellValue]] =
       scala.collection.mutable.ListBuffer.empty
-    private var columns: List[String]   = Nil
-    private var columnsSet: Set[String] = Set.empty
-    private var flushed                 = false
-    private var warnedUnseen            = false
+    private var columns: List[String]         = Nil
+    private var columnsSet: Set[String]       = Set.empty
+    private var nameToIndex: Map[String, Int] = Map.empty
+    private var flushed                       = false
+    private var warnedUnseen                  = false
 
-    private def emitRow(row: Map[String, CellValue]): Unit =
+    private def emitRow(row: Map[String, CellValue]): Unit = {
+      val values = projectRow(row, nameToIndex, columns.length)
       out.print(
-        columns
-          .map(c => CSVFormatter.escapeField(row.get(c).fold("")(_.safeDisplay)))
+        values.iterator
+          .map(v => CSVFormatter.escapeField(if v == null then "" else v.safeDisplay))
           .mkString(",") + CSVFormatter.Newline
       )
+    }
 
     private def flushSample(): Unit = {
       columns = discoverColumns(sample)
       columnsSet = columns.toSet
+      nameToIndex = indexColumns(columns)
       out.print(
         columns
           .map(CSVFormatter.escapeField)
@@ -126,27 +150,27 @@ object RowStreamWriter {
 
     private val sample: scala.collection.mutable.ListBuffer[Map[String, CellValue]] =
       scala.collection.mutable.ListBuffer.empty
-    private var columns: List[String]   = Nil
-    private var columnsSet: Set[String] = Set.empty
-    private var widths: List[Int]       = Nil
-    private var flushed                 = false
-    private var warnedUnseen            = false
+    private var columns: List[String]         = Nil
+    private var columnsSet: Set[String]       = Set.empty
+    private var nameToIndex: Map[String, Int] = Map.empty
+    private var widths: List[Int]             = Nil
+    private var flushed                       = false
+    private var warnedUnseen                  = false
+
+    private def projectedDisplay(row: Map[String, CellValue]): List[String] =
+      projectRow(row, nameToIndex, columns.length).iterator
+        .map(v => (if v == null then CellValue.Null else v).safeDisplay)
+        .toList
 
     private def flushSample(): Unit = {
       columns = discoverColumns(sample)
       columnsSet = columns.toSet
+      nameToIndex = indexColumns(columns)
       widths = tf.calculateColumnWidths(columns, sample.toList)
       out.println(tf.drawTopBorder(widths))
       out.println(tf.drawRow(columns.map(CellValue.sanitizeTerminal), widths))
       out.println(tf.drawSeparator(widths))
-      sample.foreach(r =>
-        out.println(
-          tf.drawRow(
-            columns.map(c => r.getOrElse(c, CellValue.Null).safeDisplay),
-            widths
-          )
-        )
-      )
+      sample.foreach(r => out.println(tf.drawRow(projectedDisplay(r), widths)))
       flushed = true
     }
 
@@ -156,12 +180,7 @@ object RowStreamWriter {
         if sample.size >= SampleSize then flushSample()
       } else {
         if !warnedUnseen then warnedUnseen = warnUnseenColumns(row.keySet, columnsSet, "table")
-        out.println(
-          tf.drawRow(
-            columns.map(c => row.getOrElse(c, CellValue.Null).safeDisplay),
-            widths
-          )
-        )
+        out.println(tf.drawRow(projectedDisplay(row), widths))
       }
 
     override def end(): Unit = {
@@ -184,10 +203,11 @@ object RowStreamWriter {
 
     private val sample: scala.collection.mutable.ListBuffer[Map[String, CellValue]] =
       scala.collection.mutable.ListBuffer.empty
-    private var columns: List[String]   = Nil
-    private var columnsSet: Set[String] = Set.empty
-    private var flushed                 = false
-    private var warnedUnseen            = false
+    private var columns: List[String]         = Nil
+    private var columnsSet: Set[String]       = Set.empty
+    private var nameToIndex: Map[String, Int] = Map.empty
+    private var flushed                       = false
+    private var warnedUnseen                  = false
 
     private def escapeStr(s: String): String =
       CellValue
@@ -200,18 +220,18 @@ object RowStreamWriter {
 
     private def cell(v: CellValue): String = escapeStr(v.display)
 
+    private def renderRow(row: Map[String, CellValue]): String =
+      "| " + projectRow(row, nameToIndex, columns.length).iterator
+        .map(v => cell(if v == null then CellValue.Null else v))
+        .mkString(" | ") + " |"
+
     private def flushSample(): Unit = {
       columns = discoverColumns(sample)
       columnsSet = columns.toSet
+      nameToIndex = indexColumns(columns)
       out.println("| " + columns.map(escapeStr).mkString(" | ") + " |")
       out.println("| " + columns.map(_ => "---").mkString(" | ") + " |")
-      sample.foreach(r =>
-        out.println(
-          "| " + columns
-            .map(c => cell(r.getOrElse(c, CellValue.Null)))
-            .mkString(" | ") + " |"
-        )
-      )
+      sample.foreach(r => out.println(renderRow(r)))
       flushed = true
     }
 
@@ -221,11 +241,7 @@ object RowStreamWriter {
         if sample.size >= SampleSize then flushSample()
       } else {
         if !warnedUnseen then warnedUnseen = warnUnseenColumns(row.keySet, columnsSet, "markdown")
-        out.println(
-          "| " + columns
-            .map(c => cell(row.getOrElse(c, CellValue.Null)))
-            .mkString(" | ") + " |"
-        )
+        out.println(renderRow(row))
       }
 
     override def end(): Unit =

@@ -155,4 +155,20 @@ class MarkdownFormatterTest extends AnyFlatSpec with Matchers {
     result should include("2.50")
     result should include("parquet-mr 1.12")
   }
+
+  // ── Schema evolution: rows with different key sets ──────────────────────
+
+  it should "render an empty cell for a row missing a column present in another row" in {
+    val content = FileContent(
+      rows = List(
+        Map("a" -> CellValue.I64(1L)),
+        Map("a" -> CellValue.I64(2L), "b" -> CellValue.Str("x"))
+      ),
+      totalRows = 2L,
+      isPartial = false
+    )
+    val lines = formatter.formatContent(content, None).split("\n")
+    lines(2) shouldBe "| 1 |  |"
+    lines(3) shouldBe "| 2 | x |"
+  }
 }

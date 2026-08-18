@@ -59,7 +59,7 @@ private[repositories] object ParquetWriteOps {
           case CellValue.Str(s) => group.add(fieldIndex, s)
           case CellValue.Null   => ()
           case CellValue.Bytes(b) =>
-            group.add(fieldIndex, Binary.fromConstantByteArray(b))
+            group.add(fieldIndex, Binary.fromConstantByteArray(b.toArray))
           case CellValue.Dec(bd) =>
             Option(fieldType.getLogicalTypeAnnotation) match {
               case Some(

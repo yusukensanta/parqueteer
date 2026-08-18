@@ -30,6 +30,11 @@ class RowLimiterTest extends AnyFlatSpec with Matchers {
     RowLimiter.limitList(rows, Some(3)) shouldBe rows
   }
 
+  it should "return all rows when limit is far larger than Int range" in {
+    val rows = List(1, 2, 3)
+    RowLimiter.limitList(rows, Some(5_000_000_000L)) shouldBe rows
+  }
+
   "limitIterator" should "return all elements when maxRows is None" in {
     val iter = RowLimiter.limitIterator(List(1, 2, 3), None)
     iter.toList shouldBe List(1, 2, 3)
