@@ -51,4 +51,17 @@ class CellValueTest extends AnyFlatSpec with Matchers {
     CellValue.I32(42).safeDisplay shouldBe "42"
     CellValue.F64(3.14).safeDisplay shouldBe "3.14"
   }
+
+  "CellValue.Bytes" should "compare equal for distinct arrays with the same content" in {
+    val a = scala.collection.immutable.ArraySeq.unsafeWrapArray(Array[Byte](1, 2, 3))
+    val b = scala.collection.immutable.ArraySeq.unsafeWrapArray(Array[Byte](1, 2, 3))
+    CellValue.Bytes(a) shouldBe CellValue.Bytes(b)
+    CellValue.Bytes(a).hashCode shouldBe CellValue.Bytes(b).hashCode
+  }
+
+  it should "compare unequal for different content" in {
+    val a = scala.collection.immutable.ArraySeq.unsafeWrapArray(Array[Byte](1, 2, 3))
+    val b = scala.collection.immutable.ArraySeq.unsafeWrapArray(Array[Byte](1, 2, 4))
+    CellValue.Bytes(a) should not be CellValue.Bytes(b)
+  }
 }

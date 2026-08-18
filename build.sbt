@@ -92,17 +92,16 @@ lazy val root = (project in file("."))
     },
     libraryDependencies ++= {
       val parquet4sVersion           = "2.23.0"
-      val circeVersion               = "0.14.14"
+      val circeVersion               = "0.14.16"
       val circeYamlV12Version        = "0.16.1"
       val scoptVersion               = "4.1.0"
-      val betterFilesVersion         = "3.9.2"
       val slf4jVersion               = "2.0.18"
       val scalatestVersion           = "3.2.20"
       val scalamockVersion           = "7.5.5"
       val scalatestScalacheckVersion = "3.2.18.0"
-      val awsSdkVersion              = "2.46.4"
-      val googleCloudStorageVersion  = "2.68.0"
-      val azureStorageVersion        = "12.34.0"
+      val awsSdkVersion              = "2.53.3"
+      val googleCloudStorageVersion  = "2.71.0"
+      val azureStorageVersion        = "12.35.0"
       val azureIdentityVersion       = "1.16.2"
       val hadoopVersion              = "3.5.0"
       val gcsConnectorVersion        = "hadoop3-2.2.28"
@@ -116,9 +115,6 @@ lazy val root = (project in file("."))
         "io.circe" %% "circe-generic"  % circeVersion,
         "io.circe" %% "circe-parser"   % circeVersion,
         "io.circe" %% "circe-yaml-v12" % circeYamlV12Version,
-
-        // File I/O
-        "com.github.pathikrit" %% "better-files" % betterFilesVersion,
 
         // Logging - using simple logger for smaller distribution
         "org.slf4j" % "slf4j-simple" % slf4jVersion,
@@ -193,15 +189,15 @@ lazy val root = (project in file("."))
         // to 1.64.0 (current clean release). All modules share opentelemetry-java's
         // lockstep release train and must move together to avoid binary-incompatible
         // api/sdk skew.
-        "io.opentelemetry" % "opentelemetry-api"                              % "1.64.0",
-        "io.opentelemetry" % "opentelemetry-common"                          % "1.64.0",
-        "io.opentelemetry" % "opentelemetry-context"                         % "1.64.0",
-        "io.opentelemetry" % "opentelemetry-sdk"                             % "1.64.0",
-        "io.opentelemetry" % "opentelemetry-sdk-common"                      % "1.64.0",
-        "io.opentelemetry" % "opentelemetry-sdk-extension-autoconfigure-spi" % "1.64.0",
-        "io.opentelemetry" % "opentelemetry-sdk-logs"                        % "1.64.0",
-        "io.opentelemetry" % "opentelemetry-sdk-metrics"                     % "1.64.0",
-        "io.opentelemetry" % "opentelemetry-sdk-trace"                       % "1.64.0",
+        "io.opentelemetry" % "opentelemetry-api"                              % "1.65.0",
+        "io.opentelemetry" % "opentelemetry-common"                          % "1.65.0",
+        "io.opentelemetry" % "opentelemetry-context"                         % "1.65.0",
+        "io.opentelemetry" % "opentelemetry-sdk"                             % "1.65.0",
+        "io.opentelemetry" % "opentelemetry-sdk-common"                      % "1.65.0",
+        "io.opentelemetry" % "opentelemetry-sdk-extension-autoconfigure-spi" % "1.65.0",
+        "io.opentelemetry" % "opentelemetry-sdk-logs"                        % "1.65.0",
+        "io.opentelemetry" % "opentelemetry-sdk-metrics"                     % "1.65.0",
+        "io.opentelemetry" % "opentelemetry-sdk-trace"                       % "1.65.0",
 
         // Testing
         "org.scalatest"     %% "scalatest"       % scalatestVersion           % Test,
@@ -249,18 +245,18 @@ lazy val root = (project in file("."))
         "com.fasterxml.jackson.core" % "jackson-annotations" % "2.18.9",
         // io.opentelemetry.* pulled transitively via google-cloud-storage/gcs-connector.
         // CVE-2026-45292 (MEDIUM) — unbounded memory allocation parsing oversized W3C
-        // baggage headers; fixed in 1.62.0. Pinned to 1.64.0 (current clean release);
+        // baggage headers; fixed in 1.62.0. Pinned to 1.65.0 (current release);
         // all modules below share opentelemetry-java's lockstep release train, so they
         // must move together to avoid binary-incompatible api/sdk skew.
-        "io.opentelemetry" % "opentelemetry-api"                              % "1.64.0",
-        "io.opentelemetry" % "opentelemetry-common"                          % "1.64.0",
-        "io.opentelemetry" % "opentelemetry-context"                         % "1.64.0",
-        "io.opentelemetry" % "opentelemetry-sdk"                             % "1.64.0",
-        "io.opentelemetry" % "opentelemetry-sdk-common"                      % "1.64.0",
-        "io.opentelemetry" % "opentelemetry-sdk-extension-autoconfigure-spi" % "1.64.0",
-        "io.opentelemetry" % "opentelemetry-sdk-logs"                        % "1.64.0",
-        "io.opentelemetry" % "opentelemetry-sdk-metrics"                     % "1.64.0",
-        "io.opentelemetry" % "opentelemetry-sdk-trace"                       % "1.64.0"
+        "io.opentelemetry" % "opentelemetry-api"                              % "1.65.0",
+        "io.opentelemetry" % "opentelemetry-common"                          % "1.65.0",
+        "io.opentelemetry" % "opentelemetry-context"                         % "1.65.0",
+        "io.opentelemetry" % "opentelemetry-sdk"                             % "1.65.0",
+        "io.opentelemetry" % "opentelemetry-sdk-common"                      % "1.65.0",
+        "io.opentelemetry" % "opentelemetry-sdk-extension-autoconfigure-spi" % "1.65.0",
+        "io.opentelemetry" % "opentelemetry-sdk-logs"                        % "1.65.0",
+        "io.opentelemetry" % "opentelemetry-sdk-metrics"                     % "1.65.0",
+        "io.opentelemetry" % "opentelemetry-sdk-trace"                       % "1.65.0"
       )
     },
     assembly / assemblyMergeStrategy := {

@@ -92,13 +92,12 @@ class CloudCredentialManagerTest extends AnyFlatSpec with Matchers {
     ex.getMessage should include("is not set")
   }
 
-  // ── Hadoop config output (requires AWS_ACCESS_KEY_ID in env) ────────────
+  // ── Hadoop config output ─────────────────────────────────────────────────
+  // configureHadoop no longer resolves credentials eagerly — it only wires
+  // fs.s3a.aws.credentials.provider and lets S3A resolve (and refresh) them
+  // per request, so none of these need real AWS credentials in the env.
 
-  "S3CredentialManager.configureHadoop" should "set fs.s3a.impl when credentials are available" in {
-    assume(
-      sys.env.contains("AWS_ACCESS_KEY_ID"),
-      "Skipped: AWS_ACCESS_KEY_ID not set (runs in S3 integration CI job)"
-    )
+  "S3CredentialManager.configureHadoop" should "set fs.s3a.impl" in {
     val conf =
       new S3CredentialManager().configureHadoop(S3Location("bucket", "key"))
     conf.isSuccess shouldBe true
@@ -110,65 +109,27 @@ class CloudCredentialManagerTest extends AnyFlatSpec with Matchers {
     ) shouldBe "org.apache.hadoop.fs.s3a.S3A"
   }
 
-  it should "set fs.s3a.access.key from AWS_ACCESS_KEY_ID env var" in {
-    assume(
-      sys.env.contains("AWS_ACCESS_KEY_ID"),
-      "Skipped: AWS_ACCESS_KEY_ID not set (runs in S3 integration CI job)"
-    )
+  it should "set fs.s3a.aws.credentials.provider to the default chain, and no static keys, when no profile given" in {
     val conf =
       new S3CredentialManager().configureHadoop(S3Location("bucket", "key"))
     conf.isSuccess shouldBe true
-    conf.get.get("fs.s3a.access.key") shouldBe sys.env("AWS_ACCESS_KEY_ID")
+    val provider = conf.get.get("fs.s3a.aws.credentials.provider")
+    provider should include("SimpleAWSCredentialsProvider")
+    provider should include("EnvironmentVariableCredentialsProvider")
+    provider should include("ProfileCredentialsProvider")
+    provider should include("IAMInstanceCredentialsProvider")
+    conf.get.get("fs.s3a.access.key") shouldBe null
+    conf.get.get("fs.s3a.secret.key") shouldBe null
   }
 
-  it should "set fs.s3a.endpoint when AWS_ENDPOINT_URL is set" in {
-    assume(
-      sys.env.contains("AWS_ACCESS_KEY_ID") && sys.env.contains(
-        "AWS_ENDPOINT_URL"
-      ),
-      "Skipped: AWS_ACCESS_KEY_ID or AWS_ENDPOINT_URL not set"
-    )
-    val conf =
-      new S3CredentialManager().configureHadoop(S3Location("bucket", "key"))
+  it should "pin fs.s3a.aws.credentials.provider to ProfileCredentialsProvider and set aws.profile system property when profile given" in {
+    val conf = new S3CredentialManager(profile = Some("my-test-profile"))
+      .configureHadoop(S3Location("bucket", "key"))
     conf.isSuccess shouldBe true
-    conf.get.get("fs.s3a.endpoint") shouldBe sys.env("AWS_ENDPOINT_URL")
-    conf.get.get("fs.s3a.path.style.access") shouldBe "true"
-  }
-
-  it should "set fs.s3a.connection.ssl.enabled=false when AWS_ENDPOINT_URL uses http://" in {
-    assume(
-      sys.env.contains("AWS_ACCESS_KEY_ID") &&
-        sys.env
-          .get("AWS_ENDPOINT_URL")
-          .exists(_.toLowerCase(java.util.Locale.ROOT).startsWith("http://")),
-      "Skipped: AWS_ACCESS_KEY_ID not set or AWS_ENDPOINT_URL is not an http:// endpoint"
-    )
-    val conf =
-      new S3CredentialManager().configureHadoop(S3Location("bucket", "key"))
-    conf.isSuccess shouldBe true
-    conf.get.get("fs.s3a.connection.ssl.enabled") shouldBe "false"
-  }
-
-  it should "not set fs.s3a.connection.ssl.enabled when AWS_ENDPOINT_URL uses https://" in {
-    assume(
-      sys.env.contains("AWS_ACCESS_KEY_ID") &&
-        sys.env
-          .get("AWS_ENDPOINT_URL")
-          .exists(_.toLowerCase(java.util.Locale.ROOT).startsWith("https://")),
-      "Skipped: AWS_ACCESS_KEY_ID not set or AWS_ENDPOINT_URL is not an https:// endpoint"
-    )
-    val conf =
-      new S3CredentialManager().configureHadoop(S3Location("bucket", "key"))
-    conf.isSuccess shouldBe true
-    conf.get.get("fs.s3a.connection.ssl.enabled", null) shouldBe null
-  }
-
-  "S3CredentialManager.tryInstanceProfile" should "return Failure gracefully when not on EC2 (no IMDS)" in {
-    val mgr = new S3CredentialManager()
-    // In non-EC2 environment InstanceProfileCredentialsProvider cannot reach IMDS.
-    // Verify the method wraps the failure in Try (does not throw).
-    val result = mgr.tryInstanceProfile()
-    result.isFailure shouldBe true
+    conf.get.get(
+      "fs.s3a.aws.credentials.provider"
+    ) shouldBe "software.amazon.awssdk.auth.credentials.ProfileCredentialsProvider"
+    System.getProperty("aws.profile") shouldBe "my-test-profile"
   }
 
   "S3CredentialManager.endpointDisablesSsl" should "only disable SSL for http:// endpoints" in {
@@ -200,22 +161,13 @@ class CloudCredentialManagerTest extends AnyFlatSpec with Matchers {
     result.failed.get shouldBe a[IllegalArgumentException]
   }
 
-  it should "resolve credentials with explicit profile" in {
+  it should "wire an explicit profile through without resolving it eagerly (deferred to S3A)" in {
+    // configureHadoop only builds config now; a nonexistent profile is only
+    // discovered when S3A actually tries to authenticate against it.
     val mgr    = new S3CredentialManager(profile = Some("nonexistent-profile-xyz"))
     val result = mgr.configureHadoop(S3Location("bucket", "key"))
-    result.isFailure shouldBe true
-  }
-
-  "S3CredentialManager.tryEnvironmentVariables" should "succeed when AWS_ACCESS_KEY_ID is set" in {
-    assume(
-      sys.env.contains("AWS_ACCESS_KEY_ID") && sys.env.contains("AWS_SECRET_ACCESS_KEY"),
-      "Skipped: AWS env vars not set"
-    )
-    val mgr    = new S3CredentialManager()
-    val result = mgr.configureHadoop(S3Location("bucket", "key"))
     result.isSuccess shouldBe true
-    result.get.get("fs.s3a.access.key") shouldBe sys.env("AWS_ACCESS_KEY_ID")
-    result.get.get("fs.s3a.secret.key") shouldBe sys.env("AWS_SECRET_ACCESS_KEY")
+    System.getProperty("aws.profile") shouldBe "nonexistent-profile-xyz"
   }
 
   // ── GCSCredentialManager ────────────────────────────────────────────────
@@ -416,95 +368,10 @@ class CloudCredentialManagerTest extends AnyFlatSpec with Matchers {
     result.failed.get.getMessage should include("kerberos")
   }
 
-  // ── S3CredentialManager env-injectable tests ───────────────────────────
+  // ── S3CredentialManager Hadoop config tests ─────────────────────────────
 
-  "S3CredentialManager.tryEnvironmentVariables" should "succeed with AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY injected" in {
-    val mgr = new S3CredentialManager {
-      override def env(key: String): Option[String] = key match {
-        case "AWS_ACCESS_KEY_ID"     => Some("TESTKEY")
-        case "AWS_SECRET_ACCESS_KEY" => Some("TESTSECRET")
-        case _                       => None
-      }
-    }
-    val result = mgr.tryEnvironmentVariables()
-    result.isSuccess shouldBe true
-    val (accessKey, secretKey, sessionToken) = result.get
-    accessKey shouldBe "TESTKEY"
-    secretKey shouldBe "TESTSECRET"
-    sessionToken shouldBe None
-  }
-
-  it should "succeed with legacy AWS_ACCESS_KEY and AWS_SECRET_KEY env vars" in {
-    val mgr = new S3CredentialManager {
-      override def env(key: String): Option[String] = key match {
-        case "AWS_ACCESS_KEY" => Some("LEGACYKEY")
-        case "AWS_SECRET_KEY" => Some("LEGACYSEC")
-        case _                => None
-      }
-    }
-    val result = mgr.tryEnvironmentVariables()
-    result.isSuccess shouldBe true
-    result.get._1 shouldBe "LEGACYKEY"
-    result.get._2 shouldBe "LEGACYSEC"
-  }
-
-  it should "include session token when AWS_SESSION_TOKEN is present" in {
-    val mgr = new S3CredentialManager {
-      override def env(key: String): Option[String] = key match {
-        case "AWS_ACCESS_KEY_ID"     => Some("KEY")
-        case "AWS_SECRET_ACCESS_KEY" => Some("SEC")
-        case "AWS_SESSION_TOKEN"     => Some("TOK")
-        case _                       => None
-      }
-    }
-    val result = mgr.tryEnvironmentVariables()
-    result.isSuccess shouldBe true
-    result.get._3 shouldBe Some("TOK")
-  }
-
-  it should "include session token from AWS_SECURITY_TOKEN when AWS_SESSION_TOKEN absent" in {
-    val mgr = new S3CredentialManager {
-      override def env(key: String): Option[String] = key match {
-        case "AWS_ACCESS_KEY_ID"     => Some("KEY")
-        case "AWS_SECRET_ACCESS_KEY" => Some("SEC")
-        case "AWS_SECURITY_TOKEN"    => Some("SECTOK")
-        case _                       => None
-      }
-    }
-    val result = mgr.tryEnvironmentVariables()
-    result.isSuccess shouldBe true
-    result.get._3 shouldBe Some("SECTOK")
-  }
-
-  it should "return Failure when AWS_ACCESS_KEY_ID is absent" in {
-    val mgr = new S3CredentialManager {
-      override def env(key: String): Option[String] = None
-    }
-    val result = mgr.tryEnvironmentVariables()
-    result.isFailure shouldBe true
-    result.failed.get.getMessage should include("AWS_ACCESS_KEY_ID")
-  }
-
-  it should "return Failure when AWS_SECRET_ACCESS_KEY is absent but access key is present" in {
-    val mgr = new S3CredentialManager {
-      override def env(key: String): Option[String] = key match {
-        case "AWS_ACCESS_KEY_ID" => Some("KEY")
-        case _                   => None
-      }
-    }
-    val result = mgr.tryEnvironmentVariables()
-    result.isFailure shouldBe true
-    result.failed.get.getMessage should include("AWS_SECRET_ACCESS_KEY")
-  }
-
-  "S3CredentialManager.configureHadoop" should "set all tuning constants in Hadoop config when credentials available" in {
-    val mgr = new S3CredentialManager {
-      override def env(key: String): Option[String] = key match {
-        case "AWS_ACCESS_KEY_ID"     => Some("KEY")
-        case "AWS_SECRET_ACCESS_KEY" => Some("SEC")
-        case _                       => None
-      }
-    }
+  "S3CredentialManager.configureHadoop" should "set all tuning constants in Hadoop config" in {
+    val mgr    = new S3CredentialManager()
     val result = mgr.configureHadoop(S3Location("bucket", "key"))
     result.isSuccess shouldBe true
     val conf = result.get

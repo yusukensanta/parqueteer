@@ -43,10 +43,19 @@ private[parqueteer] object CredentialRedactor {
     "()(1//[A-Za-z0-9_-]{20,})".r
   )
 
+  // Error/log messages this large are not realistic; bound input before running
+  // ~20 regexes (incl. one with lazy quantifiers) over it so a pathological
+  // message can't turn a redact() call into a large regex scan.
+  private val MaxRedactInputLength = 65536
+
   def redact(s: String): String =
     if s == null then ""
     else
-      patterns.foldLeft(s) { (acc, pattern) =>
+      val truncated =
+        if s.length > MaxRedactInputLength then
+          s.substring(0, MaxRedactInputLength) + "…[truncated]"
+        else s
+      patterns.foldLeft(truncated) { (acc, pattern) =>
         pattern.replaceAllIn(
           acc,
           // group(1) is the prefix to preserve; patterns without a prefix use an empty capturing group

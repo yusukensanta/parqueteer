@@ -197,13 +197,13 @@ class ParquetService(
       else {
         val first    = schemas.head
         val firstSet = first.map(f => (f.name, f.dataType, f.isOptional)).toSet
-        schemas.zipWithIndex
+        // .view keeps this lazy so collectFirst still short-circuits at the
+        // first mismatch, while each schema's field set is built only once
+        // (previously built once for the guard, then again for the diff msg).
+        schemas.zipWithIndex.view
+          .map { case (s, i) => (i, s.map(f => (f.name, f.dataType, f.isOptional)).toSet) }
           .collectFirst {
-            case (s, i)
-                if s
-                  .map(f => (f.name, f.dataType, f.isOptional))
-                  .toSet != firstSet =>
-              val thisSet = s.map(f => (f.name, f.dataType, f.isOptional)).toSet
+            case (i, thisSet) if thisSet != firstSet =>
               val diffMsg = describeSchemaMismatch(firstSet, thisSet)
               Left(
                 ParqueteerError.InvalidFormat(
@@ -383,18 +383,27 @@ class ParquetService(
         totalRowCount = 0L
       )
       val fieldNames = mergedFields.map(_.name).toArray
+      // Built once, outside the row loop: projecting a row onto fieldNames via
+      // N row.getOrElse(name, ...) ListMap lookups is O(fieldNames.length *
+      // row.size) per row. Iterating the row once and resolving each of its
+      // keys to an output slot through this O(1)-lookup index is O(row.size +
+      // fieldNames.length) per row instead.
+      val nameToIndex: Map[String, Int] = fieldNames.zipWithIndex.toMap
       val writeResult = repository
         .writeContentStream(outputLocation, explicitSchema, writeConfig) { write =>
           inputLocations.zipWithIndex.foreach { case (loc, i) =>
             onProgress(i + 1, inputLocations.size, inputPaths(i))
             val readResult = repository
               .streamContent(ParquetFile(loc), ReadConfig()) { row =>
+                val values: Array[CellValue] = Array.fill(fieldNames.length)(CellValue.Null)
+                row.foreach { case (k, v) =>
+                  nameToIndex.get(k).foreach(idx => values(idx) = v)
+                }
                 val builder = scala.collection.immutable.ListMap
                   .newBuilder[String, CellValue]
                 var j = 0
                 while j < fieldNames.length do {
-                  val name = fieldNames(j)
-                  builder += name -> row.getOrElse(name, CellValue.Null)
+                  builder += fieldNames(j) -> values(j)
                   j += 1
                 }
                 write(builder.result())

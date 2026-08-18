@@ -2,21 +2,31 @@ package io.github.yusukensanta.parqueteer.config
 
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import better.files.File
 import scala.util.Success
+import java.nio.file.{Files, Path}
 
 class ConfigurationManagerTest extends AnyFlatSpec with Matchers {
 
+  private def newTempDir(): Path =
+    Files.createTempDirectory("parqueteer-config-test-")
+
+  private def deleteRecursively(dir: Path): Unit =
+    if Files.exists(dir) then
+      Files
+        .walk(dir)
+        .sorted(java.util.Comparator.reverseOrder())
+        .forEach(Files.delete(_))
+
   "ConfigurationManager" should "create default config if not exists" in {
     val manager    = new ConfigurationManager()
-    val tempDir    = File.newTemporaryDirectory()
-    val configPath = (tempDir / "config.yaml").pathAsString
+    val tempDir    = newTempDir()
+    val configPath = tempDir.resolve("config.yaml").toString
 
     val result = manager.loadConfig(Some(configPath))
     result shouldBe a[Success[?]]
 
     // Cleanup
-    tempDir.delete()
+    deleteRecursively(tempDir)
   }
 
   "ConfigurationManager.validate" should "report config-not-found for nonexistent path" in {
@@ -29,9 +39,10 @@ class ConfigurationManagerTest extends AnyFlatSpec with Matchers {
 
   it should "return empty issues for valid config" in {
     val manager    = new ConfigurationManager()
-    val tempDir    = File.newTemporaryDirectory()
-    val configFile = tempDir / "config.yaml"
-    configFile.write(
+    val tempDir    = newTempDir()
+    val configFile = tempDir.resolve("config.yaml")
+    Files.writeString(
+      configFile,
       """|cloud:
          |  s3:
          |    defaultRegion: "us-east-1"
@@ -63,18 +74,19 @@ class ConfigurationManagerTest extends AnyFlatSpec with Matchers {
          |""".stripMargin
     )
 
-    val result = manager.validate(Some(configFile.pathAsString))
+    val result = manager.validate(Some(configFile.toString))
     result.isSuccess shouldBe true
     result.get shouldBe empty
 
-    tempDir.delete()
+    deleteRecursively(tempDir)
   }
 
   it should "warn about use_ssl: false (dead security field)" in {
     val manager    = new ConfigurationManager()
-    val tempDir    = File.newTemporaryDirectory()
-    val configFile = tempDir / "config.yaml"
-    configFile.write(
+    val tempDir    = newTempDir()
+    val configFile = tempDir.resolve("config.yaml")
+    Files.writeString(
+      configFile,
       """|cloud:
          |  s3:
          |    defaultRegion: "us-east-1"
@@ -106,18 +118,19 @@ class ConfigurationManagerTest extends AnyFlatSpec with Matchers {
          |""".stripMargin
     )
 
-    val result = manager.validate(Some(configFile.pathAsString))
+    val result = manager.validate(Some(configFile.toString))
     result.isSuccess shouldBe true
     result.get.exists(_.contains("use_ssl")) shouldBe true
 
-    tempDir.delete()
+    deleteRecursively(tempDir)
   }
 
   it should "warn about non-default performance fields" in {
     val manager    = new ConfigurationManager()
-    val tempDir    = File.newTemporaryDirectory()
-    val configFile = tempDir / "config.yaml"
-    configFile.write(
+    val tempDir    = newTempDir()
+    val configFile = tempDir.resolve("config.yaml")
+    Files.writeString(
+      configFile,
       """|cloud:
          |  s3:
          |    useSsl: true
@@ -148,17 +161,17 @@ class ConfigurationManagerTest extends AnyFlatSpec with Matchers {
          |""".stripMargin
     )
 
-    val result = manager.validate(Some(configFile.pathAsString))
+    val result = manager.validate(Some(configFile.toString))
     result.isSuccess shouldBe true
     result.get.exists(_.contains("max_concurrency")) shouldBe true
 
-    tempDir.delete()
+    deleteRecursively(tempDir)
   }
 
   it should "parse auto-generated snake_case config (roundtrip)" in {
     val manager    = new ConfigurationManager()
-    val tempDir    = File.newTemporaryDirectory()
-    val configPath = (tempDir / "config.yaml").pathAsString
+    val tempDir    = newTempDir()
+    val configPath = tempDir.resolve("config.yaml").toString
 
     // First call: file absent → createDefaultConfig writes snake_case YAML
     manager.loadConfig(Some(configPath)) shouldBe a[Success[?]]
@@ -179,14 +192,15 @@ class ConfigurationManagerTest extends AnyFlatSpec with Matchers {
     config.logging.level shouldBe "INFO"
     config.logging.enableConsole shouldBe true
 
-    tempDir.delete()
+    deleteRecursively(tempDir)
   }
 
   it should "parse explicit snake_case YAML keys" in {
     val manager    = new ConfigurationManager()
-    val tempDir    = File.newTemporaryDirectory()
-    val configFile = tempDir / "config.yaml"
-    configFile.write(
+    val tempDir    = newTempDir()
+    val configFile = tempDir.resolve("config.yaml")
+    Files.writeString(
+      configFile,
       """|cloud:
          |  s3:
          |    default_region: "eu-west-1"
@@ -220,7 +234,7 @@ class ConfigurationManagerTest extends AnyFlatSpec with Matchers {
          |""".stripMargin
     )
 
-    val result = manager.loadConfig(Some(configFile.pathAsString))
+    val result = manager.loadConfig(Some(configFile.toString))
     result shouldBe a[Success[?]]
 
     val config = result.get
@@ -245,44 +259,44 @@ class ConfigurationManagerTest extends AnyFlatSpec with Matchers {
     config.logging.enableConsole shouldBe false
     config.logging.enableStructured shouldBe true
 
-    tempDir.delete()
+    deleteRecursively(tempDir)
   }
 
   it should "return issues for malformed YAML" in {
     val manager    = new ConfigurationManager()
-    val tempDir    = File.newTemporaryDirectory()
-    val configFile = tempDir / "bad.yaml"
-    configFile.write("output:\n  default_format: [unclosed")
+    val tempDir    = newTempDir()
+    val configFile = tempDir.resolve("bad.yaml")
+    Files.writeString(configFile, "output:\n  default_format: [unclosed")
 
-    val result = manager.validate(Some(configFile.pathAsString))
+    val result = manager.validate(Some(configFile.toString))
     result.isSuccess shouldBe true
     result.get should not be empty
 
-    tempDir.delete()
+    deleteRecursively(tempDir)
   }
 
   it should "return default AppConfig for an empty config file" in {
     val manager    = new ConfigurationManager()
-    val tempDir    = File.newTemporaryDirectory()
-    val configFile = tempDir / "empty.yaml"
-    configFile.write("")
+    val tempDir    = newTempDir()
+    val configFile = tempDir.resolve("empty.yaml")
+    Files.writeString(configFile, "")
 
-    val result = manager.loadConfig(Some(configFile.pathAsString))
+    val result = manager.loadConfig(Some(configFile.toString))
     result.isSuccess shouldBe true
 
-    tempDir.delete()
+    deleteRecursively(tempDir)
   }
 
   it should "return default AppConfig for a whitespace-only config file" in {
     val manager    = new ConfigurationManager()
-    val tempDir    = File.newTemporaryDirectory()
-    val configFile = tempDir / "blank.yaml"
-    configFile.write("   \n  \n")
+    val tempDir    = newTempDir()
+    val configFile = tempDir.resolve("blank.yaml")
+    Files.writeString(configFile, "   \n  \n")
 
-    val result = manager.loadConfig(Some(configFile.pathAsString))
+    val result = manager.loadConfig(Some(configFile.toString))
     result.isSuccess shouldBe true
 
-    tempDir.delete()
+    deleteRecursively(tempDir)
   }
 
   "ConfigurationManager.resolvedConfigPath" should "prefer explicit path over env default" in {

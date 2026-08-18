@@ -4,8 +4,7 @@ import io.github.yusukensanta.parqueteer.core.models.{CellValue, ReadConfig}
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path as HadoopPath
 import org.apache.parquet.hadoop.ParquetFileReader
-import org.apache.parquet.hadoop.metadata.BlockMetaData
-import org.apache.parquet.hadoop.util.HadoopInputFile
+import org.apache.parquet.hadoop.metadata.{BlockMetaData, ParquetMetadata}
 import org.apache.parquet.ParquetReadOptions
 import org.apache.parquet.schema.MessageType
 import org.slf4j.LoggerFactory
@@ -24,7 +23,8 @@ private[repositories] object ParallelRowGroupReader {
       conf: Configuration,
       config: ReadConfig,
       fileSchema: MessageType,
-      blocks: List[BlockMetaData]
+      blocks: List[BlockMetaData],
+      footerMeta: ParquetMetadata
   ): List[Map[String, CellValue]] = {
     val selectedBlocks = config.maxRows match {
       case None => blocks
@@ -64,6 +64,7 @@ private[repositories] object ParallelRowGroupReader {
           readBlock(
             path,
             conf,
+            footerMeta,
             block,
             fileSchema,
             requestedSchema,
@@ -76,6 +77,11 @@ private[repositories] object ParallelRowGroupReader {
         try Await.result(Future.sequence(futures), config.readTimeout).flatten
         catch {
           case _: TimeoutException =>
+            // Cancel in-flight block reads immediately instead of letting them
+            // run to completion in the background, burning I/O for a result
+            // nobody will use — shutdown() (in the finally below) only stops
+            // queued-but-not-yet-started tasks.
+            pool.shutdownNow()
             throw new RuntimeException(
               s"parallel read timed out after ${config.readTimeout} — " +
                 "retry with --parallelism 1, or check network connectivity"
@@ -89,6 +95,7 @@ private[repositories] object ParallelRowGroupReader {
   private def readBlock(
       path: HadoopPath,
       conf: Configuration,
+      footerMeta: ParquetMetadata,
       block: BlockMetaData,
       fileSchema: MessageType,
       requestedSchema: MessageType,
@@ -124,11 +131,11 @@ private[repositories] object ParallelRowGroupReader {
         .builder()
         .withRange(rangeStart, rangeEnd)
         .build()
+      // Passing the already-parsed footer avoids ParquetFileReader re-reading
+      // and re-parsing it from `path` — on cloud storage that's 2 extra round
+      // trips per row group, which can dominate the parallelism win.
       Using.resource(
-        ParquetFileReader.open(
-          HadoopInputFile.fromPath(path, conf),
-          readOptions
-        )
+        new ParquetFileReader(conf, path, footerMeta, readOptions)
       ) { reader =>
         val pageStore = reader.readNextRowGroup()
         if pageStore == null then List.empty[Map[String, CellValue]]

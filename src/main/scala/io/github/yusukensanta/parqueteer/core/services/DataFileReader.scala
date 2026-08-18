@@ -7,9 +7,11 @@ import scala.util.{Try, Using}
 private[services] object DataFileReader {
 
   def readJsonFile(path: String): Try[List[Map[String, CellValue]]] = Try {
-    import better.files.*
     parseJsonContent(
-      File(path).contentAsString(using java.nio.charset.StandardCharsets.UTF_8)
+      java.nio.file.Files.readString(
+        java.nio.file.Paths.get(path),
+        java.nio.charset.StandardCharsets.UTF_8
+      )
     )
   }
 

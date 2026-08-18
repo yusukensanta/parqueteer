@@ -54,6 +54,9 @@ class CSVFormatter extends OutputFormatter {
     else {
       val rows    = content.rows
       val columns = extractColumns(rows, schema)
+      // One pass over each row's own entries instead of columns.length separate
+      // row.get lookups (each O(row.size) on a ListMap) — see RowStreamWriter.projectRow.
+      val columnIndex = columns.iterator.zipWithIndex.toMap
 
       val sb = new StringBuilder()
 
@@ -61,12 +64,12 @@ class CSVFormatter extends OutputFormatter {
       sb.append(Newline)
 
       rows.foreach { row =>
-        val values = columns.map { col =>
-          row.get(col) match {
-            case None | Some(CellValue.Null) => ""
-            case Some(v)                     => v.safeDisplay
-          }
-        }
+        val cells = new Array[CellValue](columns.length)
+        row.foreach { case (k, v) => columnIndex.get(k).foreach(idx => cells(idx) = v) }
+        val values = cells.iterator.map {
+          case null | CellValue.Null => ""
+          case v                     => v.safeDisplay
+        }.toList
         sb.append(formatRow(values))
         sb.append(Newline)
       }

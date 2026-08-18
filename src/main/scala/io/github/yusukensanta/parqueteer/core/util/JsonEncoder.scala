@@ -31,7 +31,7 @@ object JsonEncoder {
     case CellValue.Date(d) => Json.fromString(d.toString)
     case CellValue.Ts(i)   => Json.fromString(i.toString)
     case CellValue.Bytes(b) =>
-      Json.fromString(java.util.Base64.getEncoder.encodeToString(b))
+      Json.fromString(java.util.Base64.getEncoder.encodeToString(b.toArray))
   }
 
   // RFC 8259 disallows NaN / ±Infinity in JSON numbers — fall back to the

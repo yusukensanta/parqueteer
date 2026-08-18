@@ -172,8 +172,9 @@ private[repositories] object ParquetRecordDecoder {
             }
           case _ if rawBinaryFields.contains(key) =>
             value match {
-              case BinaryValue(bin) => CellValue.Bytes(bin.getBytes)
-              case _                => decodeValue(value)
+              case BinaryValue(bin) =>
+                CellValue.Bytes(scala.collection.immutable.ArraySeq.unsafeWrapArray(bin.getBytes))
+              case _ => decodeValue(value)
             }
           case _ => decodeValue(value)
         }
@@ -455,9 +456,13 @@ private[repositories] object ParquetRecordDecoder {
                 ) =>
               CellValue.Str(group.getBinary(i, 0).toStringUsingUTF8)
             case (PrimitiveTypeName.BINARY, _) =>
-              CellValue.Bytes(group.getBinary(i, 0).getBytes)
+              CellValue.Bytes(
+                scala.collection.immutable.ArraySeq.unsafeWrapArray(group.getBinary(i, 0).getBytes)
+              )
             case (PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY, _) =>
-              CellValue.Bytes(group.getBinary(i, 0).getBytes)
+              CellValue.Bytes(
+                scala.collection.immutable.ArraySeq.unsafeWrapArray(group.getBinary(i, 0).getBytes)
+              )
             case (PrimitiveTypeName.INT96, _) =>
               decodeInt96Binary(group.getInt96(i, 0).getBytes)
             case _ => CellValue.Str(group.getValueToString(i, 0))

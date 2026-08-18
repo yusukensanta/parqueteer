@@ -258,7 +258,7 @@ class ParquetWriteOpsTest extends AnyFlatSpec with Matchers {
       Array[Byte](0xde.toByte, 0xad.toByte, 0xbe.toByte, 0xef.toByte)
     ParquetWriteOps.writeRowToGroup(
       group,
-      Map("data" -> CellValue.Bytes(rawBytes)),
+      Map("data" -> CellValue.Bytes(scala.collection.immutable.ArraySeq.unsafeWrapArray(rawBytes))),
       mt
     )
     group.getBinary("data", 0).getBytes shouldBe rawBytes

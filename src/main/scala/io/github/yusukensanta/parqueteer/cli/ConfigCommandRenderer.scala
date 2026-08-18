@@ -42,7 +42,7 @@ private[cli] object ConfigCommandRenderer {
   ): Int = {
     if !globalOptions.quiet then {
       val resolvedPath = configManager.resolvedConfigPath(configPath)
-      val fileExists   = better.files.File(resolvedPath).exists
+      val fileExists   = java.nio.file.Files.exists(java.nio.file.Paths.get(resolvedPath))
       println(
         s"Config file: $resolvedPath [${if fileExists then "exists" else "not found"}]"
       )

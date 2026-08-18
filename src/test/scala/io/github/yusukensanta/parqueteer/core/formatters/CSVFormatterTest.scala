@@ -227,4 +227,21 @@ class CSVFormatterTest extends AnyFlatSpec with Matchers {
     result should not include "Created At"
     result should not include "Modified At"
   }
+
+  // ── Schema evolution: rows with different key sets ──────────────────────
+
+  it should "render an empty field for a row missing a column present in another row" in {
+    val content = FileContent(
+      rows = List(
+        Map("a" -> CellValue.I64(1L)),
+        Map("a" -> CellValue.I64(2L), "b" -> CellValue.Str("x"))
+      ),
+      totalRows = 2L,
+      isPartial = false
+    )
+    val lines = formatter.formatContent(content, None).trim.split("\r\n")
+    lines(0) shouldBe "a,b"
+    lines(1) shouldBe "1,"
+    lines(2) shouldBe "2,x"
+  }
 }

@@ -2,7 +2,7 @@ package io.github.yusukensanta.parqueteer.config
 
 import io.circe.{ACursor, Decoder, Encoder, JsonObject}
 import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
-import better.files.File
+import java.nio.file.{Files, Path, Paths}
 import scala.util.{Success, Try}
 
 case class AppConfig(
@@ -98,19 +98,21 @@ object AppConfig {
 }
 
 class ConfigurationManager {
-  private val defaultConfigPath = File.home / ".parqueteer" / "config.yaml"
+
+  private val defaultConfigPath =
+    Paths.get(System.getProperty("user.home"), ".parqueteer", "config.yaml")
 
   def loadConfig(configPath: Option[String] = None): Try[AppConfig] = {
-    val configFile = File(resolvedConfigPath(configPath))
-    if !configFile.exists then Success(AppConfig())
+    val configFile = Paths.get(resolvedConfigPath(configPath))
+    if !Files.exists(configFile) then Success(AppConfig())
     else parseConfigFile(configFile)
   }
 
-  private def parseConfigFile(configFile: File): Try[AppConfig] = {
+  private def parseConfigFile(configFile: Path): Try[AppConfig] = {
     import io.circe.yaml.v12.parser
 
     Try(
-      configFile.contentAsString(using java.nio.charset.StandardCharsets.UTF_8)
+      Files.readString(configFile, java.nio.charset.StandardCharsets.UTF_8)
     ).flatMap { yamlContent =>
       if yamlContent.trim.isEmpty then Success(AppConfig())
       else
@@ -138,11 +140,11 @@ class ConfigurationManager {
   }
 
   def validate(configPath: Option[String] = None): Try[List[String]] = {
-    val configFile = File(resolvedConfigPath(configPath))
-    if !configFile.exists then {
+    val configFile = Paths.get(resolvedConfigPath(configPath))
+    if !Files.exists(configFile) then {
       Success(
         List(
-          s"Config file not found: ${configFile.pathAsString} (using defaults)"
+          s"Config file not found: $configFile (using defaults)"
         )
       )
     } else {
@@ -177,5 +179,5 @@ class ConfigurationManager {
   def resolvedConfigPath(configPath: Option[String]): String =
     configPath
       .orElse(EnvConfig.configPath)
-      .getOrElse(defaultConfigPath.pathAsString)
+      .getOrElse(defaultConfigPath.toString)
 }
