@@ -127,17 +127,32 @@ private[cli] object CommandExecutor {
             compression,
             maxRows,
             dryRun,
-            _
+            schemaMode
           ) =>
-        executeConvert(
-          service,
-          inputPath,
-          outputPath,
-          compression,
-          maxRows,
-          dryRun,
-          globalOptions
-        )
+        service.resolveGlob(inputPath) match {
+          case Left(error) => reportError("Failed to convert file", globalOptions)(error)
+          case Right(paths) if paths.size == 1 =>
+            executeConvert(
+              service,
+              paths.head,
+              outputPath,
+              compression,
+              maxRows,
+              dryRun,
+              globalOptions
+            )
+          case Right(paths) =>
+            executeConvertMulti(
+              service,
+              paths,
+              outputPath,
+              compression,
+              maxRows,
+              schemaMode,
+              dryRun,
+              globalOptions
+            )
+        }
 
       case cmd: ConfigCommand =>
         executeConfig(cmd, globalOptions)
@@ -747,6 +762,160 @@ private[cli] object CommandExecutor {
                 if failed then scala.util.Try(java.nio.file.Files.deleteIfExists(outFile))
               }
             }
+      }
+
+  private[cli] def executeConvertMulti(
+      service: ParquetService,
+      inputPaths: List[String],
+      outputPath: String,
+      compression: CompressionType,
+      maxRows: Option[Long],
+      schemaMode: SchemaMode,
+      dryRun: Boolean,
+      globalOptions: GlobalOptions
+  ): Int = {
+    val inputExt  = FileExtension.of(inputPaths.head)
+    val outputExt = FileExtension.of(outputPath)
+    if dryRun then {
+      println(s"Dry run: would convert ${inputPaths.size} files → $outputPath")
+      println(s"  Input format: $inputExt")
+      println(s"  Schema mode:  $schemaMode")
+      println(s"  Compression:  ${compression.toString.toLowerCase} (output)")
+      0
+    } else {
+      val writeConfig = WriteConfig(compressionType = compression)
+      val result: Either[ParqueteerError, Long] = (inputExt, outputExt) match {
+        case ("parquet", "parquet") =>
+          val onProgress: (Int, Int, String) => Unit = (i, n, path) =>
+            if !globalOptions.quiet then System.err.println(s"[$i/$n] Converting: $path")
+          service.mergeFiles(inputPaths, outputPath, writeConfig, schemaMode, onProgress)
+        case ("parquet", ext @ ("json" | "ndjson" | "csv")) =>
+          val outFormat = ext match {
+            case "json"   => OutputFormat.JSON
+            case "ndjson" => OutputFormat.NDJSON
+            case _        => OutputFormat.CSV
+          }
+          convertParquetMultiStreamed(
+            service,
+            inputPaths,
+            outputPath,
+            outFormat,
+            schemaMode,
+            maxRows
+          )
+        case (ext @ ("json" | "ndjson" | "csv" | "ltsv"), "parquet") =>
+          service.writeMultiRawToParquet(inputPaths, ext, outputPath, writeConfig, schemaMode)
+        case _ =>
+          Left(
+            ParqueteerError.InvalidFormat(
+              inputPaths.head,
+              s"Unsupported conversion: $inputExt → $outputExt for multiple matched files."
+            )
+          )
+      }
+      result match {
+        case Right(count) =>
+          if !globalOptions.quiet then
+            println(s"Successfully converted ${inputPaths.size} files ($count rows) → $outputPath")
+          0
+        case Left(error) => reportError("Failed to convert file", globalOptions)(error)
+      }
+    }
+  }
+
+  private def convertParquetMultiStreamed(
+      service: ParquetService,
+      inputPaths: List[String],
+      outputPath: String,
+      outFormat: OutputFormat,
+      schemaMode: SchemaMode,
+      maxRows: Option[Long]
+  ): Either[ParqueteerError, Long] =
+    if cloudUriPattern.findFirstIn(outputPath).isDefined then
+      Left(
+        ParqueteerError.InvalidFormat(
+          outputPath,
+          s"Cloud URI output is not supported for text conversion (parquet → ${FileExtension.of(outputPath)})."
+        )
+      )
+    else
+      service.checkSchemaCompatibility(inputPaths, schemaMode).flatMap { _ =>
+        checkOutputWritable(outputPath).flatMap { _ =>
+          val outFilePath = java.nio.file.Paths.get(outputPath)
+          if java.nio.file.Files.exists(outFilePath) then
+            Left(
+              ParqueteerError.InvalidFormat(
+                outputPath,
+                s"Output file already exists: $outputPath. Remove it first or choose a different output path."
+              )
+            )
+          else
+            scala.util
+              .Try {
+                import java.nio.file.Files
+                Option(outFilePath.getParent).foreach(Files.createDirectories(_))
+                Files.createFile(outFilePath)
+                (
+                  outFilePath,
+                  new java.io.PrintStream(
+                    new java.io.BufferedOutputStream(Files.newOutputStream(outFilePath), 1 << 16)
+                  )
+                )
+              }
+              .toEither
+              .left
+              .map(ParqueteerError.IOError.apply)
+              .flatMap { case (outFile, ps) =>
+                val writer    = RowStreamWriter(outFormat, ps)
+                var started   = false
+                var remaining = maxRows
+                var failed    = true
+                try {
+                  val result =
+                    inputPaths.foldLeft[Either[ParqueteerError, Long]](Right(0L)) { (acc, path) =>
+                      acc.flatMap { total =>
+                        if remaining.contains(0L) then Right(total)
+                        else
+                          service
+                            .streamRead(path, ReadConfig(maxRows = remaining)) { row =>
+                              if !started then { writer.begin(); started = true }
+                              writer.writeRow(row)
+                            }
+                            .map { n =>
+                              remaining = remaining.map(r => r - n)
+                              total + n
+                            }
+                      }
+                    }
+                  val writeError = ps.checkError()
+                  failed = result.isLeft || writeError
+                  if !started && result.isRight then { writer.begin(); started = true }
+                  scala.util.Try(writer.end()) match {
+                    case scala.util.Failure(ex) if result.isRight =>
+                      Left(ParqueteerError.IOError(ex))
+                    case scala.util.Failure(ex) =>
+                      System.err.println(
+                        s"[parqueteer] warning: error flushing output: ${CredentialRedactor
+                            .redact(Option(ex.getMessage).getOrElse(ex.getClass.getSimpleName))}"
+                      )
+                      result
+                    case scala.util.Success(_) =>
+                      if writeError && result.isRight then
+                        Left(
+                          ParqueteerError.IOError(
+                            new java.io.IOException(
+                              "Output stream write error (disk full or broken pipe)"
+                            )
+                          )
+                        )
+                      else result
+                  }
+                } finally {
+                  ps.close()
+                  if failed then scala.util.Try(java.nio.file.Files.deleteIfExists(outFile))
+                }
+              }
+        }
       }
 
   private[cli] def executeMerge(

@@ -853,6 +853,39 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
     out.toString("UTF-8") should include("Dry run")
   }
 
+  "ConvertCommand" should "route glob-matched parquet-to-parquet conversion through merge" in {
+    val repo = new FakeParquetRepository() {
+      override def globStatus(location: StorageLocation): Try[List[StorageLocation]] =
+        Success(List(LocalPath("/data/a.parquet"), LocalPath("/data/b.parquet")))
+    }
+    val service = new ParquetService(repo)
+    val code = CommandExecutor.execute(
+      ConvertCommand("/data/*.parquet", "/out.parquet"),
+      service,
+      GlobalOptions(quiet = true)
+    )
+    code shouldBe 0
+  }
+
+  it should "concatenate glob-matched parquet files into one text output" in {
+    val tmpOut = java.nio.file.Files.createTempFile("parqueteer_convert_multi_", ".ndjson")
+    java.nio.file.Files.delete(tmpOut)
+    tmpOut.toFile.deleteOnExit()
+    val repo = new FakeParquetRepository() {
+      override def globStatus(location: StorageLocation): Try[List[StorageLocation]] =
+        Success(List(LocalPath("/data/a.parquet"), LocalPath("/data/b.parquet")))
+    }
+    val service = new ParquetService(repo)
+    val code = CommandExecutor.execute(
+      ConvertCommand("/data/*.parquet", tmpOut.toString),
+      service,
+      GlobalOptions(quiet = true)
+    )
+    code shouldBe 0
+    val written = java.nio.file.Files.readString(tmpOut)
+    written.trim.linesIterator.length shouldBe 2 // 1 row per matched file, 2 files
+  }
+
   it should "dispatch SchemaDiffCommand and return 0 for identical schemas" in {
     CommandExecutor.execute(
       SchemaDiffCommand("/tmp/a.parquet", "/tmp/b.parquet"),
