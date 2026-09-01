@@ -37,7 +37,8 @@ private[cli] object CommandExecutor {
             filter,
             format,
             parallelism,
-            streaming
+            streaming,
+            _
           ) =>
         executeRead(
           service,
@@ -66,7 +67,8 @@ private[cli] object CommandExecutor {
             inputFormat,
             compression,
             rowGroupSize,
-            dryRun
+            dryRun,
+            _
           ) =>
         executeWrite(
           service,
@@ -93,7 +95,8 @@ private[cli] object CommandExecutor {
             outputPath,
             compression,
             maxRows,
-            dryRun
+            dryRun,
+            _
           ) =>
         executeConvert(
           service,

@@ -129,6 +129,27 @@ object ArgumentParser {
             .action((_, c) => updateCmd[ReadCommand](c, _.copy(streaming = true)))
             .text(
               "Stream rows progressively (memory-bounded, safe for large files)"
+            ),
+          opt[String]("schema-mode")
+            .action((x, c) =>
+              updateCmd[ReadCommand](
+                c,
+                _.copy(schemaMode = x.toLowerCase match {
+                  case "union"  => SchemaMode.Union
+                  case "strict" => SchemaMode.Strict
+                  case other =>
+                    throw new IllegalArgumentException(
+                      s"Invalid --schema-mode: $other. Use strict or union"
+                    )
+                })
+              )
+            )
+            .validate(x =>
+              if List("strict", "union").contains(x.toLowerCase) then success
+              else failure(s"Invalid --schema-mode: $x. Use strict or union")
+            )
+            .text(
+              "Schema compatibility mode for multi-file glob reads: strict (default) or union"
             )
         ),
       cmd("info")
@@ -224,6 +245,27 @@ object ArgumentParser {
             .action((_, c) => updateCmd[WriteCommand](c, _.copy(dryRun = true)))
             .text(
               "Preview what would be written without performing the operation"
+            ),
+          opt[String]("schema-mode")
+            .action((x, c) =>
+              updateCmd[WriteCommand](
+                c,
+                _.copy(schemaMode = x.toLowerCase match {
+                  case "union"  => SchemaMode.Union
+                  case "strict" => SchemaMode.Strict
+                  case other =>
+                    throw new IllegalArgumentException(
+                      s"Invalid --schema-mode: $other. Use strict or union"
+                    )
+                })
+              )
+            )
+            .validate(x =>
+              if List("strict", "union").contains(x.toLowerCase) then success
+              else failure(s"Invalid --schema-mode: $x. Use strict or union")
+            )
+            .text(
+              "Schema compatibility mode for multi-file glob reads: strict (default) or union"
             )
         ),
       cmd("validate")
@@ -275,6 +317,27 @@ object ArgumentParser {
             .action((_, c) => updateCmd[ConvertCommand](c, _.copy(dryRun = true)))
             .text(
               "Preview what would be converted without performing the operation"
+            ),
+          opt[String]("schema-mode")
+            .action((x, c) =>
+              updateCmd[ConvertCommand](
+                c,
+                _.copy(schemaMode = x.toLowerCase match {
+                  case "union"  => SchemaMode.Union
+                  case "strict" => SchemaMode.Strict
+                  case other =>
+                    throw new IllegalArgumentException(
+                      s"Invalid --schema-mode: $other. Use strict or union"
+                    )
+                })
+              )
+            )
+            .validate(x =>
+              if List("strict", "union").contains(x.toLowerCase) then success
+              else failure(s"Invalid --schema-mode: $x. Use strict or union")
+            )
+            .text(
+              "Schema compatibility mode for multi-file glob reads: strict (default) or union"
             )
         ),
       cmd("schema")

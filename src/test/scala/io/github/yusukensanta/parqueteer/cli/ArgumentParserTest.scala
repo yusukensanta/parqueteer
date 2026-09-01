@@ -274,6 +274,38 @@ class ArgumentParserTest extends AnyFlatSpec with Matchers {
     result shouldBe None
   }
 
+  "read --schema-mode" should "default to Strict" in {
+    val result = OParser.parse(ArgumentParser.parser, Array("read", "/data/file.parquet"), ArgumentParser.Config())
+    result.get.command.get.asInstanceOf[ReadCommand].schemaMode shouldBe SchemaMode.Strict
+  }
+
+  it should "parse --schema-mode union" in {
+    val result = OParser.parse(
+      ArgumentParser.parser,
+      Array("read", "/data/file.parquet", "--schema-mode", "union"),
+      ArgumentParser.Config()
+    )
+    result.get.command.get.asInstanceOf[ReadCommand].schemaMode shouldBe SchemaMode.Union
+  }
+
+  "write --schema-mode" should "parse --schema-mode union" in {
+    val result = OParser.parse(
+      ArgumentParser.parser,
+      Array("write", "in.json", "out.parquet", "--schema-mode", "union"),
+      ArgumentParser.Config()
+    )
+    result.get.command.get.asInstanceOf[WriteCommand].schemaMode shouldBe SchemaMode.Union
+  }
+
+  "convert --schema-mode" should "parse --schema-mode union" in {
+    val result = OParser.parse(
+      ArgumentParser.parser,
+      Array("convert", "in.parquet", "out.parquet", "--schema-mode", "union"),
+      ArgumentParser.Config()
+    )
+    result.get.command.get.asInstanceOf[ConvertCommand].schemaMode shouldBe SchemaMode.Union
+  }
+
   "ArgumentParser config" should "parse config command (default: show)" in {
     val args = Array("config")
     val result =

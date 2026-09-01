@@ -29,7 +29,8 @@ case class ReadCommand(
     filter: Option[String] = None,
     format: OutputFormat = OutputFormat.Table,
     parallelism: Int = 1,
-    streaming: Boolean = false
+    streaming: Boolean = false,
+    schemaMode: SchemaMode = SchemaMode.Strict
 ) extends Command
 
 case class InfoCommand(
@@ -44,7 +45,8 @@ case class WriteCommand(
     inputFormat: InputFormat = InputFormat.Json,
     compression: CompressionType = CompressionType.Snappy,
     rowGroupSize: Option[Long] = None,
-    dryRun: Boolean = false
+    dryRun: Boolean = false,
+    schemaMode: SchemaMode = SchemaMode.Strict
 ) extends Command
 
 case class ValidateCommand(
@@ -58,7 +60,8 @@ case class ConvertCommand(
     outputPath: String,
     compression: CompressionType = CompressionType.Snappy,
     maxRows: Option[Long] = None,
-    dryRun: Boolean = false
+    dryRun: Boolean = false,
+    schemaMode: SchemaMode = SchemaMode.Strict
 ) extends Command
 
 case class ConfigCommand(validate: Boolean = false) extends Command
