@@ -1185,6 +1185,38 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     result should include("INT32?")
   }
 
+  // ── resolveGlob ─────────────────────────────────────────────────────────
+
+  "resolveGlob" should "pass a non-glob path through unchanged" in {
+    val service = new ParquetService(new FakeParquetRepository())
+    service.resolveGlob("/data/file.parquet") shouldBe Right(List("/data/file.parquet"))
+  }
+
+  it should "expand a glob path via the repository and sort the results" in {
+    val repo = new FakeParquetRepository() {
+      override def globStatus(location: StorageLocation): Try[List[StorageLocation]] =
+        Success(List(LocalPath("/data/b.parquet"), LocalPath("/data/a.parquet")))
+    }
+    val service = new ParquetService(repo)
+    service.resolveGlob("/data/*.parquet") shouldBe
+      Right(List("/data/a.parquet", "/data/b.parquet"))
+  }
+
+  it should "return NoGlobMatch when the glob matches nothing" in {
+    val repo = new FakeParquetRepository() {
+      override def globStatus(location: StorageLocation): Try[List[StorageLocation]] =
+        Success(List.empty)
+    }
+    val service = new ParquetService(repo)
+    service.resolveGlob("/data/*.parquet") shouldBe
+      Left(ParqueteerError.NoGlobMatch("/data/*.parquet"))
+  }
+
+  it should "propagate a malformed path as InvalidFormat before touching the repository" in {
+    val service = new ParquetService(new FakeParquetRepository())
+    service.resolveGlob("ftp://*.parquet").isLeft shouldBe true
+  }
+
   // ── M-C: merge schema compressionType is empty (not from WriteConfig) ─────
   it should "set compressionType to empty string in merge schema (not coupling to WriteConfig)" in {
     val repo = new FakeParquetRepository(

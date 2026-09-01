@@ -5,6 +5,7 @@ import io.github.yusukensanta.parqueteer.core.models.ParqueteerError.toParquetee
 import io.github.yusukensanta.parqueteer.core.models.StorageLocationParser
 import io.github.yusukensanta.parqueteer.core.repositories.ParquetRepository
 import io.github.yusukensanta.parqueteer.core.filters.FilterParser
+import io.github.yusukensanta.parqueteer.core.util.GlobDetector
 
 class ParquetService(
     repository: ParquetRepository
@@ -92,6 +93,17 @@ class ParquetService(
       metadata = Some(metadata),
       rowGroups = rowGroups
     )
+
+  def resolveGlob(path: String): Either[ParqueteerError, List[String]] =
+    if !GlobDetector.hasGlobChars(path) then Right(List(path))
+    else
+      for {
+        location <- parseLocation(path)
+        matches  <- repository.globStatus(location).toParqueteerError
+        paths <-
+          if matches.isEmpty then Left(ParqueteerError.NoGlobMatch(path))
+          else Right(matches.map(_.path).sorted)
+      } yield paths
 
   def mergeFiles(
       inputPaths: List[String],
