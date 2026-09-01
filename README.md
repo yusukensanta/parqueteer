@@ -15,6 +15,8 @@
 [![Latest Release](https://img.shields.io/github/v/release/yusukensanta/parqueteer)](https://github.com/yusukensanta/parqueteer/releases/latest)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
+Not a query engine — no SQL, joins, or aggregations; use [DuckDB](https://duckdb.org/) for that. parqueteer covers the file-level work around it: schema checks, format conversion, and cloud I/O, scriptable for CI.
+
 ---
 
 ## Features
