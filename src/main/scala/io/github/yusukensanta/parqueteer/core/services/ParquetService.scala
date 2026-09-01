@@ -80,6 +80,48 @@ class ParquetService(
         .toParqueteerError
     } yield count
 
+  def streamReadMulti(
+      paths: List[String],
+      readConfig: ReadConfig,
+      schemaMode: SchemaMode
+  )(process: Map[String, CellValue] => Unit): Either[ParqueteerError, Long] =
+    for {
+      _         <- validateFilter(readConfig.filter)
+      _         <- checkSchemaCompatibility(paths, schemaMode)
+      locations <- parseLocations(paths)
+      total     <- streamAllFiles(locations, readConfig)(process)
+    } yield total
+
+  /**
+   * Streams rows from each location in order into `process`, decrementing a
+   * shared row budget (readConfig.maxRows) across files so --limit applies
+   * to the concatenated total, not per file.
+   */
+  private def streamAllFiles(
+      locations: Vector[StorageLocation],
+      readConfig: ReadConfig
+  )(process: Map[String, CellValue] => Unit): Either[ParqueteerError, Long] = {
+    var remaining                      = readConfig.maxRows
+    var total                          = 0L
+    var error: Option[ParqueteerError] = None
+    val it                             = locations.iterator
+    while error.isEmpty && it.hasNext && !remaining.contains(0L) do {
+      val loc           = it.next()
+      val perFileConfig = readConfig.copy(maxRows = remaining)
+      repository
+        .streamContent(ParquetFile(loc), perFileConfig) { row =>
+          process(row)
+          total += 1
+          remaining = remaining.map(_ - 1)
+        }
+        .toParqueteerError match {
+        case Left(e)  => error = Some(e)
+        case Right(_) => ()
+      }
+    }
+    error.toLeft(total)
+  }
+
   def getFileInfo(path: String): Either[ParqueteerError, ParquetFile] =
     for {
       location <- parseLocation(path)
@@ -134,6 +176,16 @@ class ParquetService(
           onProgress
         )
       } yield count
+
+  def checkSchemaCompatibility(
+      paths: List[String],
+      schemaMode: SchemaMode
+  ): Either[ParqueteerError, Unit] =
+    for {
+      locations <- parseLocations(paths)
+      schemas   <- readAllSchemas(locations)
+      _         <- mergeSchemas(schemas, paths, schemaMode)
+    } yield ()
 
   /**
    * Lift a list of paths into a single Either of parsed locations,

@@ -1254,4 +1254,58 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
       col.compressionType shouldBe ""
     }
   }
+
+  // ── checkSchemaCompatibility ────────────────────────────────────────────
+
+  "checkSchemaCompatibility" should "succeed when all matched files share the same schema (Strict)" in {
+    val repo = new FakeParquetRepository(
+      schemaFieldsResult = Success(List(FieldSummary("id", "INT64", isOptional = false)))
+    )
+    val service = new ParquetService(repo)
+    service.checkSchemaCompatibility(List("/a.parquet", "/b.parquet"), SchemaMode.Strict) shouldBe Right(())
+  }
+
+  // ── streamReadMulti ─────────────────────────────────────────────────────
+
+  "streamReadMulti" should "concatenate rows from every matched file in order" in {
+    val repo    = new FakeParquetRepository()
+    val service = new ParquetService(repo)
+    val seen    = scala.collection.mutable.ListBuffer.empty[Map[String, CellValue]]
+    val result = service.streamReadMulti(
+      List("/a.parquet", "/b.parquet"),
+      ReadConfig(),
+      SchemaMode.Strict
+    )(row => seen += row)
+    result shouldBe Right(2L) // FakeParquetRepository's streamContent replays defaultContent.rows (1 row) per file
+    seen should have length 2
+  }
+
+  it should "stop early once the running --limit is exhausted across files" in {
+    val repo    = new FakeParquetRepository()
+    val service = new ParquetService(repo)
+    var count   = 0
+    val result = service.streamReadMulti(
+      List("/a.parquet", "/b.parquet"),
+      ReadConfig(maxRows = Some(1L)),
+      SchemaMode.Strict
+    )(_ => count += 1)
+    result shouldBe Right(1L)
+    count shouldBe 1
+  }
+
+  it should "fail fast under Strict mode when matched files' schemas differ" in {
+    var call = 0
+    val repo = new FakeParquetRepository() {
+      override def readSchemaFields(file: ParquetFile): Try[List[FieldSummary]] = {
+        call += 1
+        Success(
+          if call == 1 then List(FieldSummary("id", "INT64", isOptional = false))
+          else List(FieldSummary("id", "STRING", isOptional = false))
+        )
+      }
+    }
+    val service = new ParquetService(repo)
+    val result = service.streamReadMulti(List("/a.parquet", "/b.parquet"), ReadConfig(), SchemaMode.Strict)(_ => ())
+    result.isLeft shouldBe true
+  }
 }
