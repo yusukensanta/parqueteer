@@ -878,4 +878,57 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
     CommandExecutor.resolveAllGlobs(service, List("/fixed.parquet", "/data/*.parquet")) shouldBe
       Left(ParqueteerError.NoGlobMatch("/data/*.parquet"))
   }
+
+  // ── runMultiFileReport ──────────────────────────────────────────────────
+
+  "runMultiFileReport" should "print one table block per file and return 0 when all succeed" in {
+    val out = new ByteArrayOutputStream()
+    Console.withOut(new PrintStream(out)) {
+      val code = CommandExecutor.runMultiFileReport(
+        List("/a.parquet", "/b.parquet"),
+        OutputFormat.Table,
+        GlobalOptions()
+      )(path => Right((s"text for $path", true)))
+      code shouldBe 0
+    }
+    val printed = out.toString
+    printed should include("==> /a.parquet <==")
+    printed should include("text for /a.parquet")
+    printed should include("==> /b.parquet <==")
+    printed should include("text for /b.parquet")
+  }
+
+  it should "return 1 and skip nothing when one file errors" in {
+    val code = CommandExecutor.runMultiFileReport(
+      List("/a.parquet", "/b.parquet"),
+      OutputFormat.Table,
+      GlobalOptions()
+    ) {
+      case "/a.parquet" => Right(("ok", true))
+      case path         => Left(ParqueteerError.FileNotFound(path))
+    }
+    code shouldBe 1
+  }
+
+  it should "return 1 when a file renders successfully but is marked unsuccessful" in {
+    val code = CommandExecutor.runMultiFileReport(
+      List("/a.parquet"),
+      OutputFormat.Table,
+      GlobalOptions()
+    )(_ => Right(("has issues", false)))
+    code shouldBe 1
+  }
+
+  it should "wrap per-file JSON text into a single JSON array in JSON mode" in {
+    val out = new ByteArrayOutputStream()
+    Console.withOut(new PrintStream(out)) {
+      CommandExecutor.runMultiFileReport(
+        List("/a.parquet", "/b.parquet"),
+        OutputFormat.JSON,
+        GlobalOptions()
+      )(path => Right((s"""{"file":"$path"}""", true)))
+    }
+    val parsed = io.circe.parser.parse(out.toString).getOrElse(fail("not valid JSON"))
+    parsed.asArray.map(_.size) shouldBe Some(2)
+  }
 }

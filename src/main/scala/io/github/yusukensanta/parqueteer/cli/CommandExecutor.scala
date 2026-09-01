@@ -754,6 +754,52 @@ private[cli] object CommandExecutor {
       acc.flatMap(resolved => service.resolveGlob(p).map(resolved ++ _))
     }
 
+  /**
+   * Runs `renderOne` once per matched path. Table mode prints each file's
+   * rendered text as its own `==> path <==` block; JSON mode re-parses each
+   * file's already-rendered JSON text into one combined array (a file that
+   * failed to read contributes an {file, error} element instead). Exit code
+   * is 0 only if every file's renderOne result is (text, true).
+   */
+  private[cli] def runMultiFileReport(
+      paths: List[String],
+      format: OutputFormat,
+      globalOptions: GlobalOptions
+  )(renderOne: String => Either[ParqueteerError, (String, Boolean)]): Int = {
+    val results: List[(String, Either[ParqueteerError, (String, Boolean)])] =
+      paths.map(p => p -> renderOne(p))
+
+    if !globalOptions.quiet then {
+      if format == OutputFormat.JSON then {
+        val elements = results.map {
+          case (_, Right((json, _))) =>
+            io.circe.parser.parse(json).getOrElse(io.circe.Json.fromString(json))
+          case (path, Left(error)) =>
+            io.circe.Json.obj(
+              "file"  -> io.circe.Json.fromString(path),
+              "error" -> io.circe.Json.fromString(error.userMessage)
+            )
+        }
+        println(io.circe.Json.arr(elements*).spaces2)
+      } else {
+        results.zipWithIndex.foreach { case ((path, result), i) =>
+          if i > 0 then println()
+          println(s"==> $path <==")
+          result match {
+            case Right((text, _)) => println(text)
+            case Left(error) =>
+              System.err.println(s"Error: ${CredentialRedactor.redact(error.userMessage)}")
+          }
+        }
+      }
+    }
+    val allOk = results.forall {
+      case (_, Right((_, ok))) => ok
+      case (_, Left(_))        => false
+    }
+    if allOk then 0 else 1
+  }
+
   private[cli] def checkOutputWritable(
       outputPath: String
   ): Either[ParqueteerError, Unit] =
