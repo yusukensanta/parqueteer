@@ -523,6 +523,25 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
     code shouldBe 0
   }
 
+  it should "read the resolved single-match file, not the literal glob pattern" in {
+    val repo = new FakeParquetRepository() {
+      override def globStatus(location: StorageLocation): Try[List[StorageLocation]] =
+        Success(List(LocalPath("/data/only-x.parquet")))
+      override def readFileInfo(
+          file: ParquetFile
+      ): Try[(ParquetSchema, FileMetadata, List[RowGroupInfo])] =
+        if file.location.path == "/data/only-x.parquet" then super.readFileInfo(file)
+        else scala.util.Failure(new java.io.IOException(s"unexpected path: ${file.location.path}"))
+    }
+    val service = new ParquetService(repo)
+    val out     = new ByteArrayOutputStream()
+    val code = Console.withOut(new PrintStream(out)) {
+      CommandExecutor.execute(SchemaCommand("/data/only-x*.parquet"), service, GlobalOptions())
+    }
+    code shouldBe 0
+    out.toString should not include "unexpected path"
+  }
+
   "StatsCommand" should "print one report per matched file for a glob path" in {
     val service = new ParquetService(multiMatchRepo)
     val code = CommandExecutor.execute(
@@ -557,6 +576,25 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
       quietOpts
     )
     code shouldBe 1
+  }
+
+  it should "include per-file schema detail for --verbose on a glob matching valid files" in {
+    val service = new ParquetService(multiMatchRepo)
+    val out     = new ByteArrayOutputStream()
+    val code = Console.withOut(new PrintStream(out)) {
+      CommandExecutor.execute(
+        ValidateCommand("/data/*.parquet", verbose = true),
+        service,
+        GlobalOptions()
+      )
+    }
+    code shouldBe 0
+    val printed = out.toString
+    printed should include("✓ File /data/a.parquet is valid")
+    printed should include("✓ File /data/b.parquet is valid")
+    printed should include("Columns:    1")
+    printed should include("Row groups: 1")
+    printed should include("Total rows: 1")
   }
 
   // ── reportError branch coverage ────────────────────────────────────────

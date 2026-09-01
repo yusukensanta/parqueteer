@@ -85,7 +85,7 @@ private[cli] object CommandExecutor {
           case Right(paths) if paths.size == 1 =>
             executeValidate(service, paths.head, verbose, deep, globalOptions)
           case Right(paths) =>
-            executeValidateMulti(service, paths, deep, globalOptions)
+            executeValidateMulti(service, paths, verbose, deep, globalOptions)
         }
 
       case ConvertCommand(
@@ -112,7 +112,7 @@ private[cli] object CommandExecutor {
         service.resolveGlob(cmd.filePath) match {
           case Left(error) => reportError("Failed to read schema", globalOptions)(error)
           case Right(paths) if paths.size == 1 =>
-            executeSchemaInfo(service, cmd, globalOptions)
+            executeSchemaInfo(service, cmd.copy(filePath = paths.head), globalOptions)
           case Right(paths) =>
             executeSchemaInfoMulti(service, paths, cmd.format, globalOptions)
         }
@@ -402,14 +402,28 @@ private[cli] object CommandExecutor {
   private[cli] def executeValidateMulti(
       service: ParquetService,
       paths: List[String],
+      verbose: Boolean,
       deep: Boolean,
       globalOptions: GlobalOptions
   ): Int =
     runMultiFileReport(paths, OutputFormat.Table, globalOptions) { path =>
       service.validateFile(path, deep).map { result =>
         val text =
-          if result.isValid then s"✓ File $path is valid"
-          else (s"✗ File $path has issues:" :: result.issues.map(i => s"  - $i")).mkString("\n")
+          if result.isValid then {
+            val verboseOut =
+              if verbose then
+                service.getFileInfo(path) match {
+                  case Right(file) =>
+                    file.schema.fold("") { s =>
+                      s"\n  Columns:    ${s.columns.size}\n" +
+                        s"  Row groups: ${s.rowGroupCount}\n" +
+                        s"  Total rows: ${s.totalRowCount}"
+                    }
+                  case Left(_) => ""
+                }
+              else ""
+            s"✓ File $path is valid" + verboseOut
+          } else (s"✗ File $path has issues:" :: result.issues.map(i => s"  - $i")).mkString("\n")
         (text, result.isValid)
       }
     }
