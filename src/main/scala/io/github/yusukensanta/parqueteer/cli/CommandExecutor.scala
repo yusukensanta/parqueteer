@@ -52,7 +52,13 @@ private[cli] object CommandExecutor {
         )
 
       case InfoCommand(filePath, format, verbose) =>
-        executeInfo(service, filePath, format, verbose, globalOptions)
+        service.resolveGlob(filePath) match {
+          case Left(error) => reportError("Failed to get file info", globalOptions)(error)
+          case Right(paths) if paths.size == 1 =>
+            executeInfo(service, paths.head, format, verbose, globalOptions)
+          case Right(paths) =>
+            executeInfoMulti(service, paths, format, verbose, globalOptions)
+        }
 
       case WriteCommand(
             inputPath,
@@ -74,7 +80,13 @@ private[cli] object CommandExecutor {
         )
 
       case ValidateCommand(filePath, verbose, deep) =>
-        executeValidate(service, filePath, verbose, deep, globalOptions)
+        service.resolveGlob(filePath) match {
+          case Left(error) => reportError("Failed to validate file", globalOptions)(error)
+          case Right(paths) if paths.size == 1 =>
+            executeValidate(service, paths.head, verbose, deep, globalOptions)
+          case Right(paths) =>
+            executeValidateMulti(service, paths, deep, globalOptions)
+        }
 
       case ConvertCommand(
             inputPath,
@@ -97,16 +109,34 @@ private[cli] object CommandExecutor {
         executeConfig(cmd, globalOptions)
 
       case cmd: SchemaCommand =>
-        executeSchemaInfo(service, cmd, globalOptions)
+        service.resolveGlob(cmd.filePath) match {
+          case Left(error) => reportError("Failed to read schema", globalOptions)(error)
+          case Right(paths) if paths.size == 1 =>
+            executeSchemaInfo(service, cmd, globalOptions)
+          case Right(paths) =>
+            executeSchemaInfoMulti(service, paths, cmd.format, globalOptions)
+        }
 
       case cmd: SchemaDiffCommand =>
         executeSchemaDiff(service, cmd, globalOptions)
 
       case StatsCommand(filePath, format) =>
-        executeStats(service, filePath, format, globalOptions)
+        service.resolveGlob(filePath) match {
+          case Left(error) => reportError("Failed to get stats", globalOptions)(error)
+          case Right(paths) if paths.size == 1 =>
+            executeStats(service, paths.head, format, globalOptions)
+          case Right(paths) =>
+            executeStatsMulti(service, paths, format, globalOptions)
+        }
 
       case CountCommand(filePath, format) =>
-        executeCount(service, filePath, format, globalOptions)
+        service.resolveGlob(filePath) match {
+          case Left(error) => reportError("Failed to count rows", globalOptions)(error)
+          case Right(paths) if paths.size == 1 =>
+            executeCount(service, paths.head, format, globalOptions)
+          case Right(paths) =>
+            executeCountMulti(service, paths, format, globalOptions)
+        }
 
       case MergeCommand(inputPaths, outputPath, compression, schemaMode, dryRun) =>
         resolveAllGlobs(service, inputPaths) match {
@@ -263,6 +293,37 @@ private[cli] object CommandExecutor {
         reportError("Failed to get file info", globalOptions)(error)
     }
 
+  private[cli] def executeInfoMulti(
+      service: ParquetService,
+      paths: List[String],
+      format: OutputFormat,
+      verbose: Boolean,
+      globalOptions: GlobalOptions
+  ): Int =
+    runMultiFileReport(paths, format, globalOptions) { path =>
+      service.getFileInfo(path).map { file =>
+        val text =
+          if format == OutputFormat.JSON then CliOutputFormatter.formatInfoJson(file, verbose)
+          else {
+            val metaOut = file.metadata match {
+              case Some(metadata) => new TableFormatter().formatMetadata(metadata)
+              case None           => "No metadata information available"
+            }
+            val schemaOut = file.schema.fold("") { s =>
+              s"\nRows:        ${s.totalRowCount}\n" +
+                s"Row Groups:  ${s.rowGroupCount}\n" +
+                s"Columns:     ${s.columns.size}"
+            }
+            val verboseOut =
+              if verbose && file.rowGroups.nonEmpty then
+                "\n\n" + CliOutputFormatter.formatRowGroupsTable(file.rowGroups)
+              else ""
+            metaOut + schemaOut + verboseOut
+          }
+        (text, true)
+      }
+    }
+
   private[cli] def executeWrite(
       service: ParquetService,
       outputPath: String,
@@ -336,6 +397,21 @@ private[cli] object CommandExecutor {
         }
       case Left(error) =>
         reportError("Failed to validate file", globalOptions)(error)
+    }
+
+  private[cli] def executeValidateMulti(
+      service: ParquetService,
+      paths: List[String],
+      deep: Boolean,
+      globalOptions: GlobalOptions
+  ): Int =
+    runMultiFileReport(paths, OutputFormat.Table, globalOptions) { path =>
+      service.validateFile(path, deep).map { result =>
+        val text =
+          if result.isValid then s"✓ File $path is valid"
+          else (s"✗ File $path has issues:" :: result.issues.map(i => s"  - $i")).mkString("\n")
+        (text, result.isValid)
+      }
     }
 
   private[cli] def executeConvert(
@@ -633,6 +709,25 @@ private[cli] object CommandExecutor {
           0
       }
 
+  private[cli] def executeSchemaInfoMulti(
+      service: ParquetService,
+      paths: List[String],
+      format: OutputFormat,
+      globalOptions: GlobalOptions
+  ): Int =
+    runMultiFileReport(paths, format, globalOptions) { path =>
+      service.getFileInfo(path).map { file =>
+        val text =
+          if format == OutputFormat.JSON then CliOutputFormatter.formatSchemaJson(file)
+          else
+            file.schema match {
+              case Some(schema) => new TableFormatter().formatSchema(schema)
+              case None         => "No schema information available"
+            }
+        (text, true)
+      }
+    }
+
   private[cli] def executeStats(
       service: ParquetService,
       filePath: String,
@@ -651,6 +746,21 @@ private[cli] object CommandExecutor {
         0
       case Left(error) =>
         reportError("Failed to get stats", globalOptions)(error)
+    }
+
+  private[cli] def executeStatsMulti(
+      service: ParquetService,
+      paths: List[String],
+      format: OutputFormat,
+      globalOptions: GlobalOptions
+  ): Int =
+    runMultiFileReport(paths, format, globalOptions) { path =>
+      service.getStats(path).map { stats =>
+        val text =
+          if format == OutputFormat.JSON then CliOutputFormatter.formatStatsJson(stats)
+          else CliOutputFormatter.formatStatsTable(stats)
+        (text, true)
+      }
     }
 
   private[cli] def executeCount(
@@ -672,6 +782,22 @@ private[cli] object CommandExecutor {
         0
       case Left(error) =>
         reportError("Failed to count rows", globalOptions)(error)
+    }
+
+  private[cli] def executeCountMulti(
+      service: ParquetService,
+      paths: List[String],
+      format: OutputFormat,
+      globalOptions: GlobalOptions
+  ): Int =
+    runMultiFileReport(paths, format, globalOptions) { path =>
+      service.getFileInfo(path).map { file =>
+        val count = file.schema.fold(0L)(_.totalRowCount)
+        val text =
+          if format == OutputFormat.JSON then CliOutputFormatter.formatCountJson(count)
+          else count.toString
+        (text, true)
+      }
     }
 
   private[cli] def executeCompletions(

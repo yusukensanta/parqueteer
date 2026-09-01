@@ -495,6 +495,70 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
     ) shouldBe 0
   }
 
+  // ── multi-match dispatch (glob paths) ───────────────────────────────────
+
+  private def multiMatchRepo: ParquetRepository = new FakeParquetRepository() {
+    override def globStatus(location: StorageLocation): Try[List[StorageLocation]] =
+      Success(List(LocalPath("/data/a.parquet"), LocalPath("/data/b.parquet")))
+  }
+
+  "InfoCommand" should "print one report per matched file for a glob path" in {
+    val service = new ParquetService(multiMatchRepo)
+    val out     = new ByteArrayOutputStream()
+    val code = Console.withOut(new PrintStream(out)) {
+      CommandExecutor.execute(InfoCommand("/data/*.parquet"), service, GlobalOptions())
+    }
+    code shouldBe 0
+    out.toString should include("==> /data/a.parquet <==")
+    out.toString should include("==> /data/b.parquet <==")
+  }
+
+  "SchemaCommand" should "print one report per matched file for a glob path" in {
+    val service = new ParquetService(multiMatchRepo)
+    val code = CommandExecutor.execute(
+      SchemaCommand("/data/*.parquet"),
+      service,
+      quietOpts
+    )
+    code shouldBe 0
+  }
+
+  "StatsCommand" should "print one report per matched file for a glob path" in {
+    val service = new ParquetService(multiMatchRepo)
+    val code = CommandExecutor.execute(
+      StatsCommand("/data/*.parquet"),
+      service,
+      quietOpts
+    )
+    code shouldBe 0
+  }
+
+  "CountCommand" should "print one count per matched file for a glob path" in {
+    val service = new ParquetService(multiMatchRepo)
+    val code = CommandExecutor.execute(
+      CountCommand("/data/*.parquet"),
+      service,
+      quietOpts
+    )
+    code shouldBe 0
+  }
+
+  "ValidateCommand" should "aggregate exit code 1 when one matched file is invalid" in {
+    val repo = new FakeParquetRepository(
+      validateResult = Success(List("corrupt row group"))
+    ) {
+      override def globStatus(location: StorageLocation): Try[List[StorageLocation]] =
+        Success(List(LocalPath("/data/a.parquet"), LocalPath("/data/b.parquet")))
+    }
+    val service = new ParquetService(repo)
+    val code = CommandExecutor.execute(
+      ValidateCommand("/data/*.parquet"),
+      service,
+      quietOpts
+    )
+    code shouldBe 1
+  }
+
   // ── reportError branch coverage ────────────────────────────────────────
 
   it should "suppress error output when quiet" in {
