@@ -83,18 +83,34 @@ private[cli] object CommandExecutor {
             compression,
             rowGroupSize,
             dryRun,
-            _
+            schemaMode
           ) =>
-        executeWrite(
-          service,
-          outputPath,
-          inputPath,
-          inputFormat,
-          compression,
-          rowGroupSize,
-          dryRun,
-          globalOptions
-        )
+        service.resolveGlob(inputPath) match {
+          case Left(error) => reportError("Failed to write file", globalOptions)(error)
+          case Right(paths) if paths.size == 1 =>
+            executeWrite(
+              service,
+              outputPath,
+              paths.head,
+              inputFormat,
+              compression,
+              rowGroupSize,
+              dryRun,
+              globalOptions
+            )
+          case Right(paths) =>
+            executeWriteMulti(
+              service,
+              outputPath,
+              paths,
+              inputFormat,
+              compression,
+              rowGroupSize,
+              schemaMode,
+              dryRun,
+              globalOptions
+            )
+        }
 
       case ValidateCommand(filePath, verbose, deep) =>
         service.resolveGlob(filePath) match {
@@ -424,6 +440,53 @@ private[cli] object CommandExecutor {
               0
             case Left(error) =>
               reportError("Failed to write file", globalOptions)(error)
+          }
+        }
+    }
+  }
+
+  private[cli] def executeWriteMulti(
+      service: ParquetService,
+      outputPath: String,
+      inputPaths: List[String],
+      inputFormat: InputFormat,
+      compression: CompressionType,
+      rowGroupSize: Option[Long],
+      schemaMode: SchemaMode,
+      dryRun: Boolean,
+      globalOptions: GlobalOptions
+  ): Int = {
+    val writeConfig = WriteConfig(
+      compressionType = compression,
+      rowGroupSize = rowGroupSize.getOrElse(WriteConfig.DefaultRowGroupSize)
+    )
+    val formatStr = InputFormat.toServiceString(inputFormat)
+    checkOutputWritable(outputPath) match {
+      case Left(err) => reportError("Failed to write file", globalOptions)(err)
+      case Right(_) =>
+        if dryRun then {
+          println(s"Dry run: would write $outputPath")
+          println(s"  Inputs:      ${inputPaths.size} files matched")
+          inputPaths.foreach(p => println(s"    - $p"))
+          println(s"  Schema mode: $schemaMode")
+          println(s"  Compression: ${compression.toString.toLowerCase}")
+          0
+        } else {
+          val onProgress: (Int, Int, String) => Unit = (i, n, path) =>
+            if !globalOptions.quiet then System.err.println(s"[$i/$n] Writing: $path")
+          service.writeMultiRawToParquet(
+            inputPaths,
+            formatStr,
+            outputPath,
+            writeConfig,
+            schemaMode,
+            onProgress
+          ) match {
+            case Right(count) =>
+              if !globalOptions.quiet then
+                println(s"Successfully wrote ${inputPaths.size} files ($count rows) → $outputPath")
+              0
+            case Left(error) => reportError("Failed to write file", globalOptions)(error)
           }
         }
     }

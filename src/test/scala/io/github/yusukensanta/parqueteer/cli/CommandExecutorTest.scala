@@ -811,6 +811,35 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
     } finally java.nio.file.Files.deleteIfExists(tmpFile)
   }
 
+  "WriteCommand" should "concatenate multiple matched raw inputs into one parquet write" in {
+    // DataFileReader opens these paths directly (not mediated by the fake
+    // repository), so globStatus must resolve to real files on disk rather
+    // than the brief's literal "/data/a.ndjson" placeholders. The output path
+    // uses an s3:// URI (as the dry-run WriteCommand test above does) so this
+    // exercises checkOutputWritable's cloud-URI short-circuit rather than a
+    // real, possibly-unwritable local directory.
+    val fileA = java.nio.file.Files.createTempFile("parqueteer_cmd_write_multi_", ".ndjson")
+    val fileB = java.nio.file.Files.createTempFile("parqueteer_cmd_write_multi_", ".ndjson")
+    try {
+      java.nio.file.Files.writeString(fileA, """{"id": 1}""")
+      java.nio.file.Files.writeString(fileB, """{"id": 2}""")
+      val repo = new FakeParquetRepository() {
+        override def globStatus(location: StorageLocation): Try[List[StorageLocation]] =
+          Success(List(LocalPath(fileA.toString), LocalPath(fileB.toString)))
+      }
+      val service = new ParquetService(repo)
+      val code = CommandExecutor.execute(
+        WriteCommand("/data/*.ndjson", "s3://b/o.parquet", InputFormat.NDJson),
+        service,
+        GlobalOptions(quiet = true)
+      )
+      code shouldBe 0
+    } finally {
+      java.nio.file.Files.deleteIfExists(fileA)
+      java.nio.file.Files.deleteIfExists(fileB)
+    }
+  }
+
   it should "dispatch ConvertCommand with dryRun = true" in {
     val out = new ByteArrayOutputStream()
     val code = Console.withOut(new PrintStream(out)) {
