@@ -777,7 +777,7 @@ private[cli] object CommandExecutor {
           case (path, Left(error)) =>
             io.circe.Json.obj(
               "file"  -> io.circe.Json.fromString(path),
-              "error" -> io.circe.Json.fromString(error.userMessage)
+              "error" -> io.circe.Json.fromString(CredentialRedactor.redact(error.userMessage))
             )
         }
         println(io.circe.Json.arr(elements*).spaces2)

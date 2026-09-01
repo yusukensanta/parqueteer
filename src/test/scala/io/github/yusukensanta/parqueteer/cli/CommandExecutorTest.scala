@@ -931,4 +931,24 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
     val parsed = io.circe.parser.parse(out.toString).getOrElse(fail("not valid JSON"))
     parsed.asArray.map(_.size) shouldBe Some(2)
   }
+
+  it should "redact credential material from a per-file error's JSON message" in {
+    val out = new ByteArrayOutputStream()
+    Console.withOut(new PrintStream(out)) {
+      CommandExecutor.runMultiFileReport(
+        List("/secret.parquet"),
+        OutputFormat.JSON,
+        GlobalOptions()
+      ) { _ =>
+        Left(
+          ParqueteerError.FileNotFound(
+            "/secret.parquet?X-Amz-Signature=SUPERSECRET123"
+          )
+        )
+      }
+    }
+    val printed = out.toString
+    printed should not include "SUPERSECRET123"
+    printed should include("[REDACTED]")
+  }
 }
