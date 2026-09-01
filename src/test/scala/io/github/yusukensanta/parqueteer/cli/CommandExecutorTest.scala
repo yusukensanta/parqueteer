@@ -854,9 +854,25 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
   }
 
   "ConvertCommand" should "route glob-matched parquet-to-parquet conversion through merge" in {
+    // Exit code alone can't discriminate "routed through mergeFiles across
+    // both resolved files" from "fell through to the old single-file
+    // convertParquetFile path with the literal glob string as its one
+    // input" — both return 0 against this fake repository regardless of
+    // which/how-many paths are touched. Record every path streamContent is
+    // invoked with (mergeFiles's streamMerge calls it once per input file;
+    // the old single-file convertParquetFile path calls it exactly once,
+    // with the unexpanded "/data/*.parquet" literal) so the assertion below
+    // fails unless both matched files were genuinely read in order.
+    val streamedPaths = scala.collection.mutable.ListBuffer.empty[String]
     val repo = new FakeParquetRepository() {
       override def globStatus(location: StorageLocation): Try[List[StorageLocation]] =
         Success(List(LocalPath("/data/a.parquet"), LocalPath("/data/b.parquet")))
+      override def streamContent(file: ParquetFile, config: ReadConfig)(
+          process: Map[String, CellValue] => Unit
+      ): Try[Long] = {
+        streamedPaths += file.location.path
+        super.streamContent(file, config)(process)
+      }
     }
     val service = new ParquetService(repo)
     val code = CommandExecutor.execute(
@@ -865,6 +881,7 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
       GlobalOptions(quiet = true)
     )
     code shouldBe 0
+    streamedPaths.toList shouldBe List("/data/a.parquet", "/data/b.parquet")
   }
 
   it should "concatenate glob-matched parquet files into one text output" in {
