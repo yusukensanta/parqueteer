@@ -6,6 +6,7 @@ import io.github.yusukensanta.parqueteer.core.models.StorageLocationParser
 import io.github.yusukensanta.parqueteer.core.repositories.ParquetRepository
 import io.github.yusukensanta.parqueteer.core.filters.FilterParser
 import io.github.yusukensanta.parqueteer.core.util.GlobDetector
+import scala.util.Try
 
 class ParquetService(
     repository: ParquetRepository
@@ -660,6 +661,120 @@ class ParquetService(
       data <- readDataFile(inputPath, inputFormat, maxRows = maxRows)
       _    <- writeFile(outputPath, data, writeConfig)
     } yield data.size.toLong
+
+  /**
+   * Writes multiple raw (non-parquet) input files into ONE parquet output,
+   * concatenating their rows. JSON inputs are fully buffered (readDataFile
+   * per file); NDJSON/CSV/LTSV inputs use the same bounded-memory two-pass
+   * (infer schema, then stream rows) approach as streamWriteDataFile, with
+   * the merged schema across all matched files computed the same way
+   * mergeFiles does for merging existing parquet files.
+   */
+  def writeMultiRawToParquet(
+      paths: List[String],
+      inputFormat: String,
+      outputPath: String,
+      writeConfig: WriteConfig,
+      schemaMode: SchemaMode,
+      onProgress: (Int, Int, String) => Unit = (_, _, _) => ()
+  ): Either[ParqueteerError, Long] =
+    inputFormat.toLowerCase match {
+      case fmt @ ("ndjson" | "csv" | "ltsv") =>
+        streamMultiRawToParquet(paths, fmt, outputPath, writeConfig, schemaMode, onProgress)
+      case "json" =>
+        bufferedMultiRawToParquet(paths, outputPath, writeConfig, onProgress)
+      case fmt =>
+        Left(
+          ParqueteerError.InvalidFormat(
+            paths.headOption.getOrElse(""),
+            s"Unsupported input format: $fmt. Supported: json, ndjson, csv, ltsv"
+          )
+        )
+    }
+
+  private def bufferedMultiRawToParquet(
+      paths: List[String],
+      outputPath: String,
+      writeConfig: WriteConfig,
+      onProgress: (Int, Int, String) => Unit
+  ): Either[ParqueteerError, Long] = {
+    val allRows = paths.zipWithIndex
+      .foldLeft[Either[ParqueteerError, List[Map[String, CellValue]]]](Right(Nil)) {
+        case (acc, (path, idx)) =>
+          acc.flatMap { rows =>
+            onProgress(idx + 1, paths.size, path)
+            readDataFile(path, "json").map(rows ++ _)
+          }
+      }
+    allRows.flatMap { rows =>
+      writeFile(outputPath, rows, writeConfig).map(_ => rows.size.toLong)
+    }
+  }
+
+  private def streamMultiRawToParquet(
+      paths: List[String],
+      inputFormat: String,
+      outputPath: String,
+      writeConfig: WriteConfig,
+      schemaMode: SchemaMode,
+      onProgress: (Int, Int, String) => Unit
+  ): Either[ParqueteerError, Long] = {
+    def withRows[A](path: String)(f: Iterator[Map[String, CellValue]] => Try[A]): Try[A] =
+      (inputFormat match {
+        case "ndjson" => DataFileReader.withNdjsonRows(path, None)(f)
+        case "csv"    => DataFileReader.withCsvRows(path, None)(f)
+        case "ltsv"   => DataFileReader.withLtsvRows(path, None)(f)
+      }).flatten
+
+    def inferOne(path: String): Either[ParqueteerError, List[FieldSummary]] =
+      withRows(path)(repository.inferSchemaFromRows).toParqueteerError.map(
+        _.columns.map(c => FieldSummary(c.name, c.dataType, c.isOptional))
+      )
+
+    for {
+      outputLocation <- parseLocation(outputPath)
+      perFileSchemas <- paths.foldLeft[Either[ParqueteerError, Vector[List[FieldSummary]]]](
+        Right(Vector.empty)
+      )((acc, path) => acc.flatMap(v => inferOne(path).map(v :+ _)))
+      mergedFields <- mergeSchemas(perFileSchemas, paths, schemaMode)
+      explicitSchema = ParquetSchema(
+        columns = mergedFields.map { f =>
+          ColumnInfo(
+            f.name,
+            f.dataType,
+            f.isOptional,
+            if f.isOptional then 1 else 0,
+            0,
+            writeConfig.compressionType.codecName
+          )
+        },
+        rowGroupCount = 1L,
+        totalRowCount = 0L
+      )
+      fieldNames  = mergedFields.map(_.name).toArray
+      nameToIndex = fieldNames.zipWithIndex.toMap
+      writeResult = repository.writeContentStream(outputLocation, explicitSchema, writeConfig) {
+        write =>
+          paths.zipWithIndex.foreach { case (path, idx) =>
+            onProgress(idx + 1, paths.size, path)
+            val readResult = withRows(path) { rows =>
+              Try {
+                rows.foreach { row =>
+                  val values: Array[CellValue] = Array.fill(fieldNames.length)(CellValue.Null)
+                  row.foreach { case (k, v) => nameToIndex.get(k).foreach(i => values(i) = v) }
+                  val builder = scala.collection.immutable.ListMap.newBuilder[String, CellValue]
+                  var j       = 0
+                  while j < fieldNames.length do { builder += fieldNames(j) -> values(j); j += 1 }
+                  write(builder.result())
+                }
+              }
+            }
+            abortOnReadError(readResult)
+          }
+      }
+      count <- handleStreamWriteResult(outputLocation, writeResult)
+    } yield count
+  }
 
   def validateFile(
       path: String,

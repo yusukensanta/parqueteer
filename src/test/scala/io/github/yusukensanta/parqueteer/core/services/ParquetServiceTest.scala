@@ -1308,4 +1308,22 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     val result = service.streamReadMulti(List("/a.parquet", "/b.parquet"), ReadConfig(), SchemaMode.Strict)(_ => ())
     result.isLeft shouldBe true
   }
+
+  // ── writeMultiRawToParquet ──────────────────────────────────────────────
+
+  "writeMultiRawToParquet" should "concatenate rows from multiple JSON inputs into one parquet write" in {
+    def tempJsonFile(json: String): String = {
+      val f = java.nio.file.Files.createTempFile("parqueteer_write_multi_", ".json")
+      java.nio.file.Files.writeString(f, json)
+      f.toFile.deleteOnExit()
+      f.toString
+    }
+    val fileA = tempJsonFile("""[{"id": 1}]""")
+    val fileB = tempJsonFile("""[{"id": 2}]""")
+    val repo    = new FakeParquetRepository()
+    val service = new ParquetService(repo)
+    val result =
+      service.writeMultiRawToParquet(List(fileA, fileB), "json", "/out.parquet", WriteConfig(), SchemaMode.Strict)
+    result shouldBe Right(2L)
+  }
 }
