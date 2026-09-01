@@ -502,6 +502,28 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
       Success(List(LocalPath("/data/a.parquet"), LocalPath("/data/b.parquet")))
   }
 
+  "ReadCommand" should "concatenate rows from every matched file for a glob path" in {
+    val repo = new FakeParquetRepository() {
+      override def globStatus(location: StorageLocation): Try[List[StorageLocation]] =
+        Success(List(LocalPath("/data/a.parquet"), LocalPath("/data/b.parquet")))
+    }
+    val service   = new ParquetService(repo)
+    val out       = new ByteArrayOutputStream()
+    val originalOut = System.out
+    System.setOut(new PrintStream(out))
+    val code =
+      try
+        CommandExecutor.execute(
+          ReadCommand("/data/*.parquet", format = OutputFormat.NDJSON),
+          service,
+          GlobalOptions()
+        )
+      finally System.setOut(originalOut)
+    code shouldBe 0
+    // defaultContent has 1 row; 2 matched files -> 2 NDJSON lines
+    out.toString.trim.linesIterator.length shouldBe 2
+  }
+
   "InfoCommand" should "print one report per matched file for a glob path" in {
     val service = new ParquetService(multiMatchRepo)
     val out     = new ByteArrayOutputStream()

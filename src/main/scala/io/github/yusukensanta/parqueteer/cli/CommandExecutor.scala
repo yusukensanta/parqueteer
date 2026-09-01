@@ -38,19 +38,34 @@ private[cli] object CommandExecutor {
             format,
             parallelism,
             streaming,
-            _
+            schemaMode
           ) =>
-        executeRead(
-          service,
-          filePath,
-          maxRows,
-          columns,
-          filter,
-          format,
-          parallelism,
-          streaming,
-          globalOptions
-        )
+        service.resolveGlob(filePath) match {
+          case Left(error) => reportError("Error", globalOptions)(error)
+          case Right(paths) if paths.size == 1 =>
+            executeRead(
+              service,
+              paths.head,
+              maxRows,
+              columns,
+              filter,
+              format,
+              parallelism,
+              streaming,
+              globalOptions
+            )
+          case Right(paths) =>
+            executeReadMulti(
+              service,
+              paths,
+              maxRows,
+              columns,
+              filter,
+              format,
+              schemaMode,
+              globalOptions
+            )
+        }
 
       case InfoCommand(filePath, format, verbose) =>
         service.resolveGlob(filePath) match {
@@ -255,6 +270,50 @@ private[cli] object CommandExecutor {
             else None
           reportError("Error", globalOptions, filterHint)(error)
       }
+    }
+  }
+
+  private[cli] def executeReadMulti(
+      service: ParquetService,
+      paths: List[String],
+      maxRows: Option[Long],
+      columns: Option[List[String]],
+      filter: Option[String],
+      format: OutputFormat,
+      schemaMode: SchemaMode,
+      globalOptions: GlobalOptions
+  ): Int = {
+    val readConfig = ReadConfig(
+      maxRows = maxRows,
+      columns = columns,
+      filter = filter,
+      outputFormat = format
+    )
+    if format == OutputFormat.Pretty && !globalOptions.quiet then
+      System.err.println(
+        "[parqueteer] warning: --format pretty is not supported in streaming mode; falling back to ndjson."
+      )
+    val baseWriter =
+      if globalOptions.quiet then
+        new RowStreamWriter {
+          override def writeRow(row: Map[String, CellValue]): Unit = ()
+        }
+      else RowStreamWriter(format, System.out)
+    val writer =
+      if globalOptions.verbose && !globalOptions.quiet then
+        new ProgressRowStreamWriter(baseWriter, System.err)
+      else baseWriter
+    val result =
+      runWithDeferredBegin(writer, service.streamReadMulti(paths, readConfig, schemaMode))
+    val stdoutError = System.out.checkError()
+    result match {
+      case _ if stdoutError =>
+        System.err.println(
+          "[parqueteer] error: output stream write error (disk full or broken pipe)"
+        )
+        1
+      case Right(_)    => 0
+      case Left(error) => reportError("Error", globalOptions)(error)
     }
   }
 
