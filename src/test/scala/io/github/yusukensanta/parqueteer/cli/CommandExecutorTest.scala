@@ -847,4 +847,35 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
     )
     result.isLeft shouldBe true
   }
+
+  // ── resolveAllGlobs ─────────────────────────────────────────────────────
+
+  "resolveAllGlobs" should "pass literal paths through unchanged" in {
+    val service = new ParquetService(new FakeParquetRepository())
+    CommandExecutor.resolveAllGlobs(service, List("/a.parquet", "/b.parquet")) shouldBe
+      Right(List("/a.parquet", "/b.parquet"))
+  }
+
+  it should "expand a glob element in place, preserving the other literal paths" in {
+    val repo = new FakeParquetRepository() {
+      override def globStatus(location: StorageLocation): Try[List[StorageLocation]] =
+        Success(List(LocalPath("/data/2026-01.parquet"), LocalPath("/data/2026-02.parquet")))
+    }
+    val service = new ParquetService(repo)
+    CommandExecutor.resolveAllGlobs(
+      service,
+      List("/fixed.parquet", "/data/2026-*.parquet")
+    ) shouldBe
+      Right(List("/fixed.parquet", "/data/2026-01.parquet", "/data/2026-02.parquet"))
+  }
+
+  it should "short-circuit with NoGlobMatch when one element matches nothing" in {
+    val repo = new FakeParquetRepository() {
+      override def globStatus(location: StorageLocation): Try[List[StorageLocation]] =
+        Success(List.empty)
+    }
+    val service = new ParquetService(repo)
+    CommandExecutor.resolveAllGlobs(service, List("/fixed.parquet", "/data/*.parquet")) shouldBe
+      Left(ParqueteerError.NoGlobMatch("/data/*.parquet"))
+  }
 }

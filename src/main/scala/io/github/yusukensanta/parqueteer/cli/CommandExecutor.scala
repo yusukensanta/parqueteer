@@ -109,15 +109,19 @@ private[cli] object CommandExecutor {
         executeCount(service, filePath, format, globalOptions)
 
       case MergeCommand(inputPaths, outputPath, compression, schemaMode, dryRun) =>
-        executeMerge(
-          service,
-          inputPaths,
-          outputPath,
-          compression,
-          schemaMode,
-          dryRun,
-          globalOptions
-        )
+        resolveAllGlobs(service, inputPaths) match {
+          case Left(error) => reportError("Failed to merge", globalOptions)(error)
+          case Right(expandedPaths) =>
+            executeMerge(
+              service,
+              expandedPaths,
+              outputPath,
+              compression,
+              schemaMode,
+              dryRun,
+              globalOptions
+            )
+        }
 
       case CompletionsCommand(shell) =>
         executeCompletions(shell, globalOptions)
@@ -741,6 +745,14 @@ private[cli] object CommandExecutor {
       }
     error.exitCode
   }
+
+  private[cli] def resolveAllGlobs(
+      service: ParquetService,
+      paths: List[String]
+  ): Either[ParqueteerError, List[String]] =
+    paths.foldLeft[Either[ParqueteerError, List[String]]](Right(Nil)) { (acc, p) =>
+      acc.flatMap(resolved => service.resolveGlob(p).map(resolved ++ _))
+    }
 
   private[cli] def checkOutputWritable(
       outputPath: String
