@@ -19,6 +19,12 @@ object ParqueteerError:
     val userMessage =
       s"File not found: $path\nCheck the path exists and you have read permission."
 
+  case class NoGlobMatch(pattern: String) extends ParqueteerError:
+    val exitCode = 3
+
+    val userMessage =
+      s"No files matched glob pattern: $pattern\nCheck the pattern and that the bucket/directory path is correct."
+
   case class SchemaMismatch(expected: String, actual: String) extends ParqueteerError:
     val exitCode = 4
 

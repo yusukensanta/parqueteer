@@ -60,6 +60,18 @@ class ParqueteerErrorTest extends AnyFlatSpec with Matchers {
     result shouldBe Right(42)
   }
 
+  // ── NoGlobMatch ────────────────────────────────────────────────────────────
+
+  "NoGlobMatch" should "have exit code 3, same family as FileNotFound" in {
+    ParqueteerError.NoGlobMatch("s3://bucket/*.parquet").exitCode shouldBe 3
+  }
+
+  it should "name the unresolved pattern in its message" in {
+    ParqueteerError
+      .NoGlobMatch("s3://bucket/2026-*.parquet")
+      .userMessage should include("s3://bucket/2026-*.parquet")
+  }
+
   // ── Exit codes ─────────────────────────────────────────────────────────────
 
   "ParqueteerError exit codes" should "be distinct per variant" in {
