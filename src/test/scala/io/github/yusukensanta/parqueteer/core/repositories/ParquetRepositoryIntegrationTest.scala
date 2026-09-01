@@ -1244,4 +1244,40 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
       .find(_("id") == CellValue.I64(2L))
       .get("info") shouldBe CellValue.Null
   }
+
+  // ── globStatus ──────────────────────────────────────────────────────────
+
+  "ParquetRepository.globStatus" should "match multiple files by a wildcard pattern" taggedAs IntegrationTest in {
+    val dir = Files.createTempDirectory("parqueteer_glob_it_")
+    dir.toFile.deleteOnExit()
+    val fileA = LocalPath(dir.resolve("a.parquet").toString)
+    val fileB = LocalPath(dir.resolve("b.parquet").toString)
+    repo.writeContent(fileA, sampleData, None, WriteConfig()).isSuccess shouldBe true
+    repo.writeContent(fileB, sampleData, None, WriteConfig()).isSuccess shouldBe true
+
+    val result = repo.globStatus(LocalPath(dir.resolve("*.parquet").toString))
+    result.isSuccess shouldBe true
+    result.get.map(_.path).sorted shouldBe List(fileA.path, fileB.path).sorted
+  }
+
+  it should "return an empty list when nothing matches" taggedAs IntegrationTest in {
+    val dir = Files.createTempDirectory("parqueteer_glob_it_empty_")
+    dir.toFile.deleteOnExit()
+    val result = repo.globStatus(LocalPath(dir.resolve("*.parquet").toString))
+    result.isSuccess shouldBe true
+    result.get shouldBe empty
+  }
+
+  it should "not match directories, only files" taggedAs IntegrationTest in {
+    val dir = Files.createTempDirectory("parqueteer_glob_it_dirs_")
+    dir.toFile.deleteOnExit()
+    val subDir = Files.createDirectory(dir.resolve("nested.parquet"))
+    subDir.toFile.deleteOnExit()
+    val file = LocalPath(dir.resolve("real.parquet").toString)
+    repo.writeContent(file, sampleData, None, WriteConfig()).isSuccess shouldBe true
+
+    val result = repo.globStatus(LocalPath(dir.resolve("*.parquet").toString))
+    result.isSuccess shouldBe true
+    result.get.map(_.path) shouldBe List(file.path)
+  }
 }

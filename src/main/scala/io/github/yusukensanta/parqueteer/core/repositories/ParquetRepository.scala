@@ -10,7 +10,7 @@ import com.github.mjakubowski84.parquet4s.{
   RowParquetRecord
 }
 import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.{FileSystem, Path as HadoopPath}
+import org.apache.hadoop.fs.{FileStatus, FileSystem, Path as HadoopPath}
 import org.apache.parquet.hadoop.ParquetFileReader
 import org.apache.parquet.hadoop.example.ExampleParquetWriter
 import org.apache.parquet.hadoop.metadata.{BlockMetaData, ColumnChunkMetaData, ParquetMetadata}
@@ -69,6 +69,16 @@ trait ParquetRepository {
   def readSchemaFields(file: ParquetFile): Try[List[FieldSummary]]
   def deleteFile(location: StorageLocation): Try[Unit]
   def readStats(file: ParquetFile): Try[FileStats]
+
+  /**
+   * Expand a glob pattern (containing *, ?, [, {) into the concrete files it
+   * matches, sorted by path. A location with no glob metacharacters is
+   * expected to already have been filtered out by the caller — this default
+   * passthrough exists only so fake repositories used in unit tests don't
+   * need to implement glob matching to keep compiling.
+   */
+  def globStatus(location: StorageLocation): Try[List[StorageLocation]] =
+    Success(List(location))
 
   def cacheStats(): ParquetRepository.CacheStats =
     ParquetRepository.CacheStats(0, 0, 0, 0)
@@ -679,6 +689,29 @@ class HadoopParquetRepository(
         FileStats(columns, totalRows, blocks.size.toLong)
       }
     }
+
+  override def globStatus(location: StorageLocation): Try[List[StorageLocation]] =
+    withHadoopConfig(location) { hadoopConfig =>
+      Try {
+        val hadoopPath = new HadoopPath(location.path)
+        val fs         = hadoopPath.getFileSystem(hadoopConfig)
+        val matches    = Option(fs.globStatus(hadoopPath)).getOrElse(Array.empty[FileStatus])
+        matches.toList
+          .filterNot(_.isDirectory)
+          .flatMap(status => StorageLocationParser.parse(matchedPathString(status)).toOption)
+          .sortBy(_.path)
+      }
+    }
+
+  // Hadoop's local-filesystem Path renders as "file:/abs/path" (single slash,
+  // no authority) rather than a standard "file:///abs/path" URI. That form
+  // isn't a scheme StorageLocationParser recognizes, so for local matches we
+  // hand it the bare filesystem path instead of the "file:" URI string.
+  // Cloud schemes (s3a/gs/abfss) already round-trip through toString as-is.
+  private def matchedPathString(status: FileStatus): String = {
+    val uri = status.getPath.toUri
+    if uri.getScheme == "file" then uri.getPath else status.getPath.toString
+  }
 
   private def providerNameFor(location: StorageLocation): String = location match {
     case _: S3Location    => "S3"
