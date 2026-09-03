@@ -1363,4 +1363,39 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
       )
     result shouldBe Right(2L)
   }
+
+  it should "fail fast under Strict mode when JSON inputs' inferred schemas differ" in {
+    def tempJsonFile(json: String): String = {
+      val f = java.nio.file.Files.createTempFile("parqueteer_write_multi_mismatch_", ".json")
+      java.nio.file.Files.writeString(f, json)
+      f.toFile.deleteOnExit()
+      f.toString
+    }
+    val fileA = tempJsonFile("""[{"id": 1}]""")
+    val fileB = tempJsonFile("""[{"id": 2}]""")
+    var call  = 0
+    val repo = new FakeParquetRepository() {
+      override def inferSchemaFromRows(
+          rows: Iterator[Map[String, CellValue]]
+      ): Try[ParquetSchema] = {
+        call += 1
+        Success(
+          if call == 1 then defaultSchema
+          else
+            defaultSchema.copy(columns =
+              List(ColumnInfo("id", "STRING", isOptional = false, 1, 0, "SNAPPY"))
+            )
+        )
+      }
+    }
+    val service = new ParquetService(repo)
+    val result = service.writeMultiRawToParquet(
+      List(fileA, fileB),
+      "json",
+      "/out.parquet",
+      WriteConfig(),
+      SchemaMode.Strict
+    )
+    result.isLeft shouldBe true
+  }
 }

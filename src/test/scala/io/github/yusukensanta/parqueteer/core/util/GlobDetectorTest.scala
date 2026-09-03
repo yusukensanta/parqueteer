@@ -32,4 +32,18 @@ class GlobDetectorTest extends AnyFlatSpec with Matchers {
   it should "return false for an empty string" in {
     GlobDetector.hasGlobChars("") shouldBe false
   }
+
+  it should "return false for a cloud path with a versionId query string" in {
+    GlobDetector.hasGlobChars("s3://bucket/file.parquet?versionId=abc123") shouldBe false
+  }
+
+  it should "return false for a cloud path with a SAS-style query string" in {
+    GlobDetector.hasGlobChars(
+      "abfss://container@acct.dfs.core.windows.net/file.parquet?sv=2020-01-01&sig=xyz"
+    ) shouldBe false
+  }
+
+  it should "still return true when a real wildcard precedes a query string" in {
+    GlobDetector.hasGlobChars("s3://bucket/2026-*.parquet?versionId=abc123") shouldBe true
+  }
 }
