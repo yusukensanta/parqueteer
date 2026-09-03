@@ -43,6 +43,7 @@ private[cli] object CommandExecutor {
         service.resolveGlob(filePath) match {
           case Left(error) => reportError("Error", globalOptions)(error)
           case Right(paths) if paths.size == 1 =>
+            warnIfSchemaModeNoop(schemaMode, globalOptions)
             executeRead(
               service,
               paths.head,
@@ -88,6 +89,7 @@ private[cli] object CommandExecutor {
         service.resolveGlob(inputPath) match {
           case Left(error) => reportError("Failed to write file", globalOptions)(error)
           case Right(paths) if paths.size == 1 =>
+            warnIfSchemaModeNoop(schemaMode, globalOptions)
             executeWrite(
               service,
               outputPath,
@@ -132,6 +134,7 @@ private[cli] object CommandExecutor {
         service.resolveGlob(inputPath) match {
           case Left(error) => reportError("Failed to convert file", globalOptions)(error)
           case Right(paths) if paths.size == 1 =>
+            warnIfSchemaModeNoop(schemaMode, globalOptions)
             executeConvert(
               service,
               paths.head,
@@ -774,52 +777,66 @@ private[cli] object CommandExecutor {
       dryRun: Boolean,
       globalOptions: GlobalOptions
   ): Int = {
-    val inputExt  = FileExtension.of(inputPaths.head)
-    val outputExt = FileExtension.of(outputPath)
-    if dryRun then {
-      println(s"Dry run: would convert ${inputPaths.size} files → $outputPath")
-      println(s"  Input format: $inputExt")
-      println(s"  Schema mode:  $schemaMode")
-      println(s"  Compression:  ${compression.toString.toLowerCase} (output)")
-      0
-    } else {
-      val writeConfig = WriteConfig(compressionType = compression)
-      val result: Either[ParqueteerError, Long] = (inputExt, outputExt) match {
-        case ("parquet", "parquet") =>
-          val onProgress: (Int, Int, String) => Unit = (i, n, path) =>
-            if !globalOptions.quiet then System.err.println(s"[$i/$n] Converting: $path")
-          service.mergeFiles(inputPaths, outputPath, writeConfig, schemaMode, onProgress)
-        case ("parquet", ext @ ("json" | "ndjson" | "csv")) =>
-          val outFormat = ext match {
-            case "json"   => OutputFormat.JSON
-            case "ndjson" => OutputFormat.NDJSON
-            case _        => OutputFormat.CSV
-          }
-          convertParquetMultiStreamed(
-            service,
-            inputPaths,
-            outputPath,
-            outFormat,
-            schemaMode,
-            maxRows
+    val inputExt      = FileExtension.of(inputPaths.head)
+    val outputExt     = FileExtension.of(outputPath)
+    val mismatchedExt = inputPaths.find(p => FileExtension.of(p) != inputExt)
+    mismatchedExt match {
+      case Some(badPath) =>
+        reportError("Failed to convert file", globalOptions)(
+          ParqueteerError.InvalidFormat(
+            badPath,
+            s"Mixed input formats in matched files: expected '$inputExt' (from ${inputPaths.head}), " +
+              s"found '${FileExtension.of(badPath)}' in $badPath. All matched files must share the same format."
           )
-        case (ext @ ("json" | "ndjson" | "csv" | "ltsv"), "parquet") =>
-          service.writeMultiRawToParquet(inputPaths, ext, outputPath, writeConfig, schemaMode)
-        case _ =>
-          Left(
-            ParqueteerError.InvalidFormat(
-              inputPaths.head,
-              s"Unsupported conversion: $inputExt → $outputExt for multiple matched files."
-            )
-          )
-      }
-      result match {
-        case Right(count) =>
-          if !globalOptions.quiet then
-            println(s"Successfully converted ${inputPaths.size} files ($count rows) → $outputPath")
+        )
+      case None =>
+        if dryRun then {
+          println(s"Dry run: would convert ${inputPaths.size} files → $outputPath")
+          println(s"  Input format: $inputExt")
+          println(s"  Schema mode:  $schemaMode")
+          println(s"  Compression:  ${compression.toString.toLowerCase} (output)")
           0
-        case Left(error) => reportError("Failed to convert file", globalOptions)(error)
-      }
+        } else {
+          val writeConfig = WriteConfig(compressionType = compression)
+          val result: Either[ParqueteerError, Long] = (inputExt, outputExt) match {
+            case ("parquet", "parquet") =>
+              val onProgress: (Int, Int, String) => Unit = (i, n, path) =>
+                if !globalOptions.quiet then System.err.println(s"[$i/$n] Converting: $path")
+              service.mergeFiles(inputPaths, outputPath, writeConfig, schemaMode, onProgress)
+            case ("parquet", ext @ ("json" | "ndjson" | "csv")) =>
+              val outFormat = ext match {
+                case "json"   => OutputFormat.JSON
+                case "ndjson" => OutputFormat.NDJSON
+                case _        => OutputFormat.CSV
+              }
+              convertParquetMultiStreamed(
+                service,
+                inputPaths,
+                outputPath,
+                outFormat,
+                schemaMode,
+                maxRows
+              )
+            case (ext @ ("json" | "ndjson" | "csv" | "ltsv"), "parquet") =>
+              service.writeMultiRawToParquet(inputPaths, ext, outputPath, writeConfig, schemaMode)
+            case _ =>
+              Left(
+                ParqueteerError.InvalidFormat(
+                  inputPaths.head,
+                  s"Unsupported conversion: $inputExt → $outputExt for multiple matched files."
+                )
+              )
+          }
+          result match {
+            case Right(count) =>
+              if !globalOptions.quiet then
+                println(
+                  s"Successfully converted ${inputPaths.size} files ($count rows) → $outputPath"
+                )
+              0
+            case Left(error) => reportError("Failed to convert file", globalOptions)(error)
+          }
+        }
     }
   }
 
@@ -866,50 +883,37 @@ private[cli] object CommandExecutor {
               .left
               .map(ParqueteerError.IOError.apply)
               .flatMap { case (outFile, ps) =>
-                val writer    = RowStreamWriter(outFormat, ps)
-                var started   = false
-                var remaining = maxRows
-                var failed    = true
+                val writer = RowStreamWriter(outFormat, ps)
+                var failed = true
                 try {
-                  val result =
-                    inputPaths.foldLeft[Either[ParqueteerError, Long]](Right(0L)) { (acc, path) =>
-                      acc.flatMap { total =>
-                        if remaining.contains(0L) then Right(total)
-                        else
-                          service
-                            .streamRead(path, ReadConfig(maxRows = remaining)) { row =>
-                              if !started then { writer.begin(); started = true }
-                              writer.writeRow(row)
-                            }
-                            .map { n =>
-                              remaining = remaining.map(r => r - n)
-                              total + n
-                            }
-                      }
+                  // Each closure shares `remaining` by reference, so the row
+                  // budget decrements across files as runWithDeferredBeginMulti
+                  // invokes them in order — the same running --limit semantics
+                  // ParquetService.streamAllFiles uses for multi-file `read`.
+                  var remaining = maxRows
+                  val reads
+                      : List[(Map[String, CellValue] => Unit) => Either[ParqueteerError, Long]] =
+                    inputPaths.map { path => process =>
+                      if remaining.contains(0L) then Right(0L)
+                      else
+                        service.streamRead(path, ReadConfig(maxRows = remaining))(process).map {
+                          n =>
+                            remaining = remaining.map(r => r - n)
+                            n
+                        }
                     }
+                  val result     = runWithDeferredBeginMulti(writer, reads)
                   val writeError = ps.checkError()
                   failed = result.isLeft || writeError
-                  if !started && result.isRight then { writer.begin(); started = true }
-                  scala.util.Try(writer.end()) match {
-                    case scala.util.Failure(ex) if result.isRight =>
-                      Left(ParqueteerError.IOError(ex))
-                    case scala.util.Failure(ex) =>
-                      System.err.println(
-                        s"[parqueteer] warning: error flushing output: ${CredentialRedactor
-                            .redact(Option(ex.getMessage).getOrElse(ex.getClass.getSimpleName))}"
-                      )
-                      result
-                    case scala.util.Success(_) =>
-                      if writeError && result.isRight then
-                        Left(
-                          ParqueteerError.IOError(
-                            new java.io.IOException(
-                              "Output stream write error (disk full or broken pipe)"
-                            )
-                          )
+                  if writeError && result.isRight then
+                    Left(
+                      ParqueteerError.IOError(
+                        new java.io.IOException(
+                          "Output stream write error (disk full or broken pipe)"
                         )
-                      else result
-                  }
+                      )
+                    )
+                  else result
                 } finally {
                   ps.close()
                   if failed then scala.util.Try(java.nio.file.Files.deleteIfExists(outFile))
@@ -1188,6 +1192,15 @@ private[cli] object CommandExecutor {
       acc.flatMap(resolved => service.resolveGlob(p).map(resolved ++ _))
     }
 
+  private[cli] def warnIfSchemaModeNoop(
+      schemaMode: SchemaMode,
+      globalOptions: GlobalOptions
+  ): Unit =
+    if schemaMode != SchemaMode.Strict && !globalOptions.quiet then
+      System.err.println(
+        "[parqueteer] warning: --schema-mode has no effect — the path resolved to a single file."
+      )
+
   /**
    * Runs `renderOne` once per matched path. Table mode prints each file's
    * rendered text as its own `==> path <==` block; JSON mode re-parses each
@@ -1268,24 +1281,50 @@ private[cli] object CommandExecutor {
   private[cli] def runWithDeferredBegin(
       writer: RowStreamWriter,
       read: (Map[String, CellValue] => Unit) => Either[ParqueteerError, Long]
+  ): Either[ParqueteerError, Long] =
+    runWithDeferredBeginMulti(writer, List(read))
+
+  /**
+   * Runs each `read` in `reads` in order, sharing one begin/end lifecycle
+   * across all of them: `writer.begin()` fires at most once, on the first
+   * row of the first read that produces one (or once at the end if every
+   * read succeeds with zero rows); `writer.end()` fires only if `begin()`
+   * ever fired. Stops at the first read that returns `Left`. Generalizes
+   * the single-read case (`runWithDeferredBegin`) to N sequential reads —
+   * used by multi-file streaming conversions where one output writer spans
+   * several input files.
+   */
+  private[cli] def runWithDeferredBeginMulti(
+      writer: RowStreamWriter,
+      reads: List[(Map[String, CellValue] => Unit) => Either[ParqueteerError, Long]]
   ): Either[ParqueteerError, Long] = {
-    var started = false
-    val result = read { row =>
-      if !started then { writer.begin(); started = true }
-      writer.writeRow(row)
+    var started                        = false
+    var total                          = 0L
+    var error: Option[ParqueteerError] = None
+    val it                             = reads.iterator
+    while error.isEmpty && it.hasNext do {
+      val read = it.next()
+      read { row =>
+        if !started then { writer.begin(); started = true }
+        writer.writeRow(row)
+      } match {
+        case Right(n)  => total += n
+        case Left(err) => error = Some(err)
+      }
     }
-    if !started && result.isRight then { writer.begin(); started = true }
+    if !started && error.isEmpty then { writer.begin(); started = true }
     val endFailure: Option[Throwable] =
       if started then scala.util.Try(writer.end()).failed.toOption else None
-    endFailure match {
-      case Some(ex) if result.isRight => Left(ParqueteerError.IOError(ex))
-      case Some(ex) =>
+    (error, endFailure) match {
+      case (None, Some(ex)) => Left(ParqueteerError.IOError(ex))
+      case (Some(err), Some(ex)) =>
         System.err.println(
           s"[parqueteer] warning: error flushing output: ${CredentialRedactor
               .redact(Option(ex.getMessage).getOrElse(ex.getClass.getSimpleName))}"
         )
-        result
-      case None => result
+        Left(err)
+      case (Some(err), None) => Left(err)
+      case (None, None)      => Right(total)
     }
   }
 

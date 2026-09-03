@@ -904,6 +904,23 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
     written.trim.linesIterator.length shouldBe 2 // 1 row per matched file, 2 files
   }
 
+  it should "reject a glob matching files with different extensions" in {
+    val repo = new FakeParquetRepository() {
+      override def globStatus(location: StorageLocation): Try[List[StorageLocation]] =
+        Success(List(LocalPath("/data/a.json"), LocalPath("/data/b.ndjson")))
+    }
+    val service = new ParquetService(repo)
+    val (code, err) = captureStderr {
+      CommandExecutor.execute(
+        ConvertCommand("/data/*.{json,ndjson}", "/out.parquet"),
+        service,
+        defaultOpts
+      )
+    }
+    code should not be 0
+    err should include("Mixed input formats")
+  }
+
   it should "dispatch SchemaDiffCommand and return 0 for identical schemas" in {
     CommandExecutor.execute(
       SchemaDiffCommand("/tmp/a.parquet", "/tmp/b.parquet"),
@@ -1050,6 +1067,60 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
       process => { process(Map.empty); Right(1L) }
     )
     result.isLeft shouldBe true
+  }
+
+  // ── runWithDeferredBeginMulti ────────────────────────────────────────────
+
+  "runWithDeferredBeginMulti" should "share one begin/end lifecycle across multiple reads" in {
+    val calls = scala.collection.mutable.ListBuffer.empty[String]
+    val writer = new io.github.yusukensanta.parqueteer.core.formatters.RowStreamWriter {
+      override def begin(): Unit                               = calls += "begin"
+      override def writeRow(row: Map[String, CellValue]): Unit = calls += "row"
+      override def end(): Unit                                 = calls += "end"
+    }
+    val reads: List[(Map[String, CellValue] => Unit) => Either[ParqueteerError, Long]] = List(
+      process => { process(Map.empty); Right(1L) },
+      process => { process(Map.empty); process(Map.empty); Right(2L) }
+    )
+    val result = CommandExecutor.runWithDeferredBeginMulti(writer, reads)
+    result shouldBe Right(3L)
+    // begin fires once, before the first row of the first read, not once per read
+    calls.toList shouldBe List("begin", "row", "row", "row", "end")
+  }
+
+  it should "stop at the first failing read and never call end without begin" in {
+    val calls = scala.collection.mutable.ListBuffer.empty[String]
+    val writer = new io.github.yusukensanta.parqueteer.core.formatters.RowStreamWriter {
+      override def begin(): Unit                               = calls += "begin"
+      override def writeRow(row: Map[String, CellValue]): Unit = calls += "row"
+      override def end(): Unit                                 = calls += "end"
+    }
+    val err               = ParqueteerError.FileNotFound("/first.parquet")
+    var secondReadInvoked = false
+    val reads: List[(Map[String, CellValue] => Unit) => Either[ParqueteerError, Long]] = List(
+      _ => Left(err),
+      process => { secondReadInvoked = true; process(Map.empty); Right(1L) }
+    )
+    val result = CommandExecutor.runWithDeferredBeginMulti(writer, reads)
+    result shouldBe Left(err)
+    secondReadInvoked shouldBe false
+    // the first read failed before writing any row, so begin() never fired —
+    // end() must not fire either, matching runWithDeferredBegin's single-read contract
+    calls.toList shouldBe empty
+  }
+
+  it should "call begin and end even when every read succeeds with zero rows" in {
+    val calls = scala.collection.mutable.ListBuffer.empty[String]
+    val writer = new io.github.yusukensanta.parqueteer.core.formatters.RowStreamWriter {
+      override def begin(): Unit                               = calls += "begin"
+      override def writeRow(row: Map[String, CellValue]): Unit = calls += "row"
+      override def end(): Unit                                 = calls += "end"
+    }
+    val reads: List[(Map[String, CellValue] => Unit) => Either[ParqueteerError, Long]] =
+      List(_ => Right(0L), _ => Right(0L))
+    val result = CommandExecutor.runWithDeferredBeginMulti(writer, reads)
+    result shouldBe Right(0L)
+    calls.toList shouldBe List("begin", "end")
   }
 
   // ── resolveAllGlobs ─────────────────────────────────────────────────────
@@ -1205,5 +1276,61 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
     val printed = out.toString
     printed should not include "SUPERSECRET123"
     printed should include("[REDACTED]")
+  }
+
+  // ── warnIfSchemaModeNoop ─────────────────────────────────────────────────
+
+  "warnIfSchemaModeNoop" should "warn when schema-mode is Union" in {
+    val (_, err) = captureStderr {
+      CommandExecutor.warnIfSchemaModeNoop(SchemaMode.Union, defaultOpts)
+    }
+    err should include("--schema-mode has no effect")
+  }
+
+  it should "stay silent when schema-mode is the default Strict" in {
+    val (_, err) = captureStderr {
+      CommandExecutor.warnIfSchemaModeNoop(SchemaMode.Strict, defaultOpts)
+    }
+    err shouldBe empty
+  }
+
+  it should "stay silent in quiet mode even for Union" in {
+    val (_, err) = captureStderr {
+      CommandExecutor.warnIfSchemaModeNoop(SchemaMode.Union, quietOpts)
+    }
+    err shouldBe empty
+  }
+
+  "execute" should "warn on a single-match ReadCommand when --schema-mode is a no-op" in {
+    val (_, err) = captureStderr {
+      CommandExecutor.execute(
+        ReadCommand("/tmp/test.parquet", schemaMode = SchemaMode.Union),
+        newService(),
+        defaultOpts
+      )
+    }
+    err should include("--schema-mode has no effect")
+  }
+
+  it should "warn on a single-match WriteCommand when --schema-mode is a no-op" in {
+    val (_, err) = captureStderr {
+      CommandExecutor.execute(
+        WriteCommand("in.json", "s3://b/o.parquet", schemaMode = SchemaMode.Union),
+        newService(),
+        defaultOpts
+      )
+    }
+    err should include("--schema-mode has no effect")
+  }
+
+  it should "warn on a single-match ConvertCommand when --schema-mode is a no-op" in {
+    val (_, err) = captureStderr {
+      CommandExecutor.execute(
+        ConvertCommand("input.csv", "output.parquet", schemaMode = SchemaMode.Union),
+        newService(),
+        defaultOpts
+      )
+    }
+    err should include("--schema-mode has no effect")
   }
 }

@@ -683,7 +683,7 @@ class ParquetService(
       case fmt @ ("ndjson" | "csv" | "ltsv") =>
         streamMultiRawToParquet(paths, fmt, outputPath, writeConfig, schemaMode, onProgress)
       case "json" =>
-        bufferedMultiRawToParquet(paths, outputPath, writeConfig, onProgress)
+        bufferedMultiRawToParquet(paths, outputPath, writeConfig, schemaMode, onProgress)
       case fmt =>
         Left(
           ParqueteerError.InvalidFormat(
@@ -697,19 +697,33 @@ class ParquetService(
       paths: List[String],
       outputPath: String,
       writeConfig: WriteConfig,
+      schemaMode: SchemaMode,
       onProgress: (Int, Int, String) => Unit
   ): Either[ParqueteerError, Long] = {
-    val allRows = paths.zipWithIndex
-      .foldLeft[Either[ParqueteerError, List[Map[String, CellValue]]]](Right(Nil)) {
-        case (acc, (path, idx)) =>
-          acc.flatMap { rows =>
-            onProgress(idx + 1, paths.size, path)
-            readDataFile(path, "json").map(rows ++ _)
-          }
+    def inferOne(rows: List[Map[String, CellValue]]): Either[ParqueteerError, List[FieldSummary]] =
+      repository
+        .inferSchemaFromRows(rows.iterator)
+        .toParqueteerError
+        .map(_.columns.map(c => FieldSummary(c.name, c.dataType, c.isOptional)))
+
+    val perFileRows = paths.zipWithIndex
+      .foldLeft[Either[ParqueteerError, Vector[List[Map[String, CellValue]]]]](
+        Right(Vector.empty)
+      ) { case (acc, (path, idx)) =>
+        acc.flatMap { rowsAcc =>
+          onProgress(idx + 1, paths.size, path)
+          readDataFile(path, "json").map(rowsAcc :+ _)
+        }
       }
-    allRows.flatMap { rows =>
-      writeFile(outputPath, rows, writeConfig).map(_ => rows.size.toLong)
-    }
+    for {
+      rowsPerFile <- perFileRows
+      perFileSchemas <- rowsPerFile.foldLeft[Either[ParqueteerError, Vector[List[FieldSummary]]]](
+        Right(Vector.empty)
+      )((acc, rows) => acc.flatMap(v => inferOne(rows).map(v :+ _)))
+      _ <- mergeSchemas(perFileSchemas, paths, schemaMode)
+      allRows = rowsPerFile.toList.flatten
+      rowCount <- writeFile(outputPath, allRows, writeConfig).map(_ => allRows.size.toLong)
+    } yield rowCount
   }
 
   private def streamMultiRawToParquet(
