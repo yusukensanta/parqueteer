@@ -18,8 +18,9 @@ object ShellCompletions {
       |    read)
       |      case "$prev" in
       |        --format) COMPREPLY=($(compgen -W "$formats" -- "$cur")) ; return ;;
+      |        --schema-mode) COMPREPLY=($(compgen -W "strict union" -- "$cur")) ; return ;;
       |        --limit|-n|--columns|-c|--filter|-f) return ;;
-      |        *) COMPREPLY=($(compgen -W "--format --limit --columns --filter --parallel --stream" -- "$cur"))
+      |        *) COMPREPLY=($(compgen -W "--format --limit --columns --filter --parallel --stream --schema-mode" -- "$cur"))
       |           COMPREPLY+=($(compgen -f -X '!*.parquet' -- "$cur")) ; return ;;
       |      esac ;;
       |    info)
@@ -60,7 +61,8 @@ object ShellCompletions {
       |        --compression|-c) COMPREPLY=($(compgen -W "$compressions" -- "$cur")) ; return ;;
       |        --input-format) COMPREPLY=($(compgen -W "json ndjson csv ltsv" -- "$cur")) ; return ;;
       |        --row-group-size) return ;;
-      |        *) COMPREPLY=($(compgen -W "--input-format --compression --row-group-size --dry-run" -- "$cur"))
+      |        --schema-mode) COMPREPLY=($(compgen -W "strict union" -- "$cur")) ; return ;;
+      |        *) COMPREPLY=($(compgen -W "--input-format --compression --row-group-size --dry-run --schema-mode" -- "$cur"))
       |           COMPREPLY+=($(compgen -f -- "$cur")) ; return ;;
       |      esac ;;
       |    validate)
@@ -70,7 +72,8 @@ object ShellCompletions {
       |      case "$prev" in
       |        --compression) COMPREPLY=($(compgen -W "$compressions" -- "$cur")) ; return ;;
       |        --limit|-n) return ;;
-      |        *) COMPREPLY=($(compgen -W "--compression --limit --dry-run" -- "$cur"))
+      |        --schema-mode) COMPREPLY=($(compgen -W "strict union" -- "$cur")) ; return ;;
+      |        *) COMPREPLY=($(compgen -W "--compression --limit --dry-run --schema-mode" -- "$cur"))
       |           COMPREPLY+=($(compgen -f -- "$cur")) ; return ;;
       |      esac ;;
       |    merge)
@@ -139,6 +142,7 @@ object ShellCompletions {
       |            '--format[Output format]:format:('"${formats[*]}"')' \
       |            '--parallel[Parallel threads]:count' \
       |            '--stream[Stream mode]' \
+      |            '--schema-mode[Schema mode]:mode:(strict union)' \
       |            ':parquet file:_files -g "*.parquet"' ;;
       |        info)
       |          _arguments \
@@ -172,6 +176,7 @@ object ShellCompletions {
       |            '(-c --compression)'{-c,--compression}'[Compression]:type:('"${compressions[*]}"')' \
       |            '--row-group-size[Row group size]:size' \
       |            '--dry-run[Preview only]' \
+      |            '--schema-mode[Schema mode]:mode:(strict union)' \
       |            ':input file:_files' \
       |            ':output parquet file:_files -g "*.parquet"' ;;
       |        validate)
@@ -184,6 +189,7 @@ object ShellCompletions {
       |            '--compression[Compression]:type:('"${compressions[*]}"')' \
       |            '(-n --limit)'{-n,--limit}'[Maximum rows]:count' \
       |            '--dry-run[Preview only]' \
+      |            '--schema-mode[Schema mode]:mode:(strict union)' \
       |            ':input file:_files' \
       |            ':output file:_files' ;;
       |        merge)
@@ -233,6 +239,7 @@ object ShellCompletions {
       |complete -c parqueteer -n '__fish_seen_subcommand_from read' -l filter   -s f -d 'Filter expression'
       |complete -c parqueteer -n '__fish_seen_subcommand_from read' -l parallel -d 'Parallel threads'
       |complete -c parqueteer -n '__fish_seen_subcommand_from read' -l stream   -f -d 'Stream mode'
+      |complete -c parqueteer -n '__fish_seen_subcommand_from read' -l schema-mode -f -a 'strict union' -d 'Schema mode'
       |
       |# info
       |complete -c parqueteer -n '__fish_seen_subcommand_from info' -l format  -f -a 'table json' -d 'Output format'
@@ -243,11 +250,13 @@ object ShellCompletions {
       |complete -c parqueteer -n '__fish_seen_subcommand_from write' -l compression    -s c -f -a 'none snappy gzip lzo brotli lz4 zstd' -d 'Compression type'
       |complete -c parqueteer -n '__fish_seen_subcommand_from write' -l row-group-size -d 'Row group size'
       |complete -c parqueteer -n '__fish_seen_subcommand_from write' -l dry-run        -f -d 'Preview only'
+      |complete -c parqueteer -n '__fish_seen_subcommand_from write' -l schema-mode    -f -a 'strict union' -d 'Schema mode'
       |
       |# convert
       |complete -c parqueteer -n '__fish_seen_subcommand_from convert' -l compression -f -a 'none snappy gzip lzo brotli lz4 zstd' -d 'Compression type'
       |complete -c parqueteer -n '__fish_seen_subcommand_from convert' -l limit       -s n -d 'Maximum rows'
       |complete -c parqueteer -n '__fish_seen_subcommand_from convert' -l dry-run     -f -d 'Preview only'
+      |complete -c parqueteer -n '__fish_seen_subcommand_from convert' -l schema-mode -f -a 'strict union' -d 'Schema mode'
       |
       |# merge
       |complete -c parqueteer -n '__fish_seen_subcommand_from merge' -l output      -s o -d 'Output file'

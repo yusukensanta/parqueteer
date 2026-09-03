@@ -498,6 +498,7 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
   // ── multi-match dispatch (glob paths) ───────────────────────────────────
 
   private def multiMatchRepo: ParquetRepository = new FakeParquetRepository() {
+
     override def globStatus(location: StorageLocation): Try[List[StorageLocation]] =
       Success(List(LocalPath("/data/a.parquet"), LocalPath("/data/b.parquet")))
   }
@@ -507,8 +508,8 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
       override def globStatus(location: StorageLocation): Try[List[StorageLocation]] =
         Success(List(LocalPath("/data/a.parquet"), LocalPath("/data/b.parquet")))
     }
-    val service   = new ParquetService(repo)
-    val out       = new ByteArrayOutputStream()
+    val service     = new ParquetService(repo)
+    val out         = new ByteArrayOutputStream()
     val originalOut = System.out
     System.setOut(new PrintStream(out))
     val code =
@@ -1129,10 +1130,61 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
         List("/a.parquet", "/b.parquet"),
         OutputFormat.JSON,
         GlobalOptions()
-      )(path => Right((s"""{"file":"$path"}""", true)))
+      )(_ => Right((s"""{"count":42}""", true)))
     }
     val parsed = io.circe.parser.parse(out.toString).getOrElse(fail("not valid JSON"))
     parsed.asArray.map(_.size) shouldBe Some(2)
+  }
+
+  it should "tag each successful JSON element with its own path and an ok status" in {
+    val out = new ByteArrayOutputStream()
+    Console.withOut(new PrintStream(out)) {
+      CommandExecutor.runMultiFileReport(
+        List("/a.parquet", "/b.parquet"),
+        OutputFormat.JSON,
+        GlobalOptions()
+      )(path => Right((s"""{"count":${path.length}}""", true)))
+    }
+    val elements = io.circe.parser
+      .parse(out.toString)
+      .getOrElse(fail("not valid JSON"))
+      .asArray
+      .getOrElse(fail("not a JSON array"))
+    elements.map(_.hcursor.get[String]("path")) shouldBe Vector(
+      Right("/a.parquet"),
+      Right("/b.parquet")
+    )
+    elements.map(_.hcursor.get[String]("status")) shouldBe Vector(Right("ok"), Right("ok"))
+    // Distinguishable by path, not merely structurally identical objects.
+    elements(0) should not be elements(1)
+    elements(0).hcursor.get[Int]("count") shouldBe Right("/a.parquet".length)
+    elements(1).hcursor.get[Int]("count") shouldBe Right("/b.parquet".length)
+  }
+
+  it should "tag each errored JSON element with its own path and an error status" in {
+    val out = new ByteArrayOutputStream()
+    Console.withOut(new PrintStream(out)) {
+      CommandExecutor.runMultiFileReport(
+        List("/a.parquet", "/b.parquet"),
+        OutputFormat.JSON,
+        GlobalOptions()
+      ) {
+        case "/a.parquet" => Right((s"""{"count":1}""", true))
+        case path         => Left(ParqueteerError.FileNotFound(path))
+      }
+    }
+    val elements = io.circe.parser
+      .parse(out.toString)
+      .getOrElse(fail("not valid JSON"))
+      .asArray
+      .getOrElse(fail("not a JSON array"))
+    elements.map(_.hcursor.get[String]("path")) shouldBe Vector(
+      Right("/a.parquet"),
+      Right("/b.parquet")
+    )
+    elements(0).hcursor.get[String]("status") shouldBe Right("ok")
+    elements(1).hcursor.get[String]("status") shouldBe Right("error")
+    elements(1).hcursor.get[String]("error").toOption shouldBe defined
   }
 
   it should "redact credential material from a per-file error's JSON message" in {

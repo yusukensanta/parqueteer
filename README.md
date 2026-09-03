@@ -26,6 +26,7 @@ Not a query engine — no SQL, joins, or aggregations; use [DuckDB](https://duck
 - 📊 **Multiple output formats** - table, JSON, CSV, Markdown, NDJSON, LTSV
 - 🔍 **Filtering** - SQL-like expressions with BETWEEN, IN, IS NULL, nested columns
 - 🛠️ **Format conversion** - CSV/JSON ↔ Parquet
+- 🔎 **Glob patterns** - match multiple files with `*`, `?`, `[]`, `{}` on local paths and S3, GCS, and Azure
 - 🔀 **Schema diff** - compare schemas of two Parquet files
 - 🐚 **Shell completions** - bash, zsh, and fish
 
@@ -92,6 +93,10 @@ parqueteer read data.parquet --columns "id,name" --filter "age > 25" --limit 50 
 parqueteer read s3://bucket/data.parquet
 parqueteer read gs://bucket/data.parquet
 parqueteer read abfss://container@account.dfs.core.windows.net/data.parquet
+
+# Glob patterns match multiple files (also supported by write, convert, merge,
+# info, schema, stats, count, and validate)
+parqueteer read "s3://bucket/2026-*.parquet"
 ```
 
 ### File Information

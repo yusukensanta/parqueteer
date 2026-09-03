@@ -1262,7 +1262,33 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
       schemaFieldsResult = Success(List(FieldSummary("id", "INT64", isOptional = false)))
     )
     val service = new ParquetService(repo)
-    service.checkSchemaCompatibility(List("/a.parquet", "/b.parquet"), SchemaMode.Strict) shouldBe Right(())
+    service.checkSchemaCompatibility(
+      List("/a.parquet", "/b.parquet"),
+      SchemaMode.Strict
+    ) shouldBe Right(())
+  }
+
+  it should "report a Union-mode type conflict without mislabeling the format as 'merge'" in {
+    var call = 0
+    val repo = new FakeParquetRepository() {
+      override def readSchemaFields(file: ParquetFile): Try[List[FieldSummary]] = {
+        call += 1
+        Success(
+          if call == 1 then List(FieldSummary("id", "INT64", isOptional = false))
+          else List(FieldSummary("id", "STRING", isOptional = false))
+        )
+      }
+    }
+    val service = new ParquetService(repo)
+    val result =
+      service.checkSchemaCompatibility(List("/a.parquet", "/b.parquet"), SchemaMode.Union)
+    result.isLeft shouldBe true
+    val err = result.left.toOption.get
+    err shouldBe a[ParqueteerError.InvalidFormat]
+    // This call arrives via `read`/`convert --schema-mode union`, not `merge` —
+    // the error must not carry the hardcoded "merge" format label from a
+    // shared mergeSchemas helper (regression guard for the fix wave).
+    err.userMessage should not startWith """Unsupported format: "merge""""
   }
 
   // ── streamReadMulti ─────────────────────────────────────────────────────
@@ -1276,7 +1302,9 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
       ReadConfig(),
       SchemaMode.Strict
     )(row => seen += row)
-    result shouldBe Right(2L) // FakeParquetRepository's streamContent replays defaultContent.rows (1 row) per file
+    result shouldBe Right(
+      2L
+    ) // FakeParquetRepository's streamContent replays defaultContent.rows (1 row) per file
     seen should have length 2
   }
 
@@ -1305,7 +1333,10 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
       }
     }
     val service = new ParquetService(repo)
-    val result = service.streamReadMulti(List("/a.parquet", "/b.parquet"), ReadConfig(), SchemaMode.Strict)(_ => ())
+    val result =
+      service.streamReadMulti(List("/a.parquet", "/b.parquet"), ReadConfig(), SchemaMode.Strict)(
+        _ => ()
+      )
     result.isLeft shouldBe true
   }
 
@@ -1318,12 +1349,18 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
       f.toFile.deleteOnExit()
       f.toString
     }
-    val fileA = tempJsonFile("""[{"id": 1}]""")
-    val fileB = tempJsonFile("""[{"id": 2}]""")
+    val fileA   = tempJsonFile("""[{"id": 1}]""")
+    val fileB   = tempJsonFile("""[{"id": 2}]""")
     val repo    = new FakeParquetRepository()
     val service = new ParquetService(repo)
     val result =
-      service.writeMultiRawToParquet(List(fileA, fileB), "json", "/out.parquet", WriteConfig(), SchemaMode.Strict)
+      service.writeMultiRawToParquet(
+        List(fileA, fileB),
+        "json",
+        "/out.parquet",
+        WriteConfig(),
+        SchemaMode.Strict
+      )
     result shouldBe Right(2L)
   }
 }

@@ -295,8 +295,8 @@ class ParquetService(
             if duplicates.nonEmpty then
               Left(
                 ParqueteerError.InvalidFormat(
-                  "merge",
-                  s"File at index $fileIdx has duplicate column names: ${duplicates
+                  inputPaths(fileIdx),
+                  s"File '${inputPaths(fileIdx)}' has duplicate column names: ${duplicates
                       .mkString(", ")}. " +
                     "Parquet files with duplicate column names cannot be merged."
                 )
@@ -310,8 +310,9 @@ class ParquetService(
               if conflicts.nonEmpty then
                 Left(
                   ParqueteerError.InvalidFormat(
-                    "merge",
-                    s"Type conflicts in union merge: ${conflicts.mkString(", ")}. " +
+                    inputPaths(fileIdx),
+                    s"Type conflicts in union merge at file '${inputPaths(fileIdx)}': ${conflicts
+                        .mkString(", ")}. " +
                       "Cannot union-merge columns with incompatible types."
                   )
                 )

@@ -77,7 +77,9 @@ object ArgumentParser {
                 )
               )
             )
-            .text("Path to parquet file (local, s3://, gs://, abfss://)"),
+            .text(
+              "Path to parquet file (local, s3://, gs://, abfss://) (supports glob patterns: *, ?, [], {})"
+            ),
           opt[Long]("limit")
             .abbr("n")
             .validate(x =>
@@ -173,7 +175,7 @@ object ArgumentParser {
                 )
               )
             )
-            .text("Path to parquet file"),
+            .text("Path to parquet file (supports glob patterns: *, ?, [], {})"),
           opt[String]("format")
             .action((x, c) => updateCmd[InfoCommand](c, _.copy(format = parseOutputFormat(x))))
             .validate(x =>
@@ -193,7 +195,7 @@ object ArgumentParser {
           arg[String]("<input>")
             .required()
             .action((x, c) => c.copy(command = Some(WriteCommand(x, ""))))
-            .text("Input data file path (JSON or CSV)"),
+            .text("Input data file path (JSON or CSV) (supports glob patterns: *, ?, [], {})"),
           arg[String]("<output>")
             .required()
             .action((x, c) => updateCmd[WriteCommand](c, _.copy(outputPath = x)))
@@ -274,7 +276,7 @@ object ArgumentParser {
           arg[String]("<file>")
             .required()
             .action((x, c) => c.copy(command = Some(ValidateCommand(x))))
-            .text("Path to parquet file"),
+            .text("Path to parquet file (supports glob patterns: *, ?, [], {})"),
           opt[Unit]("verbose")
             .action((_, c) => updateCmd[ValidateCommand](c, _.copy(verbose = true)))
             .text("Show detailed validation information"),
@@ -292,7 +294,7 @@ object ArgumentParser {
             .action((x, c) =>
               c.copy(command = Some(ConvertCommand(x, "", maxRows = EnvConfig.parsedMaxRows)))
             )
-            .text("Input file path"),
+            .text("Input file path (supports glob patterns: *, ?, [], {})"),
           arg[String]("<output>")
             .required()
             .action((x, c) => updateCmd[ConvertCommand](c, _.copy(outputPath = x)))
@@ -360,7 +362,7 @@ object ArgumentParser {
           arg[String]("<file>")
             .optional()
             .action((x, c) => updateCmd[SchemaCommand](c, _.copy(filePath = x)))
-            .text("Path to parquet file"),
+            .text("Path to parquet file (supports glob patterns: *, ?, [], {})"),
           opt[String]("format")
             .action((x, c) => updateCmd[SchemaCommand](c, _.copy(format = parseOutputFormat(x))))
             .validate(x =>
@@ -485,7 +487,7 @@ object ArgumentParser {
                 )
               )
             )
-            .text("Path to parquet file"),
+            .text("Path to parquet file (supports glob patterns: *, ?, [], {})"),
           opt[String]("format")
             .action((x, c) => updateCmd[StatsCommand](c, _.copy(format = parseOutputFormat(x))))
             .validate(x =>
@@ -502,7 +504,7 @@ object ArgumentParser {
           arg[String]("<file>")
             .required()
             .action((x, c) => c.copy(command = Some(CountCommand(x))))
-            .text("Path to parquet file"),
+            .text("Path to parquet file (supports glob patterns: *, ?, [], {})"),
           opt[String]("format")
             .action((x, c) => updateCmd[CountCommand](c, _.copy(format = parseOutputFormat(x))))
             .validate(x =>

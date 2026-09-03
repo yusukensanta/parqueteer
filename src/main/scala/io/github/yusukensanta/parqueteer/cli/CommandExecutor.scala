@@ -1206,12 +1206,20 @@ private[cli] object CommandExecutor {
     if !globalOptions.quiet then {
       if format == OutputFormat.JSON then {
         val elements = results.map {
-          case (_, Right((json, _))) =>
-            io.circe.parser.parse(json).getOrElse(io.circe.Json.fromString(json))
+          case (path, Right((json, _))) =>
+            val parsed =
+              io.circe.parser.parse(json).getOrElse(io.circe.Json.fromString(json))
+            io.circe.Json
+              .obj(
+                "path"   -> io.circe.Json.fromString(path),
+                "status" -> io.circe.Json.fromString("ok")
+              )
+              .deepMerge(parsed)
           case (path, Left(error)) =>
             io.circe.Json.obj(
-              "file"  -> io.circe.Json.fromString(path),
-              "error" -> io.circe.Json.fromString(CredentialRedactor.redact(error.userMessage))
+              "path"   -> io.circe.Json.fromString(path),
+              "status" -> io.circe.Json.fromString("error"),
+              "error"  -> io.circe.Json.fromString(CredentialRedactor.redact(error.userMessage))
             )
         }
         println(io.circe.Json.arr(elements*).spaces2)

@@ -275,7 +275,11 @@ class ArgumentParserTest extends AnyFlatSpec with Matchers {
   }
 
   "read --schema-mode" should "default to Strict" in {
-    val result = OParser.parse(ArgumentParser.parser, Array("read", "/data/file.parquet"), ArgumentParser.Config())
+    val result = OParser.parse(
+      ArgumentParser.parser,
+      Array("read", "/data/file.parquet"),
+      ArgumentParser.Config()
+    )
     result.get.command.get.asInstanceOf[ReadCommand].schemaMode shouldBe SchemaMode.Strict
   }
 

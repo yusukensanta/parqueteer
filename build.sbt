@@ -189,7 +189,7 @@ lazy val root = (project in file("."))
         // to 1.64.0 (current clean release). All modules share opentelemetry-java's
         // lockstep release train and must move together to avoid binary-incompatible
         // api/sdk skew.
-        "io.opentelemetry" % "opentelemetry-api"                              % "1.65.0",
+        "io.opentelemetry" % "opentelemetry-api"                             % "1.65.0",
         "io.opentelemetry" % "opentelemetry-common"                          % "1.65.0",
         "io.opentelemetry" % "opentelemetry-context"                         % "1.65.0",
         "io.opentelemetry" % "opentelemetry-sdk"                             % "1.65.0",
@@ -248,7 +248,7 @@ lazy val root = (project in file("."))
         // baggage headers; fixed in 1.62.0. Pinned to 1.65.0 (current release);
         // all modules below share opentelemetry-java's lockstep release train, so they
         // must move together to avoid binary-incompatible api/sdk skew.
-        "io.opentelemetry" % "opentelemetry-api"                              % "1.65.0",
+        "io.opentelemetry" % "opentelemetry-api"                             % "1.65.0",
         "io.opentelemetry" % "opentelemetry-common"                          % "1.65.0",
         "io.opentelemetry" % "opentelemetry-context"                         % "1.65.0",
         "io.opentelemetry" % "opentelemetry-sdk"                             % "1.65.0",
