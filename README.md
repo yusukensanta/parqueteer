@@ -97,6 +97,11 @@ parqueteer read abfss://container@account.dfs.core.windows.net/data.parquet
 # Glob patterns match multiple files (also supported by write, convert, merge,
 # info, schema, stats, count, and validate)
 parqueteer read "s3://bucket/2026-*.parquet"
+
+# Fetch up to N matched files concurrently from cloud storage (default: 4).
+# Applies to info, validate, stats, count, and schema — bounds concurrent
+# connections and in-flight memory instead of opening every match at once.
+parqueteer info "s3://bucket/2026-*.parquet" --file-parallelism 8
 ```
 
 ### File Information

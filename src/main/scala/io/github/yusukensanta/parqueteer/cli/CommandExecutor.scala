@@ -19,6 +19,11 @@ import io.github.yusukensanta.parqueteer.core.formatters.{
   TableFormatter
 }
 import io.github.yusukensanta.parqueteer.core.util.FileExtension
+import scala.concurrent.{Await, ExecutionContext, Future}
+import scala.concurrent.duration.Duration
+import scala.util.control.NonFatal
+import java.util.concurrent.{Executors, ThreadFactory}
+import java.util.concurrent.atomic.AtomicInteger
 
 private[cli] object CommandExecutor {
 
@@ -1213,8 +1218,7 @@ private[cli] object CommandExecutor {
       format: OutputFormat,
       globalOptions: GlobalOptions
   )(renderOne: String => Either[ParqueteerError, (String, Boolean)]): Int = {
-    val results: List[(String, Either[ParqueteerError, (String, Boolean)])] =
-      paths.map(p => p -> renderOne(p))
+    val results = fetchBounded(paths, globalOptions.fileParallelism)(renderOne)
 
     if !globalOptions.quiet then {
       if format == OutputFormat.JSON then {
@@ -1254,6 +1258,45 @@ private[cli] object CommandExecutor {
     }
     if allOk then 0 else 1
   }
+
+  /**
+   * Fetches each path's render result with at most `parallelism` files
+   * in flight at once — bounds concurrent cloud connections and in-memory
+   * results for large globs instead of opening every file at once. Falls
+   * back to a plain sequential map when there's nothing to gain (a single
+   * path, or parallelism disabled), avoiding pool setup overhead. Output
+   * order always matches `paths`, regardless of completion order, and one
+   * path throwing (rather than returning Left) doesn't take the others
+   * down with it.
+   */
+  private def fetchBounded(
+      paths: List[String],
+      parallelism: Int
+  )(
+      renderOne: String => Either[ParqueteerError, (String, Boolean)]
+  ): List[(String, Either[ParqueteerError, (String, Boolean)])] =
+    if paths.size <= 1 || parallelism <= 1 then paths.map(p => p -> renderOne(p))
+    else {
+      val pool = Executors.newFixedThreadPool(
+        parallelism.min(paths.size),
+        new ThreadFactory {
+          private val counter = new AtomicInteger(0)
+          override def newThread(r: Runnable): Thread =
+            val t = new Thread(r, s"parqueteer-file-fetch-${counter.getAndIncrement()}")
+            t.setDaemon(true)
+            t
+        }
+      )
+      try {
+        implicit val ec: ExecutionContext = ExecutionContext.fromExecutor(pool)
+        val futures = paths.map { p =>
+          Future(p -> renderOne(p)).recover { case NonFatal(e) =>
+            p -> Left(ParqueteerError.IOError(e))
+          }
+        }
+        Await.result(Future.sequence(futures), Duration.Inf)
+      } finally pool.shutdown()
+    }
 
   private[cli] def checkOutputWritable(
       outputPath: String
