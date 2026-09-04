@@ -1278,6 +1278,71 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
     printed should include("[REDACTED]")
   }
 
+  it should "never run more than file-parallelism renders concurrently" in {
+    val inFlight    = new java.util.concurrent.atomic.AtomicInteger(0)
+    val maxObserved = new java.util.concurrent.atomic.AtomicInteger(0)
+    val paths       = (1 to 12).map(i => s"/f$i.parquet").toList
+    val code = CommandExecutor.runMultiFileReport(
+      paths,
+      OutputFormat.Table,
+      GlobalOptions(quiet = true, fileParallelism = 3)
+    ) { path =>
+      val current = inFlight.incrementAndGet()
+      maxObserved.updateAndGet(prev => prev.max(current))
+      Thread.sleep(20)
+      inFlight.decrementAndGet()
+      Right((path, true))
+    }
+    code shouldBe 0
+    maxObserved.get should be <= 3
+  }
+
+  it should "preserve input order in output even when later files finish first" in {
+    val out = new ByteArrayOutputStream()
+    Console.withOut(new PrintStream(out)) {
+      CommandExecutor.runMultiFileReport(
+        List("/slow.parquet", "/fast.parquet"),
+        OutputFormat.Table,
+        GlobalOptions(fileParallelism = 4)
+      ) {
+        case "/slow.parquet" =>
+          Thread.sleep(50)
+          Right(("slow result", true))
+        case _ =>
+          Right(("fast result", true))
+      }
+    }
+    val printed = out.toString
+    // The block for /slow.parquet must still appear before /fast.parquet's,
+    // regardless of which one's renderOne call actually finished first.
+    printed.indexOf("==> /slow.parquet <==") should be < printed.indexOf("==> /fast.parquet <==")
+  }
+
+  it should "capture a thrown exception from one file without losing the others" in {
+    val code = CommandExecutor.runMultiFileReport(
+      List("/a.parquet", "/boom.parquet", "/c.parquet"),
+      OutputFormat.Table,
+      GlobalOptions(quiet = true, fileParallelism = 4)
+    ) {
+      case "/boom.parquet" => throw new RuntimeException("simulated network failure")
+      case path            => Right((path, true))
+    }
+    code shouldBe 1
+  }
+
+  it should "fall back to sequential execution when file-parallelism is 1" in {
+    val order = scala.collection.mutable.ListBuffer.empty[String]
+    CommandExecutor.runMultiFileReport(
+      List("/a.parquet", "/b.parquet", "/c.parquet"),
+      OutputFormat.Table,
+      GlobalOptions(quiet = true, fileParallelism = 1)
+    ) { path =>
+      order += path
+      Right((path, true))
+    }
+    order.toList shouldBe List("/a.parquet", "/b.parquet", "/c.parquet")
+  }
+
   // ── warnIfSchemaModeNoop ─────────────────────────────────────────────────
 
   "warnIfSchemaModeNoop" should "warn when schema-mode is Union" in {

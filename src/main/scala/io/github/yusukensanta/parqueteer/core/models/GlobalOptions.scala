@@ -18,5 +18,6 @@ case class GlobalOptions(
     profile: Option[String] = None,
     region: Option[String] = None,
     s3EndpointUrl: Option[String] = None,
-    colorMode: ColorMode = ColorMode.Auto
+    colorMode: ColorMode = ColorMode.Auto,
+    fileParallelism: Int = 4
 )

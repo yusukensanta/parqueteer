@@ -49,6 +49,17 @@ object ArgumentParser {
       opt[String]("region")
         .action((x, c) => c.copy(globalOptions = c.globalOptions.copy(region = Some(x))))
         .text("AWS S3 region (e.g. us-east-1, ap-northeast-1)"),
+      opt[Int]("file-parallelism")
+        .action((x, c) => c.copy(globalOptions = c.globalOptions.copy(fileParallelism = x)))
+        .validate(x =>
+          if x >= 1 then success
+          else failure("File parallelism must be at least 1")
+        )
+        .text(
+          "Max cloud files fetched concurrently for multi-file/glob commands " +
+            "(info, validate, stats, count, schema info) — bounds concurrent " +
+            "connections and in-flight memory (default: 4)"
+        ),
       opt[String]("color")
         .action((x, c) =>
           c.copy(globalOptions =
