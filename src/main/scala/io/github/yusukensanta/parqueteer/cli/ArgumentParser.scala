@@ -57,8 +57,8 @@ object ArgumentParser {
         )
         .text(
           "Max cloud files fetched concurrently for multi-file/glob commands " +
-            "(info, validate, stats, count, schema info) — bounds concurrent " +
-            "connections and in-flight memory (default: 4)"
+            "(info, validate, stats, count, schema info, merge, convert) — bounds " +
+            "concurrent connections and in-flight memory (default: 4)"
         ),
       opt[String]("color")
         .action((x, c) =>

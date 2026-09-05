@@ -99,9 +99,12 @@ parqueteer read abfss://container@account.dfs.core.windows.net/data.parquet
 parqueteer read "s3://bucket/2026-*.parquet"
 
 # Fetch up to N matched files concurrently from cloud storage (default: 4).
-# Applies to info, validate, stats, count, and schema — bounds concurrent
-# connections and in-flight memory instead of opening every match at once.
+# Applies to info, validate, stats, count, schema, merge, and convert — bounds
+# concurrent connections and in-flight memory instead of opening every match
+# at once. For merge/convert, files are fetched ahead of the single output
+# writer rather than all at once, so output order is unaffected.
 parqueteer info "s3://bucket/2026-*.parquet" --file-parallelism 8
+parqueteer merge "s3://bucket/2026-*.parquet" merged.parquet --file-parallelism 8
 ```
 
 ### File Information

@@ -5,7 +5,7 @@ import io.github.yusukensanta.parqueteer.core.models.ParqueteerError.toParquetee
 import io.github.yusukensanta.parqueteer.core.models.StorageLocationParser
 import io.github.yusukensanta.parqueteer.core.repositories.ParquetRepository
 import io.github.yusukensanta.parqueteer.core.filters.FilterParser
-import io.github.yusukensanta.parqueteer.core.util.GlobDetector
+import io.github.yusukensanta.parqueteer.core.util.{GlobDetector, RowPipeline}
 import scala.util.Try
 
 class ParquetService(
@@ -153,7 +153,8 @@ class ParquetService(
       outputPath: String,
       writeConfig: WriteConfig,
       schemaMode: SchemaMode,
-      onProgress: (Int, Int, String) => Unit = (_, _, _) => ()
+      onProgress: (Int, Int, String) => Unit = (_, _, _) => (),
+      fileParallelism: Int = 1
   ): Either[ParqueteerError, Long] =
     if inputPaths.size < 2 then
       Left(
@@ -174,7 +175,8 @@ class ParquetService(
           mergedFields,
           outputLocation,
           writeConfig,
-          onProgress
+          onProgress,
+          fileParallelism
         )
       } yield count
 
@@ -419,7 +421,8 @@ class ParquetService(
       mergedFields: List[FieldSummary],
       outputLocation: StorageLocation,
       writeConfig: WriteConfig,
-      onProgress: (Int, Int, String) => Unit
+      onProgress: (Int, Int, String) => Unit,
+      fileParallelism: Int
   ): Either[ParqueteerError, Long] = {
     val nestedFields = mergedFields.filter(f =>
       f.dataType.startsWith("STRUCT") || f.dataType
@@ -455,27 +458,35 @@ class ParquetService(
       // keys to an output slot through this O(1)-lookup index is O(row.size +
       // fieldNames.length) per row instead.
       val nameToIndex: Map[String, Int] = fieldNames.zipWithIndex.toMap
+      def projectRow(row: Map[String, CellValue]): Map[String, CellValue] = {
+        val values: Array[CellValue] = Array.fill(fieldNames.length)(CellValue.Null)
+        row.foreach { case (k, v) =>
+          nameToIndex.get(k).foreach(idx => values(idx) = v)
+        }
+        val builder = scala.collection.immutable.ListMap.newBuilder[String, CellValue]
+        var j       = 0
+        while j < fieldNames.length do {
+          builder += fieldNames(j) -> values(j)
+          j += 1
+        }
+        builder.result()
+      }
       val writeResult = repository
         .writeContentStream(outputLocation, explicitSchema, writeConfig) { write =>
-          inputLocations.zipWithIndex.foreach { case (loc, i) =>
+          // Up to `fileParallelism` input files are fetched concurrently
+          // ahead of `write`, each buffered through a bounded queue — see
+          // RowPipeline. Output row order still matches inputLocations order
+          // regardless of which file's cloud fetch happens to finish first.
+          val pipelineResult = RowPipeline.run(
+            inputLocations.zipWithIndex.toList,
+            fileParallelism
+          ) { case ((loc, i), sink) =>
             onProgress(i + 1, inputLocations.size, inputPaths(i))
-            val readResult = repository
-              .streamContent(ParquetFile(loc), ReadConfig()) { row =>
-                val values: Array[CellValue] = Array.fill(fieldNames.length)(CellValue.Null)
-                row.foreach { case (k, v) =>
-                  nameToIndex.get(k).foreach(idx => values(idx) = v)
-                }
-                val builder = scala.collection.immutable.ListMap
-                  .newBuilder[String, CellValue]
-                var j = 0
-                while j < fieldNames.length do {
-                  builder += fieldNames(j) -> values(j)
-                  j += 1
-                }
-                write(builder.result())
-              }
-            abortOnReadError(readResult)
-          }
+            repository
+              .streamContent(ParquetFile(loc), ReadConfig())(row => sink(projectRow(row)))
+              .toEither
+          }(write)
+          abortOnReadError(pipelineResult.toTry)
         }
 
       handleStreamWriteResult(outputLocation, writeResult)
@@ -677,11 +688,20 @@ class ParquetService(
       outputPath: String,
       writeConfig: WriteConfig,
       schemaMode: SchemaMode,
-      onProgress: (Int, Int, String) => Unit = (_, _, _) => ()
+      onProgress: (Int, Int, String) => Unit = (_, _, _) => (),
+      fileParallelism: Int = 1
   ): Either[ParqueteerError, Long] =
     inputFormat.toLowerCase match {
       case fmt @ ("ndjson" | "csv" | "ltsv") =>
-        streamMultiRawToParquet(paths, fmt, outputPath, writeConfig, schemaMode, onProgress)
+        streamMultiRawToParquet(
+          paths,
+          fmt,
+          outputPath,
+          writeConfig,
+          schemaMode,
+          onProgress,
+          fileParallelism
+        )
       case "json" =>
         bufferedMultiRawToParquet(paths, outputPath, writeConfig, schemaMode, onProgress)
       case fmt =>
@@ -732,7 +752,8 @@ class ParquetService(
       outputPath: String,
       writeConfig: WriteConfig,
       schemaMode: SchemaMode,
-      onProgress: (Int, Int, String) => Unit
+      onProgress: (Int, Int, String) => Unit,
+      fileParallelism: Int
   ): Either[ParqueteerError, Long] = {
     def withRows[A](path: String)(f: Iterator[Map[String, CellValue]] => Try[A]): Try[A] =
       (inputFormat match {
@@ -770,22 +791,29 @@ class ParquetService(
       nameToIndex = fieldNames.zipWithIndex.toMap
       writeResult = repository.writeContentStream(outputLocation, explicitSchema, writeConfig) {
         write =>
-          paths.zipWithIndex.foreach { case (path, idx) =>
-            onProgress(idx + 1, paths.size, path)
-            val readResult = withRows(path) { rows =>
-              Try {
-                rows.foreach { row =>
-                  val values: Array[CellValue] = Array.fill(fieldNames.length)(CellValue.Null)
-                  row.foreach { case (k, v) => nameToIndex.get(k).foreach(i => values(i) = v) }
-                  val builder = scala.collection.immutable.ListMap.newBuilder[String, CellValue]
-                  var j       = 0
-                  while j < fieldNames.length do { builder += fieldNames(j) -> values(j); j += 1 }
-                  write(builder.result())
+          // See RowPipeline: up to fileParallelism input files are fetched
+          // concurrently ahead of write, bounded per-file, without reordering
+          // rows relative to paths.
+          val pipelineResult = RowPipeline.run(paths.zipWithIndex.toList, fileParallelism) {
+            case ((path, idx), sink) =>
+              onProgress(idx + 1, paths.size, path)
+              withRows(path) { rows =>
+                Try {
+                  var n = 0L
+                  rows.foreach { row =>
+                    val values: Array[CellValue] = Array.fill(fieldNames.length)(CellValue.Null)
+                    row.foreach { case (k, v) => nameToIndex.get(k).foreach(i => values(i) = v) }
+                    val builder = scala.collection.immutable.ListMap.newBuilder[String, CellValue]
+                    var j       = 0
+                    while j < fieldNames.length do { builder += fieldNames(j) -> values(j); j += 1 }
+                    sink(builder.result())
+                    n += 1
+                  }
+                  n
                 }
-              }
-            }
-            abortOnReadError(readResult)
-          }
+              }.toEither
+          }(write)
+          abortOnReadError(pipelineResult.toTry)
       }
       count <- handleStreamWriteResult(outputLocation, writeResult)
     } yield count

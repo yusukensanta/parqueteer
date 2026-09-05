@@ -1123,6 +1123,44 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
     calls.toList shouldBe List("begin", "end")
   }
 
+  it should "keep writer.writeRow calls in read order when parallelism > 1, even if a later read finishes first" in {
+    val written = scala.collection.mutable.ArrayBuffer.empty[Int]
+    val writer = new io.github.yusukensanta.parqueteer.core.formatters.RowStreamWriter {
+      override def begin(): Unit = ()
+      override def writeRow(row: Map[String, CellValue]): Unit =
+        written += row("id").asInstanceOf[CellValue.I64].l.toInt
+      override def end(): Unit = ()
+    }
+    val delayMs = List(30L, 0L, 10L)
+    val reads: List[(Map[String, CellValue] => Unit) => Either[ParqueteerError, Long]] =
+      delayMs.zipWithIndex.map { case (delay, i) =>
+        process => {
+          if delay > 0 then Thread.sleep(delay)
+          process(Map("id" -> CellValue.I64((i + 1).toLong)))
+          Right(1L)
+        }
+      }
+    val result = CommandExecutor.runWithDeferredBeginMulti(writer, reads, parallelism = 3)
+    result shouldBe Right(3L)
+    written.toList shouldBe List(1, 2, 3)
+  }
+
+  it should "still abort on the first failing read when parallelism > 1" in {
+    val err = ParqueteerError.FileNotFound("/b.parquet")
+    val reads: List[(Map[String, CellValue] => Unit) => Either[ParqueteerError, Long]] = List(
+      process => { process(Map.empty); Right(1L) },
+      _ => Left(err),
+      process => { process(Map.empty); Right(1L) }
+    )
+    val writer = new io.github.yusukensanta.parqueteer.core.formatters.RowStreamWriter {
+      override def begin(): Unit                               = ()
+      override def writeRow(row: Map[String, CellValue]): Unit = ()
+      override def end(): Unit                                 = ()
+    }
+    val result = CommandExecutor.runWithDeferredBeginMulti(writer, reads, parallelism = 3)
+    result shouldBe Left(err)
+  }
+
   // ── resolveAllGlobs ─────────────────────────────────────────────────────
 
   "resolveAllGlobs" should "pass literal paths through unchanged" in {
