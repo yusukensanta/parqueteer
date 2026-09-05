@@ -18,7 +18,7 @@ import io.github.yusukensanta.parqueteer.core.formatters.{
   RowStreamWriter,
   TableFormatter
 }
-import io.github.yusukensanta.parqueteer.core.util.FileExtension
+import io.github.yusukensanta.parqueteer.core.util.{FileExtension, RowPipeline}
 import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.concurrent.duration.Duration
 import scala.util.control.NonFatal
@@ -807,7 +807,14 @@ private[cli] object CommandExecutor {
             case ("parquet", "parquet") =>
               val onProgress: (Int, Int, String) => Unit = (i, n, path) =>
                 if !globalOptions.quiet then System.err.println(s"[$i/$n] Converting: $path")
-              service.mergeFiles(inputPaths, outputPath, writeConfig, schemaMode, onProgress)
+              service.mergeFiles(
+                inputPaths,
+                outputPath,
+                writeConfig,
+                schemaMode,
+                onProgress,
+                globalOptions.fileParallelism
+              )
             case ("parquet", ext @ ("json" | "ndjson" | "csv")) =>
               val outFormat = ext match {
                 case "json"   => OutputFormat.JSON
@@ -820,10 +827,18 @@ private[cli] object CommandExecutor {
                 outputPath,
                 outFormat,
                 schemaMode,
-                maxRows
+                maxRows,
+                globalOptions.fileParallelism
               )
             case (ext @ ("json" | "ndjson" | "csv" | "ltsv"), "parquet") =>
-              service.writeMultiRawToParquet(inputPaths, ext, outputPath, writeConfig, schemaMode)
+              service.writeMultiRawToParquet(
+                inputPaths,
+                ext,
+                outputPath,
+                writeConfig,
+                schemaMode,
+                fileParallelism = globalOptions.fileParallelism
+              )
             case _ =>
               Left(
                 ParqueteerError.InvalidFormat(
@@ -851,7 +866,8 @@ private[cli] object CommandExecutor {
       outputPath: String,
       outFormat: OutputFormat,
       schemaMode: SchemaMode,
-      maxRows: Option[Long]
+      maxRows: Option[Long],
+      fileParallelism: Int
   ): Either[ParqueteerError, Long] =
     if cloudUriPattern.findFirstIn(outputPath).isDefined then
       Left(
@@ -907,7 +923,12 @@ private[cli] object CommandExecutor {
                             n
                         }
                     }
-                  val result     = runWithDeferredBeginMulti(writer, reads)
+                  // A running --limit budget is shared (by mutable closure)
+                  // across `reads` in file order, so honoring it correctly
+                  // requires each file to finish before the next starts —
+                  // only prefetch ahead when there's no limit to honor.
+                  val effectiveParallelism = if maxRows.isDefined then 1 else fileParallelism
+                  val result     = runWithDeferredBeginMulti(writer, reads, effectiveParallelism)
                   val writeError = ps.checkError()
                   failed = result.isLeft || writeError
                   if writeError && result.isRight then
@@ -959,7 +980,8 @@ private[cli] object CommandExecutor {
             outputPath,
             writeConfig,
             schemaMode,
-            onProgress
+            onProgress,
+            globalOptions.fileParallelism
           ) match {
             case Right(count) =>
               if !globalOptions.quiet then
@@ -1328,46 +1350,43 @@ private[cli] object CommandExecutor {
     runWithDeferredBeginMulti(writer, List(read))
 
   /**
-   * Runs each `read` in `reads` in order, sharing one begin/end lifecycle
-   * across all of them: `writer.begin()` fires at most once, on the first
-   * row of the first read that produces one (or once at the end if every
-   * read succeeds with zero rows); `writer.end()` fires only if `begin()`
-   * ever fired. Stops at the first read that returns `Left`. Generalizes
-   * the single-read case (`runWithDeferredBegin`) to N sequential reads —
-   * used by multi-file streaming conversions where one output writer spans
-   * several input files.
+   * Runs each `read` in `reads`, sharing one begin/end lifecycle across all
+   * of them: `writer.begin()` fires at most once, on the first row of the
+   * first read that produces one (or once at the end if every read
+   * succeeds with zero rows); `writer.end()` fires only if `begin()` ever
+   * fired. Aborts on the first read that returns `Left`. Generalizes the
+   * single-read case (`runWithDeferredBegin`) to N reads — used by
+   * multi-file streaming conversions where one output writer spans several
+   * input files. `writer.begin()`/`writeRow` only ever run on the calling
+   * thread, in `reads` order, even when `parallelism > 1` fetches several
+   * reads concurrently ahead of the writer (see RowPipeline).
    */
   private[cli] def runWithDeferredBeginMulti(
       writer: RowStreamWriter,
-      reads: List[(Map[String, CellValue] => Unit) => Either[ParqueteerError, Long]]
+      reads: List[(Map[String, CellValue] => Unit) => Either[ParqueteerError, Long]],
+      parallelism: Int = 1
   ): Either[ParqueteerError, Long] = {
-    var started                        = false
-    var total                          = 0L
-    var error: Option[ParqueteerError] = None
-    val it                             = reads.iterator
-    while error.isEmpty && it.hasNext do {
-      val read = it.next()
-      read { row =>
-        if !started then { writer.begin(); started = true }
-        writer.writeRow(row)
-      } match {
-        case Right(n)  => total += n
-        case Left(err) => error = Some(err)
-      }
+    var started = false
+    // Each `read` thunk is itself the pipeline "item" — up to `parallelism`
+    // of them run concurrently ahead of the writer (see RowPipeline), but
+    // writer.begin()/writeRow still only ever run on this thread, in order.
+    val pipelineResult = RowPipeline.run(reads, parallelism)((read, sink) => read(sink)) { row =>
+      if !started then { writer.begin(); started = true }
+      writer.writeRow(row)
     }
-    if !started && error.isEmpty then { writer.begin(); started = true }
+    if !started && pipelineResult.isRight then { writer.begin(); started = true }
     val endFailure: Option[Throwable] =
       if started then scala.util.Try(writer.end()).failed.toOption else None
-    (error, endFailure) match {
-      case (None, Some(ex)) => Left(ParqueteerError.IOError(ex))
-      case (Some(err), Some(ex)) =>
+    (pipelineResult, endFailure) match {
+      case (Right(_), Some(ex)) => Left(ParqueteerError.IOError(ex))
+      case (Left(err), Some(ex)) =>
         System.err.println(
           s"[parqueteer] warning: error flushing output: ${CredentialRedactor
               .redact(Option(ex.getMessage).getOrElse(ex.getClass.getSimpleName))}"
         )
         Left(err)
-      case (Some(err), None) => Left(err)
-      case (None, None)      => Right(total)
+      case (Left(err), None)    => Left(err)
+      case (Right(total), None) => Right(total)
     }
   }
 

@@ -872,6 +872,75 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     filesAttempted shouldBe 1
   }
 
+  // ── mergeFiles concurrent fetch (fileParallelism > 1) ────────────────────
+
+  it should "keep output row order matching input path order, even when a later file's fetch finishes first" in {
+    val rowsByPath = Map(
+      "a.parquet" -> (30L, CellValue.I64(1L)),
+      "b.parquet" -> (0L, CellValue.I64(2L)),
+      "c.parquet" -> (10L, CellValue.I64(3L))
+    )
+    val repo = new FakeParquetRepository() {
+      override def streamContent(file: ParquetFile, config: ReadConfig)(
+          process: Map[String, CellValue] => Unit
+      ): Try[Long] = {
+        val (delayMs, id) = rowsByPath(file.location.path.split("/").last)
+        if delayMs > 0 then Thread.sleep(delayMs)
+        process(Map("id" -> id))
+        Success(1L)
+      }
+    }
+    val captured = scala.collection.mutable.ArrayBuffer.empty[Map[String, CellValue]]
+    val capturingRepo = new FakeParquetRepository() {
+      val inner: ParquetRepository = repo
+      override def streamContent(file: ParquetFile, config: ReadConfig)(
+          process: Map[String, CellValue] => Unit
+      ): Try[Long] = inner.streamContent(file, config)(process)
+      override def writeContentStream(
+          location: StorageLocation,
+          schema: ParquetSchema,
+          config: WriteConfig
+      )(feed: (Map[String, CellValue] => Unit) => Unit): Try[Long] = {
+        feed(row => captured.synchronized(captured += row))
+        Success(captured.size.toLong)
+      }
+    }
+    val service = new ParquetService(capturingRepo)
+    val result = service.mergeFiles(
+      List("a.parquet", "b.parquet", "c.parquet"),
+      "out.parquet",
+      WriteConfig(),
+      SchemaMode.Strict,
+      fileParallelism = 3
+    )
+    result.isRight shouldBe true
+    captured.map(_("id")).toList shouldBe List(
+      CellValue.I64(1L),
+      CellValue.I64(2L),
+      CellValue.I64(3L)
+    )
+  }
+
+  it should "fail the merge if any file errors, even when files are fetched concurrently" in {
+    val repo = new FakeParquetRepository() {
+      override def streamContent(file: ParquetFile, config: ReadConfig)(
+          process: Map[String, CellValue] => Unit
+      ): Try[Long] =
+        if file.location.path.endsWith("b.parquet") then
+          Failure(new RuntimeException("simulated read error on file b"))
+        else { process(Map("id" -> CellValue.I64(1L))); Success(1L) }
+    }
+    val service = new ParquetService(repo)
+    val result = service.mergeFiles(
+      List("a.parquet", "b.parquet", "c.parquet"),
+      "out.parquet",
+      WriteConfig(),
+      SchemaMode.Strict,
+      fileParallelism = 3
+    )
+    result.isLeft shouldBe true
+  }
+
   // ── mergeFiles union required-flag correctness ───────────────────────────
   it should "mark a column optional in union merge when it first appears in a later file" in {
     // file 1 has only column 'a'; file 2 adds column 'b' (REQUIRED in its own schema).
