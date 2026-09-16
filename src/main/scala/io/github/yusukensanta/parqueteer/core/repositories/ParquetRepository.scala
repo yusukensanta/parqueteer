@@ -14,7 +14,8 @@ import org.apache.hadoop.fs.{FileStatus, FileSystem, Path as HadoopPath}
 import org.apache.parquet.hadoop.ParquetFileReader
 import org.apache.parquet.hadoop.example.ExampleParquetWriter
 import org.apache.parquet.hadoop.metadata.{BlockMetaData, ColumnChunkMetaData, ParquetMetadata}
-import org.apache.parquet.hadoop.util.HadoopInputFile
+import org.apache.parquet.hadoop.util.{HadoopInputFile, HadoopStreams}
+import org.apache.parquet.io.{LocalInputFile, SeekableInputStream}
 import org.apache.parquet.example.data.simple.SimpleGroupFactory
 import org.apache.parquet.hadoop.ParquetWriter as HParquetWriter
 import org.apache.parquet.example.data.Group
@@ -192,11 +193,38 @@ class HadoopParquetRepository(
       )
     )
 
-  // Cache-aware footer fetch: 0 cloud ops on hit, 1 stat + 1 stream on miss.
+  // Opens a footer-reading stream for `location`. Local paths go through
+  // LocalInputFile (plain RandomAccessFile — no Hadoop Configuration/FileSystem
+  // touched at all, which is most of the fixed per-invocation cost for local
+  // schema/stats/count reads). Cloud paths go through Hadoop's FileSystem, but
+  // via openFile().withFileStatus() rather than plain open() — S3A (and other
+  // FileSystems that support it) skip their own internal getFileStatus/HEAD
+  // when a FileStatus is already supplied, so passing a caller-known status
+  // here avoids a second redundant HEAD on top of the one below.
+  private[repositories] def openFooterStream(
+      location: StorageLocation,
+      path: HadoopPath,
+      conf: Configuration,
+      knownStatus: Option[FileStatus]
+  ): (SeekableInputStream, Long) = location match {
+    case LocalPath(p) =>
+      val localFile = new LocalInputFile(java.nio.file.Paths.get(p))
+      (localFile.newStream(), localFile.getLength)
+    case _ =>
+      val fs     = path.getFileSystem(conf)
+      val status = knownStatus.getOrElse(fs.getFileStatus(path))
+      val stream = HadoopStreams.wrap(fs.openFile(path).withFileStatus(status).build().get())
+      (stream, status.getLen)
+  }
+
+  // Cache-aware footer fetch: 0 cloud ops on hit, at most 1 stat + 1 stream on
+  // miss (0 stats when the caller already knows the FileStatus).
   // LRU eviction is handled by the LinkedHashMap's removeEldestEntry override.
   private def getFooter(
+      location: StorageLocation,
       path: HadoopPath,
-      conf: Configuration
+      conf: Configuration,
+      knownStatus: Option[FileStatus] = None
   ): FooterEntry = {
     val key = path.toString
     Option(footerCache.get(key)) match {
@@ -205,7 +233,8 @@ class HadoopParquetRepository(
         cached
       case None =>
         footerCacheMisses.incrementAndGet()
-        val footerBytes = FooterReader.readFooterBytes(HadoopInputFile.fromPath(path, conf))
+        val (stream, fileLen)    = openFooterStream(location, path, conf, knownStatus)
+        val footerBytes          = FooterReader.readFooterBytes(stream, fileLen)
         val (version, createdBy) = FooterReader.parseRawMeta(footerBytes)
         val meta                 = FooterReader.parseFooter(footerBytes)
         val entry =
@@ -221,9 +250,10 @@ class HadoopParquetRepository(
     withHadoopConfig(file.location) { hadoopConfig =>
       val cacheKey = new HadoopPath(file.location.path).toString
       val result = Try {
-        val hadoopPath                             = new HadoopPath(file.location.path)
-        val (fileSchema, blocks, _, _, footerMeta) = getFooter(hadoopPath, hadoopConfig)
-        val totalRows                              = blocks.map(_.getRowCount).sum
+        val hadoopPath = new HadoopPath(file.location.path)
+        val (fileSchema, blocks, _, _, footerMeta) =
+          getFooter(file.location, hadoopPath, hadoopConfig)
+        val totalRows = blocks.map(_.getRowCount).sum
 
         // filter forces sequential: parquet4s evaluates predicates during
         // deserialization, not at page-selection time, so parallel reads can't
@@ -306,7 +336,7 @@ class HadoopParquetRepository(
       val result = Try {
         val path4s                   = Parquet4sPath(file.location.path)
         val hadoopPath               = new HadoopPath(file.location.path)
-        val (fileSchema, _, _, _, _) = getFooter(hadoopPath, hadoopConfig)
+        val (fileSchema, _, _, _, _) = getFooter(file.location, hadoopPath, hadoopConfig)
         val rawBinaryFields =
           ParquetRecordDecoder.rawBinaryFieldsFor(fileSchema)
         val int96Fields =
@@ -381,20 +411,42 @@ class HadoopParquetRepository(
     withHadoopConfig(file.location) { hadoopConfig =>
       Try {
         val path                         = new HadoopPath(file.location.path)
-        val (msgSchema, blocks, _, _, _) = getFooter(path, hadoopConfig)
+        val (msgSchema, blocks, _, _, _) = getFooter(file.location, path, hadoopConfig)
         FooterReader.buildParquetSchema(msgSchema, blocks)
       }
     }
+
+  // Size + mtime for FileMetadata. Takes no Configuration/FileSystem — for
+  // local paths this is the only extra Hadoop touch readFileInfo needed
+  // beyond the footer read, so keeping it Hadoop-free here (rather than via
+  // path.getFileSystem(conf).getFileStatus(path)) is what lets the "schema"
+  // and "info" CLI commands skip Hadoop entirely for local files. Mirrors
+  // Hadoop's own FileNotFoundException-on-missing-path contract so error
+  // handling (ParqueteerError's FileNotFoundException case) is unaffected.
+  private[repositories] def localFileSizeAndMTime(path: String): (Long, Long) = {
+    val f = new java.io.File(path)
+    if !f.exists() then throw new FileNotFoundException(path)
+    (f.length(), f.lastModified())
+  }
 
   def readFileInfo(
       file: ParquetFile
   ): Try[(ParquetSchema, FileMetadata, List[RowGroupInfo])] =
     withHadoopConfig(file.location) { hadoopConfig =>
       Try {
-        val path       = new HadoopPath(file.location.path)
-        val fileStatus = path.getFileSystem(hadoopConfig).getFileStatus(path)
-        val (msgSchema, blocks, version, createdBy, _) = getFooter(path, hadoopConfig)
-        val ratio                                      = calculateCompressionRatio(blocks)
+        val path = new HadoopPath(file.location.path)
+        val (fileSize, modTimeMillis, knownStatus): (Long, Long, Option[FileStatus]) =
+          file.location match {
+            case LocalPath(p) =>
+              val (size, mtime) = localFileSizeAndMTime(p)
+              (size, mtime, None)
+            case _ =>
+              val status = path.getFileSystem(hadoopConfig).getFileStatus(path)
+              (status.getLen, status.getModificationTime, Some(status))
+          }
+        val (msgSchema, blocks, version, createdBy, _) =
+          getFooter(file.location, path, hadoopConfig, knownStatus)
+        val ratio        = calculateCompressionRatio(blocks)
         val parsedSchema = FooterReader.buildParquetSchema(msgSchema, blocks)
         val codecs       = parsedSchema.columns.map(_.compressionType).distinct
         val codec =
@@ -405,11 +457,9 @@ class HadoopParquetRepository(
           if blocks.isEmpty then None
           else Some(blocks.map(_.getTotalByteSize).sum / blocks.size)
         val metadata = FileMetadata(
-          fileSize = fileStatus.getLen,
+          fileSize = fileSize,
           createdAt = None,
-          modifiedAt = Some(
-            java.time.Instant.ofEpochMilli(fileStatus.getModificationTime)
-          ),
+          modifiedAt = Some(java.time.Instant.ofEpochMilli(modTimeMillis)),
           compressionRatio = ratio,
           version = version,
           createdBy = Some(createdBy),
@@ -614,7 +664,7 @@ class HadoopParquetRepository(
     withHadoopConfig(file.location) { hadoopConfig =>
       Try {
         val path                 = new HadoopPath(file.location.path)
-        val (schema, _, _, _, _) = getFooter(path, hadoopConfig)
+        val (schema, _, _, _, _) = getFooter(file.location, path, hadoopConfig)
         schema.getFields.asScala.toList.map { field =>
           val typeName =
             if field.isPrimitive then {
@@ -648,7 +698,7 @@ class HadoopParquetRepository(
     withHadoopConfig(file.location) { hadoopConfig =>
       Try {
         val path                      = new HadoopPath(file.location.path)
-        val (schema, blocks, _, _, _) = getFooter(path, hadoopConfig)
+        val (schema, blocks, _, _, _) = getFooter(file.location, path, hadoopConfig)
         val totalRows                 = blocks.map(_.getRowCount).sum
 
         // Build each block's column-name -> chunk index once (O(blocks * columns)),

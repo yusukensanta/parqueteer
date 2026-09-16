@@ -2,7 +2,7 @@ package io.github.yusukensanta.parqueteer.core.repositories
 
 import io.github.yusukensanta.parqueteer.core.models.{ColumnInfo, ParquetSchema}
 import org.apache.parquet.hadoop.metadata.{BlockMetaData, ParquetMetadata}
-import org.apache.parquet.hadoop.util.HadoopInputFile
+import org.apache.parquet.io.SeekableInputStream
 import org.apache.parquet.format.converter.ParquetMetadataConverter
 import org.apache.parquet.schema.{LogicalTypeAnnotation, MessageType}
 import org.apache.parquet.schema.LogicalTypeAnnotation.*
@@ -19,9 +19,12 @@ private[repositories] object FooterReader {
   private val metadataConverter = new ParquetMetadataConverter()
   private val MaxFooterBytes    = 256 * 1024 * 1024
 
-  def readFooterBytes(inputFile: HadoopInputFile): Array[Byte] =
-    Using.resource(inputFile.newStream()) { stream =>
-      val fileLen = inputFile.getLength
+  // Takes an already-open stream + known length rather than an InputFile so
+  // callers can supply either a Hadoop-backed stream (cloud/legacy paths) or a
+  // LocalInputFile-backed one (plain local reads, no Hadoop Configuration/
+  // FileSystem involved at all) through the same footer-parsing logic.
+  def readFooterBytes(stream: SeekableInputStream, fileLen: Long): Array[Byte] =
+    Using.resource(stream) { stream =>
       if fileLen < 12 then
         throw new IOException(
           s"File too small to be a valid Parquet file (${fileLen} bytes)"
