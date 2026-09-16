@@ -863,15 +863,23 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
     // invoked with (mergeFiles's streamMerge calls it once per input file;
     // the old single-file convertParquetFile path calls it exactly once,
     // with the unexpanded "/data/*.parquet" literal) so the assertion below
-    // fails unless both matched files were genuinely read in order.
-    val streamedPaths = scala.collection.mutable.ListBuffer.empty[String]
+    // fails unless both matched files were genuinely read.
+    //
+    // GlobalOptions defaults fileParallelism to 4, so mergeFiles's fetch-ahead
+    // pipeline (RowPipeline) fetches both files concurrently on real threads —
+    // it only guarantees row order, not which file's streamContent call
+    // starts first, so asserting an exact call order here is inherently
+    // flaky. A thread-safe collection plus a set comparison checks what's
+    // actually guaranteed (both files genuinely read) without coupling the
+    // test to fetch-ahead scheduling.
+    val streamedPaths = new java.util.concurrent.ConcurrentLinkedQueue[String]()
     val repo = new FakeParquetRepository() {
       override def globStatus(location: StorageLocation): Try[List[StorageLocation]] =
         Success(List(LocalPath("/data/a.parquet"), LocalPath("/data/b.parquet")))
       override def streamContent(file: ParquetFile, config: ReadConfig)(
           process: Map[String, CellValue] => Unit
       ): Try[Long] = {
-        streamedPaths += file.location.path
+        streamedPaths.add(file.location.path)
         super.streamContent(file, config)(process)
       }
     }
@@ -882,7 +890,8 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
       GlobalOptions(quiet = true)
     )
     code shouldBe 0
-    streamedPaths.toList shouldBe List("/data/a.parquet", "/data/b.parquet")
+    import scala.jdk.CollectionConverters.*
+    streamedPaths.asScala.toSet shouldBe Set("/data/a.parquet", "/data/b.parquet")
   }
 
   it should "concatenate glob-matched parquet files into one text output" in {
