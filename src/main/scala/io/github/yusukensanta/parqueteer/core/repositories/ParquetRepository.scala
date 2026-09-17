@@ -15,7 +15,7 @@ import org.apache.parquet.hadoop.ParquetFileReader
 import org.apache.parquet.hadoop.example.ExampleParquetWriter
 import org.apache.parquet.hadoop.metadata.{BlockMetaData, ColumnChunkMetaData, ParquetMetadata}
 import org.apache.parquet.hadoop.util.{HadoopInputFile, HadoopStreams}
-import org.apache.parquet.io.{LocalInputFile, SeekableInputStream}
+import org.apache.parquet.io.{InputFile, LocalInputFile, SeekableInputStream}
 import org.apache.parquet.example.data.simple.SimpleGroupFactory
 import org.apache.parquet.hadoop.ParquetWriter as HParquetWriter
 import org.apache.parquet.example.data.Group
@@ -215,6 +215,19 @@ class HadoopParquetRepository(
       val status = knownStatus.getOrElse(fs.getFileStatus(path))
       val stream = HadoopStreams.wrap(fs.openFile(path).withFileStatus(status).build().get())
       (stream, status.getLen)
+  }
+
+  // Same LocalPath-vs-cloud branch as openFooterStream, but returning a plain
+  // InputFile for callers (validateFile) that use parquet-mr's own generic
+  // ParquetFileReader.open(InputFile) API directly rather than going through
+  // getFooter's cached (stream, length) shape.
+  private[repositories] def openInputFile(
+      location: StorageLocation,
+      path: HadoopPath,
+      conf: Configuration
+  ): InputFile = location match {
+    case LocalPath(p) => new LocalInputFile(java.nio.file.Paths.get(p))
+    case _            => HadoopInputFile.fromPath(path, conf)
   }
 
   // Cache-aware footer fetch: 0 cloud ops on hit, at most 1 stat + 1 stream on
@@ -595,7 +608,7 @@ class HadoopParquetRepository(
         val issues = scala.collection.mutable.ListBuffer[String]()
 
         Try(
-          ParquetFileReader.open(HadoopInputFile.fromPath(path, hadoopConfig))
+          ParquetFileReader.open(openInputFile(file.location, path, hadoopConfig))
         ) match {
           case scala.util.Failure(ex: FileNotFoundException) =>
             throw ex
