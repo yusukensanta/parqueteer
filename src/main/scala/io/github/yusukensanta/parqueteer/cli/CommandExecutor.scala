@@ -6,8 +6,10 @@ import io.github.yusukensanta.parqueteer.core.models.{
   ColorMode,
   CompressionType,
   ConversionConfig,
+  FileStats,
   GlobalOptions,
   OutputFormat,
+  ParquetFile,
   ParqueteerError,
   ReadConfig,
   SchemaMode,
@@ -214,6 +216,41 @@ private[cli] object CommandExecutor {
         executeCompletions(shell, globalOptions)
     }
 
+  // Shared by executeRead/executeReadMulti's streaming branches.
+  private[cli] def buildRowStreamWriter(
+      format: OutputFormat,
+      globalOptions: GlobalOptions
+  ): RowStreamWriter = {
+    val baseWriter =
+      if globalOptions.quiet then
+        new RowStreamWriter {
+          override def writeRow(row: Map[String, CellValue]): Unit = ()
+        }
+      else RowStreamWriter(format, System.out)
+    if globalOptions.verbose && !globalOptions.quiet then
+      new ProgressRowStreamWriter(baseWriter, System.err)
+    else baseWriter
+  }
+
+  // Shared by executeRead/executeReadMulti: a broken pipe/full disk surfaces
+  // as a stdout write error rather than a Left from the read itself, so it
+  // needs its own check ahead of the normal Either handling.
+  private[cli] def exitCodeForStreamResult(
+      result: Either[ParqueteerError, Long],
+      globalOptions: GlobalOptions
+  ): Int = {
+    val stdoutError = System.out.checkError()
+    result match {
+      case _ if stdoutError =>
+        System.err.println(
+          "[parqueteer] error: output stream write error (disk full or broken pipe)"
+        )
+        1
+      case Right(_)    => 0
+      case Left(error) => reportError("Error", globalOptions)(error)
+    }
+  }
+
   private[cli] def executeRead(
       service: ParquetService,
       filePath: String,
@@ -256,29 +293,10 @@ private[cli] object CommandExecutor {
       )
 
     if effectiveStreaming then {
-      val baseWriter =
-        if globalOptions.quiet then
-          new RowStreamWriter {
-            override def writeRow(row: Map[String, CellValue]): Unit = ()
-          }
-        else RowStreamWriter(format, System.out)
-      val writer =
-        if globalOptions.verbose && !globalOptions.quiet then
-          new ProgressRowStreamWriter(baseWriter, System.err)
-        else baseWriter
+      val writer = buildRowStreamWriter(format, globalOptions)
       val result =
         runWithDeferredBegin(writer, service.streamRead(filePath, readConfig))
-      val stdoutError = System.out.checkError()
-      result match {
-        case _ if stdoutError =>
-          System.err.println(
-            "[parqueteer] error: output stream write error (disk full or broken pipe)"
-          )
-          1
-        case Right(_) => 0
-        case Left(error) =>
-          reportError("Error", globalOptions)(error)
-      }
+      exitCodeForStreamResult(result, globalOptions)
     } else {
       service.readFile(filePath, readConfig) match {
         case Right(file) =>
@@ -332,28 +350,36 @@ private[cli] object CommandExecutor {
       System.err.println(
         "[parqueteer] warning: --format pretty is not supported in streaming mode; falling back to ndjson."
       )
-    val baseWriter =
-      if globalOptions.quiet then
-        new RowStreamWriter {
-          override def writeRow(row: Map[String, CellValue]): Unit = ()
-        }
-      else RowStreamWriter(format, System.out)
-    val writer =
-      if globalOptions.verbose && !globalOptions.quiet then
-        new ProgressRowStreamWriter(baseWriter, System.err)
-      else baseWriter
+    val writer = buildRowStreamWriter(format, globalOptions)
     val result =
       runWithDeferredBegin(writer, service.streamReadMulti(paths, readConfig, schemaMode))
-    val stdoutError = System.out.checkError()
-    result match {
-      case _ if stdoutError =>
-        System.err.println(
-          "[parqueteer] error: output stream write error (disk full or broken pipe)"
-        )
-        1
-      case Right(_)    => 0
-      case Left(error) => reportError("Error", globalOptions)(error)
-    }
+    exitCodeForStreamResult(result, globalOptions)
+  }
+
+  // Shared by executeInfo/executeInfoMulti so the two rendering paths can't
+  // silently drift apart (JSON vs table branch, metadata/schema/row-group
+  // sections) the way they used to when each had its own copy.
+  private[cli] def formatInfoText(
+      file: ParquetFile,
+      format: OutputFormat,
+      verbose: Boolean
+  ): String = format match {
+    case OutputFormat.JSON => CliOutputFormatter.formatInfoJson(file, verbose)
+    case _ =>
+      val metaOut = file.metadata match {
+        case Some(metadata) => new TableFormatter().formatMetadata(metadata)
+        case None           => "No metadata information available"
+      }
+      val schemaOut = file.schema.fold("") { s =>
+        s"\nRows:        ${s.totalRowCount}\n" +
+          s"Row Groups:  ${s.rowGroupCount}\n" +
+          s"Columns:     ${s.columns.size}"
+      }
+      val verboseOut =
+        if verbose && file.rowGroups.nonEmpty then
+          "\n\n" + CliOutputFormatter.formatRowGroupsTable(file.rowGroups)
+        else ""
+      metaOut + schemaOut + verboseOut
   }
 
   private[cli] def executeInfo(
@@ -365,30 +391,7 @@ private[cli] object CommandExecutor {
   ): Int =
     service.getFileInfo(filePath) match {
       case Right(file) =>
-        if !globalOptions.quiet then {
-          format match {
-            case OutputFormat.JSON =>
-              println(CliOutputFormatter.formatInfoJson(file, verbose))
-            case _ =>
-              val metaOut = file.metadata match {
-                case Some(metadata) =>
-                  new TableFormatter().formatMetadata(metadata)
-                case None => "No metadata information available"
-              }
-              val schemaOut = file.schema.fold("") { s =>
-                s"\nRows:        ${s.totalRowCount}\n" +
-                  s"Row Groups:  ${s.rowGroupCount}\n" +
-                  s"Columns:     ${s.columns.size}"
-              }
-              val verboseOut =
-                if verbose && file.rowGroups.nonEmpty then
-                  "\n\n" + CliOutputFormatter.formatRowGroupsTable(
-                    file.rowGroups
-                  )
-                else ""
-              println(metaOut + schemaOut + verboseOut)
-          }
-        }
+        if !globalOptions.quiet then println(formatInfoText(file, format, verbose))
         0
       case Left(error) =>
         reportError("Failed to get file info", globalOptions)(error)
@@ -402,27 +405,7 @@ private[cli] object CommandExecutor {
       globalOptions: GlobalOptions
   ): Int =
     runMultiFileReport(paths, format, globalOptions) { path =>
-      service.getFileInfo(path).map { file =>
-        val text =
-          if format == OutputFormat.JSON then CliOutputFormatter.formatInfoJson(file, verbose)
-          else {
-            val metaOut = file.metadata match {
-              case Some(metadata) => new TableFormatter().formatMetadata(metadata)
-              case None           => "No metadata information available"
-            }
-            val schemaOut = file.schema.fold("") { s =>
-              s"\nRows:        ${s.totalRowCount}\n" +
-                s"Row Groups:  ${s.rowGroupCount}\n" +
-                s"Columns:     ${s.columns.size}"
-            }
-            val verboseOut =
-              if verbose && file.rowGroups.nonEmpty then
-                "\n\n" + CliOutputFormatter.formatRowGroupsTable(file.rowGroups)
-              else ""
-            metaOut + schemaOut + verboseOut
-          }
-        (text, true)
-      }
+      service.getFileInfo(path).map(file => (formatInfoText(file, format, verbose), true))
     }
 
   private[cli] def executeWrite(
@@ -515,6 +498,21 @@ private[cli] object CommandExecutor {
     }
   }
 
+  // Shared by executeValidate/executeValidateMulti's --verbose schema
+  // summary. Returns "" when there's no schema to show (missing file info,
+  // or the file legitimately has none) so callers can decide how to attach
+  // it (println vs string concatenation) without duplicating the lookup.
+  private[cli] def formatValidateVerboseSchema(service: ParquetService, path: String): String =
+    service.getFileInfo(path) match {
+      case Right(file) =>
+        file.schema.fold("") { s =>
+          s"  Columns:    ${s.columns.size}\n" +
+            s"  Row groups: ${s.rowGroupCount}\n" +
+            s"  Total rows: ${s.totalRowCount}"
+        }
+      case Left(_) => ""
+    }
+
   private[cli] def executeValidate(
       service: ParquetService,
       filePath: String,
@@ -527,15 +525,8 @@ private[cli] object CommandExecutor {
         if result.isValid then {
           if !globalOptions.quiet then println(s"✓ File $filePath is valid")
           if verbose then {
-            service.getFileInfo(filePath) match {
-              case Right(file) =>
-                file.schema.foreach { s =>
-                  println(s"  Columns:    ${s.columns.size}")
-                  println(s"  Row groups: ${s.rowGroupCount}")
-                  println(s"  Total rows: ${s.totalRowCount}")
-                }
-              case Left(_) => ()
-            }
+            val summary = formatValidateVerboseSchema(service, filePath)
+            if summary.nonEmpty then println(summary)
           }
           0
         } else {
@@ -558,18 +549,8 @@ private[cli] object CommandExecutor {
       service.validateFile(path, deep).map { result =>
         val text =
           if result.isValid then {
-            val verboseOut =
-              if verbose then
-                service.getFileInfo(path) match {
-                  case Right(file) =>
-                    file.schema.fold("") { s =>
-                      s"\n  Columns:    ${s.columns.size}\n" +
-                        s"  Row groups: ${s.rowGroupCount}\n" +
-                        s"  Total rows: ${s.totalRowCount}"
-                    }
-                  case Left(_) => ""
-                }
-              else ""
+            val summary    = if verbose then formatValidateVerboseSchema(service, path) else ""
+            val verboseOut = if summary.nonEmpty then "\n" + summary else ""
             s"✓ File $path is valid" + verboseOut
           } else (s"✗ File $path has issues:" :: result.issues.map(i => s"  - $i")).mkString("\n")
         (text, result.isValid)
@@ -1018,6 +999,16 @@ private[cli] object CommandExecutor {
     0
   }
 
+  private[cli] def formatSchemaText(file: ParquetFile, format: OutputFormat): String =
+    format match {
+      case OutputFormat.JSON => CliOutputFormatter.formatSchemaJson(file)
+      case _ =>
+        file.schema match {
+          case Some(schema) => new TableFormatter().formatSchema(schema)
+          case None         => "No schema information available"
+        }
+    }
+
   private[cli] def executeSchemaInfo(
       service: ParquetService,
       cmd: SchemaCommand,
@@ -1033,18 +1024,7 @@ private[cli] object CommandExecutor {
         case Left(error) =>
           reportError("Failed to read schema", globalOptions)(error)
         case Right(file) =>
-          if !globalOptions.quiet then {
-            cmd.format match {
-              case OutputFormat.JSON =>
-                println(CliOutputFormatter.formatSchemaJson(file))
-              case _ =>
-                val output = file.schema match {
-                  case Some(schema) => new TableFormatter().formatSchema(schema)
-                  case None         => "No schema information available"
-                }
-                println(output)
-            }
-          }
+          if !globalOptions.quiet then println(formatSchemaText(file, cmd.format))
           0
       }
 
@@ -1055,16 +1035,13 @@ private[cli] object CommandExecutor {
       globalOptions: GlobalOptions
   ): Int =
     runMultiFileReport(paths, format, globalOptions) { path =>
-      service.getFileInfo(path).map { file =>
-        val text =
-          if format == OutputFormat.JSON then CliOutputFormatter.formatSchemaJson(file)
-          else
-            file.schema match {
-              case Some(schema) => new TableFormatter().formatSchema(schema)
-              case None         => "No schema information available"
-            }
-        (text, true)
-      }
+      service.getFileInfo(path).map(file => (formatSchemaText(file, format), true))
+    }
+
+  private[cli] def formatStatsText(stats: FileStats, format: OutputFormat): String =
+    format match {
+      case OutputFormat.JSON => CliOutputFormatter.formatStatsJson(stats)
+      case _                 => CliOutputFormatter.formatStatsTable(stats)
     }
 
   private[cli] def executeStats(
@@ -1075,13 +1052,7 @@ private[cli] object CommandExecutor {
   ): Int =
     service.getStats(filePath) match {
       case Right(stats) =>
-        if !globalOptions.quiet then {
-          format match {
-            case OutputFormat.JSON =>
-              println(CliOutputFormatter.formatStatsJson(stats))
-            case _ => println(CliOutputFormatter.formatStatsTable(stats))
-          }
-        }
+        if !globalOptions.quiet then println(formatStatsText(stats, format))
         0
       case Left(error) =>
         reportError("Failed to get stats", globalOptions)(error)
@@ -1094,12 +1065,13 @@ private[cli] object CommandExecutor {
       globalOptions: GlobalOptions
   ): Int =
     runMultiFileReport(paths, format, globalOptions) { path =>
-      service.getStats(path).map { stats =>
-        val text =
-          if format == OutputFormat.JSON then CliOutputFormatter.formatStatsJson(stats)
-          else CliOutputFormatter.formatStatsTable(stats)
-        (text, true)
-      }
+      service.getStats(path).map(stats => (formatStatsText(stats, format), true))
+    }
+
+  private[cli] def formatCountText(count: Long, format: OutputFormat): String =
+    format match {
+      case OutputFormat.JSON => CliOutputFormatter.formatCountJson(count)
+      case _                 => count.toString
     }
 
   private[cli] def executeCount(
@@ -1112,11 +1084,7 @@ private[cli] object CommandExecutor {
       case Right(file) =>
         if !globalOptions.quiet then {
           val count = file.schema.fold(0L)(_.totalRowCount)
-          format match {
-            case OutputFormat.JSON =>
-              println(CliOutputFormatter.formatCountJson(count))
-            case _ => println(count)
-          }
+          println(formatCountText(count, format))
         }
         0
       case Left(error) =>
@@ -1132,10 +1100,7 @@ private[cli] object CommandExecutor {
     runMultiFileReport(paths, format, globalOptions) { path =>
       service.getFileInfo(path).map { file =>
         val count = file.schema.fold(0L)(_.totalRowCount)
-        val text =
-          if format == OutputFormat.JSON then CliOutputFormatter.formatCountJson(count)
-          else count.toString
-        (text, true)
+        (formatCountText(count, format), true)
       }
     }
 
