@@ -64,6 +64,19 @@ lazy val root = (project in file("."))
     bashScriptExtraDefines += """addJava "-Xmx1G"""",
     bashScriptExtraDefines += """addJava "-Dfile.encoding=UTF-8"""",
     bashScriptExtraDefines += """addJava "-Dstdout.encoding=UTF-8"""",
+    // AppCDS: self-training only, deliberately not a pre-baked archive.
+    // A classic/dynamic CDS archive is validated against the exact classpath
+    // string it was dumped with, so one built at release time (some build
+    // machine's path) can never match wherever a user actually extracts the
+    // tarball -- it would just get silently discarded and retrained anyway.
+    // AutoCreateSharedArchive instead creates lib/parqueteer.jsa on this
+    // install's own first invocation, at its own real path, and every
+    // subsequent command run from that same install reuses it. Coverage is
+    // whatever classes the first command that happens to run touches, not
+    // the full CLI surface -- narrower than a broad archive would be, but
+    // actually valid.
+    bashScriptExtraDefines += """addJava "-XX:SharedArchiveFile=$lib_dir/parqueteer.jsa"""",
+    bashScriptExtraDefines += """addJava "-XX:+AutoCreateSharedArchive"""",
 
     // For Windows batch scripts
     batScriptExtraDefines += """set "_JAVA_OPTS=%_JAVA_OPTS% --add-opens=java.base/java.lang=ALL-UNNAMED"""",
@@ -71,6 +84,8 @@ lazy val root = (project in file("."))
     batScriptExtraDefines += """set "_JAVA_OPTS=%_JAVA_OPTS% -Xmx1G"""",
     batScriptExtraDefines += """set "_JAVA_OPTS=%_JAVA_OPTS% -Dfile.encoding=UTF-8"""",
     batScriptExtraDefines += """set "_JAVA_OPTS=%_JAVA_OPTS% -Dstdout.encoding=UTF-8"""",
+    batScriptExtraDefines += """set "_JAVA_OPTS=%_JAVA_OPTS% -XX:SharedArchiveFile=%APP_LIB_DIR%\parqueteer.jsa"""",
+    batScriptExtraDefines += """set "_JAVA_OPTS=%_JAVA_OPTS% -XX:+AutoCreateSharedArchive"""",
 
     // Universal packaging configuration for distribution
     Universal / packageName       := s"${name.value}-${version.value}",
@@ -90,6 +105,7 @@ lazy val root = (project in file("."))
         path.contains("parqueteer.jar") && !path.startsWith("lib/")
       }
     },
+
     libraryDependencies ++= {
       val parquet4sVersion           = "2.23.0"
       val circeVersion               = "0.14.16"
