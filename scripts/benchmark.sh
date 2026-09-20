@@ -18,32 +18,23 @@ ITERATIONS="${ITERATIONS:-5}"  # number of timed runs per scenario
 log() { printf "  %s\n" "$*"; }
 header() { printf "\n=== %s ===\n" "$*"; }
 
-# TODO(human): implement time_cmd
-#
-# This function is the core of the benchmark harness. It should:
-#   1. Run "$@" exactly $ITERATIONS times
-#   2. Capture wall-clock elapsed time (in milliseconds) for each run
-#   3. Print min / avg / max times to stdout in the format:
-#        min=NNNms avg=NNNms max=NNNms
-#
-# Design decisions to consider:
-#   - Use the bash $SECONDS builtin, or /usr/bin/time, or date +%s%3N for ms?
-#   - Should the first run be excluded (cold-cache warm-up vs real-world)?
-#     Note: for a CLI tool, cold JVM start IS the real workload — don't skip it.
-#   - Redirect stdout/stderr of the benchmarked command to /dev/null (noise)
-#   - Return non-zero if the command itself fails
-#
 # Signature: time_cmd <cmd> [args...]
+#
+# Uses bash's $EPOCHREALTIME builtin (seconds.microseconds, bash 5+) rather
+# than `date +%s%3N`: the latter assumes GNU date's %N-truncation extension
+# (%3N == milliseconds), which uutils/BSD date implementations don't honor —
+# they emit full nanoseconds regardless of the digit prefix, which then
+# overflows bash's 64-bit integer arithmetic into garbage/negative results.
 time_cmd() {
-  local times=() i start end elapsed
+  local times=() i start end elapsed_ms
   for ((i = 0; i < ITERATIONS; i++)); do
-    start=$(date +%s%3N)
+    start=$EPOCHREALTIME
     if ! "$@" >/dev/null 2>&1; then
       return 1
     fi
-    end=$(date +%s%3N)
-    elapsed=$(( end - start ))
-    times+=("$elapsed")
+    end=$EPOCHREALTIME
+    elapsed_ms=$(awk -v s="$start" -v e="$end" 'BEGIN { printf "%.0f", (e - s) * 1000 }')
+    times+=("$elapsed_ms")
   done
 
   local sum=0 min max t

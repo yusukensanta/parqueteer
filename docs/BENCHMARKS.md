@@ -34,3 +34,92 @@ wall-clock from process start to exit. JIT effects average out over 5 runs.
 > Run `./scripts/generate-test-data.sh` then `./scripts/benchmark.sh` to populate this section.
 
 <!-- benchmark results are appended below by benchmark.sh -->
+
+---
+
+## vs. Other Tools
+
+Metadata-read latency (schema + row count) against DuckDB, pyarrow, and
+Polars — the tools someone would otherwise reach for to inspect a Parquet
+file. This is **not** a query-engine comparison: those three can do SQL,
+joins, and aggregations that parqueteer deliberately doesn't attempt (see
+[Project Scope](../README.md#project-scope)). It only measures the one
+thing they overlap on.
+
+**Reproduce**: `./scripts/generate-test-data.sh` to produce the fixture
+files, then `python3 -m pip install duckdb pyarrow polars` (or `uv pip
+install duckdb pyarrow polars` in a venv) and `./scripts/benchmark-compare.sh`.
+Set `BENCH_PYTHON=/path/to/python3` if the tools live in a venv rather than
+the ambient interpreter.
+
+- **Tool**: `scripts/benchmark-compare.sh`
+- **Metric**: wall-clock elapsed time, cold process start per invocation, min/avg/max over 5 runs
+- **Data**: `bench_10000rows_5cols.parquet`, `bench_100000rows_5cols.parquet` (from `generate-test-data.sh`)
+
+### Results
+
+- **parqueteer**: 0.10.163
+- **pyarrow**: 25.0.1
+- **duckdb**: 1.5.5
+- **polars**: 1.44.2
+- **Host**: Linux 6.18.33.1-microsoft-standard-WSL2 x86_64
+
+| File | Tool | Operation | min | avg | max |
+|------|------|-----------|-----|-----|-----|
+| bench_10000rows_5cols | parqueteer | schema | 293ms | 299ms | 305ms |
+| bench_10000rows_5cols | parqueteer | count | 289ms | 294ms | 299ms |
+| bench_10000rows_5cols | pyarrow | schema | 42ms | 42ms | 45ms |
+| bench_10000rows_5cols | pyarrow | count | 41ms | 42ms | 44ms |
+| bench_10000rows_5cols | duckdb | schema | 50ms | 52ms | 54ms |
+| bench_10000rows_5cols | duckdb | count | 51ms | 52ms | 55ms |
+| bench_10000rows_5cols | polars | schema | 74ms | 77ms | 79ms |
+| bench_10000rows_5cols | polars | count | 80ms | 80ms | 82ms |
+| bench_100000rows_5cols | parqueteer | schema | 310ms | 318ms | 336ms |
+| bench_100000rows_5cols | parqueteer | count | 320ms | 336ms | 364ms |
+| bench_100000rows_5cols | pyarrow | schema | 46ms | 47ms | 51ms |
+| bench_100000rows_5cols | pyarrow | count | 44ms | 45ms | 46ms |
+| bench_100000rows_5cols | duckdb | schema | 55ms | 56ms | 58ms |
+| bench_100000rows_5cols | duckdb | count | 52ms | 53ms | 55ms |
+| bench_100000rows_5cols | polars | schema | 77ms | 79ms | 81ms |
+| bench_100000rows_5cols | polars | count | 80ms | 82ms | 89ms |
+
+Numbers stay flat as row count goes 10,000 → 100,000: all four tools read
+only the Parquet footer for schema/count, never a full scan, so file size
+within this range doesn't move the needle — the entire cost on both sides
+is fixed per-invocation overhead.
+
+### Why the gap, and why it doesn't close
+
+parqueteer is ~6x slower than pyarrow here, ~4x slower than Polars. That
+gap is the JVM process-startup floor (bytecode loading/verification, even
+with [AppCDS self-training](../build.sbt) enabled) against native/C++-backed
+tools that have no VM to boot. It's architectural, not a bug: `parqueteer
+--version`, which does no Parquet I/O at all, still costs ~150ms on this
+machine — that's the floor any command pays before doing a single byte of
+actual work, and no amount of classloading optimization removes it, only
+gets other commands closer to it.
+
+### Why you might still reach for parqueteer anyway
+
+The comparison above only covers where DuckDB/pyarrow/Polars and parqueteer
+overlap. Outside that overlap:
+
+- **Writing** Parquet from JSON/NDJSON/CSV/LTSV, and **merging** multiple
+  files, are first-class CLI commands here — with pyarrow/Polars that's
+  Python glue code you write yourself; DuckDB can do it via SQL but needs
+  the input already loadable as a table.
+- **Schema diff** (`schema diff a.parquet b.parquet`) has no equivalent
+  one-liner in any of the three — you'd write comparison code by hand.
+- **Uniform cloud credentials**: one `--profile`/`--region`/`--s3-endpoint-url`
+  flag surface works the same way across S3, GCS, and Azure. DuckDB needs a
+  separate extension + `SECRET`/`ATTACH` setup per provider; pyarrow/Polars
+  need `fsspec`/provider-specific filesystem objects wired up per script.
+- **A single static-feeling binary in CI**: no Python environment or
+  dependency resolution to manage in a pipeline step — install one tarball,
+  get read/write/validate/merge/convert/schema-diff.
+
+If the job is "run one ad-hoc query," reach for DuckDB — it's faster to
+start and far more capable at that specific task. If the job is "this
+exact multi-step Parquet operation needs to run the same way every time in
+a pipeline," that's parqueteer's actual scope.
+

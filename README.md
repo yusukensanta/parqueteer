@@ -451,7 +451,7 @@ Run `parqueteer <command> --help` for per-command options.
 
 | Document | Description |
 |----------|-------------|
-| [docs/BENCHMARKS.md](docs/BENCHMARKS.md) | Benchmark methodology and results matrix (populate via `scripts/benchmark.sh`) |
+| [docs/BENCHMARKS.md](docs/BENCHMARKS.md) | Benchmark methodology, results matrix, and a metadata-latency comparison against DuckDB/pyarrow/Polars |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Development setup, workflow, and PR guidelines |
 | [CHANGELOG.md](CHANGELOG.md) | Version history |
 | [SECURITY.md](SECURITY.md) | Security policy and vulnerability reporting |
