@@ -1280,4 +1280,74 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
     result.isSuccess shouldBe true
     result.get.map(_.path) shouldBe List(file.path)
   }
+
+  // ── DECIMAL round-trip (regression) ───────────────────────────────────────
+  //
+  // ParquetSchemaBuilder previously declared every DECIMAL column as BINARY.
+  // That's valid per the Parquet spec, but parquet4s's reader (which parqueteer
+  // uses for read/streamContent) only supports DECIMAL backed by
+  // INT32/INT64/FIXED_LEN_BYTE_ARRAY -- so a file parqueteer wrote with a
+  // DECIMAL column could never be read back by parqueteer itself, failing
+  // with "BINARY is unsupported as a decimal type". These write-then-read
+  // each precision tier the physical-type choice now covers.
+
+  "ParquetRepository" should "round-trip a DECIMAL column through the INT32 tier (precision <= 9)" taggedAs IntegrationTest in {
+    val loc  = LocalPath(tempFile().getAbsolutePath)
+    val data = List(Map("price" -> CellValue.Dec(BigDecimal("9.99"))))
+    repo.writeContent(loc, data, None).isSuccess shouldBe true
+
+    val result = repo.readContent(ParquetFile(loc), ReadConfig())
+    result.isSuccess shouldBe true
+    result.get.rows.head("price") shouldBe CellValue.Dec(BigDecimal("9.99"))
+  }
+
+  it should "round-trip a DECIMAL column through the INT64 tier (precision 10-18)" taggedAs IntegrationTest in {
+    val loc = LocalPath(tempFile().getAbsolutePath)
+    val data = List(
+      Map(
+        "amount" -> CellValue.Dec(BigDecimal("123456789012.3456"))
+      )
+    )
+    repo.writeContent(loc, data, None).isSuccess shouldBe true
+
+    val result = repo.readContent(ParquetFile(loc), ReadConfig())
+    result.isSuccess shouldBe true
+    result.get.rows.head("amount") shouldBe CellValue.Dec(
+      BigDecimal("123456789012.3456")
+    )
+  }
+
+  it should "round-trip a DECIMAL column through the FIXED_LEN_BYTE_ARRAY tier (precision > 18)" taggedAs IntegrationTest in {
+    val loc = LocalPath(tempFile().getAbsolutePath)
+    // 20 integer digits + 2 scale digits = precision 22, past the INT64 ceiling.
+    val data = List(
+      Map(
+        "total" -> CellValue.Dec(BigDecimal("12345678901234567890.12"))
+      )
+    )
+    repo.writeContent(loc, data, None).isSuccess shouldBe true
+
+    val result = repo.readContent(ParquetFile(loc), ReadConfig())
+    result.isSuccess shouldBe true
+    result.get.rows.head("total") shouldBe CellValue.Dec(
+      BigDecimal("12345678901234567890.12")
+    )
+  }
+
+  it should "round-trip a negative DECIMAL value through the FIXED_LEN_BYTE_ARRAY tier" taggedAs IntegrationTest in {
+    // Exercises sign-extension padding on the negative side, not just zero-padding.
+    val loc = LocalPath(tempFile().getAbsolutePath)
+    val data = List(
+      Map(
+        "total" -> CellValue.Dec(BigDecimal("-12345678901234567890.12"))
+      )
+    )
+    repo.writeContent(loc, data, None).isSuccess shouldBe true
+
+    val result = repo.readContent(ParquetFile(loc), ReadConfig())
+    result.isSuccess shouldBe true
+    result.get.rows.head("total") shouldBe CellValue.Dec(
+      BigDecimal("-12345678901234567890.12")
+    )
+  }
 }

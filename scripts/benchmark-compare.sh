@@ -76,7 +76,10 @@ tool_available() {
 }
 
 TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-PARQUETEER_VERSION=$("$PARQUETEER" --version 2>/dev/null | head -1 || echo "unknown")
+# grep -m1 skips any stray JVM log lines (e.g. -Xlog:cds warnings, which go
+# to stdout, not stderr) ahead of the actual "parqueteer X.Y.Z" line --
+# `head -1` alone would grab a warning line instead when one is present.
+PARQUETEER_VERSION=$("$PARQUETEER" --version 2>/dev/null | grep -m1 '^parqueteer ' || echo "unknown")
 PYTHON_VERSION=$("$BENCH_PYTHON" --version 2>&1 || echo "unknown")
 
 header "vs-other-tools benchmark — $TIMESTAMP"

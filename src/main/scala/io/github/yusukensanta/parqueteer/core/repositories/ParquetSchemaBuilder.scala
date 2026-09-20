@@ -40,14 +40,53 @@ private[repositories] object ParquetSchemaBuilder {
       val repetition =
         if col.isOptional then Type.Repetition.OPTIONAL
         else Type.Repetition.REQUIRED
-      val (primitive, annotation) = mapDeclaredType(col.dataType)
-      builder.addField(makeField(col.name, primitive, repetition, annotation))
+      val (primitive, annotation, length) = mapDeclaredType(col.dataType)
+      builder.addField(
+        makeField(col.name, primitive, repetition, annotation, length)
+      )
     }
     builder.named("root")
   }
 
   // Helper to infer schema from data
   private[repositories] val MaxDecimalPrecision = 38
+
+  // Largest DECIMAL precision that fits (with sign) in a signed 4-byte / 8-byte
+  // integer: 2^31-1 ~= 2.1e9 (10 digits, but the top one isn't always usable,
+  // so 9 is the safe ceiling) and 2^63-1 ~= 9.22e18 (19 digits, same reasoning
+  // caps it at 18). Matches the well-known Spark/Arrow DECIMAL byte-width
+  // convention.
+  private[repositories] val MaxInt32DecimalPrecision = 9
+  private[repositories] val MaxInt64DecimalPrecision = 18
+
+  // Physical Parquet type to declare for a DECIMAL column of the given
+  // precision, and (for FIXED_LEN_BYTE_ARRAY only) the byte length to declare
+  // alongside it. This is NOT an arbitrary choice: parquet4s's reader
+  // (ParquetRecordConverter.createConverter, which parqueteer's own
+  // read/streamContent path uses) only supports DECIMAL backed by INT32,
+  // INT64, or FIXED_LEN_BYTE_ARRAY -- plain BINARY throws
+  // ParquetDecodingException("BINARY is unsupported as a decimal type") at
+  // read time despite being spec-valid. Writing BINARY-backed DECIMAL here
+  // would produce a file parqueteer itself could never read back.
+  private[repositories] def decimalPhysicalType(
+      precision: Int
+  ): (PrimitiveTypeName, Option[Int]) =
+    if precision <= MaxInt32DecimalPrecision then (PrimitiveTypeName.INT32, None)
+    else if precision <= MaxInt64DecimalPrecision then (PrimitiveTypeName.INT64, None)
+    else (PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY, Some(fixedLenByteArrayLength(precision)))
+
+  // Smallest byte width that can hold a signed two's-complement unscaled
+  // value up to (10^precision - 1) in magnitude: the smallest L such that
+  // 2^(8L-1) >= 10^precision. Computed with BigInteger rather than
+  // math.log/math.pow to avoid floating-point rounding tipping a boundary
+  // the wrong way -- an undersized field here would silently truncate data.
+  private[repositories] def fixedLenByteArrayLength(precision: Int): Int = {
+    val bound  = java.math.BigInteger.TEN.pow(precision)
+    var length = 1
+    while java.math.BigInteger.ONE.shiftLeft(8 * length - 1).compareTo(bound) < 0
+    do length += 1
+    length
+  }
 
   def inferSchemaFromData(data: List[Map[String, CellValue]]): MessageType =
     inferSchemaFromRows(data.iterator)
@@ -103,7 +142,7 @@ private[repositories] object ParquetSchemaBuilder {
     val builder = Types.buildMessage()
     seenKeys.toList.foreach { key =>
       val rank = rankByKey.getOrElse(key, TypeRank.String)
-      val (primitive, annotation) =
+      val (primitive, annotation, length) =
         if rank == TypeRank.Decimal then {
           val (maxScale, maxIntDigits) =
             decimalMetaByKey.getOrElse(key, (18, 20))
@@ -116,13 +155,18 @@ private[repositories] object ParquetSchemaBuilder {
                 s"but Parquet DECIMAL max is $MaxDecimalPrecision. " +
                 s"Reduce scale/integer-part size or split into multiple columns."
             )
+          val (physical, flbaLength) = decimalPhysicalType(precision)
           (
-            PrimitiveTypeName.BINARY,
-            Some(LogicalTypeAnnotation.decimalType(scale, precision))
+            physical,
+            Some(LogicalTypeAnnotation.decimalType(scale, precision)),
+            flbaLength
           )
-        } else rankToParquetType(rank)
+        } else {
+          val (p, a) = rankToParquetType(rank)
+          (p, a, None)
+        }
       builder.addField(
-        makeField(key, primitive, Type.Repetition.OPTIONAL, annotation)
+        makeField(key, primitive, Type.Repetition.OPTIONAL, annotation, length)
       )
     }
     builder.named("root")
@@ -131,15 +175,18 @@ private[repositories] object ParquetSchemaBuilder {
   // ── private helpers ───────────────────────────────────────────────────────
 
   /**
-   * Build a Parquet primitive field with an optional logical type annotation.
+   * Build a Parquet primitive field with an optional logical type annotation
+   * and, for FIXED_LEN_BYTE_ARRAY fields, an optional declared byte length.
    */
   private def makeField(
       name: String,
       primitive: PrimitiveTypeName,
       repetition: Type.Repetition,
-      annotation: Option[LogicalTypeAnnotation]
+      annotation: Option[LogicalTypeAnnotation],
+      length: Option[Int]
   ): PrimitiveType = {
-    val base = Types.primitive(primitive, repetition)
+    val base0 = Types.primitive(primitive, repetition)
+    val base  = length.fold(base0)(base0.length)
     annotation.foldLeft(base)(_.as(_)).named(name)
   }
 
@@ -147,22 +194,22 @@ private[repositories] object ParquetSchemaBuilder {
 
   private def mapDeclaredType(
       dataType: String
-  ): (PrimitiveTypeName, Option[LogicalTypeAnnotation]) =
+  ): (PrimitiveTypeName, Option[LogicalTypeAnnotation], Option[Int]) =
     dataType.toUpperCase match {
-      case "INT32" | "INT"  => (PrimitiveTypeName.INT32, None)
-      case "INT64" | "LONG" => (PrimitiveTypeName.INT64, None)
-      case "DOUBLE"         => (PrimitiveTypeName.DOUBLE, None)
-      case "FLOAT"          => (PrimitiveTypeName.FLOAT, None)
-      case "BOOLEAN"        => (PrimitiveTypeName.BOOLEAN, None)
-      case "DATE"           => (PrimitiveTypeName.INT32, Some(dateAnnotation))
+      case "INT32" | "INT"  => (PrimitiveTypeName.INT32, None, None)
+      case "INT64" | "LONG" => (PrimitiveTypeName.INT64, None, None)
+      case "DOUBLE"         => (PrimitiveTypeName.DOUBLE, None, None)
+      case "FLOAT"          => (PrimitiveTypeName.FLOAT, None, None)
+      case "BOOLEAN"        => (PrimitiveTypeName.BOOLEAN, None, None)
+      case "DATE"           => (PrimitiveTypeName.INT32, Some(dateAnnotation), None)
       case "TIMESTAMP" | "TIMESTAMP_MILLIS" =>
-        (PrimitiveTypeName.INT64, Some(timestampMillisAnnotation))
+        (PrimitiveTypeName.INT64, Some(timestampMillisAnnotation), None)
       case "TIMESTAMP_MICROS" =>
-        (PrimitiveTypeName.INT64, Some(timestampMicrosAnnotation))
+        (PrimitiveTypeName.INT64, Some(timestampMicrosAnnotation), None)
       case "TIMESTAMP_NANOS" =>
-        (PrimitiveTypeName.INT64, Some(timestampNanosAnnotation))
-      case "STRING" => (PrimitiveTypeName.BINARY, Some(stringAnnotation))
-      case "BINARY" => (PrimitiveTypeName.BINARY, None)
+        (PrimitiveTypeName.INT64, Some(timestampNanosAnnotation), None)
+      case "STRING" => (PrimitiveTypeName.BINARY, Some(stringAnnotation), None)
+      case "BINARY" => (PrimitiveTypeName.BINARY, None, None)
       case "INT96" =>
         throw new IllegalArgumentException(
           "INT96 is deprecated in the Parquet spec and not supported for writing. " +
@@ -186,9 +233,11 @@ private[repositories] object ParquetSchemaBuilder {
               throw new IllegalArgumentException(
                 s"Invalid DECIMAL scale $scale in '$t': must be in [0, precision] = [0, $precision]."
               )
+            val (physical, flbaLength) = decimalPhysicalType(precision)
             (
-              PrimitiveTypeName.BINARY,
-              Some(LogicalTypeAnnotation.decimalType(scale, precision))
+              physical,
+              Some(LogicalTypeAnnotation.decimalType(scale, precision)),
+              flbaLength
             )
           case _ =>
             throw new IllegalArgumentException(

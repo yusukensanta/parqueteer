@@ -102,6 +102,38 @@ private[repositories] object ParquetWriteOps {
                             "overflows INT64 range. Use DECIMAL(p,s) with p≤18, or widen the schema type."
                         )
                     }
+                  case PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY =>
+                    // BigInteger.toByteArray() produces the minimal
+                    // big-endian two's-complement representation, which is
+                    // almost always shorter than the field's declared fixed
+                    // length (ParquetSchemaBuilder sizes that length to the
+                    // column's full DECIMAL precision, not this specific
+                    // value) — sign-extend on the left to pad it out exactly.
+                    val declaredLength = fieldType.getTypeLength
+                    val raw            = unscaled.toByteArray
+                    if raw.length > declaredLength then
+                      throw new IllegalArgumentException(
+                        s"Column '$key': DECIMAL value $bd (unscaled $unscaled) needs " +
+                          s"${raw.length} bytes but the field's declared FIXED_LEN_BYTE_ARRAY " +
+                          s"length is $declaredLength. This Parquet file was written with a " +
+                          "non-standard schema."
+                      )
+                    val padded =
+                      if raw.length == declaredLength then raw
+                      else {
+                        val signByte: Byte =
+                          if unscaled.signum < 0 then 0xff.toByte else 0x00.toByte
+                        val out = Array.fill[Byte](declaredLength)(signByte)
+                        System.arraycopy(
+                          raw,
+                          0,
+                          out,
+                          declaredLength - raw.length,
+                          raw.length
+                        )
+                        out
+                      }
+                    group.add(fieldIndex, Binary.fromConstantByteArray(padded))
                   case _ =>
                     group.add(
                       fieldIndex,

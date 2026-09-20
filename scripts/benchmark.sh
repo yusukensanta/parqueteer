@@ -61,7 +61,10 @@ fi
 # ── Benchmark suite ────────────────────────────────────────────────────────
 
 TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-PARQUETEER_VERSION=$("$PARQUETEER" --version 2>/dev/null || echo "unknown")
+# grep -m1 skips any stray JVM log lines (e.g. -Xlog:cds warnings, which go
+# to stdout, not stderr, so `2>/dev/null` alone doesn't filter them) ahead
+# of the actual "parqueteer X.Y.Z" line.
+PARQUETEER_VERSION=$("$PARQUETEER" --version 2>/dev/null | grep -m1 '^parqueteer ' || echo "unknown")
 
 header "parqueteer benchmark — $TIMESTAMP"
 log "version   : $PARQUETEER_VERSION"
@@ -112,16 +115,27 @@ if [[ -f "$SMALL_FILE" ]]; then
 
   header "Write / convert (10k rows, 5 cols)"
 
-  # convert parquet → json
+  # convert/write refuse to overwrite an existing output file, and time_cmd
+  # runs its command $ITERATIONS times against the same target -- wrap each
+  # in a function that clears the target first, rather than passing the raw
+  # command directly (which would only succeed on the first iteration).
   OUT_JSON="$TMPDIR_BENCH/out.json"
-  t=$(time_cmd "$PARQUETEER" convert "$SMALL_FILE" "$OUT_JSON" --quiet)
+  convert_to_json() {
+    rm -f "$OUT_JSON"
+    "$PARQUETEER" convert "$SMALL_FILE" "$OUT_JSON" --quiet
+  }
+  t=$(time_cmd convert_to_json)
   log "  convert parquet→json $t"
   RESULTS["10k5:convert_to_json"]="$t"
 
   # convert json → parquet
   if [[ -f "$OUT_JSON" ]]; then
     OUT_PARQUET="$TMPDIR_BENCH/out.parquet"
-    t=$(time_cmd "$PARQUETEER" write "$OUT_JSON" "$OUT_PARQUET" --quiet)
+    write_from_json() {
+      rm -f "$OUT_PARQUET"
+      "$PARQUETEER" write "$OUT_JSON" "$OUT_PARQUET" --quiet
+    }
+    t=$(time_cmd write_from_json)
     log "  write json→parquet   $t"
     RESULTS["10k5:write_from_json"]="$t"
   fi

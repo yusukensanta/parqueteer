@@ -640,6 +640,61 @@ class ParquetWriteOpsTest extends AnyFlatSpec with Matchers {
     group.getInteger("amount", 0) shouldBe 9999
   }
 
+  it should "write CellValue.Dec to FIXED_LEN_BYTE_ARRAY(9)+DECIMAL column as a padded 9-byte value" in {
+    // DECIMAL(19,2): precision 19 is past the INT64 ceiling (18), so
+    // ParquetSchemaBuilder declares this as FIXED_LEN_BYTE_ARRAY(9).
+    val mt = schema(
+      "message root { required fixed_len_byte_array(9) total (DECIMAL(19,2)); }"
+    )
+    val group = new SimpleGroupFactory(mt).newGroup()
+    ParquetWriteOps.writeRowToGroup(
+      group,
+      Map("total" -> CellValue.Dec(BigDecimal("12345678901234567.89"))),
+      mt
+    )
+    val bytes = group.getBinary("total", 0).getBytes
+    bytes.length shouldBe 9
+    new java.math.BigInteger(bytes) shouldBe java.math.BigInteger.valueOf(
+      1234567890123456789L
+    )
+  }
+
+  it should "sign-extend (not zero-pad) a negative DECIMAL value for FIXED_LEN_BYTE_ARRAY encoding" in {
+    val mt = schema(
+      "message root { required fixed_len_byte_array(9) total (DECIMAL(19,2)); }"
+    )
+    val group = new SimpleGroupFactory(mt).newGroup()
+    ParquetWriteOps.writeRowToGroup(
+      group,
+      Map("total" -> CellValue.Dec(BigDecimal("-12345678901234567.89"))),
+      mt
+    )
+    val bytes = group.getBinary("total", 0).getBytes
+    bytes.length shouldBe 9
+    new java.math.BigInteger(bytes) shouldBe java.math.BigInteger.valueOf(
+      -1234567890123456789L
+    )
+  }
+
+  it should "pad a small DECIMAL value up to the full declared FIXED_LEN_BYTE_ARRAY length" in {
+    // unscaled(9.99, scale 2) = 999, which needs far fewer than 9 bytes on
+    // its own -- verifies BigInteger.toByteArray()'s shorter minimal
+    // representation gets padded out to the schema's declared length rather
+    // than written as a mismatched-length value.
+    val mt = schema(
+      "message root { required fixed_len_byte_array(9) total (DECIMAL(19,2)); }"
+    )
+    val group = new SimpleGroupFactory(mt).newGroup()
+    ParquetWriteOps.writeRowToGroup(
+      group,
+      Map("total" -> CellValue.Dec(BigDecimal("9.99"))),
+      mt
+    )
+    val bytes = group.getBinary("total", 0).getBytes
+    bytes.length shouldBe 9
+    new java.math.BigInteger(bytes) shouldBe java.math.BigInteger.valueOf(999L)
+  }
+
   it should "throw with a clear message for BINARY DECIMAL with precision > 38 (non-standard Parquet file)" in {
     // Precision > 38 is outside the Parquet spec; the clamp was previously silent.
     // We now throw explicitly so the error is traceable instead of using a wrong bound.

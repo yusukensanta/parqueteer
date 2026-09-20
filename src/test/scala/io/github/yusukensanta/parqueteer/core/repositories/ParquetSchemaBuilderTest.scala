@@ -424,12 +424,16 @@ class ParquetSchemaBuilderTest extends AnyFlatSpec with Matchers {
     field.getLogicalTypeAnnotation shouldBe LogicalTypeAnnotation.stringType()
   }
 
-  it should "infer BINARY+DECIMAL for CellValue.Dec (not STRING or DOUBLE)" in {
+  it should "infer INT32+DECIMAL for CellValue.Dec (not STRING or DOUBLE)" in {
+    // precision 2 (bare "42") -- parquet4s's reader only supports DECIMAL
+    // backed by INT32/INT64/FIXED_LEN_BYTE_ARRAY, not BINARY (see
+    // decimalPhysicalType) -- a BINARY-backed choice here would write a file
+    // parqueteer's own `read` couldn't decode back.
     val data =
       List(Map[String, CellValue]("x" -> CellValue.Dec(BigDecimal(42))))
     val mt    = ParquetSchemaBuilder.inferSchemaFromData(data)
     val field = fieldByName(mt, "x")
-    field.getPrimitiveTypeName shouldBe PrimitiveTypeName.BINARY
+    field.getPrimitiveTypeName shouldBe PrimitiveTypeName.INT32
     field.getLogicalTypeAnnotation shouldBe a[
       LogicalTypeAnnotation.DecimalLogicalTypeAnnotation
     ]
@@ -610,39 +614,42 @@ class ParquetSchemaBuilderTest extends AnyFlatSpec with Matchers {
     warnCount shouldBe 1
   }
 
-  it should "infer BINARY+DECIMAL schema for Dec values (not STRING or DOUBLE)" in {
+  it should "infer INT32+DECIMAL schema for Dec values (not STRING or DOUBLE)" in {
+    // precision 3 ("9.99") -- fits INT32 (precision <= 9).
     val data = List(
       Map[String, CellValue]("price" -> CellValue.Dec(BigDecimal("9.99")))
     )
     val mt    = ParquetSchemaBuilder.inferSchemaFromData(data)
     val field = mt.getFields.get(0).asPrimitiveType
-    field.getPrimitiveTypeName shouldBe PrimitiveTypeName.BINARY
+    field.getPrimitiveTypeName shouldBe PrimitiveTypeName.INT32
     field.getLogicalTypeAnnotation shouldBe a[
       LogicalTypeAnnotation.DecimalLogicalTypeAnnotation
     ]
   }
 
-  it should "widen Dec and Int64 to BINARY+DECIMAL (Decimal beats integer rank)" in {
+  it should "widen Dec and Int64 to INT32+DECIMAL (Decimal beats integer rank)" in {
+    // precision 2 ("1.5") -- fits INT32.
     val data = List(
       Map[String, CellValue]("n" -> CellValue.Dec(BigDecimal("1.5"))),
       Map[String, CellValue]("n" -> CellValue.I64(2L))
     )
     val mt    = ParquetSchemaBuilder.inferSchemaFromData(data)
     val field = mt.getFields.get(0).asPrimitiveType
-    field.getPrimitiveTypeName shouldBe PrimitiveTypeName.BINARY
+    field.getPrimitiveTypeName shouldBe PrimitiveTypeName.INT32
     field.getLogicalTypeAnnotation shouldBe a[
       LogicalTypeAnnotation.DecimalLogicalTypeAnnotation
     ]
   }
 
-  it should "widen Dec and Float to BINARY+DECIMAL (Decimal beats float rank)" in {
+  it should "widen Dec and Float to INT32+DECIMAL (Decimal beats float rank)" in {
+    // precision 3 ("9.99") -- fits INT32.
     val data = List(
       Map[String, CellValue]("v" -> CellValue.F64(1.5)),
       Map[String, CellValue]("v" -> CellValue.Dec(BigDecimal("9.99")))
     )
     val mt    = ParquetSchemaBuilder.inferSchemaFromData(data)
     val field = mt.getFields.get(0).asPrimitiveType
-    field.getPrimitiveTypeName shouldBe PrimitiveTypeName.BINARY
+    field.getPrimitiveTypeName shouldBe PrimitiveTypeName.INT32
     field.getLogicalTypeAnnotation shouldBe a[
       LogicalTypeAnnotation.DecimalLogicalTypeAnnotation
     ]
@@ -659,16 +666,74 @@ class ParquetSchemaBuilderTest extends AnyFlatSpec with Matchers {
     field.getLogicalTypeAnnotation shouldBe LogicalTypeAnnotation.stringType()
   }
 
-  it should "parse DECIMAL(p,s) in buildMessageType and produce BINARY+DECIMAL annotation" in {
+  it should "parse DECIMAL(p,s) in buildMessageType and produce INT64+DECIMAL annotation" in {
+    // precision 10 -- past INT32's ceiling (9), fits INT64 (<= 18).
     val mt = ParquetSchemaBuilder.buildMessageType(
       schema(columnInfo("price", "DECIMAL(10,2)"))
     )
     val field = fieldByName(mt, "price")
-    field.getPrimitiveTypeName shouldBe PrimitiveTypeName.BINARY
+    field.getPrimitiveTypeName shouldBe PrimitiveTypeName.INT64
     val ann = field.getLogicalTypeAnnotation
       .asInstanceOf[LogicalTypeAnnotation.DecimalLogicalTypeAnnotation]
     ann.getPrecision shouldBe 10
     ann.getScale shouldBe 2
+  }
+
+  it should "choose INT32 for DECIMAL(p,s) at the INT32 ceiling (p=9)" in {
+    val mt = ParquetSchemaBuilder.buildMessageType(
+      schema(columnInfo("price", "DECIMAL(9,2)"))
+    )
+    fieldByName(mt, "price").getPrimitiveTypeName shouldBe PrimitiveTypeName.INT32
+  }
+
+  it should "choose INT64 for DECIMAL(p,s) at the INT64 ceiling (p=18)" in {
+    val mt = ParquetSchemaBuilder.buildMessageType(
+      schema(columnInfo("price", "DECIMAL(18,2)"))
+    )
+    fieldByName(mt, "price").getPrimitiveTypeName shouldBe PrimitiveTypeName.INT64
+  }
+
+  it should "choose FIXED_LEN_BYTE_ARRAY(9) for DECIMAL(p,s) just past the INT64 ceiling (p=19)" in {
+    // 2^63-1 (INT64 max, ~9.22e18) < 10^19-1 (~9.99...e18 by digit count is
+    // actually larger) -- precision 19 no longer fits signed 8-byte INT64,
+    // needs a 9-byte fixed-length field. Cross-checked against Spark's
+    // Decimal.minBytesForPrecision, which uses the same 9-byte boundary here.
+    val mt = ParquetSchemaBuilder.buildMessageType(
+      schema(columnInfo("price", "DECIMAL(19,2)"))
+    )
+    val field = fieldByName(mt, "price")
+    field.getPrimitiveTypeName shouldBe PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY
+    field.getTypeLength shouldBe 9
+  }
+
+  it should "choose FIXED_LEN_BYTE_ARRAY(16) for DECIMAL(38,x) (maximum precision)" in {
+    // Matches Spark/Arrow's well-known 16-byte width for DECIMAL(38,x).
+    val mt = ParquetSchemaBuilder.buildMessageType(
+      schema(columnInfo("price", "DECIMAL(38,10)"))
+    )
+    val field = fieldByName(mt, "price")
+    field.getPrimitiveTypeName shouldBe PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY
+    field.getTypeLength shouldBe 16
+  }
+
+  "ParquetSchemaBuilder.decimalPhysicalType" should "choose INT32/INT64/FIXED_LEN_BYTE_ARRAY matching what parquet4s's reader supports" in {
+    // parquet4s's ParquetRecordConverter.createConverter only handles DECIMAL
+    // backed by INT32, INT64, or FIXED_LEN_BYTE_ARRAY -- plain BINARY throws
+    // ParquetDecodingException("BINARY is unsupported as a decimal type") at
+    // read time. This is the actual contract the physical-type choice must
+    // satisfy, not an arbitrary preference.
+    ParquetSchemaBuilder.decimalPhysicalType(1) shouldBe (PrimitiveTypeName.INT32, None)
+    ParquetSchemaBuilder.decimalPhysicalType(9) shouldBe (PrimitiveTypeName.INT32, None)
+    ParquetSchemaBuilder.decimalPhysicalType(10) shouldBe (PrimitiveTypeName.INT64, None)
+    ParquetSchemaBuilder.decimalPhysicalType(18) shouldBe (PrimitiveTypeName.INT64, None)
+    ParquetSchemaBuilder.decimalPhysicalType(19) shouldBe (
+      PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY,
+      Some(9)
+    )
+    ParquetSchemaBuilder.decimalPhysicalType(38) shouldBe (
+      PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY,
+      Some(16)
+    )
   }
 
   it should "throw on malformed DECIMAL syntax in buildMessageType" in {
