@@ -248,7 +248,6 @@ jobs:
             homepage "https://github.com/yusukensanta/parqueteer"
             url "PLACEHOLDER_URL"
             sha256 "PLACEHOLDER_SHA"
-            version "PLACEHOLDER_VERSION"
             license "Apache-2.0"
 
             depends_on "openjdk@21"
@@ -257,7 +256,7 @@ jobs:
               rm_r Dir["bin/*.bat"]
               libexec.install Dir["*"]
               (bin/"parqueteer").write_env_script libexec/"bin/parqueteer",
-                JAVA_HOME: Formula["openjdk@21"].opt_prefix
+                JAVA_HOME: formula_opt_prefix("openjdk@21")
             end
 
             test do
@@ -268,7 +267,6 @@ jobs:
 
           sed -i "s|PLACEHOLDER_URL|${TGZ_URL}|" /tmp/homebrew-tap/Formula/parqueteer.rb
           sed -i "s|PLACEHOLDER_SHA|${TGZ_SHA}|" /tmp/homebrew-tap/Formula/parqueteer.rb
-          sed -i "s|PLACEHOLDER_VERSION|${VERSION}|" /tmp/homebrew-tap/Formula/parqueteer.rb
 
           cd /tmp/homebrew-tap
           git config user.name "github-actions[bot]"
