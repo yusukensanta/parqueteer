@@ -52,11 +52,9 @@ class CSVFormatter extends OutputFormatter {
   ): String =
     if content.rows.isEmpty then ""
     else {
-      val rows    = content.rows
-      val columns = extractColumns(rows, schema)
-      // One pass over each row's own entries instead of columns.length separate
-      // row.get lookups (each O(row.size) on a ListMap) — see RowStreamWriter.projectRow.
-      val columnIndex = columns.iterator.zipWithIndex.toMap
+      val rows        = content.rows
+      val columns     = extractColumns(rows, schema)
+      val columnIndex = OutputFormatter.indexColumns(columns)
 
       val sb = new StringBuilder()
 
@@ -64,8 +62,7 @@ class CSVFormatter extends OutputFormatter {
       sb.append(Newline)
 
       rows.foreach { row =>
-        val cells = new Array[CellValue](columns.length)
-        row.foreach { case (k, v) => columnIndex.get(k).foreach(idx => cells(idx) = v) }
+        val cells = OutputFormatter.projectRow(row, columnIndex, columns.length)
         val values = cells.iterator.map {
           case null | CellValue.Null => ""
           case v                     => v.safeDisplay

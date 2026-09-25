@@ -22,24 +22,14 @@ object RowStreamWriter {
   }
 
   private def indexColumns(columns: List[String]): Map[String, Int] =
-    columns.iterator.zipWithIndex.toMap
+    OutputFormatter.indexColumns(columns)
 
-  // Projects a row onto a fixed column list in one pass instead of doing
-  // columns.length separate row.get/getOrElse lookups (each O(row.size) on a
-  // ListMap, so O(columns.length * row.size) total). Missing columns are left
-  // as `null` (a real absence marker, distinct from a present CellValue.Null)
-  // so each caller can pick its own missing-value rendering.
   private def projectRow(
       row: Map[String, CellValue],
       nameToIndex: Map[String, Int],
       numCols: Int
-  ): Array[CellValue] = {
-    val values = new Array[CellValue](numCols)
-    row.foreach { case (k, v) =>
-      nameToIndex.get(k).foreach(idx => values(idx) = v)
-    }
-    values
-  }
+  ): Array[CellValue] =
+    OutputFormatter.projectRow(row, nameToIndex, numCols)
 
   private def warnUnseenColumns(
       rowKeys: Set[String],

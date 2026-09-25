@@ -7,6 +7,7 @@ import io.github.yusukensanta.parqueteer.core.models.{
   S3Location,
   StorageLocation
 }
+import io.github.yusukensanta.parqueteer.core.util.CredentialRedactor
 import org.apache.hadoop.conf.Configuration
 import scala.util.{Failure, Success, Try}
 
@@ -56,8 +57,9 @@ object CloudCredentialManager {
       it.next()() match {
         case s @ Success(_) => found = Some(s)
         case Failure(err) =>
-          failures += io.github.yusukensanta.parqueteer.core.util.CredentialRedactor
-            .redact(Option(err.getMessage).getOrElse(err.getClass.getName))
+          failures += CredentialRedactor.redact(
+            Option(err.getMessage).getOrElse(err.getClass.getName)
+          )
           lastCause = err
       }
     found.getOrElse(

@@ -4,6 +4,7 @@ import io.github.yusukensanta.parqueteer.core.services.ParquetService
 import io.github.yusukensanta.parqueteer.core.repositories.HadoopParquetRepository
 import io.github.yusukensanta.parqueteer.core.models.{GlobalOptions, ParqueteerError}
 import io.github.yusukensanta.parqueteer.config.{AppConfig, ConfigurationManager, EnvConfig}
+import io.github.yusukensanta.parqueteer.core.util.CredentialRedactor
 import scopt.OParser
 import org.slf4j.LoggerFactory
 

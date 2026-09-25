@@ -1,6 +1,7 @@
 package io.github.yusukensanta.parqueteer.cloud
 
 import io.github.yusukensanta.parqueteer.core.models.{GCSLocation, StorageLocation}
+import io.github.yusukensanta.parqueteer.core.util.CredentialRedactor
 import org.apache.hadoop.conf.Configuration
 import org.slf4j.LoggerFactory
 import scala.util.{Failure, Success, Try}
@@ -55,8 +56,7 @@ class GCSCredentialManager extends CloudCredentialManager {
               conf.set("google.cloud.auth.service.account.enable", "false")
               logger.warn(
                 "Using application default credentials: {}",
-                io.github.yusukensanta.parqueteer.core.util.CredentialRedactor
-                  .redact(Option(error.getMessage).getOrElse(""))
+                CredentialRedactor.redact(Option(error.getMessage).getOrElse(""))
               )
           }
 

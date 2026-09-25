@@ -5,7 +5,12 @@ import io.github.yusukensanta.parqueteer.core.models.ParqueteerError.toParquetee
 import io.github.yusukensanta.parqueteer.core.models.StorageLocationParser
 import io.github.yusukensanta.parqueteer.core.repositories.ParquetRepository
 import io.github.yusukensanta.parqueteer.core.filters.FilterParser
-import io.github.yusukensanta.parqueteer.core.util.{GlobDetector, RowPipeline}
+import io.github.yusukensanta.parqueteer.core.util.{
+  CredentialRedactor,
+  GlobDetector,
+  RowLimiter,
+  RowPipeline
+}
 import scala.util.Try
 
 class ParquetService(
@@ -370,7 +375,7 @@ class ParquetService(
     repository.deleteFile(outputLocation) match {
       case scala.util.Failure(delErr) =>
         logger.warn(
-          s"Failed to delete partial output at ${outputLocation.path}: ${io.github.yusukensanta.parqueteer.core.util.CredentialRedactor
+          s"Failed to delete partial output at ${outputLocation.path}: ${CredentialRedactor
               .redact(delErr.getMessage)}. Partial file may remain."
         )
       case _ =>
@@ -415,6 +420,52 @@ class ParquetService(
    * output is deleted before returning the real error. Returns the count of
    * rows written on success.
    */
+  /**
+   * Builds an explicit ParquetSchema from merged/read field summaries — shared
+   * by every stream-write path (merge, parquet→parquet convert, multi-raw→parquet)
+   * that writes with a schema known up front rather than inferred per-row.
+   */
+  private def buildExplicitSchema(
+      fields: List[FieldSummary],
+      compressionCodec: String
+  ): ParquetSchema =
+    ParquetSchema(
+      columns = fields.map { f =>
+        ColumnInfo(
+          f.name,
+          f.dataType,
+          f.isOptional,
+          if f.isOptional then 1 else 0,
+          0,
+          compressionCodec
+        )
+      },
+      rowGroupCount = 1L,
+      totalRowCount = 0L
+    )
+
+  /**
+   * Projects a row onto a fixed field order in one pass instead of
+   * `fieldNames.length` separate `row.getOrElse` ListMap lookups (each
+   * O(row.size), so O(fieldNames.length * row.size) total) — iterating the
+   * row once and resolving each key to an output slot via `nameToIndex` is
+   * O(row.size + fieldNames.length) instead. Missing fields become
+   * `CellValue.Null`. Shared by merge and multi-raw-input-to-parquet, both of
+   * which reconcile per-file rows onto one merged column order.
+   */
+  private def projectRow(
+      row: Map[String, CellValue],
+      fieldNames: Array[String],
+      nameToIndex: Map[String, Int]
+  ): Map[String, CellValue] = {
+    val values: Array[CellValue] = Array.fill(fieldNames.length)(CellValue.Null)
+    row.foreach { case (k, v) => nameToIndex.get(k).foreach(idx => values(idx) = v) }
+    val builder = scala.collection.immutable.ListMap.newBuilder[String, CellValue]
+    var j       = 0
+    while j < fieldNames.length do { builder += fieldNames(j) -> values(j); j += 1 }
+    builder.result()
+  }
+
   private def streamMerge(
       inputLocations: Vector[StorageLocation],
       inputPaths: List[String],
@@ -437,40 +488,10 @@ class ParquetService(
         )
       )
     else {
-      val explicitSchema = ParquetSchema(
-        columns = mergedFields.map { f =>
-          ColumnInfo(
-            f.name,
-            f.dataType,
-            f.isOptional,
-            if f.isOptional then 1 else 0,
-            0,
-            "" // compression controlled by WriteConfig, not ColumnInfo
-          )
-        },
-        rowGroupCount = 1L,
-        totalRowCount = 0L
-      )
-      val fieldNames = mergedFields.map(_.name).toArray
-      // Built once, outside the row loop: projecting a row onto fieldNames via
-      // N row.getOrElse(name, ...) ListMap lookups is O(fieldNames.length *
-      // row.size) per row. Iterating the row once and resolving each of its
-      // keys to an output slot through this O(1)-lookup index is O(row.size +
-      // fieldNames.length) per row instead.
+      // compression controlled by WriteConfig, not ColumnInfo
+      val explicitSchema                = buildExplicitSchema(mergedFields, compressionCodec = "")
+      val fieldNames                    = mergedFields.map(_.name).toArray
       val nameToIndex: Map[String, Int] = fieldNames.zipWithIndex.toMap
-      def projectRow(row: Map[String, CellValue]): Map[String, CellValue] = {
-        val values: Array[CellValue] = Array.fill(fieldNames.length)(CellValue.Null)
-        row.foreach { case (k, v) =>
-          nameToIndex.get(k).foreach(idx => values(idx) = v)
-        }
-        val builder = scala.collection.immutable.ListMap.newBuilder[String, CellValue]
-        var j       = 0
-        while j < fieldNames.length do {
-          builder += fieldNames(j) -> values(j)
-          j += 1
-        }
-        builder.result()
-      }
       val writeResult = repository
         .writeContentStream(outputLocation, explicitSchema, writeConfig) { write =>
           // Up to `fileParallelism` input files are fetched concurrently
@@ -483,7 +504,9 @@ class ParquetService(
           ) { case ((loc, i), sink) =>
             onProgress(i + 1, inputLocations.size, inputPaths(i))
             repository
-              .streamContent(ParquetFile(loc), ReadConfig())(row => sink(projectRow(row)))
+              .streamContent(ParquetFile(loc), ReadConfig())(row =>
+                sink(projectRow(row, fieldNames, nameToIndex))
+              )
               .toEither
           }(write)
           abortOnReadError(pipelineResult.toTry)
@@ -509,19 +532,9 @@ class ParquetService(
       schemaFields <- repository
         .readSchemaFields(ParquetFile(inputLocation))
         .toParqueteerError
-      explicitSchema = ParquetSchema(
-        columns = schemaFields.map { f =>
-          ColumnInfo(
-            f.name,
-            f.dataType,
-            f.isOptional,
-            if f.isOptional then 1 else 0,
-            0,
-            conversionConfig.writeConfig.compressionType.codecName
-          )
-        },
-        rowGroupCount = 1L,
-        totalRowCount = 0L
+      explicitSchema = buildExplicitSchema(
+        schemaFields,
+        conversionConfig.writeConfig.compressionType.codecName
       )
       writeResult = repository.writeContentStream(
         outputLocation,
@@ -568,14 +581,14 @@ class ParquetService(
     if path == "-" then
       DataFileReader
         .readFromStdin(inputFormat, stdin)
-        .map(io.github.yusukensanta.parqueteer.core.util.RowLimiter.limitList(_, maxRows))
+        .map(RowLimiter.limitList(_, maxRows))
         .toParqueteerError
     else
       inputFormat.toLowerCase match {
         case "json" =>
           DataFileReader
             .readJsonFile(path)
-            .map(io.github.yusukensanta.parqueteer.core.util.RowLimiter.limitList(_, maxRows))
+            .map(RowLimiter.limitList(_, maxRows))
             .toParqueteerError
         case "ndjson" =>
           DataFileReader.readNdjsonFile(path, maxRows).toParqueteerError
@@ -611,56 +624,41 @@ class ParquetService(
       bufferedWriteDataFile(inputPath, inputFormat, outputPath, writeConfig, maxRows)
     else
       inputFormat.toLowerCase match {
-        case "ndjson" =>
-          for {
-            outputLocation <- parseLocation(outputPath)
-            schema <- DataFileReader
-              .withNdjsonRows(inputPath, maxRows)(repository.inferSchemaFromRows)
-              .flatten
-              .toParqueteerError
-            writeResult = DataFileReader
-              .withNdjsonRows(inputPath, maxRows) { rows =>
-                repository.writeContentStream(outputLocation, schema, writeConfig)(feed =>
-                  rows.foreach(feed)
-                )
-              }
-              .flatten
-            count <- handleStreamWriteResult(outputLocation, writeResult)
-          } yield count
-        case "ltsv" =>
-          for {
-            outputLocation <- parseLocation(outputPath)
-            schema <- DataFileReader
-              .withLtsvRows(inputPath, maxRows)(repository.inferSchemaFromRows)
-              .flatten
-              .toParqueteerError
-            writeResult = DataFileReader
-              .withLtsvRows(inputPath, maxRows) { rows =>
-                repository.writeContentStream(outputLocation, schema, writeConfig)(feed =>
-                  rows.foreach(feed)
-                )
-              }
-              .flatten
-            count <- handleStreamWriteResult(outputLocation, writeResult)
-          } yield count
-        case "csv" =>
-          for {
-            outputLocation <- parseLocation(outputPath)
-            schema <- DataFileReader
-              .withCsvRows(inputPath, maxRows)(repository.inferSchemaFromRows)
-              .flatten
-              .toParqueteerError
-            writeResult = DataFileReader
-              .withCsvRows(inputPath, maxRows) { rows =>
-                repository.writeContentStream(outputLocation, schema, writeConfig)(feed =>
-                  rows.foreach(feed)
-                )
-              }
-              .flatten
-            count <- handleStreamWriteResult(outputLocation, writeResult)
-          } yield count
+        case fmt @ ("ndjson" | "ltsv" | "csv") =>
+          streamOneFormat(inputPath, outputPath, fmt, writeConfig, maxRows)
         case _ => bufferedWriteDataFile(inputPath, inputFormat, outputPath, writeConfig, maxRows)
       }
+
+  /**
+   * Two-pass bounded-memory write for a single ndjson/ltsv/csv input: infer a
+   * schema from one pass over `withRows`, then stream rows from a second pass
+   * straight into the writer. `withRows` reopens `inputPath` fresh on each
+   * call — see DataFileReader.withNdjsonRows/withLtsvRows/withCsvRows.
+   */
+  private def streamOneFormat(
+      inputPath: String,
+      outputPath: String,
+      inputFormat: String,
+      writeConfig: WriteConfig,
+      maxRows: Option[Long]
+  ): Either[ParqueteerError, Long] = {
+    def withRows[A](f: Iterator[Map[String, CellValue]] => A): Try[A] =
+      inputFormat match {
+        case "ndjson" => DataFileReader.withNdjsonRows(inputPath, maxRows)(f)
+        case "ltsv"   => DataFileReader.withLtsvRows(inputPath, maxRows)(f)
+        case "csv"    => DataFileReader.withCsvRows(inputPath, maxRows)(f)
+      }
+    for {
+      outputLocation <- parseLocation(outputPath)
+      schema         <- withRows(repository.inferSchemaFromRows).flatten.toParqueteerError
+      writeResult = withRows { rows =>
+        repository.writeContentStream(outputLocation, schema, writeConfig)(feed =>
+          rows.foreach(feed)
+        )
+      }.flatten
+      count <- handleStreamWriteResult(outputLocation, writeResult)
+    } yield count
+  }
 
   private def bufferedWriteDataFile(
       inputPath: String,
@@ -773,22 +771,9 @@ class ParquetService(
         Right(Vector.empty)
       )((acc, path) => acc.flatMap(v => inferOne(path).map(v :+ _)))
       mergedFields <- mergeSchemas(perFileSchemas, paths, schemaMode)
-      explicitSchema = ParquetSchema(
-        columns = mergedFields.map { f =>
-          ColumnInfo(
-            f.name,
-            f.dataType,
-            f.isOptional,
-            if f.isOptional then 1 else 0,
-            0,
-            writeConfig.compressionType.codecName
-          )
-        },
-        rowGroupCount = 1L,
-        totalRowCount = 0L
-      )
-      fieldNames  = mergedFields.map(_.name).toArray
-      nameToIndex = fieldNames.zipWithIndex.toMap
+      explicitSchema = buildExplicitSchema(mergedFields, writeConfig.compressionType.codecName)
+      fieldNames     = mergedFields.map(_.name).toArray
+      nameToIndex    = fieldNames.zipWithIndex.toMap
       writeResult = repository.writeContentStream(outputLocation, explicitSchema, writeConfig) {
         write =>
           // See RowPipeline: up to fileParallelism input files are fetched
@@ -801,12 +786,7 @@ class ParquetService(
                 Try {
                   var n = 0L
                   rows.foreach { row =>
-                    val values: Array[CellValue] = Array.fill(fieldNames.length)(CellValue.Null)
-                    row.foreach { case (k, v) => nameToIndex.get(k).foreach(i => values(i) = v) }
-                    val builder = scala.collection.immutable.ListMap.newBuilder[String, CellValue]
-                    var j       = 0
-                    while j < fieldNames.length do { builder += fieldNames(j) -> values(j); j += 1 }
-                    sink(builder.result())
+                    sink(projectRow(row, fieldNames, nameToIndex))
                     n += 1
                   }
                   n
