@@ -2,7 +2,7 @@ package io.github.yusukensanta.parqueteer.cli
 
 import io.github.yusukensanta.parqueteer.config.{ConfigurationManager, EnvConfig}
 import io.github.yusukensanta.parqueteer.core.models.GlobalOptions
-import io.github.yusukensanta.parqueteer.cli.CredentialRedactor
+import io.github.yusukensanta.parqueteer.core.util.CredentialRedactor
 
 private[cli] object ConfigCommandRenderer {
 

@@ -15,11 +15,9 @@ class MarkdownFormatter extends OutputFormatter {
   ): String =
     if content.rows.isEmpty then "No data to display"
     else {
-      val columns = extractColumns(content.rows, schema)
-      val sb      = new StringBuilder()
-      // One pass over each row's own entries instead of columns.length separate
-      // row.get lookups (each O(row.size) on a ListMap) — see RowStreamWriter.projectRow.
-      val columnIndex = columns.iterator.zipWithIndex.toMap
+      val columns     = extractColumns(content.rows, schema)
+      val sb          = new StringBuilder()
+      val columnIndex = OutputFormatter.indexColumns(columns)
 
       sb.append("| ")
         .append(columns.map(escapeCell).mkString(" | "))
@@ -29,8 +27,7 @@ class MarkdownFormatter extends OutputFormatter {
         .append(" |\n")
 
       content.rows.foreach { row =>
-        val cells = new Array[CellValue](columns.length)
-        row.foreach { case (k, v) => columnIndex.get(k).foreach(idx => cells(idx) = v) }
+        val cells  = OutputFormatter.projectRow(row, columnIndex, columns.length)
         val values = cells.iterator.map(v => escapeCell(if v == null then "" else v.display)).toList
         sb.append("| ").append(values.mkString(" | ")).append(" |\n")
       }

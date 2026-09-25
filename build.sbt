@@ -105,7 +105,6 @@ lazy val root = (project in file("."))
         path.contains("parqueteer.jar") && !path.startsWith("lib/")
       }
     },
-
     libraryDependencies ++= {
       val parquet4sVersion           = "2.23.0"
       val circeVersion               = "0.14.16"

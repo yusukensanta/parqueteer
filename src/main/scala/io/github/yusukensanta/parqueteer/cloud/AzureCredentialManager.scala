@@ -8,12 +8,13 @@ class AzureCredentialManager extends CloudCredentialManager {
 
   protected[cloud] def env(key: String): Option[String] = sys.env.get(key)
 
+  // Deliberately not CloudCredentialManager.requiredEnv: that reads sys.env
+  // directly, bypassing the overridable env() hook tests use to inject
+  // credentials without touching real environment variables.
   private def requiredEnv(key: String): String =
     env(key)
       .filter(_.nonEmpty)
-      .getOrElse(
-        throw new RuntimeException(s"$key is not set in the environment")
-      )
+      .getOrElse(throw new RuntimeException(s"$key is not set in the environment"))
 
   override def configureHadoop(
       location: StorageLocation

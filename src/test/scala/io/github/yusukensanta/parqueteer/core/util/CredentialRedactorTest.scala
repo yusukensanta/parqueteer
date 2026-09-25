@@ -1,4 +1,4 @@
-package io.github.yusukensanta.parqueteer.cli
+package io.github.yusukensanta.parqueteer.core.util
 
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers

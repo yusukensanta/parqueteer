@@ -2,6 +2,7 @@ package io.github.yusukensanta.parqueteer.config
 
 import io.circe.{ACursor, Decoder, Encoder, JsonObject}
 import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
+import io.github.yusukensanta.parqueteer.core.util.CredentialRedactor
 import java.nio.file.{Files, Path, Paths}
 import scala.util.{Success, Try}
 
@@ -123,15 +124,13 @@ class ConfigurationManager {
                 case Right(config) => config
                 case Left(error) =>
                   throw new RuntimeException(
-                    s"Failed to parse configuration: ${io.github.yusukensanta.parqueteer.core.util.CredentialRedactor
-                        .redact(error.getMessage)}",
+                    s"Failed to parse configuration: ${CredentialRedactor.redact(error.getMessage)}",
                     error
                   )
               }
             case Left(error) =>
               throw new RuntimeException(
-                s"Invalid YAML syntax: ${io.github.yusukensanta.parqueteer.core.util.CredentialRedactor
-                    .redact(error.getMessage)}",
+                s"Invalid YAML syntax: ${CredentialRedactor.redact(error.getMessage)}",
                 error
               )
           }
@@ -149,10 +148,7 @@ class ConfigurationManager {
       )
     } else {
       parseConfigFile(configFile).map(deadFieldWarnings).recover { case ex =>
-        List(
-          io.github.yusukensanta.parqueteer.core.util.CredentialRedactor
-            .redact(Option(ex.getMessage).getOrElse("parse error"))
-        )
+        List(CredentialRedactor.redact(Option(ex.getMessage).getOrElse("parse error")))
       }
     }
   }

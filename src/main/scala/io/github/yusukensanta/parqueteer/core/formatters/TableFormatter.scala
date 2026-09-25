@@ -33,14 +33,9 @@ class TableFormatter extends OutputFormatter {
 
       // Pre-format all cell values once: calculateColumnWidths and drawRow both
       // need the formatted string, so computing it twice per cell is wasteful.
-      //
-      // Projecting via columnIndex + one pass over each row's own entries is
-      // O(row.size) per row; the equivalent columns.map(row.get) is O(columns.length
-      // * row.size) since each row.get on a ListMap is itself O(row.size).
-      val columnIndex = columns.iterator.zipWithIndex.toMap
+      val columnIndex = OutputFormatter.indexColumns(columns)
       val fmtRows = rows.map { row =>
-        val values = new Array[CellValue](columns.length)
-        row.foreach { case (k, v) => columnIndex.get(k).foreach(idx => values(idx) = v) }
+        val values = OutputFormatter.projectRow(row, columnIndex, columns.length)
         values.iterator.map(v => if v == null then "null" else formatValue(v)).toList
       }
       val columnWidths = {

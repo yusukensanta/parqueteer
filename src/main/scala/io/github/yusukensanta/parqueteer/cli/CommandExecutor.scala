@@ -20,7 +20,7 @@ import io.github.yusukensanta.parqueteer.core.formatters.{
   RowStreamWriter,
   TableFormatter
 }
-import io.github.yusukensanta.parqueteer.core.util.{FileExtension, RowPipeline}
+import io.github.yusukensanta.parqueteer.core.util.{CredentialRedactor, FileExtension, RowPipeline}
 import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.concurrent.duration.Duration
 import scala.util.control.NonFatal
@@ -30,6 +30,14 @@ import java.util.concurrent.atomic.AtomicInteger
 private[cli] object CommandExecutor {
 
   private val cloudUriPattern = "^(s3a?|gs|abfss?|wasbs?)://".r
+
+  // Shared by performConvert/executeConvertMulti: parquet → text conversions
+  // only ever target one of these three formats.
+  private[cli] def textOutputFormatFor(ext: String): OutputFormat = ext match {
+    case "json"   => OutputFormat.JSON
+    case "ndjson" => OutputFormat.NDJSON
+    case _        => OutputFormat.CSV
+  }
 
   def execute(
       command: Command,
@@ -640,11 +648,7 @@ private[cli] object CommandExecutor {
     val outputExt = FileExtension.of(outputPath)
     (inputExt, outputExt) match {
       case ("parquet", ext @ ("json" | "ndjson" | "csv")) =>
-        val outFormat = ext match {
-          case "json"   => OutputFormat.JSON
-          case "ndjson" => OutputFormat.NDJSON
-          case _        => OutputFormat.CSV
-        }
+        val outFormat = textOutputFormatFor(ext)
         convertParquetStreamed(
           service,
           inputPath,
@@ -676,13 +680,19 @@ private[cli] object CommandExecutor {
     }
   }
 
-  private def convertParquetStreamed(
-      service: ParquetService,
-      inputPath: String,
+  // Refuses a cloud URI output, refuses to silently truncate a pre-existing
+  // output file, then creates it and hands `doRead` a RowStreamWriter over
+  // it. Deletes the just-created file if `doRead` — or the write itself —
+  // fails. We already verified the file didn't pre-exist, so any file at
+  // outputPath afterward was created by this run and is safe to remove on
+  // failure. Shared by the single-file and multi-file parquet→text streaming
+  // conversion paths, which differ only in how `doRead` drives the writer.
+  private def withSafeTextOutput(
       outputPath: String,
-      outFormat: OutputFormat,
-      conversionConfig: ConversionConfig
-  ): Either[ParqueteerError, Unit] =
+      outFormat: OutputFormat
+  )(
+      doRead: RowStreamWriter => Either[ParqueteerError, Long]
+  ): Either[ParqueteerError, Long] =
     if cloudUriPattern.findFirstIn(outputPath).isDefined then
       Left(
         ParqueteerError.InvalidFormat(
@@ -694,9 +704,6 @@ private[cli] object CommandExecutor {
       )
     else
       checkOutputWritable(outputPath).flatMap { _ =>
-        // Mirror the parquet-to-parquet path's overwrite guard: refuse to silently
-        // truncate an existing output file instead of only checking the parent
-        // directory is writable.
         val outFilePath = java.nio.file.Paths.get(outputPath)
         if java.nio.file.Files.exists(outFilePath) then
           Left(
@@ -725,13 +732,7 @@ private[cli] object CommandExecutor {
               val writer = RowStreamWriter(outFormat, ps)
               var failed = true
               try {
-                val result = runWithDeferredBegin(
-                  writer,
-                  service.streamRead(
-                    inputPath,
-                    ReadConfig(maxRows = conversionConfig.maxRows)
-                  )
-                )
+                val result     = doRead(writer)
                 val writeError = ps.checkError()
                 failed = result.isLeft || writeError
                 if writeError && result.isRight then
@@ -742,16 +743,27 @@ private[cli] object CommandExecutor {
                       )
                     )
                   )
-                else result.map(_ => ())
+                else result
               } finally {
                 ps.close()
-                // We already verified the file didn't pre-exist, so any file at
-                // outputPath now was created by this run and is safe to remove
-                // on failure.
                 if failed then scala.util.Try(java.nio.file.Files.deleteIfExists(outFile))
               }
             }
       }
+
+  private def convertParquetStreamed(
+      service: ParquetService,
+      inputPath: String,
+      outputPath: String,
+      outFormat: OutputFormat,
+      conversionConfig: ConversionConfig
+  ): Either[ParqueteerError, Unit] =
+    withSafeTextOutput(outputPath, outFormat) { writer =>
+      runWithDeferredBegin(
+        writer,
+        service.streamRead(inputPath, ReadConfig(maxRows = conversionConfig.maxRows))
+      )
+    }.map(_ => ())
 
   private[cli] def executeConvertMulti(
       service: ParquetService,
@@ -797,11 +809,7 @@ private[cli] object CommandExecutor {
                 globalOptions.fileParallelism
               )
             case ("parquet", ext @ ("json" | "ndjson" | "csv")) =>
-              val outFormat = ext match {
-                case "json"   => OutputFormat.JSON
-                case "ndjson" => OutputFormat.NDJSON
-                case _        => OutputFormat.CSV
-              }
+              val outFormat = textOutputFormatFor(ext)
               convertParquetMultiStreamed(
                 service,
                 inputPaths,
@@ -850,84 +858,30 @@ private[cli] object CommandExecutor {
       maxRows: Option[Long],
       fileParallelism: Int
   ): Either[ParqueteerError, Long] =
-    if cloudUriPattern.findFirstIn(outputPath).isDefined then
-      Left(
-        ParqueteerError.InvalidFormat(
-          outputPath,
-          s"Cloud URI output is not supported for text conversion (parquet → ${FileExtension.of(outputPath)})."
-        )
-      )
-    else
-      service.checkSchemaCompatibility(inputPaths, schemaMode).flatMap { _ =>
-        checkOutputWritable(outputPath).flatMap { _ =>
-          val outFilePath = java.nio.file.Paths.get(outputPath)
-          if java.nio.file.Files.exists(outFilePath) then
-            Left(
-              ParqueteerError.InvalidFormat(
-                outputPath,
-                s"Output file already exists: $outputPath. Remove it first or choose a different output path."
-              )
-            )
-          else
-            scala.util
-              .Try {
-                import java.nio.file.Files
-                Option(outFilePath.getParent).foreach(Files.createDirectories(_))
-                Files.createFile(outFilePath)
-                (
-                  outFilePath,
-                  new java.io.PrintStream(
-                    new java.io.BufferedOutputStream(Files.newOutputStream(outFilePath), 1 << 16)
-                  )
-                )
+    service.checkSchemaCompatibility(inputPaths, schemaMode).flatMap { _ =>
+      withSafeTextOutput(outputPath, outFormat) { writer =>
+        // Each closure shares `remaining` by reference, so the row budget
+        // decrements across files as runWithDeferredBeginMulti invokes them
+        // in order — the same running --limit semantics
+        // ParquetService.streamAllFiles uses for multi-file `read`.
+        var remaining = maxRows
+        val reads: List[(Map[String, CellValue] => Unit) => Either[ParqueteerError, Long]] =
+          inputPaths.map { path => process =>
+            if remaining.contains(0L) then Right(0L)
+            else
+              service.streamRead(path, ReadConfig(maxRows = remaining))(process).map { n =>
+                remaining = remaining.map(r => r - n)
+                n
               }
-              .toEither
-              .left
-              .map(ParqueteerError.IOError.apply)
-              .flatMap { case (outFile, ps) =>
-                val writer = RowStreamWriter(outFormat, ps)
-                var failed = true
-                try {
-                  // Each closure shares `remaining` by reference, so the row
-                  // budget decrements across files as runWithDeferredBeginMulti
-                  // invokes them in order — the same running --limit semantics
-                  // ParquetService.streamAllFiles uses for multi-file `read`.
-                  var remaining = maxRows
-                  val reads
-                      : List[(Map[String, CellValue] => Unit) => Either[ParqueteerError, Long]] =
-                    inputPaths.map { path => process =>
-                      if remaining.contains(0L) then Right(0L)
-                      else
-                        service.streamRead(path, ReadConfig(maxRows = remaining))(process).map {
-                          n =>
-                            remaining = remaining.map(r => r - n)
-                            n
-                        }
-                    }
-                  // A running --limit budget is shared (by mutable closure)
-                  // across `reads` in file order, so honoring it correctly
-                  // requires each file to finish before the next starts —
-                  // only prefetch ahead when there's no limit to honor.
-                  val effectiveParallelism = if maxRows.isDefined then 1 else fileParallelism
-                  val result     = runWithDeferredBeginMulti(writer, reads, effectiveParallelism)
-                  val writeError = ps.checkError()
-                  failed = result.isLeft || writeError
-                  if writeError && result.isRight then
-                    Left(
-                      ParqueteerError.IOError(
-                        new java.io.IOException(
-                          "Output stream write error (disk full or broken pipe)"
-                        )
-                      )
-                    )
-                  else result
-                } finally {
-                  ps.close()
-                  if failed then scala.util.Try(java.nio.file.Files.deleteIfExists(outFile))
-                }
-              }
-        }
+          }
+        // A running --limit budget is shared (by mutable closure) across
+        // `reads` in file order, so honoring it correctly requires each file
+        // to finish before the next starts — only prefetch ahead when
+        // there's no limit to honor.
+        val effectiveParallelism = if maxRows.isDefined then 1 else fileParallelism
+        runWithDeferredBeginMulti(writer, reads, effectiveParallelism)
       }
+    }
 
   private[cli] def executeMerge(
       service: ParquetService,

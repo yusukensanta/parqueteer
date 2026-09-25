@@ -3,6 +3,7 @@ package io.github.yusukensanta.parqueteer.core.repositories
 import io.github.yusukensanta.parqueteer.core.models.*
 import io.github.yusukensanta.parqueteer.core.models.ParqueteerError.CloudAuthException
 import io.github.yusukensanta.parqueteer.cloud.CloudCredentialManager
+import io.github.yusukensanta.parqueteer.core.util.CredentialRedactor
 import com.github.mjakubowski84.parquet4s.{
   Filter,
   ParquetReader,
@@ -613,14 +614,12 @@ class HadoopParquetRepository(
           case scala.util.Failure(ex: FileNotFoundException) =>
             throw ex
           case scala.util.Failure(ex) =>
-            issues += s"File cannot be opened as Parquet: ${io.github.yusukensanta.parqueteer.core.util.CredentialRedactor
-                .redact(ex.getMessage)}"
+            issues += s"File cannot be opened as Parquet: ${CredentialRedactor.redact(ex.getMessage)}"
           case scala.util.Success(reader) =>
             Using.resource(reader) { r =>
               Try(r.getFooter) match {
                 case scala.util.Failure(ex) =>
-                  issues += s"Cannot read file footer: ${io.github.yusukensanta.parqueteer.core.util.CredentialRedactor
-                      .redact(ex.getMessage)}"
+                  issues += s"Cannot read file footer: ${CredentialRedactor.redact(ex.getMessage)}"
                 case scala.util.Success(footer) =>
                   val schema = footer.getFileMetaData.getSchema
                   if schema.getColumns.isEmpty then issues += "Schema has no columns"
@@ -637,7 +636,7 @@ class HadoopParquetRepository(
                       if indicesToCheck.contains(index) then {
                         Try(r.readNextRowGroup()) match {
                           case scala.util.Failure(ex) =>
-                            issues += s"Row group $index data is corrupt or truncated: ${io.github.yusukensanta.parqueteer.core.util.CredentialRedactor
+                            issues += s"Row group $index data is corrupt or truncated: ${CredentialRedactor
                                 .redact(ex.getMessage)}"
                             readerBroken = true
                           case scala.util.Success(null) =>
@@ -648,7 +647,7 @@ class HadoopParquetRepository(
                       } else {
                         Try(r.skipNextRowGroup()) match {
                           case scala.util.Failure(ex) =>
-                            issues += s"Row group $index could not be skipped: ${io.github.yusukensanta.parqueteer.core.util.CredentialRedactor
+                            issues += s"Row group $index could not be skipped: ${CredentialRedactor
                                 .redact(ex.getMessage)}"
                             readerBroken = true
                           case _ =>
@@ -810,7 +809,7 @@ class HadoopParquetRepository(
                 scala.util.Failure(
                   new CloudAuthException(
                     providerNameFor(effectiveLocation),
-                    io.github.yusukensanta.parqueteer.core.util.CredentialRedactor
+                    CredentialRedactor
                       .redact(Option(e.getMessage).getOrElse(e.getClass.getSimpleName)),
                     e
                   )
@@ -842,8 +841,7 @@ class HadoopParquetRepository(
         scala.util.Failure(
           new CloudAuthException(
             providerNameFor(location),
-            io.github.yusukensanta.parqueteer.core.util.CredentialRedactor
-              .redact(Option(e.getMessage).getOrElse(e.getClass.getSimpleName)),
+            CredentialRedactor.redact(Option(e.getMessage).getOrElse(e.getClass.getSimpleName)),
             e
           )
         )
