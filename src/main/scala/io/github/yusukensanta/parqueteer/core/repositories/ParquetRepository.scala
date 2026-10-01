@@ -14,7 +14,7 @@ import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileStatus, FileSystem, Path as HadoopPath}
 import org.apache.parquet.hadoop.ParquetFileReader
 import org.apache.parquet.hadoop.example.ExampleParquetWriter
-import org.apache.parquet.hadoop.metadata.{BlockMetaData, ColumnChunkMetaData, ParquetMetadata}
+import org.apache.parquet.hadoop.metadata.{BlockMetaData, ColumnChunkMetaData}
 import org.apache.parquet.hadoop.util.{HadoopInputFile, HadoopStreams}
 import org.apache.parquet.io.{InputFile, LocalInputFile, SeekableInputStream}
 import org.apache.parquet.example.data.simple.SimpleGroupFactory
@@ -24,7 +24,7 @@ import org.apache.parquet.schema.{GroupType, MessageType}
 import org.apache.parquet.schema.Type.Repetition
 import java.io.{FileNotFoundException, IOException}
 import java.nio.file.{Files, Paths}
-import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong}
+import java.util.concurrent.atomic.AtomicBoolean
 import scala.util.{Success, Try, Using}
 import scala.jdk.CollectionConverters.*
 
@@ -117,61 +117,18 @@ class HadoopParquetRepository(
   private val HadoopConfigCacheMaxSize = 64
   private val FooterCacheMaxSize       = 1024
 
-  private val hadoopConfigCache: java.util.Map[String, Configuration] =
-    java.util.Collections.synchronizedMap(
-      new java.util.LinkedHashMap[String, Configuration](
-        16,
-        0.75f,
-        true
-      ) {
+  private val hadoopConfigCache = new LruCache[String, Configuration](HadoopConfigCacheMaxSize)
 
-        override def removeEldestEntry(
-            eldest: java.util.Map.Entry[String, Configuration]
-        ): Boolean = size() > HadoopConfigCacheMaxSize
-      }
-    )
-
-  // The 5th field (raw ParquetMetadata) is the same footer object schema/blocks
-  // were derived from — kept so callers that need to open a ParquetFileReader
-  // (e.g. the parallel reader) can pass it in directly instead of triggering
-  // another footer read+parse per row group.
-  private type FooterEntry = (MessageType, List[BlockMetaData], String, String, ParquetMetadata)
-
-  // Caches (MessageType, blocks, version, createdBy) per file path for the lifetime of this
-  // repository instance. Bounded LRU: evicts the least-recently-used entry when size exceeds
-  // FooterCacheMaxSize so large multi-file merges don't grow the cache unboundedly.
-  private val footerCache: java.util.Map[String, FooterEntry] =
-    java.util.Collections.synchronizedMap(
-      new java.util.LinkedHashMap[String, FooterEntry](
-        16,
-        0.75f,
-        true
-      ) {
-
-        override def removeEldestEntry(
-            eldest: java.util.Map.Entry[String, FooterEntry]
-        ): Boolean = size() > FooterCacheMaxSize
-      }
-    )
-
-  private val footerCacheHits =
-    new AtomicLong(0)
-
-  private val footerCacheMisses =
-    new AtomicLong(0)
-
-  private val configCacheHits =
-    new AtomicLong(0)
-
-  private val configCacheMisses =
-    new AtomicLong(0)
+  // Caches the parsed footer per file path for the lifetime of this repository
+  // instance. Bounded so large multi-file merges don't grow it unboundedly.
+  private val footerCache = new LruCache[String, FooterInfo](FooterCacheMaxSize)
 
   override def cacheStats(): ParquetRepository.CacheStats =
     ParquetRepository.CacheStats(
-      footerHits = footerCacheHits.get(),
-      footerMisses = footerCacheMisses.get(),
-      configHits = configCacheHits.get(),
-      configMisses = configCacheMisses.get()
+      footerHits = footerCache.hits,
+      footerMisses = footerCache.misses,
+      configHits = hadoopConfigCache.hits,
+      configMisses = hadoopConfigCache.misses
     )
 
   private def configCacheKey(location: StorageLocation): String =
@@ -233,28 +190,18 @@ class HadoopParquetRepository(
 
   // Cache-aware footer fetch: 0 cloud ops on hit, at most 1 stat + 1 stream on
   // miss (0 stats when the caller already knows the FileStatus).
-  // LRU eviction is handled by the LinkedHashMap's removeEldestEntry override.
   private def getFooter(
       location: StorageLocation,
       path: HadoopPath,
       conf: Configuration,
       knownStatus: Option[FileStatus] = None
-  ): FooterEntry = {
+  ): FooterInfo = {
     val key = path.toString
-    Option(footerCache.get(key)) match {
-      case Some(cached) =>
-        footerCacheHits.incrementAndGet()
-        cached
-      case None =>
-        footerCacheMisses.incrementAndGet()
-        val (stream, fileLen)    = openFooterStream(location, path, conf, knownStatus)
-        val footerBytes          = FooterReader.readFooterBytes(stream, fileLen)
-        val (version, createdBy) = FooterReader.parseRawMeta(footerBytes)
-        val meta                 = FooterReader.parseFooter(footerBytes)
-        val entry =
-          (meta.getFileMetaData.getSchema, meta.getBlocks.asScala.toList, version, createdBy, meta)
-        footerCache.put(key, entry)
-        entry
+    footerCache.get(key).getOrElse {
+      val (stream, fileLen) = openFooterStream(location, path, conf, knownStatus)
+      val footer            = FooterReader.readFooterInfo(stream, fileLen)
+      footerCache.put(key, footer)
+      footer
     }
   }
 
@@ -265,9 +212,10 @@ class HadoopParquetRepository(
       val cacheKey = new HadoopPath(file.location.path).toString
       val result = Try {
         val hadoopPath = new HadoopPath(file.location.path)
-        val (fileSchema, blocks, _, _, footerMeta) =
-          getFooter(file.location, hadoopPath, hadoopConfig)
-        val totalRows = blocks.map(_.getRowCount).sum
+        val footer     = getFooter(file.location, hadoopPath, hadoopConfig)
+        val fileSchema = footer.schema
+        val blocks     = footer.blocks
+        val totalRows  = blocks.map(_.getRowCount).sum
 
         // filter forces sequential: parquet4s evaluates predicates during
         // deserialization, not at page-selection time, so parallel reads can't
@@ -282,18 +230,13 @@ class HadoopParquetRepository(
                 config,
                 fileSchema,
                 blocks,
-                footerMeta
+                footer.metadata
               ),
               false
             )
           else {
-            val path4s = Parquet4sPath(file.location.path)
-            val rawBinaryFields =
-              ParquetRecordDecoder.rawBinaryFieldsFor(fileSchema)
-            val int96Fields =
-              ParquetRecordDecoder.int96FieldsFor(fileSchema)
-            val temporalTransformer =
-              ParquetRecordDecoder.buildTemporalTransformer(fileSchema)
+            val path4s    = Parquet4sPath(file.location.path)
+            val decodeRow = ParquetRecordDecoder.rowDecoderFor(fileSchema)
             Using.resource(
               openParquetReader(path4s, hadoopConfig, config, fileSchema)
             ) { reader =>
@@ -305,16 +248,7 @@ class HadoopParquetRepository(
                   def iterator: Iterator[RowParquetRecord] = baseIter
                 },
                 config.maxRows
-              ).map(r =>
-                ParquetRecordDecoder.applyTemporalTransformer(
-                  ParquetRecordDecoder.convertRecordToMapWithSchema(
-                    r,
-                    rawBinaryFields,
-                    int96Fields
-                  ),
-                  temporalTransformer
-                )
-              ).toList
+              ).map(decodeRow).toList
               // Peek one more row to determine if more matching rows exist beyond the limit.
               // Avoids false-positive isPartial when the filter matches exactly maxRows records.
               val peek =
@@ -348,32 +282,17 @@ class HadoopParquetRepository(
     withHadoopConfig(file.location) { hadoopConfig =>
       val cacheKey = new HadoopPath(file.location.path).toString
       val result = Try {
-        val path4s                   = Parquet4sPath(file.location.path)
-        val hadoopPath               = new HadoopPath(file.location.path)
-        val (fileSchema, _, _, _, _) = getFooter(file.location, hadoopPath, hadoopConfig)
-        val rawBinaryFields =
-          ParquetRecordDecoder.rawBinaryFieldsFor(fileSchema)
-        val int96Fields =
-          ParquetRecordDecoder.int96FieldsFor(fileSchema)
-        val temporalTransformer =
-          ParquetRecordDecoder.buildTemporalTransformer(fileSchema)
+        val path4s     = Parquet4sPath(file.location.path)
+        val hadoopPath = new HadoopPath(file.location.path)
+        val fileSchema = getFooter(file.location, hadoopPath, hadoopConfig).schema
+        val decodeRow  = ParquetRecordDecoder.rowDecoderFor(fileSchema)
         Using.resource(
           openParquetReader(path4s, hadoopConfig, config, fileSchema)
         ) { source =>
           val iter  = applyMaxRows(source.iterator, config.maxRows)
           var count = 0L
           iter.foreach { record =>
-            process(
-              ParquetRecordDecoder.applyTemporalTransformer(
-                ParquetRecordDecoder
-                  .convertRecordToMapWithSchema(
-                    record,
-                    rawBinaryFields,
-                    int96Fields
-                  ),
-                temporalTransformer
-              )
-            )
+            process(decodeRow(record))
             count += 1
           }
           count
@@ -424,9 +343,9 @@ class HadoopParquetRepository(
   def readSchema(file: ParquetFile): Try[ParquetSchema] =
     withHadoopConfig(file.location) { hadoopConfig =>
       Try {
-        val path                         = new HadoopPath(file.location.path)
-        val (msgSchema, blocks, _, _, _) = getFooter(file.location, path, hadoopConfig)
-        FooterReader.buildParquetSchema(msgSchema, blocks)
+        val path   = new HadoopPath(file.location.path)
+        val footer = getFooter(file.location, path, hadoopConfig)
+        FooterReader.buildParquetSchema(footer.schema, footer.blocks)
       }
     }
 
@@ -458,7 +377,7 @@ class HadoopParquetRepository(
               val status = path.getFileSystem(hadoopConfig).getFileStatus(path)
               (status.getLen, status.getModificationTime, Some(status))
           }
-        val (msgSchema, blocks, version, createdBy, _) =
+        val FooterInfo(msgSchema, blocks, version, createdBy, _) =
           getFooter(file.location, path, hadoopConfig, knownStatus)
         val ratio        = calculateCompressionRatio(blocks)
         val parsedSchema = FooterReader.buildParquetSchema(msgSchema, blocks)
@@ -675,8 +594,8 @@ class HadoopParquetRepository(
   ): Try[List[FieldSummary]] =
     withHadoopConfig(file.location) { hadoopConfig =>
       Try {
-        val path                 = new HadoopPath(file.location.path)
-        val (schema, _, _, _, _) = getFooter(file.location, path, hadoopConfig)
+        val path   = new HadoopPath(file.location.path)
+        val schema = getFooter(file.location, path, hadoopConfig).schema
         schema.getFields.asScala.toList.map { field =>
           val typeName =
             if field.isPrimitive then {
@@ -709,9 +628,11 @@ class HadoopParquetRepository(
   def readStats(file: ParquetFile): Try[FileStats] =
     withHadoopConfig(file.location) { hadoopConfig =>
       Try {
-        val path                      = new HadoopPath(file.location.path)
-        val (schema, blocks, _, _, _) = getFooter(file.location, path, hadoopConfig)
-        val totalRows                 = blocks.map(_.getRowCount).sum
+        val path      = new HadoopPath(file.location.path)
+        val footer    = getFooter(file.location, path, hadoopConfig)
+        val schema    = footer.schema
+        val blocks    = footer.blocks
+        val totalRows = blocks.map(_.getRowCount).sum
 
         // Build each block's column-name -> chunk index once (O(blocks * columns)),
         // so per-column stats lookup below is O(1) instead of a linear .find over
@@ -791,12 +712,10 @@ class HadoopParquetRepository(
       location: StorageLocation
   ): Try[Configuration] = {
     val key = configCacheKey(location)
-    Option(hadoopConfigCache.get(key)) match {
+    hadoopConfigCache.get(key) match {
       case Some(cfg) =>
-        configCacheHits.incrementAndGet()
         Success(new Configuration(cfg))
       case None =>
-        configCacheMisses.incrementAndGet()
         val effectiveLocation = (location, region) match {
           case (s3: S3Location, Some(r)) => s3.copy(region = Some(r))
           case _                         => location
