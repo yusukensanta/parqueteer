@@ -584,4 +584,27 @@ class ArgumentParserTest extends AnyFlatSpec with Matchers {
     )
     result shouldBe None
   }
+
+  "ArgumentParser convert --compression" should "reject an unknown codec at parse time" in {
+    val result = OParser.parse(
+      ArgumentParser.parser,
+      Array("convert", "in.parquet", "out.parquet", "--compression", "bogus"),
+      ArgumentParser.Config()
+    )
+    result shouldBe None
+  }
+
+  it should "accept the 'uncompressed' and 'gz' aliases" in {
+    def parsedCompression(codec: String) =
+      OParser
+        .parse(
+          ArgumentParser.parser,
+          Array("convert", "in.parquet", "out.parquet", "--compression", codec),
+          ArgumentParser.Config()
+        )
+        .flatMap(_.command)
+        .collect { case c: ConvertCommand => c.compression }
+    parsedCompression("uncompressed") shouldBe Some(CompressionType.Uncompressed)
+    parsedCompression("gz") shouldBe Some(CompressionType.Gzip)
+  }
 }
