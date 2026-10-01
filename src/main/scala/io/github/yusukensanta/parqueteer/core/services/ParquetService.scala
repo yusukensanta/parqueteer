@@ -7,6 +7,7 @@ import io.github.yusukensanta.parqueteer.core.repositories.ParquetRepository
 import io.github.yusukensanta.parqueteer.core.filters.FilterParser
 import io.github.yusukensanta.parqueteer.core.util.{
   CredentialRedactor,
+  Eithers,
   GlobDetector,
   RowLimiter,
   RowPipeline
@@ -172,7 +173,7 @@ class ParquetService(
       for {
         inputLocations <- parseLocations(inputPaths)
         schemas        <- readAllSchemas(inputLocations)
-        mergedFields   <- mergeSchemas(schemas, inputPaths, schemaMode)
+        mergedFields   <- SchemaReconciler.reconcile(schemas, inputPaths, schemaMode)
         outputLocation <- parseLocation(outputPath)
         count <- streamMerge(
           inputLocations,
@@ -192,7 +193,7 @@ class ParquetService(
     for {
       locations <- parseLocations(paths)
       schemas   <- readAllSchemas(locations)
-      _         <- mergeSchemas(schemas, paths, schemaMode)
+      _         <- SchemaReconciler.reconcile(schemas, paths, schemaMode)
     } yield ()
 
   /**
@@ -202,9 +203,7 @@ class ParquetService(
   private def parseLocations(
       paths: List[String]
   ): Either[ParqueteerError, Vector[StorageLocation]] =
-    paths.foldLeft[Either[ParqueteerError, Vector[StorageLocation]]](
-      Right(Vector.empty)
-    )((acc, p) => acc.flatMap(locs => parseLocation(p).map(locs :+ _)))
+    Eithers.traverse(paths)(parseLocation)
 
   /**
    * Read the field-summary schema for each input file, preserving order. Stops
@@ -213,141 +212,9 @@ class ParquetService(
   private def readAllSchemas(
       locations: Vector[StorageLocation]
   ): Either[ParqueteerError, Vector[List[FieldSummary]]] =
-    locations.foldLeft[Either[ParqueteerError, Vector[List[FieldSummary]]]](
-      Right(Vector.empty)
-    )((acc, loc) =>
-      acc.flatMap(vec =>
-        repository
-          .readSchemaFields(ParquetFile(loc))
-          .toParqueteerError
-          .map(vec :+ _)
-      )
+    Eithers.traverse(locations)(loc =>
+      repository.readSchemaFields(ParquetFile(loc)).toParqueteerError
     )
-
-  private[services] def describeSchemaMismatch(
-      expected: Set[(String, String, Boolean)],
-      actual: Set[(String, String, Boolean)]
-  ): String = {
-    val missing          = expected -- actual
-    val extra            = actual -- expected
-    val missingNames     = missing.map(_._1)
-    val extraNames       = extra.map(_._1)
-    val changedNames     = missingNames.intersect(extraNames)
-    val onlyMissingNames = missingNames -- changedNames
-    val onlyExtraNames   = extraNames -- changedNames
-    val fmt              = (t: String, o: Boolean) => if o then s"$t?" else t
-    val changedDetails = changedNames.toList.sorted.flatMap { name =>
-      for {
-        (_, ft, fo) <- missing.find(_._1 == name)
-        (_, tt, to) <- extra.find(_._1 == name)
-      } yield s"$name (${fmt(ft, fo)} → ${fmt(tt, to)})"
-    }
-    List(
-      if changedNames.nonEmpty then s"type/nullability changed: ${changedDetails.mkString(", ")}"
-      else "",
-      if onlyMissingNames.nonEmpty then s"missing: ${onlyMissingNames.toList.sorted.mkString(", ")}"
-      else "",
-      if onlyExtraNames.nonEmpty then s"extra: ${onlyExtraNames.toList.sorted.mkString(", ")}"
-      else ""
-    ).filter(_.nonEmpty).mkString("; ")
-  }
-
-  /**
-   * Combine per-file schemas under the chosen strategy:
-   *   - Strict: every input must match the first file's schema exactly.
-   *   - Union: collect the union of fields, surfacing per-column type
-   *     conflicts as a single SchemaMismatch error. Union-merged fields are
-   *     marked optional because not every file is guaranteed to supply them.
-   */
-  private def mergeSchemas(
-      schemas: Vector[List[FieldSummary]],
-      inputPaths: List[String],
-      schemaMode: SchemaMode
-  ): Either[ParqueteerError, List[FieldSummary]] = schemaMode match {
-    case SchemaMode.Strict =>
-      if schemas.isEmpty then Right(Nil)
-      else {
-        val first    = schemas.head
-        val firstSet = first.map(f => (f.name, f.dataType, f.isOptional)).toSet
-        // .view keeps this lazy so collectFirst still short-circuits at the
-        // first mismatch, while each schema's field set is built only once
-        // (previously built once for the guard, then again for the diff msg).
-        schemas.zipWithIndex.view
-          .map { case (s, i) => (i, s.map(f => (f.name, f.dataType, f.isOptional)).toSet) }
-          .collectFirst {
-            case (i, thisSet) if thisSet != firstSet =>
-              val diffMsg = describeSchemaMismatch(firstSet, thisSet)
-              Left(
-                ParqueteerError.SchemaMismatch(
-                  inputPaths(i),
-                  s"$diffMsg. Use --schema-mode union to allow schema differences."
-                )
-              )
-          }
-          .getOrElse(Right(first))
-      }
-
-    case SchemaMode.Union =>
-      // (dataType, requiredInAllInputsSoFar)
-      val seen =
-        scala.collection.mutable.LinkedHashMap.empty[String, (String, Boolean)]
-      schemas.zipWithIndex
-        .foldLeft[Either[ParqueteerError, Unit]](Right(())) { case (acc, (fields, fileIdx)) =>
-          acc.flatMap { _ =>
-            val duplicates = fields
-              .groupBy(_.name)
-              .collect { case (n, fs) if fs.size > 1 => n }
-              .toList
-              .sorted
-            if duplicates.nonEmpty then
-              Left(
-                ParqueteerError.SchemaMismatch(
-                  inputPaths(fileIdx),
-                  s"duplicate column names: ${duplicates.mkString(", ")}. " +
-                    "Parquet files with duplicate column names cannot be merged."
-                )
-              )
-            else {
-              val fieldMap = fields.view.map(f => f.name -> f).toMap
-              val conflicts = fields.collect {
-                case f if seen.get(f.name).exists(_._1 != f.dataType) =>
-                  s"'${f.name}' (${seen(f.name)._1} vs ${f.dataType})"
-              }
-              if conflicts.nonEmpty then
-                Left(
-                  ParqueteerError.SchemaMismatch(
-                    inputPaths(fileIdx),
-                    s"Type conflicts in union merge: ${conflicts.mkString(", ")}. " +
-                      "Cannot union-merge columns with incompatible types."
-                  )
-                )
-              else {
-                // Fields already seen but absent from this schema → must become optional
-                seen.keys.filterNot(fieldMap.contains).foreach { name =>
-                  seen(name) = (seen(name)._1, false)
-                }
-                fields.foreach { f =>
-                  seen.get(f.name) match {
-                    case Some((dt, wasRequired)) =>
-                      seen(f.name) = (dt, wasRequired && !f.isOptional)
-                    case None =>
-                      // New field: required only if it appears in the first file AND is marked required.
-                      // A field first seen in a later file was absent from earlier files, so it must be optional.
-                      val isRequired = fileIdx == 0 && !f.isOptional
-                      seen(f.name) = (f.dataType, isRequired)
-                  }
-                }
-                Right(())
-              }
-            } // end else (no duplicate names)
-          }
-        }
-        .map(_ =>
-          seen.map { case (name, (t, allRequired)) =>
-            FieldSummary(name, t, isOptional = !allRequired)
-          }.toList
-        )
-  }
 
   /**
    * Thrown inside the writeContentStream feed callback to abort streaming on
@@ -408,12 +275,6 @@ class ParquetService(
     }
 
   /**
-   * Stream rows from each input file into a single output writer. On the first
-   * read failure throws a sentinel exception through the writer so the partial
-   * output is deleted before returning the real error. Returns the count of
-   * rows written on success.
-   */
-  /**
    * Builds an explicit ParquetSchema from merged/read field summaries — shared
    * by every stream-write path (merge, parquet→parquet convert, multi-raw→parquet)
    * that writes with a schema known up front rather than inferred per-row.
@@ -459,6 +320,12 @@ class ParquetService(
     builder.result()
   }
 
+  /**
+   * Stream rows from each input file into a single output writer. On the first
+   * read failure throws a sentinel exception through the writer so the partial
+   * output is deleted before returning the real error. Returns the count of
+   * rows written on success.
+   */
   private def streamMerge(
       inputLocations: Vector[StorageLocation],
       inputPaths: List[String],
@@ -691,21 +558,13 @@ class ParquetService(
         .toParqueteerError
         .map(_.columns.map(c => FieldSummary(c.name, c.dataType, c.isOptional)))
 
-    val perFileRows = paths.zipWithIndex
-      .foldLeft[Either[ParqueteerError, Vector[List[Map[String, CellValue]]]]](
-        Right(Vector.empty)
-      ) { case (acc, (path, idx)) =>
-        acc.flatMap { rowsAcc =>
-          onProgress(idx + 1, paths.size, path)
-          readDataFile(path, InputFormat.Json).map(rowsAcc :+ _)
-        }
-      }
     for {
-      rowsPerFile <- perFileRows
-      perFileSchemas <- rowsPerFile.foldLeft[Either[ParqueteerError, Vector[List[FieldSummary]]]](
-        Right(Vector.empty)
-      )((acc, rows) => acc.flatMap(v => inferOne(rows).map(v :+ _)))
-      _ <- mergeSchemas(perFileSchemas, paths, schemaMode)
+      rowsPerFile <- Eithers.traverse(paths.zipWithIndex) { (path, idx) =>
+        onProgress(idx + 1, paths.size, path)
+        readDataFile(path, InputFormat.Json)
+      }
+      perFileSchemas <- Eithers.traverse(rowsPerFile)(inferOne)
+      _              <- SchemaReconciler.reconcile(perFileSchemas, paths, schemaMode)
       allRows = rowsPerFile.toList.flatten
       rowCount <- writeFile(outputPath, allRows, writeConfig).map(_ => allRows.size.toLong)
     } yield rowCount
@@ -730,10 +589,8 @@ class ParquetService(
 
     for {
       outputLocation <- parseLocation(outputPath)
-      perFileSchemas <- paths.foldLeft[Either[ParqueteerError, Vector[List[FieldSummary]]]](
-        Right(Vector.empty)
-      )((acc, path) => acc.flatMap(v => inferOne(path).map(v :+ _)))
-      mergedFields <- mergeSchemas(perFileSchemas, paths, schemaMode)
+      perFileSchemas <- Eithers.traverse(paths)(inferOne)
+      mergedFields   <- SchemaReconciler.reconcile(perFileSchemas, paths, schemaMode)
       explicitSchema = buildExplicitSchema(mergedFields, writeConfig.compressionType.codecName)
       fieldNames     = mergedFields.map(_.name).toArray
       nameToIndex    = fieldNames.zipWithIndex.toMap
@@ -781,38 +638,9 @@ class ParquetService(
     for {
       f1 <- getFileInfo(path1)
       f2 <- getFileInfo(path2)
-    } yield {
-      val cols1 = f1.schema.map(_.columns).getOrElse(List.empty)
-      val cols2 = f2.schema.map(_.columns).getOrElse(List.empty)
-      val map1  = cols1.map(c => c.name -> c).toMap
-      val map2  = cols2.map(c => c.name -> c).toMap
-
-      val added   = cols2.filterNot(c => map1.contains(c.name))
-      val removed = cols1.filterNot(c => map2.contains(c.name))
-      val changed = cols1.flatMap { c1 =>
-        map2.get(c1.name).flatMap { c2 =>
-          if c1.dataType != c2.dataType || c1.isOptional != c2.isOptional then
-            Some(
-              ColumnChange(
-                c1.name,
-                c1.dataType,
-                c2.dataType,
-                c1.isOptional,
-                c2.isOptional
-              )
-            )
-          else None
-        }
-      }
-      val unchanged = cols1.collect {
-        case c
-            if map2
-              .get(c.name)
-              .exists(c2 => c.dataType == c2.dataType && c.isOptional == c2.isOptional) =>
-          c.name
-      }
-
-      SchemaDiff(added, removed, changed, unchanged)
-    }
+    } yield SchemaReconciler.diff(
+      f1.schema.map(_.columns).getOrElse(Nil),
+      f2.schema.map(_.columns).getOrElse(Nil)
+    )
 
 }
