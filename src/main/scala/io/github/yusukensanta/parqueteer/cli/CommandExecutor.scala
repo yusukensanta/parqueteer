@@ -46,183 +46,95 @@ private[cli] object CommandExecutor {
       globalOptions: GlobalOptions
   ): Int =
     command match {
-      case ReadCommand(
-            filePath,
-            maxRows,
-            columns,
-            filter,
-            format,
-            parallelism,
-            streaming,
-            schemaMode
-          ) =>
-        service.resolveGlob(filePath) match {
-          case Left(error) => reportError("Error", globalOptions)(error)
-          case Right(paths) if paths.size == 1 =>
-            warnIfSchemaModeNoop(schemaMode, globalOptions)
-            executeRead(
-              service,
-              paths.head,
-              maxRows,
-              columns,
-              filter,
-              format,
-              parallelism,
-              streaming,
-              globalOptions
-            )
-          case Right(paths) =>
-            executeReadMulti(
-              service,
-              paths,
-              maxRows,
-              columns,
-              filter,
-              format,
-              schemaMode,
-              globalOptions
-            )
-        }
+      case cmd: ReadCommand =>
+        withResolvedPaths(service, cmd.filePath, "Error", globalOptions)(
+          path => {
+            warnIfSchemaModeNoop(cmd.schemaMode, globalOptions)
+            executeRead(service, cmd.copy(filePath = path), globalOptions)
+          },
+          paths => executeReadMulti(service, paths, cmd, globalOptions)
+        )
 
-      case InfoCommand(filePath, format, verbose) =>
-        service.resolveGlob(filePath) match {
-          case Left(error) => reportError("Failed to get file info", globalOptions)(error)
-          case Right(paths) if paths.size == 1 =>
-            executeInfo(service, paths.head, format, verbose, globalOptions)
-          case Right(paths) =>
-            executeInfoMulti(service, paths, format, verbose, globalOptions)
-        }
+      case cmd: InfoCommand =>
+        withResolvedPaths(service, cmd.filePath, "Failed to get file info", globalOptions)(
+          path => executeInfo(service, cmd.copy(filePath = path), globalOptions),
+          paths => executeInfoMulti(service, paths, cmd, globalOptions)
+        )
 
-      case WriteCommand(
-            inputPath,
-            outputPath,
-            inputFormat,
-            compression,
-            rowGroupSize,
-            dryRun,
-            schemaMode
-          ) =>
-        service.resolveGlob(inputPath) match {
-          case Left(error) => reportError("Failed to write file", globalOptions)(error)
-          case Right(paths) if paths.size == 1 =>
-            warnIfSchemaModeNoop(schemaMode, globalOptions)
-            executeWrite(
-              service,
-              outputPath,
-              paths.head,
-              inputFormat,
-              compression,
-              rowGroupSize,
-              dryRun,
-              globalOptions
-            )
-          case Right(paths) =>
-            executeWriteMulti(
-              service,
-              outputPath,
-              paths,
-              inputFormat,
-              compression,
-              rowGroupSize,
-              schemaMode,
-              dryRun,
-              globalOptions
-            )
-        }
+      case cmd: WriteCommand =>
+        withResolvedPaths(service, cmd.inputPath, "Failed to write file", globalOptions)(
+          path => {
+            warnIfSchemaModeNoop(cmd.schemaMode, globalOptions)
+            executeWrite(service, cmd.copy(inputPath = path), globalOptions)
+          },
+          paths => executeWriteMulti(service, paths, cmd, globalOptions)
+        )
 
-      case ValidateCommand(filePath, verbose, deep) =>
-        service.resolveGlob(filePath) match {
-          case Left(error) => reportError("Failed to validate file", globalOptions)(error)
-          case Right(paths) if paths.size == 1 =>
-            executeValidate(service, paths.head, verbose, deep, globalOptions)
-          case Right(paths) =>
-            executeValidateMulti(service, paths, verbose, deep, globalOptions)
-        }
+      case cmd: ValidateCommand =>
+        withResolvedPaths(service, cmd.filePath, "Failed to validate file", globalOptions)(
+          path => executeValidate(service, cmd.copy(filePath = path), globalOptions),
+          paths => executeValidateMulti(service, paths, cmd, globalOptions)
+        )
 
-      case ConvertCommand(
-            inputPath,
-            outputPath,
-            compression,
-            maxRows,
-            dryRun,
-            schemaMode
-          ) =>
-        service.resolveGlob(inputPath) match {
-          case Left(error) => reportError("Failed to convert file", globalOptions)(error)
-          case Right(paths) if paths.size == 1 =>
-            warnIfSchemaModeNoop(schemaMode, globalOptions)
-            executeConvert(
-              service,
-              paths.head,
-              outputPath,
-              compression,
-              maxRows,
-              dryRun,
-              globalOptions
-            )
-          case Right(paths) =>
-            executeConvertMulti(
-              service,
-              paths,
-              outputPath,
-              compression,
-              maxRows,
-              schemaMode,
-              dryRun,
-              globalOptions
-            )
-        }
+      case cmd: ConvertCommand =>
+        withResolvedPaths(service, cmd.inputPath, "Failed to convert file", globalOptions)(
+          path => {
+            warnIfSchemaModeNoop(cmd.schemaMode, globalOptions)
+            executeConvert(service, cmd.copy(inputPath = path), globalOptions)
+          },
+          paths => executeConvertMulti(service, paths, cmd, globalOptions)
+        )
 
       case cmd: ConfigCommand =>
         executeConfig(cmd, globalOptions)
 
       case cmd: SchemaCommand =>
-        service.resolveGlob(cmd.filePath) match {
-          case Left(error) => reportError("Failed to read schema", globalOptions)(error)
-          case Right(paths) if paths.size == 1 =>
-            executeSchemaInfo(service, cmd.copy(filePath = paths.head), globalOptions)
-          case Right(paths) =>
-            executeSchemaInfoMulti(service, paths, cmd.format, globalOptions)
-        }
+        withResolvedPaths(service, cmd.filePath, "Failed to read schema", globalOptions)(
+          path => executeSchemaInfo(service, cmd.copy(filePath = path), globalOptions),
+          paths => executeSchemaInfoMulti(service, paths, cmd.format, globalOptions)
+        )
 
       case cmd: SchemaDiffCommand =>
         executeSchemaDiff(service, cmd, globalOptions)
 
-      case StatsCommand(filePath, format) =>
-        service.resolveGlob(filePath) match {
-          case Left(error) => reportError("Failed to get stats", globalOptions)(error)
-          case Right(paths) if paths.size == 1 =>
-            executeStats(service, paths.head, format, globalOptions)
-          case Right(paths) =>
-            executeStatsMulti(service, paths, format, globalOptions)
-        }
+      case cmd: StatsCommand =>
+        withResolvedPaths(service, cmd.filePath, "Failed to get stats", globalOptions)(
+          path => executeStats(service, cmd.copy(filePath = path), globalOptions),
+          paths => executeStatsMulti(service, paths, cmd, globalOptions)
+        )
 
-      case CountCommand(filePath, format) =>
-        service.resolveGlob(filePath) match {
-          case Left(error) => reportError("Failed to count rows", globalOptions)(error)
-          case Right(paths) if paths.size == 1 =>
-            executeCount(service, paths.head, format, globalOptions)
-          case Right(paths) =>
-            executeCountMulti(service, paths, format, globalOptions)
-        }
+      case cmd: CountCommand =>
+        withResolvedPaths(service, cmd.filePath, "Failed to count rows", globalOptions)(
+          path => executeCount(service, cmd.copy(filePath = path), globalOptions),
+          paths => executeCountMulti(service, paths, cmd, globalOptions)
+        )
 
-      case MergeCommand(inputPaths, outputPath, compression, schemaMode, dryRun) =>
-        resolveAllGlobs(service, inputPaths) match {
+      case cmd: MergeCommand =>
+        resolveAllGlobs(service, cmd.inputPaths) match {
           case Left(error) => reportError("Failed to merge", globalOptions)(error)
           case Right(expandedPaths) =>
-            executeMerge(
-              service,
-              expandedPaths,
-              outputPath,
-              compression,
-              schemaMode,
-              dryRun,
-              globalOptions
-            )
+            executeMerge(service, cmd.copy(inputPaths = expandedPaths), globalOptions)
         }
 
       case CompletionsCommand(shell) =>
         executeCompletions(shell, globalOptions)
+    }
+
+  /**
+   * Expands a possibly-glob `path` and routes to the single-file handler for
+   * exactly one match, or the multi-file handler otherwise. Resolution errors
+   * (bad location, no glob match) are reported with `errorPrefix`.
+   */
+  private def withResolvedPaths(
+      service: ParquetService,
+      path: String,
+      errorPrefix: String,
+      globalOptions: GlobalOptions
+  )(single: String => Int, multi: List[String] => Int): Int =
+    service.resolveGlob(path) match {
+      case Left(error)      => reportError(errorPrefix, globalOptions)(error)
+      case Right(List(one)) => single(one)
+      case Right(paths)     => multi(paths)
     }
 
   // Shared by executeRead/executeReadMulti's streaming branches.
@@ -262,15 +174,10 @@ private[cli] object CommandExecutor {
 
   private[cli] def executeRead(
       service: ParquetService,
-      filePath: String,
-      maxRows: Option[Long],
-      columns: Option[List[String]],
-      filter: Option[String],
-      format: OutputFormat,
-      parallelism: Int,
-      streaming: Boolean,
+      cmd: ReadCommand,
       globalOptions: GlobalOptions
   ): Int = {
+    import cmd.{filePath, maxRows, columns, filter, format, parallelism, streaming}
     val effectiveParallelism =
       if filter.isDefined && parallelism > 1 then {
         if !globalOptions.quiet then
@@ -342,13 +249,10 @@ private[cli] object CommandExecutor {
   private[cli] def executeReadMulti(
       service: ParquetService,
       paths: List[String],
-      maxRows: Option[Long],
-      columns: Option[List[String]],
-      filter: Option[String],
-      format: OutputFormat,
-      schemaMode: SchemaMode,
+      cmd: ReadCommand,
       globalOptions: GlobalOptions
   ): Int = {
+    import cmd.{maxRows, columns, filter, format, schemaMode}
     val readConfig = ReadConfig(
       maxRows = maxRows,
       columns = columns,
@@ -393,11 +297,10 @@ private[cli] object CommandExecutor {
 
   private[cli] def executeInfo(
       service: ParquetService,
-      filePath: String,
-      format: OutputFormat,
-      verbose: Boolean,
+      cmd: InfoCommand,
       globalOptions: GlobalOptions
-  ): Int =
+  ): Int = {
+    import cmd.{filePath, format, verbose}
     service.getFileInfo(filePath) match {
       case Right(file) =>
         if !globalOptions.quiet then println(formatInfoText(file, format, verbose))
@@ -405,28 +308,26 @@ private[cli] object CommandExecutor {
       case Left(error) =>
         reportError("Failed to get file info", globalOptions)(error)
     }
+  }
 
   private[cli] def executeInfoMulti(
       service: ParquetService,
       paths: List[String],
-      format: OutputFormat,
-      verbose: Boolean,
+      cmd: InfoCommand,
       globalOptions: GlobalOptions
-  ): Int =
+  ): Int = {
+    import cmd.{format, verbose}
     runMultiFileReport(paths, format, globalOptions) { path =>
       service.getFileInfo(path).map(file => (formatInfoText(file, format, verbose), true))
     }
+  }
 
   private[cli] def executeWrite(
       service: ParquetService,
-      outputPath: String,
-      inputPath: String,
-      inputFormat: InputFormat,
-      compression: CompressionType,
-      rowGroupSize: Option[Long],
-      dryRun: Boolean,
+      cmd: WriteCommand,
       globalOptions: GlobalOptions
   ): Int = {
+    import cmd.{inputPath, outputPath, inputFormat, compression, rowGroupSize, dryRun}
     val writeConfig = WriteConfig(
       compressionType = compression,
       rowGroupSize = rowGroupSize.getOrElse(WriteConfig.DefaultRowGroupSize)
@@ -461,15 +362,11 @@ private[cli] object CommandExecutor {
 
   private[cli] def executeWriteMulti(
       service: ParquetService,
-      outputPath: String,
       inputPaths: List[String],
-      inputFormat: InputFormat,
-      compression: CompressionType,
-      rowGroupSize: Option[Long],
-      schemaMode: SchemaMode,
-      dryRun: Boolean,
+      cmd: WriteCommand,
       globalOptions: GlobalOptions
   ): Int = {
+    import cmd.{outputPath, inputFormat, compression, rowGroupSize, schemaMode, dryRun}
     val writeConfig = WriteConfig(
       compressionType = compression,
       rowGroupSize = rowGroupSize.getOrElse(WriteConfig.DefaultRowGroupSize)
@@ -522,11 +419,10 @@ private[cli] object CommandExecutor {
 
   private[cli] def executeValidate(
       service: ParquetService,
-      filePath: String,
-      verbose: Boolean,
-      deep: Boolean,
+      cmd: ValidateCommand,
       globalOptions: GlobalOptions
-  ): Int =
+  ): Int = {
+    import cmd.{filePath, verbose, deep}
     service.validateFile(filePath, deep) match {
       case Right(result) =>
         if result.isValid then {
@@ -544,14 +440,15 @@ private[cli] object CommandExecutor {
       case Left(error) =>
         reportError("Failed to validate file", globalOptions)(error)
     }
+  }
 
   private[cli] def executeValidateMulti(
       service: ParquetService,
       paths: List[String],
-      verbose: Boolean,
-      deep: Boolean,
+      cmd: ValidateCommand,
       globalOptions: GlobalOptions
-  ): Int =
+  ): Int = {
+    import cmd.{verbose, deep}
     runMultiFileReport(paths, OutputFormat.Table, globalOptions) { path =>
       service.validateFile(path, deep).map { result =>
         val text =
@@ -563,16 +460,14 @@ private[cli] object CommandExecutor {
         (text, result.isValid)
       }
     }
+  }
 
   private[cli] def executeConvert(
       service: ParquetService,
-      inputPath: String,
-      outputPath: String,
-      compression: CompressionType,
-      maxRows: Option[Long],
-      dryRun: Boolean,
+      cmd: ConvertCommand,
       globalOptions: GlobalOptions
   ): Int = {
+    import cmd.{inputPath, outputPath, compression, maxRows, dryRun}
     val conversionConfig = ConversionConfig(
       writeConfig = WriteConfig(compressionType = compression),
       maxRows = maxRows
@@ -762,13 +657,10 @@ private[cli] object CommandExecutor {
   private[cli] def executeConvertMulti(
       service: ParquetService,
       inputPaths: List[String],
-      outputPath: String,
-      compression: CompressionType,
-      maxRows: Option[Long],
-      schemaMode: SchemaMode,
-      dryRun: Boolean,
+      cmd: ConvertCommand,
       globalOptions: GlobalOptions
   ): Int = {
+    import cmd.{outputPath, compression, maxRows, schemaMode, dryRun}
     val inputExt      = FileExtension.of(inputPaths.head)
     val outputExt     = FileExtension.of(outputPath)
     val mismatchedExt = inputPaths.find(p => FileExtension.of(p) != inputExt)
@@ -879,13 +771,10 @@ private[cli] object CommandExecutor {
 
   private[cli] def executeMerge(
       service: ParquetService,
-      inputPaths: List[String],
-      outputPath: String,
-      compression: CompressionType,
-      schemaMode: SchemaMode,
-      dryRun: Boolean,
+      cmd: MergeCommand,
       globalOptions: GlobalOptions
   ): Int = {
+    import cmd.{inputPaths, outputPath, compression, schemaMode, dryRun}
     val writeConfig = WriteConfig(compressionType = compression)
     checkOutputWritable(outputPath) match {
       case Left(err) =>
@@ -994,10 +883,10 @@ private[cli] object CommandExecutor {
 
   private[cli] def executeStats(
       service: ParquetService,
-      filePath: String,
-      format: OutputFormat,
+      cmd: StatsCommand,
       globalOptions: GlobalOptions
-  ): Int =
+  ): Int = {
+    import cmd.{filePath, format}
     service.getStats(filePath) match {
       case Right(stats) =>
         if !globalOptions.quiet then println(formatStatsText(stats, format))
@@ -1005,16 +894,19 @@ private[cli] object CommandExecutor {
       case Left(error) =>
         reportError("Failed to get stats", globalOptions)(error)
     }
+  }
 
   private[cli] def executeStatsMulti(
       service: ParquetService,
       paths: List[String],
-      format: OutputFormat,
+      cmd: StatsCommand,
       globalOptions: GlobalOptions
-  ): Int =
+  ): Int = {
+    import cmd.format
     runMultiFileReport(paths, format, globalOptions) { path =>
       service.getStats(path).map(stats => (formatStatsText(stats, format), true))
     }
+  }
 
   private[cli] def formatCountText(count: Long, format: OutputFormat): String =
     format match {
@@ -1024,10 +916,10 @@ private[cli] object CommandExecutor {
 
   private[cli] def executeCount(
       service: ParquetService,
-      filePath: String,
-      format: OutputFormat,
+      cmd: CountCommand,
       globalOptions: GlobalOptions
-  ): Int =
+  ): Int = {
+    import cmd.{filePath, format}
     service.getFileInfo(filePath) match {
       case Right(file) =>
         if !globalOptions.quiet then {
@@ -1038,19 +930,22 @@ private[cli] object CommandExecutor {
       case Left(error) =>
         reportError("Failed to count rows", globalOptions)(error)
     }
+  }
 
   private[cli] def executeCountMulti(
       service: ParquetService,
       paths: List[String],
-      format: OutputFormat,
+      cmd: CountCommand,
       globalOptions: GlobalOptions
-  ): Int =
+  ): Int = {
+    import cmd.format
     runMultiFileReport(paths, format, globalOptions) { path =>
       service.getFileInfo(path).map { file =>
         val count = file.schema.fold(0L)(_.totalRowCount)
         (formatCountText(count, format), true)
       }
     }
+  }
 
   private[cli] def executeCompletions(
       shell: String,

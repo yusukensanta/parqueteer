@@ -209,9 +209,7 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
   "executeInfo" should "return 0 on success with quiet" in {
     CommandExecutor.executeInfo(
       newService(),
-      "/tmp/test.parquet",
-      OutputFormat.Table,
-      verbose = false,
+      InfoCommand("/tmp/test.parquet", OutputFormat.Table, verbose = false),
       quietOpts
     ) shouldBe 0
   }
@@ -224,9 +222,7 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
     val (code, _) = captureStderr {
       CommandExecutor.executeInfo(
         newService(repo),
-        "/nope",
-        OutputFormat.Table,
-        verbose = false,
+        InfoCommand("/nope", OutputFormat.Table, verbose = false),
         quietOpts
       )
     }
@@ -238,9 +234,7 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
   "executeValidate" should "return 0 for valid file" in {
     CommandExecutor.executeValidate(
       newService(),
-      "/tmp/test.parquet",
-      verbose = false,
-      deep = false,
+      ValidateCommand("/tmp/test.parquet", verbose = false, deep = false),
       quietOpts
     ) shouldBe 0
   }
@@ -251,9 +245,7 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
     )
     CommandExecutor.executeValidate(
       newService(repo),
-      "/tmp/test.parquet",
-      verbose = false,
-      deep = false,
+      ValidateCommand("/tmp/test.parquet", verbose = false, deep = false),
       quietOpts
     ) shouldBe 1
   }
@@ -263,8 +255,7 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
   "executeCount" should "return 0 on success" in {
     CommandExecutor.executeCount(
       newService(),
-      "/tmp/test.parquet",
-      OutputFormat.Table,
+      CountCommand("/tmp/test.parquet", OutputFormat.Table),
       quietOpts
     ) shouldBe 0
   }
@@ -274,8 +265,7 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
   "executeStats" should "return 0 on success" in {
     CommandExecutor.executeStats(
       newService(),
-      "/tmp/test.parquet",
-      OutputFormat.Table,
+      StatsCommand("/tmp/test.parquet", OutputFormat.Table),
       quietOpts
     ) shouldBe 0
   }
@@ -285,7 +275,11 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
       statsResult = scala.util.Failure(new java.io.IOException("disk error"))
     )
     val (code, _) = captureStderr {
-      CommandExecutor.executeStats(newService(repo), "/nope", OutputFormat.Table, quietOpts)
+      CommandExecutor.executeStats(
+        newService(repo),
+        StatsCommand("/nope", OutputFormat.Table),
+        quietOpts
+      )
     }
     code should not be 0
   }
@@ -352,11 +346,13 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
   "executeMerge" should "reject unwritable cloud-like but check local paths" in {
     CommandExecutor.executeMerge(
       newService(),
-      List("/tmp/a.parquet"),
-      "s3://bucket/merged.parquet",
-      CompressionType.Snappy,
-      SchemaMode.Strict,
-      dryRun = false,
+      MergeCommand(
+        List("/tmp/a.parquet"),
+        "s3://bucket/merged.parquet",
+        CompressionType.Snappy,
+        SchemaMode.Strict,
+        dryRun = false
+      ),
       quietOpts
     )
   }
@@ -366,11 +362,13 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
     Console.withOut(new java.io.PrintStream(out)) {
       CommandExecutor.executeMerge(
         newService(),
-        List("/tmp/a.parquet", "/tmp/b.parquet"),
-        "s3://bucket/merged.parquet",
-        CompressionType.Snappy,
-        SchemaMode.Strict,
-        dryRun = true,
+        MergeCommand(
+          List("/tmp/a.parquet", "/tmp/b.parquet"),
+          "s3://bucket/merged.parquet",
+          CompressionType.Snappy,
+          SchemaMode.Strict,
+          dryRun = true
+        ),
         quietOpts
       )
     }
@@ -385,13 +383,15 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
     val (code, stderr) = captureStderr {
       CommandExecutor.executeRead(
         newService(),
-        "/tmp/test.parquet",
-        maxRows = None,
-        columns = None,
-        filter = Some("id > 0"),
-        format = OutputFormat.Table,
-        parallelism = 4,
-        streaming = false,
+        ReadCommand(
+          "/tmp/test.parquet",
+          maxRows = None,
+          columns = None,
+          filter = Some("id > 0"),
+          format = OutputFormat.Table,
+          parallelism = 4,
+          streaming = false
+        ),
         defaultOpts
       )
     }
@@ -403,13 +403,15 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
     val (code, stderr) = captureStderr {
       CommandExecutor.executeRead(
         newService(),
-        "/tmp/test.parquet",
-        maxRows = None,
-        columns = None,
-        filter = Some("id > 0"),
-        format = OutputFormat.Table,
-        parallelism = 4,
-        streaming = false,
+        ReadCommand(
+          "/tmp/test.parquet",
+          maxRows = None,
+          columns = None,
+          filter = Some("id > 0"),
+          format = OutputFormat.Table,
+          parallelism = 4,
+          streaming = false
+        ),
         quietOpts
       )
     }
@@ -420,13 +422,15 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
   it should "use streaming for NDJSON format" in {
     CommandExecutor.executeRead(
       newService(),
-      "/tmp/test.parquet",
-      maxRows = None,
-      columns = None,
-      filter = None,
-      format = OutputFormat.NDJSON,
-      parallelism = 1,
-      streaming = false,
+      ReadCommand(
+        "/tmp/test.parquet",
+        maxRows = None,
+        columns = None,
+        filter = None,
+        format = OutputFormat.NDJSON,
+        parallelism = 1,
+        streaming = false
+      ),
       quietOpts
     ) shouldBe 0
   }
@@ -434,13 +438,15 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
   it should "use streaming when streaming flag is set" in {
     CommandExecutor.executeRead(
       newService(),
-      "/tmp/test.parquet",
-      maxRows = None,
-      columns = None,
-      filter = None,
-      format = OutputFormat.CSV,
-      parallelism = 1,
-      streaming = true,
+      ReadCommand(
+        "/tmp/test.parquet",
+        maxRows = None,
+        columns = None,
+        filter = None,
+        format = OutputFormat.CSV,
+        parallelism = 1,
+        streaming = true
+      ),
       quietOpts
     ) shouldBe 0
   }
@@ -703,12 +709,14 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
       Console.withOut(new PrintStream(out)) {
         CommandExecutor.executeWrite(
           newService(),
-          "s3://bucket/out.parquet",
-          tmpFile.toString,
-          InputFormat.Json,
-          CompressionType.Snappy,
-          rowGroupSize = None,
-          dryRun = true,
+          WriteCommand(
+            tmpFile.toString,
+            "s3://bucket/out.parquet",
+            InputFormat.Json,
+            CompressionType.Snappy,
+            rowGroupSize = None,
+            dryRun = true
+          ),
           quietOpts
         )
       }
@@ -723,12 +731,14 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
     val (code, stderr) = captureStderr {
       CommandExecutor.executeWrite(
         newService(),
-        "s3://bucket/out.parquet",
-        "/nonexistent/input.json",
-        InputFormat.Json,
-        CompressionType.Snappy,
-        rowGroupSize = None,
-        dryRun = true,
+        WriteCommand(
+          "/nonexistent/input.json",
+          "s3://bucket/out.parquet",
+          InputFormat.Json,
+          CompressionType.Snappy,
+          rowGroupSize = None,
+          dryRun = true
+        ),
         quietOpts
       )
     }
@@ -743,11 +753,13 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
     Console.withOut(new PrintStream(out)) {
       CommandExecutor.executeConvert(
         newService(),
-        "input.csv",
-        "output.parquet",
-        CompressionType.Zstd,
-        maxRows = None,
-        dryRun = true,
+        ConvertCommand(
+          "input.csv",
+          "output.parquet",
+          CompressionType.Zstd,
+          maxRows = None,
+          dryRun = true
+        ),
         quietOpts
       )
     }
@@ -763,11 +775,13 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
     Console.withOut(new PrintStream(out)) {
       CommandExecutor.executeConvert(
         newService(),
-        "input.parquet",
-        "output.parquet",
-        CompressionType.Snappy,
-        maxRows = None,
-        dryRun = true,
+        ConvertCommand(
+          "input.parquet",
+          "output.parquet",
+          CompressionType.Snappy,
+          maxRows = None,
+          dryRun = true
+        ),
         quietOpts
       )
     }
@@ -781,11 +795,13 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
     val (code, stderr) = captureStderr {
       CommandExecutor.executeConvert(
         newService(),
-        "input.txt",
-        "output.xml",
-        CompressionType.Snappy,
-        maxRows = None,
-        dryRun = false,
+        ConvertCommand(
+          "input.txt",
+          "output.xml",
+          CompressionType.Snappy,
+          maxRows = None,
+          dryRun = false
+        ),
         quietOpts
       )
     }

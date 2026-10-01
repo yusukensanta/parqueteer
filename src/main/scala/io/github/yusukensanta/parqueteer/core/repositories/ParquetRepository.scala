@@ -796,6 +796,6 @@ class HadoopParquetRepository(
       .toList
       .sorted
       .mkString(",")
-    s"STRUCT<$fields>"
+    NestedType.struct(fields)
   }
 }

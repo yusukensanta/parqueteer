@@ -244,9 +244,7 @@ private[repositories] object ParquetSchemaBuilder {
               s"Invalid DECIMAL syntax '$t'. Use DECIMAL(precision,scale) e.g. DECIMAL(10,2)"
             )
         }
-      case t
-          if t.startsWith("STRUCT") || t
-            .startsWith("MAP") || t.startsWith("LIST") =>
+      case t if NestedType.isNested(t) =>
         throw new IllegalArgumentException(
           s"Nested type '$t' (STRUCT/MAP/LIST) is not supported for writing. " +
             "Flatten the data structure to primitive columns before writing."

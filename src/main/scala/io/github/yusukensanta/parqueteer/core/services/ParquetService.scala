@@ -335,10 +335,7 @@ class ParquetService(
       onProgress: (Int, Int, String) => Unit,
       fileParallelism: Int
   ): Either[ParqueteerError, Long] = {
-    val nestedFields = mergedFields.filter(f =>
-      f.dataType.startsWith("STRUCT") || f.dataType
-        .startsWith("MAP") || f.dataType.startsWith("LIST")
-    )
+    val nestedFields = mergedFields.filter(_.isNested)
     if nestedFields.nonEmpty then
       Left(
         ParqueteerError.UnsupportedOperation(
