@@ -35,8 +35,15 @@ case class AzureLocation(
 }
 
 object StorageLocationParser {
-  private val s3Pattern: Regex  = """s3a?://([^/]+)/(.+)""".r
-  private val gcsPattern: Regex = """gs://([^/]+)/(.+)""".r
+
+  // Every scheme parqueteer treats as remote storage. Includes wasb[s]://,
+  // which parse() rejects, because such a path is still clearly not local.
+  private val cloudSchemePattern: Regex = "^(s3a?|gs|abfss?|wasbs?)://".r
+
+  /** True when `url` names remote storage (by scheme alone; it may still fail to parse). */
+  def hasCloudScheme(url: String): Boolean = cloudSchemePattern.findFirstIn(url).isDefined
+  private val s3Pattern: Regex             = """s3a?://([^/]+)/(.+)""".r
+  private val gcsPattern: Regex            = """gs://([^/]+)/(.+)""".r
 
   // Matches both abfss:// (secure) and abfs:// (non-secure); both map to AzureLocation.
   private val azurePattern: Regex =

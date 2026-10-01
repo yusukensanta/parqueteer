@@ -2,6 +2,7 @@ package io.github.yusukensanta.parqueteer.config
 
 import io.github.yusukensanta.parqueteer.core.models.{ColorMode, GlobalOptions}
 import io.github.yusukensanta.parqueteer.core.models.OutputFormat
+import io.github.yusukensanta.parqueteer.core.util.Warnings
 
 object EnvConfig {
 
@@ -36,7 +37,7 @@ object EnvConfig {
         case _          => None
       }
       if parsed.isEmpty then
-        io.github.yusukensanta.parqueteer.core.util.Warnings.emit(
+        Warnings.emit(
           s"PARQUETEER_DEFAULT_FORMAT=$s is not a recognized format; ignoring"
         )
       parsed
@@ -53,7 +54,7 @@ object EnvConfig {
           ColorMode.fromString(s) match {
             case Some(mode) => mode
             case None =>
-              io.github.yusukensanta.parqueteer.core.util.Warnings.emit(
+              Warnings.emit(
                 s"PARQUETEER_COLOR=$s is not recognized (auto/always/never); ignoring"
               )
               ColorMode.Auto
@@ -73,7 +74,7 @@ object EnvConfig {
     env("PARQUETEER_MAX_ROWS").flatMap { raw =>
       val parsed = raw.toLongOption.filter(_ > 0)
       if parsed.isEmpty then
-        io.github.yusukensanta.parqueteer.core.util.Warnings.emit(
+        Warnings.emit(
           s"PARQUETEER_MAX_ROWS=$raw is not a positive integer; ignoring"
         )
       parsed

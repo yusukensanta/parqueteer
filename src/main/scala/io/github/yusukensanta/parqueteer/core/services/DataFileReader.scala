@@ -1,8 +1,8 @@
 package io.github.yusukensanta.parqueteer.core.services
 
 import io.github.yusukensanta.parqueteer.core.models.{CellValue, InputFormat}
-import io.github.yusukensanta.parqueteer.core.util.{CsvParser, LTSVParser, TypeInferrer}
-import scala.util.{Try, Using}
+import io.github.yusukensanta.parqueteer.core.util.{CsvParser, LTSVParser, RowLimiter, TypeInferrer}
+import scala.util.{Failure, Try, Using}
 
 private[services] object DataFileReader {
 
@@ -27,7 +27,7 @@ private[services] object DataFileReader {
       case InputFormat.Csv    => withCsvRows(path, maxRows)(f)
       case InputFormat.Ltsv   => withLtsvRows(path, maxRows)(f)
       case InputFormat.Json =>
-        scala.util.Failure(
+        Failure(
           new IllegalArgumentException("JSON array input cannot be streamed row by row")
         )
     }
@@ -61,8 +61,7 @@ private[services] object DataFileReader {
       f: Iterator[Map[String, CellValue]] => A
   ): Try[A] =
     Using(scala.io.Source.fromFile(path, "UTF-8")) { source =>
-      val limited = io.github.yusukensanta.parqueteer.core.util.RowLimiter
-        .limitIterator(source.getLines(), maxRows)
+      val limited = RowLimiter.limitIterator(source.getLines(), maxRows)
       f(parseNdjsonLinesIterator(limited))
     }
 
@@ -70,8 +69,7 @@ private[services] object DataFileReader {
       f: Iterator[Map[String, CellValue]] => A
   ): Try[A] =
     Using(scala.io.Source.fromFile(path, "UTF-8")) { source =>
-      val limited = io.github.yusukensanta.parqueteer.core.util.RowLimiter
-        .limitIterator(source.getLines(), maxRows)
+      val limited = RowLimiter.limitIterator(source.getLines(), maxRows)
       f(LTSVParser.parseLines(limited))
     }
 
@@ -81,8 +79,7 @@ private[services] object DataFileReader {
     Using(scala.io.Source.fromFile(path, "UTF-8")) { source =>
       val records = CsvParser.parseRecordsIncremental(source.getLines())
       val rows    = CsvParser.rowsToMaps(records)
-      val limited = io.github.yusukensanta.parqueteer.core.util.RowLimiter
-        .limitIterator(rows, maxRows)
+      val limited = RowLimiter.limitIterator(rows, maxRows)
       f(limited)
     }
 

@@ -176,4 +176,22 @@ class StorageLocationParserTest extends AnyFlatSpec with Matchers {
     result.isLeft shouldBe true
     result.left.toOption.get should include("wasb")
   }
+
+  "StorageLocationParser.hasCloudScheme" should "recognise every supported remote scheme" in {
+    List(
+      "s3://b/k",
+      "s3a://b/k",
+      "gs://b/k",
+      "abfs://c@a.dfs.core.windows.net/k",
+      "abfss://x",
+      "wasb://x",
+      "wasbs://x"
+    )
+      .foreach(StorageLocationParser.hasCloudScheme(_) shouldBe true)
+  }
+
+  it should "treat local and unknown-scheme paths as non-cloud" in {
+    List("/tmp/out.csv", "out.csv", "./s3://not-a-scheme", "ftp://host/file", "S3://upper")
+      .foreach(StorageLocationParser.hasCloudScheme(_) shouldBe false)
+  }
 }
