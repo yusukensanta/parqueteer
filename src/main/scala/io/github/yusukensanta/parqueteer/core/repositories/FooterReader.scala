@@ -13,6 +13,20 @@ import java.nio.{ByteBuffer, ByteOrder}
 import scala.jdk.CollectionConverters.*
 import scala.util.Using
 
+/**
+ * A parsed parquet footer. `metadata` is the raw footer object `schema` and
+ * `blocks` were derived from — kept so callers that need to open a
+ * ParquetFileReader (e.g. the parallel reader) can pass it in directly instead
+ * of triggering another footer read+parse per row group.
+ */
+final private[repositories] case class FooterInfo(
+    schema: MessageType,
+    blocks: List[BlockMetaData],
+    version: String,
+    createdBy: String,
+    metadata: ParquetMetadata
+)
+
 private[repositories] object FooterReader {
 
   private val parquetMagic      = Array[Byte]('P', 'A', 'R', '1')
@@ -52,6 +66,20 @@ private[repositories] object FooterReader {
       stream.readFully(footerBytes)
       footerBytes
     }
+
+  /** Reads and parses the footer from an open stream (which is closed afterwards). */
+  def readFooterInfo(stream: SeekableInputStream, fileLen: Long): FooterInfo = {
+    val footerBytes          = readFooterBytes(stream, fileLen)
+    val (version, createdBy) = parseRawMeta(footerBytes)
+    val meta                 = parseFooter(footerBytes)
+    FooterInfo(
+      meta.getFileMetaData.getSchema,
+      meta.getBlocks.asScala.toList,
+      version,
+      createdBy,
+      meta
+    )
+  }
 
   def parseFooter(footerBytes: Array[Byte]): ParquetMetadata =
     metadataConverter.readParquetMetadata(

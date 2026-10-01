@@ -193,6 +193,23 @@ private[repositories] object ParquetRecordDecoder {
     )
 
   /**
+   * Builds a per-file row decoder: the raw-binary/INT96 field sets and the
+   * temporal transformer are computed once from `schema`, then reused for
+   * every record. Shared by the sequential read and streaming read paths so
+   * they can't decode the same file differently.
+   */
+  def rowDecoderFor(schema: MessageType): RowParquetRecord => Map[String, CellValue] = {
+    val rawBinaryFields     = rawBinaryFieldsFor(schema)
+    val int96Fields         = int96FieldsFor(schema)
+    val temporalTransformer = buildTemporalTransformer(schema)
+    record =>
+      applyTemporalTransformer(
+        convertRecordToMapWithSchema(record, rawBinaryFields, int96Fields),
+        temporalTransformer
+      )
+  }
+
+  /**
    * Pre-compute a per-column transformer from the schema. Call once per file
    * and pass to applyTemporalTransformer for each row to avoid O(N×K) map
    * rebuilds (K = temporal column count, N = row count).
