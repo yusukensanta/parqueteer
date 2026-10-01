@@ -5,6 +5,7 @@ import io.github.yusukensanta.parqueteer.core.models.{
   ColorMode,
   CompressionType,
   GlobalOptions,
+  InputFormat,
   OutputFormat,
   SchemaMode
 }
