@@ -82,7 +82,9 @@ class ParqueteerErrorTest extends AnyFlatSpec with Matchers {
       ParqueteerError.SchemaMismatch("a", "b"),
       ParqueteerError.CloudAuthError("S3", "m"),
       ParqueteerError.InvalidFormat("f", "m"),
-      ParqueteerError.FilterParseError("e", "m")
+      ParqueteerError.FilterParseError("e", "m"),
+      ParqueteerError.OutputExists("p"),
+      ParqueteerError.UnsupportedOperation("s", "m")
     )
     val codes = errors.map(_.exitCode)
     codes.distinct.size shouldBe codes.size
@@ -96,7 +98,9 @@ class ParqueteerErrorTest extends AnyFlatSpec with Matchers {
       ParqueteerError.SchemaMismatch("a", "b"),
       ParqueteerError.CloudAuthError("S3", "m"),
       ParqueteerError.InvalidFormat("f", "m"),
-      ParqueteerError.FilterParseError("e", "m")
+      ParqueteerError.FilterParseError("e", "m"),
+      ParqueteerError.OutputExists("p"),
+      ParqueteerError.UnsupportedOperation("s", "m")
     )
     errors.foreach(e => e.exitCode should be > 0)
   }

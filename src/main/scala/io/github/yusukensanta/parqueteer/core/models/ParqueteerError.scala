@@ -26,11 +26,12 @@ object ParqueteerError:
     val userMessage =
       s"No files matched glob pattern: $pattern\nCheck the pattern and that the bucket/directory path is correct."
 
-  case class SchemaMismatch(expected: String, actual: String) extends ParqueteerError:
+  /** Input schemas can't be combined (strict mismatch, union type conflict, duplicate columns). */
+  case class SchemaMismatch(path: String, detail: String) extends ParqueteerError:
     val exitCode = 4
 
     val userMessage =
-      s"Schema mismatch: expected $expected, got $actual\nVerify the file matches the expected schema."
+      s"Schema mismatch at '$path': ${redact(detail)}"
 
   case class FilterParseError(expression: String, message: String) extends ParqueteerError:
     val exitCode = 7
@@ -64,6 +65,22 @@ object ParqueteerError:
   case class ParseError(format: String, message: String) extends ParqueteerError:
     val exitCode    = 2
     val userMessage = s"Parse error ($format): ${redact(message)}"
+
+  /** The output path already exists; parqueteer never overwrites an existing file. */
+  case class OutputExists(path: String) extends ParqueteerError:
+    val exitCode = 8
+
+    val userMessage =
+      s"Output file already exists: $path\nRemove it first or choose a different output path."
+
+  /**
+   * A well-formed request the tool can't carry out (e.g. merging nested
+   * columns, reading parquet from stdin). Distinct from InvalidFormat, whose
+   * message points the user at the list of supported formats.
+   */
+  case class UnsupportedOperation(subject: String, message: String) extends ParqueteerError:
+    val exitCode    = 9
+    val userMessage = s"Unsupported operation ($subject): ${redact(message)}"
 
   class CloudAuthException(
       val provider: String,

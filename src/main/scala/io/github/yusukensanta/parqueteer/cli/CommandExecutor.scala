@@ -695,7 +695,7 @@ private[cli] object CommandExecutor {
   ): Either[ParqueteerError, Long] =
     if cloudUriPattern.findFirstIn(outputPath).isDefined then
       Left(
-        ParqueteerError.InvalidFormat(
+        ParqueteerError.UnsupportedOperation(
           outputPath,
           s"Cloud URI output is not supported for text conversion (parquet → ${FileExtension
               .of(outputPath)}). " +
@@ -706,12 +706,7 @@ private[cli] object CommandExecutor {
       checkOutputWritable(outputPath).flatMap { _ =>
         val outFilePath = java.nio.file.Paths.get(outputPath)
         if java.nio.file.Files.exists(outFilePath) then
-          Left(
-            ParqueteerError.InvalidFormat(
-              outputPath,
-              s"Output file already exists: $outputPath. Remove it first or choose a different output path."
-            )
-          )
+          Left(ParqueteerError.OutputExists(outputPath))
         else
           scala.util
             .Try {
