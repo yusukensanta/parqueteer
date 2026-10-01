@@ -29,8 +29,8 @@ class ParquetService(
   private def requireNotStdin(path: String): Either[ParqueteerError, Unit] =
     if path == "-" then
       Left(
-        ParqueteerError.InvalidFormat(
-          "-",
+        ParqueteerError.UnsupportedOperation(
+          "stdin",
           "Parquet files require random-access I/O and cannot be read from stdin"
         )
       )
@@ -163,7 +163,7 @@ class ParquetService(
   ): Either[ParqueteerError, Long] =
     if inputPaths.size < 2 then
       Left(
-        ParqueteerError.InvalidFormat(
+        ParqueteerError.UnsupportedOperation(
           "merge",
           "merge requires at least two input files"
         )
@@ -256,7 +256,7 @@ class ParquetService(
    * Combine per-file schemas under the chosen strategy:
    *   - Strict: every input must match the first file's schema exactly.
    *   - Union: collect the union of fields, surfacing per-column type
-   *     conflicts as a single InvalidFormat error. Union-merged fields are
+   *     conflicts as a single SchemaMismatch error. Union-merged fields are
    *     marked optional because not every file is guaranteed to supply them.
    */
   private def mergeSchemas(
@@ -278,9 +278,9 @@ class ParquetService(
             case (i, thisSet) if thisSet != firstSet =>
               val diffMsg = describeSchemaMismatch(firstSet, thisSet)
               Left(
-                ParqueteerError.InvalidFormat(
+                ParqueteerError.SchemaMismatch(
                   inputPaths(i),
-                  s"Schema mismatch at file '${inputPaths(i)}' ($diffMsg). Use --schema-mode union to allow schema differences."
+                  s"$diffMsg. Use --schema-mode union to allow schema differences."
                 )
               )
           }
@@ -301,10 +301,9 @@ class ParquetService(
               .sorted
             if duplicates.nonEmpty then
               Left(
-                ParqueteerError.InvalidFormat(
+                ParqueteerError.SchemaMismatch(
                   inputPaths(fileIdx),
-                  s"File '${inputPaths(fileIdx)}' has duplicate column names: ${duplicates
-                      .mkString(", ")}. " +
+                  s"duplicate column names: ${duplicates.mkString(", ")}. " +
                     "Parquet files with duplicate column names cannot be merged."
                 )
               )
@@ -316,10 +315,9 @@ class ParquetService(
               }
               if conflicts.nonEmpty then
                 Left(
-                  ParqueteerError.InvalidFormat(
+                  ParqueteerError.SchemaMismatch(
                     inputPaths(fileIdx),
-                    s"Type conflicts in union merge at file '${inputPaths(fileIdx)}': ${conflicts
-                        .mkString(", ")}. " +
+                    s"Type conflicts in union merge: ${conflicts.mkString(", ")}. " +
                       "Cannot union-merge columns with incompatible types."
                   )
                 )
@@ -402,12 +400,7 @@ class ParquetService(
         deletePartialOutput(outputLocation)
         Left(ex.error)
       case scala.util.Failure(ex) if isOutputAlreadyExistsError(ex) =>
-        Left(
-          ParqueteerError.InvalidFormat(
-            outputLocation.path,
-            s"Output file already exists: ${outputLocation.path}. Remove it first or choose a different output path."
-          )
-        )
+        Left(ParqueteerError.OutputExists(outputLocation.path))
       case scala.util.Failure(ex) =>
         deletePartialOutput(outputLocation)
         scala.util.Failure(ex).toParqueteerError
@@ -481,7 +474,7 @@ class ParquetService(
     )
     if nestedFields.nonEmpty then
       Left(
-        ParqueteerError.InvalidFormat(
+        ParqueteerError.UnsupportedOperation(
           "merge",
           s"Cannot merge files containing nested columns: ${nestedFields.map(_.name).mkString(", ")}. " +
             "Flatten STRUCT/MAP/LIST columns before merging."
@@ -574,7 +567,7 @@ class ParquetService(
 
   def readDataFile(
       path: String,
-      inputFormat: String,
+      inputFormat: InputFormat,
       stdin: java.io.InputStream = System.in,
       maxRows: Option[Long] = None
   ): Either[ParqueteerError, List[Map[String, CellValue]]] =
@@ -584,25 +577,18 @@ class ParquetService(
         .map(RowLimiter.limitList(_, maxRows))
         .toParqueteerError
     else
-      inputFormat.toLowerCase match {
-        case "json" =>
+      inputFormat match {
+        case InputFormat.Json =>
           DataFileReader
             .readJsonFile(path)
             .map(RowLimiter.limitList(_, maxRows))
             .toParqueteerError
-        case "ndjson" =>
+        case InputFormat.NDJson =>
           DataFileReader.readNdjsonFile(path, maxRows).toParqueteerError
-        case "csv" =>
+        case InputFormat.Csv =>
           DataFileReader.readCsvFile(path, maxRows).toParqueteerError
-        case "ltsv" =>
+        case InputFormat.Ltsv =>
           DataFileReader.readLtsvFile(path, maxRows).toParqueteerError
-        case fmt =>
-          Left(
-            ParqueteerError.InvalidFormat(
-              path,
-              s"Unsupported input format: $fmt. Supported: json, ndjson, csv, ltsv"
-            )
-          )
       }
 
   /**
@@ -615,39 +601,30 @@ class ParquetService(
    */
   def streamWriteDataFile(
       inputPath: String,
-      inputFormat: String,
+      inputFormat: InputFormat,
       outputPath: String,
       writeConfig: WriteConfig = WriteConfig(),
       maxRows: Option[Long] = None
   ): Either[ParqueteerError, Long] =
-    if inputPath == "-" then
-      bufferedWriteDataFile(inputPath, inputFormat, outputPath, writeConfig, maxRows)
-    else
-      inputFormat.toLowerCase match {
-        case fmt @ ("ndjson" | "ltsv" | "csv") =>
-          streamOneFormat(inputPath, outputPath, fmt, writeConfig, maxRows)
-        case _ => bufferedWriteDataFile(inputPath, inputFormat, outputPath, writeConfig, maxRows)
-      }
+    if inputPath != "-" && inputFormat.isStreamable then
+      streamOneFormat(inputPath, outputPath, inputFormat, writeConfig, maxRows)
+    else bufferedWriteDataFile(inputPath, inputFormat, outputPath, writeConfig, maxRows)
 
   /**
    * Two-pass bounded-memory write for a single ndjson/ltsv/csv input: infer a
    * schema from one pass over `withRows`, then stream rows from a second pass
    * straight into the writer. `withRows` reopens `inputPath` fresh on each
-   * call — see DataFileReader.withNdjsonRows/withLtsvRows/withCsvRows.
+   * call — see DataFileReader.withRows.
    */
   private def streamOneFormat(
       inputPath: String,
       outputPath: String,
-      inputFormat: String,
+      inputFormat: InputFormat,
       writeConfig: WriteConfig,
       maxRows: Option[Long]
   ): Either[ParqueteerError, Long] = {
     def withRows[A](f: Iterator[Map[String, CellValue]] => A): Try[A] =
-      inputFormat match {
-        case "ndjson" => DataFileReader.withNdjsonRows(inputPath, maxRows)(f)
-        case "ltsv"   => DataFileReader.withLtsvRows(inputPath, maxRows)(f)
-        case "csv"    => DataFileReader.withCsvRows(inputPath, maxRows)(f)
-      }
+      DataFileReader.withRows(inputFormat, inputPath, maxRows)(f)
     for {
       outputLocation <- parseLocation(outputPath)
       schema         <- withRows(repository.inferSchemaFromRows).flatten.toParqueteerError
@@ -662,7 +639,7 @@ class ParquetService(
 
   private def bufferedWriteDataFile(
       inputPath: String,
-      inputFormat: String,
+      inputFormat: InputFormat,
       outputPath: String,
       writeConfig: WriteConfig,
       maxRows: Option[Long]
@@ -682,34 +659,24 @@ class ParquetService(
    */
   def writeMultiRawToParquet(
       paths: List[String],
-      inputFormat: String,
+      inputFormat: InputFormat,
       outputPath: String,
       writeConfig: WriteConfig,
       schemaMode: SchemaMode,
       onProgress: (Int, Int, String) => Unit = (_, _, _) => (),
       fileParallelism: Int = 1
   ): Either[ParqueteerError, Long] =
-    inputFormat.toLowerCase match {
-      case fmt @ ("ndjson" | "csv" | "ltsv") =>
-        streamMultiRawToParquet(
-          paths,
-          fmt,
-          outputPath,
-          writeConfig,
-          schemaMode,
-          onProgress,
-          fileParallelism
-        )
-      case "json" =>
-        bufferedMultiRawToParquet(paths, outputPath, writeConfig, schemaMode, onProgress)
-      case fmt =>
-        Left(
-          ParqueteerError.InvalidFormat(
-            paths.headOption.getOrElse(""),
-            s"Unsupported input format: $fmt. Supported: json, ndjson, csv, ltsv"
-          )
-        )
-    }
+    if inputFormat.isStreamable then
+      streamMultiRawToParquet(
+        paths,
+        inputFormat,
+        outputPath,
+        writeConfig,
+        schemaMode,
+        onProgress,
+        fileParallelism
+      )
+    else bufferedMultiRawToParquet(paths, outputPath, writeConfig, schemaMode, onProgress)
 
   private def bufferedMultiRawToParquet(
       paths: List[String],
@@ -730,7 +697,7 @@ class ParquetService(
       ) { case (acc, (path, idx)) =>
         acc.flatMap { rowsAcc =>
           onProgress(idx + 1, paths.size, path)
-          readDataFile(path, "json").map(rowsAcc :+ _)
+          readDataFile(path, InputFormat.Json).map(rowsAcc :+ _)
         }
       }
     for {
@@ -746,7 +713,7 @@ class ParquetService(
 
   private def streamMultiRawToParquet(
       paths: List[String],
-      inputFormat: String,
+      inputFormat: InputFormat,
       outputPath: String,
       writeConfig: WriteConfig,
       schemaMode: SchemaMode,
@@ -754,11 +721,7 @@ class ParquetService(
       fileParallelism: Int
   ): Either[ParqueteerError, Long] = {
     def withRows[A](path: String)(f: Iterator[Map[String, CellValue]] => Try[A]): Try[A] =
-      (inputFormat match {
-        case "ndjson" => DataFileReader.withNdjsonRows(path, None)(f)
-        case "csv"    => DataFileReader.withCsvRows(path, None)(f)
-        case "ltsv"   => DataFileReader.withLtsvRows(path, None)(f)
-      }).flatten
+      DataFileReader.withRows(inputFormat, path, None)(f).flatten
 
     def inferOne(path: String): Either[ParqueteerError, List[FieldSummary]] =
       withRows(path)(repository.inferSchemaFromRows).toParqueteerError.map(

@@ -305,7 +305,7 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     Files.writeString(f.toPath, """[{"id": 1, "name": "Alice"}]""")
 
     val service = new ParquetService(new FakeParquetRepository())
-    val result  = service.readDataFile(f.getAbsolutePath, "json")
+    val result  = service.readDataFile(f.getAbsolutePath, InputFormat.Json)
 
     result.isRight shouldBe true
     result.toOption.get should have length 1
@@ -319,21 +319,10 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     Files.writeString(f.toPath, "id,name\n1,Alice\n")
 
     val service = new ParquetService(new FakeParquetRepository())
-    val result  = service.readDataFile(f.getAbsolutePath, "csv")
+    val result  = service.readDataFile(f.getAbsolutePath, InputFormat.Csv)
 
     result.isRight shouldBe true
     result.toOption.get.head("name") shouldBe CellValue.Str("Alice")
-  }
-
-  it should "return Left(InvalidFormat) for unsupported format" in {
-    val service = new ParquetService(new FakeParquetRepository())
-    val result  = service.readDataFile("/any/file.tsv", "tsv")
-    result.isLeft shouldBe true
-    result.left.toOption.get shouldBe a[ParqueteerError.InvalidFormat]
-    result.left.toOption.get.userMessage should include(
-      "Unsupported input format"
-    )
-    result.left.toOption.get.exitCode shouldBe 6
   }
 
   // ── stdin / pipe support (#42) ────────────────────────────────────────────
@@ -342,7 +331,7 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     val stdin = new ByteArrayInputStream(json)
 
     val service = new ParquetService(new FakeParquetRepository())
-    val result  = service.readDataFile("-", "json", stdin)
+    val result  = service.readDataFile("-", InputFormat.Json, stdin)
 
     result.isRight shouldBe true
     result.toOption.get should have length 1
@@ -354,21 +343,11 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     val stdin = new ByteArrayInputStream(csv)
 
     val service = new ParquetService(new FakeParquetRepository())
-    val result  = service.readDataFile("-", "csv", stdin)
+    val result  = service.readDataFile("-", InputFormat.Csv, stdin)
 
     result.isRight shouldBe true
     result.toOption.get should have length 2
     result.toOption.get.head("name") shouldBe CellValue.Str("Alice")
-  }
-
-  it should "return Left for unsupported format from stdin" in {
-    val stdin   = new ByteArrayInputStream("data".getBytes("UTF-8"))
-    val service = new ParquetService(new FakeParquetRepository())
-    val result  = service.readDataFile("-", "tsv", stdin)
-    result.isLeft shouldBe true
-    result.left.toOption.get.userMessage should include(
-      "Unsupported input format"
-    )
   }
 
   it should "close the InputStream after reading from stdin" in {
@@ -377,7 +356,7 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
       override def close(): Unit = { closed = true; super.close() }
     }
     val service = new ParquetService(new FakeParquetRepository())
-    service.readDataFile("-", "json", stdin)
+    service.readDataFile("-", InputFormat.Json, stdin)
     closed shouldBe true
   }
 
@@ -563,7 +542,7 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     val stdin = new java.io.ByteArrayInputStream(
       """{"x": 42}""".getBytes("UTF-8")
     )
-    val rows = DataFileReader.readFromStdin("ndjson", stdin).get
+    val rows = DataFileReader.readFromStdin(InputFormat.NDJson, stdin).get
     rows.head("x") shouldBe CellValue.I64(42L)
   }
 
@@ -795,7 +774,7 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     val rows = service
       .readDataFile(
         "-",
-        "json",
+        InputFormat.Json,
         new ByteArrayInputStream("""[{"id":1}]""".getBytes)
       )
       .toOption
@@ -803,13 +782,6 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     rows should have length 1
     val writeResult = service.writeFile("/tmp/out.parquet", rows, WriteConfig())
     writeResult.isRight shouldBe true
-  }
-
-  it should "return Left(InvalidFormat) for unsupported input format" in {
-    val service = new ParquetService(new FakeParquetRepository())
-    val result  = service.readDataFile("/tmp/file.tsv", "tsv")
-    result.isLeft shouldBe true
-    result.left.toOption.get shouldBe a[ParqueteerError.InvalidFormat]
   }
 
   it should "wrap IllegalArgumentException from streamContent as ParseError(data), not IOError" in {
@@ -1112,7 +1084,7 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
   }
 
   // ── C1: output-already-exists must not delete pre-existing file ───────────
-  "ParquetService.mergeFiles" should "return InvalidFormat and NOT delete when output already exists" in {
+  "ParquetService.mergeFiles" should "return OutputExists and NOT delete when output already exists" in {
     var deleteWasCalled = false
     val alreadyExists =
       new org.apache.hadoop.fs.FileAlreadyExistsException("/out.parquet")
@@ -1133,7 +1105,7 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
       SchemaMode.Strict
     )
     result.isLeft shouldBe true
-    result.left.toOption.get shouldBe a[ParqueteerError.InvalidFormat]
+    result.left.toOption.get shouldBe a[ParqueteerError.OutputExists]
     result.left.toOption.get.userMessage should include("already exists")
     deleteWasCalled shouldBe false
   }
@@ -1162,7 +1134,7 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     deleteWasCalled shouldBe false
   }
 
-  "ParquetService.convertParquetFile" should "return InvalidFormat and NOT delete when output already exists" in {
+  "ParquetService.convertParquetFile" should "return OutputExists and NOT delete when output already exists" in {
     var deleteWasCalled = false
     val alreadyExists =
       new org.apache.hadoop.fs.FileAlreadyExistsException("/out.parquet")
@@ -1181,7 +1153,7 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
       ConversionConfig()
     )
     result.isLeft shouldBe true
-    result.left.toOption.get shouldBe a[ParqueteerError.InvalidFormat]
+    result.left.toOption.get shouldBe a[ParqueteerError.OutputExists]
     result.left.toOption.get.userMessage should include("already exists")
     deleteWasCalled shouldBe false
   }
@@ -1209,7 +1181,8 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
       SchemaMode.Union
     )
     result.isLeft shouldBe true
-    result.left.toOption.get shouldBe a[ParqueteerError.InvalidFormat]
+    result.left.toOption.get shouldBe a[ParqueteerError.SchemaMismatch]
+    result.left.toOption.get.exitCode shouldBe 4
     result.left.toOption.get.userMessage should include(
       "duplicate column names"
     )
@@ -1353,7 +1326,7 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
       service.checkSchemaCompatibility(List("/a.parquet", "/b.parquet"), SchemaMode.Union)
     result.isLeft shouldBe true
     val err = result.left.toOption.get
-    err shouldBe a[ParqueteerError.InvalidFormat]
+    err shouldBe a[ParqueteerError.SchemaMismatch]
     // This call arrives via `read`/`convert --schema-mode union`, not `merge` —
     // the error must not carry the hardcoded "merge" format label from a
     // shared mergeSchemas helper (regression guard for the fix wave).
@@ -1425,7 +1398,7 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     val result =
       service.writeMultiRawToParquet(
         List(fileA, fileB),
-        "json",
+        InputFormat.Json,
         "/out.parquet",
         WriteConfig(),
         SchemaMode.Strict
@@ -1460,7 +1433,7 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     val service = new ParquetService(repo)
     val result = service.writeMultiRawToParquet(
       List(fileA, fileB),
-      "json",
+      InputFormat.Json,
       "/out.parquet",
       WriteConfig(),
       SchemaMode.Strict
