@@ -9,6 +9,7 @@ import io.github.yusukensanta.parqueteer.core.util.{
   CredentialRedactor,
   Eithers,
   GlobDetector,
+  RowBudget,
   RowLimiter,
   RowPipeline
 }
@@ -108,22 +109,19 @@ class ParquetService(
       locations: Vector[StorageLocation],
       readConfig: ReadConfig
   )(process: Map[String, CellValue] => Unit): Either[ParqueteerError, Long] = {
-    var remaining                      = readConfig.maxRows
+    val budget                         = RowBudget(readConfig.maxRows)
     var total                          = 0L
     var error: Option[ParqueteerError] = None
     val it                             = locations.iterator
-    while error.isEmpty && it.hasNext && !remaining.contains(0L) do {
-      val loc           = it.next()
-      val perFileConfig = readConfig.copy(maxRows = remaining)
+    while error.isEmpty && it.hasNext && !budget.isExhausted do {
+      val perFileConfig = readConfig.copy(maxRows = budget.nextLimit)
       repository
-        .streamContent(ParquetFile(loc), perFileConfig) { row =>
-          process(row)
-          total += 1
-          remaining = remaining.map(_ - 1)
-        }
+        .streamContent(ParquetFile(it.next()), perFileConfig)(process)
         .toParqueteerError match {
-        case Left(e)  => error = Some(e)
-        case Right(_) => ()
+        case Left(e) => error = Some(e)
+        case Right(n) =>
+          budget.consume(n)
+          total += n
       }
     }
     error.toLeft(total)

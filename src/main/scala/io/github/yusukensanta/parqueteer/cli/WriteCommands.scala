@@ -2,7 +2,7 @@ package io.github.yusukensanta.parqueteer.cli
 
 import io.github.yusukensanta.parqueteer.core.services.ParquetService
 import io.github.yusukensanta.parqueteer.core.models.*
-import io.github.yusukensanta.parqueteer.core.util.FileExtension
+import io.github.yusukensanta.parqueteer.core.util.{FileExtension, RowBudget}
 import CommandSupport.*
 import StreamingOutput.*
 
@@ -315,23 +315,21 @@ private[cli] object WriteCommands {
   ): Either[ParqueteerError, Long] =
     service.checkSchemaCompatibility(inputPaths, schemaMode).flatMap { _ =>
       withSafeTextOutput(outputPath, outFormat) { writer =>
-        // Each closure shares `remaining` by reference, so the row budget
-        // decrements across files as runWithDeferredBeginMulti invokes them
-        // in order — the same running --limit semantics
-        // ParquetService.streamAllFiles uses for multi-file `read`.
-        var remaining = maxRows
+        // Every closure shares one budget, so --limit applies to the
+        // concatenated output, the same semantics ParquetService.streamAllFiles
+        // uses for multi-file `read`.
+        val budget = RowBudget(maxRows)
         val reads: List[(Map[String, CellValue] => Unit) => Either[ParqueteerError, Long]] =
           inputPaths.map { path => process =>
-            if remaining.contains(0L) then Right(0L)
+            if budget.isExhausted then Right(0L)
             else
-              service.streamRead(path, ReadConfig(maxRows = remaining))(process).map { n =>
-                remaining = remaining.map(r => r - n)
+              service.streamRead(path, ReadConfig(maxRows = budget.nextLimit))(process).map { n =>
+                budget.consume(n)
                 n
               }
           }
-        // A running --limit budget is shared (by mutable closure) across
-        // `reads` in file order, so honoring it correctly requires each file
-        // to finish before the next starts — only prefetch ahead when
+        // The budget is consumed in file order, so honoring it requires each
+        // file to finish before the next starts: only prefetch ahead when
         // there's no limit to honor.
         val effectiveParallelism = if maxRows.isDefined then 1 else fileParallelism
         runWithDeferredBeginMulti(writer, reads, effectiveParallelism)
