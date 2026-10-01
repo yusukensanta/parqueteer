@@ -1,4 +1,4 @@
-package io.github.yusukensanta.parqueteer.cli
+package io.github.yusukensanta.parqueteer.core.models
 
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -34,27 +34,29 @@ class InputFormatTest extends AnyFlatSpec with Matchers {
     InputFormat.fromString("") shouldBe None
   }
 
-  "InputFormat.toServiceString" should "map Json to json" in {
-    InputFormat.toServiceString(InputFormat.Json) shouldBe "json"
-  }
-
-  it should "map NDJson to ndjson" in {
-    InputFormat.toServiceString(InputFormat.NDJson) shouldBe "ndjson"
-  }
-
-  it should "map Csv to csv" in {
-    InputFormat.toServiceString(InputFormat.Csv) shouldBe "csv"
-  }
-
-  it should "map Ltsv to ltsv" in {
-    InputFormat.toServiceString(InputFormat.Ltsv) shouldBe "ltsv"
+  "InputFormat.name" should "map each variant to its lowercase CLI/extension name" in {
+    InputFormat.Json.name shouldBe "json"
+    InputFormat.NDJson.name shouldBe "ndjson"
+    InputFormat.Csv.name shouldBe "csv"
+    InputFormat.Ltsv.name shouldBe "ltsv"
   }
 
   it should "round-trip with fromString for all variants" in {
-    InputFormat.values.foreach { fmt =>
-      val str    = InputFormat.toServiceString(fmt)
-      val parsed = InputFormat.fromString(str)
-      parsed shouldBe Some(fmt)
-    }
+    InputFormat.values.foreach(fmt => InputFormat.fromString(fmt.name) shouldBe Some(fmt))
+  }
+
+  "InputFormat.isStreamable" should "be false only for JSON arrays" in {
+    InputFormat.values.filterNot(_.isStreamable).toList shouldBe List(InputFormat.Json)
+  }
+
+  "InputFormat.FromName" should "extract a format from a file extension" in {
+    ("csv" match {
+      case InputFormat.FromName(f) => Some(f)
+      case _                       => None
+    }) shouldBe Some(InputFormat.Csv)
+    ("parquet" match {
+      case InputFormat.FromName(f) => Some(f)
+      case _                       => None
+    }) shouldBe None
   }
 }

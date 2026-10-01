@@ -35,9 +35,11 @@ class WriteStreamIntegrationTest extends AnyFlatSpec with Matchers {
       tempInput(".ndjson", "{\"id\":1,\"name\":\"Alice\"}\n{\"id\":2,\"name\":\"Bob\"}\n")
 
     val streamedOut = tempOutputPath()
-    service.streamWriteDataFile(ndjson, "ndjson", streamedOut, WriteConfig()).isRight shouldBe true
+    service
+      .streamWriteDataFile(ndjson, InputFormat.NDJson, streamedOut, WriteConfig())
+      .isRight shouldBe true
 
-    val bufferedData = service.readDataFile(ndjson, "ndjson").toOption.get
+    val bufferedData = service.readDataFile(ndjson, InputFormat.NDJson).toOption.get
     val bufferedOut  = tempOutputPath()
     service.writeFile(bufferedOut, bufferedData, WriteConfig()).isRight shouldBe true
 
@@ -50,9 +52,11 @@ class WriteStreamIntegrationTest extends AnyFlatSpec with Matchers {
     val ltsv = tempInput(".ltsv", "id:1\tname:Alice\nid:2\tname:Bob\n")
 
     val streamedOut = tempOutputPath()
-    service.streamWriteDataFile(ltsv, "ltsv", streamedOut, WriteConfig()).isRight shouldBe true
+    service
+      .streamWriteDataFile(ltsv, InputFormat.Ltsv, streamedOut, WriteConfig())
+      .isRight shouldBe true
 
-    val bufferedData = service.readDataFile(ltsv, "ltsv").toOption.get
+    val bufferedData = service.readDataFile(ltsv, InputFormat.Ltsv).toOption.get
     val bufferedOut  = tempOutputPath()
     service.writeFile(bufferedOut, bufferedData, WriteConfig()).isRight shouldBe true
 
@@ -65,9 +69,11 @@ class WriteStreamIntegrationTest extends AnyFlatSpec with Matchers {
     val csv = tempInput(".csv", "id,name\n1,Alice\n2,Bob\n")
 
     val streamedOut = tempOutputPath()
-    service.streamWriteDataFile(csv, "csv", streamedOut, WriteConfig()).isRight shouldBe true
+    service
+      .streamWriteDataFile(csv, InputFormat.Csv, streamedOut, WriteConfig())
+      .isRight shouldBe true
 
-    val bufferedData = service.readDataFile(csv, "csv").toOption.get
+    val bufferedData = service.readDataFile(csv, InputFormat.Csv).toOption.get
     val bufferedOut  = tempOutputPath()
     service.writeFile(bufferedOut, bufferedData, WriteConfig()).isRight shouldBe true
 
@@ -83,7 +89,7 @@ class WriteStreamIntegrationTest extends AnyFlatSpec with Matchers {
     val ndjson = tempInput(".ndjson", lines.mkString("\n") + "\n")
 
     val out    = tempOutputPath()
-    val result = service.streamWriteDataFile(ndjson, "ndjson", out, WriteConfig())
+    val result = service.streamWriteDataFile(ndjson, InputFormat.NDJson, out, WriteConfig())
     result.isRight shouldBe true
 
     val content = repo.readContent(ParquetFile(LocalPath(out)), ReadConfig()).get
@@ -97,7 +103,7 @@ class WriteStreamIntegrationTest extends AnyFlatSpec with Matchers {
     val ndjson = tempInput(".ndjson", "{\"id\":1}\n{\"id\":2}\nNOT VALID JSON\n")
     val out    = tempOutputPath()
 
-    val result = service.streamWriteDataFile(ndjson, "ndjson", out, WriteConfig())
+    val result = service.streamWriteDataFile(ndjson, InputFormat.NDJson, out, WriteConfig())
     result.isLeft shouldBe true
     java.nio.file.Files.exists(java.nio.file.Paths.get(out)) shouldBe false
   }
@@ -109,7 +115,13 @@ class WriteStreamIntegrationTest extends AnyFlatSpec with Matchers {
     val out    = tempOutputPath()
 
     val result =
-      service.streamWriteDataFile(ndjson, "ndjson", out, WriteConfig(), maxRows = Some(3L))
+      service.streamWriteDataFile(
+        ndjson,
+        InputFormat.NDJson,
+        out,
+        WriteConfig(),
+        maxRows = Some(3L)
+      )
     result shouldBe Right(3L)
 
     val content = repo.readContent(ParquetFile(LocalPath(out)), ReadConfig()).get
