@@ -117,7 +117,7 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
 
   "reportError" should "return the error's exit code" in {
     val (code, _) = captureStderr {
-      CommandExecutor.reportError("Test", quietOpts)(
+      CommandSupport.reportError("Test", quietOpts)(
         ParqueteerError.FileNotFound("/missing")
       )
     }
@@ -126,7 +126,7 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
 
   it should "print prefix and error message to stderr" in {
     val (_, stderr) = captureStderr {
-      CommandExecutor.reportError("Failed", defaultOpts)(
+      CommandSupport.reportError("Failed", defaultOpts)(
         ParqueteerError.FileNotFound("/x")
       )
     }
@@ -136,7 +136,7 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
 
   it should "redact credentials in error messages" in {
     val (_, stderr) = captureStderr {
-      CommandExecutor.reportError("Err", defaultOpts)(
+      CommandSupport.reportError("Err", defaultOpts)(
         ParqueteerError.IOError(
           new java.io.IOException("AccessKey=AKIAIOSFODNN7EXAMPLE leaked")
         )
@@ -147,7 +147,7 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
 
   it should "print hint when provided" in {
     val (_, stderr) = captureStderr {
-      CommandExecutor.reportError("Err", defaultOpts, Some("Try --help"))(
+      CommandSupport.reportError("Err", defaultOpts, Some("Try --help"))(
         ParqueteerError.InvalidFormat("f", "bad")
       )
     }
@@ -157,15 +157,15 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
   // ── checkOutputWritable ────────────────────────────────────────────────
 
   "checkOutputWritable" should "pass cloud URIs without filesystem check" in {
-    CommandExecutor.checkOutputWritable("s3://bucket/key") shouldBe Right(())
-    CommandExecutor.checkOutputWritable("gs://bucket/key") shouldBe Right(())
-    CommandExecutor.checkOutputWritable("abfss://container@account/path") shouldBe Right(())
+    CommandSupport.checkOutputWritable("s3://bucket/key") shouldBe Right(())
+    CommandSupport.checkOutputWritable("gs://bucket/key") shouldBe Right(())
+    CommandSupport.checkOutputWritable("abfss://container@account/path") shouldBe Right(())
   }
 
   it should "pass for writable local paths" in {
     val tmpDir = java.nio.file.Files.createTempDirectory("pqt-test")
     try
-      CommandExecutor.checkOutputWritable(
+      CommandSupport.checkOutputWritable(
         tmpDir.resolve("out.parquet").toString
       ) shouldBe Right(())
     finally
@@ -207,7 +207,7 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
   // ── executeInfo ────────────────────────────────────────────────────────
 
   "executeInfo" should "return 0 on success with quiet" in {
-    CommandExecutor.executeInfo(
+    InspectCommands.executeInfo(
       newService(),
       InfoCommand("/tmp/test.parquet", OutputFormat.Table, verbose = false),
       quietOpts
@@ -220,7 +220,7 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
       metadataResult = scala.util.Failure(new java.io.FileNotFoundException("/nope"))
     )
     val (code, _) = captureStderr {
-      CommandExecutor.executeInfo(
+      InspectCommands.executeInfo(
         newService(repo),
         InfoCommand("/nope", OutputFormat.Table, verbose = false),
         quietOpts
@@ -232,7 +232,7 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
   // ── executeValidate ────────────────────────────────────────────────────
 
   "executeValidate" should "return 0 for valid file" in {
-    CommandExecutor.executeValidate(
+    InspectCommands.executeValidate(
       newService(),
       ValidateCommand("/tmp/test.parquet", verbose = false, deep = false),
       quietOpts
@@ -243,7 +243,7 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
     val repo = new FakeParquetRepository(
       validateResult = Success(List("column mismatch"))
     )
-    CommandExecutor.executeValidate(
+    InspectCommands.executeValidate(
       newService(repo),
       ValidateCommand("/tmp/test.parquet", verbose = false, deep = false),
       quietOpts
@@ -253,7 +253,7 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
   // ── executeCount ───────────────────────────────────────────────────────
 
   "executeCount" should "return 0 on success" in {
-    CommandExecutor.executeCount(
+    InspectCommands.executeCount(
       newService(),
       CountCommand("/tmp/test.parquet", OutputFormat.Table),
       quietOpts
@@ -263,7 +263,7 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
   // ── executeStats ───────────────────────────────────────────────────────
 
   "executeStats" should "return 0 on success" in {
-    CommandExecutor.executeStats(
+    InspectCommands.executeStats(
       newService(),
       StatsCommand("/tmp/test.parquet", OutputFormat.Table),
       quietOpts
@@ -275,7 +275,7 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
       statsResult = scala.util.Failure(new java.io.IOException("disk error"))
     )
     val (code, _) = captureStderr {
-      CommandExecutor.executeStats(
+      InspectCommands.executeStats(
         newService(repo),
         StatsCommand("/nope", OutputFormat.Table),
         quietOpts
@@ -288,7 +288,7 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
 
   "executeSchemaInfo" should "return 2 when filePath is empty" in {
     val (code, stderr) = captureStderr {
-      CommandExecutor.executeSchemaInfo(
+      InspectCommands.executeSchemaInfo(
         newService(),
         SchemaCommand(""),
         quietOpts
@@ -299,7 +299,7 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
   }
 
   it should "return 0 when filePath is valid" in {
-    CommandExecutor.executeSchemaInfo(
+    InspectCommands.executeSchemaInfo(
       newService(),
       SchemaCommand("/tmp/test.parquet"),
       quietOpts
@@ -309,7 +309,7 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
   // ── performConvert ─────────────────────────────────────────────────────
 
   "performConvert" should "reject unsupported extension pairs" in {
-    val result = CommandExecutor.performConvert(
+    val result = WriteCommands.performConvert(
       newService(),
       "input.txt",
       "output.xml",
@@ -323,7 +323,7 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
     val tmpFile = java.nio.file.Files.createTempFile("pqt-convert-guard", ".csv")
     try {
       java.nio.file.Files.writeString(tmpFile, "PREEXISTING")
-      val result = CommandExecutor.performConvert(
+      val result = WriteCommands.performConvert(
         newService(),
         "input.parquet",
         tmpFile.toString,
@@ -338,13 +338,13 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
   // ── showStatus ─────────────────────────────────────────────────────────
 
   "showStatus" should "return false when quiet" in {
-    CommandExecutor.showStatus(quietOpts) shouldBe false
+    Terminal.showStatus(quietOpts) shouldBe false
   }
 
   // ── executeMerge ───────────────────────────────────────────────────────
 
   "executeMerge" should "reject unwritable cloud-like but check local paths" in {
-    CommandExecutor.executeMerge(
+    WriteCommands.executeMerge(
       newService(),
       MergeCommand(
         List("/tmp/a.parquet"),
@@ -360,7 +360,7 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
   it should "show dry-run summary without writing" in {
     val out = new java.io.ByteArrayOutputStream()
     Console.withOut(new java.io.PrintStream(out)) {
-      CommandExecutor.executeMerge(
+      WriteCommands.executeMerge(
         newService(),
         MergeCommand(
           List("/tmp/a.parquet", "/tmp/b.parquet"),
@@ -381,7 +381,7 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
 
   "executeRead" should "warn and fallback parallelism when filter is set with parallel > 1" in {
     val (code, stderr) = captureStderr {
-      CommandExecutor.executeRead(
+      ReadCommands.executeRead(
         newService(),
         ReadCommand(
           "/tmp/test.parquet",
@@ -401,7 +401,7 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
 
   it should "suppress filter-parallel warning when quiet" in {
     val (code, stderr) = captureStderr {
-      CommandExecutor.executeRead(
+      ReadCommands.executeRead(
         newService(),
         ReadCommand(
           "/tmp/test.parquet",
@@ -420,7 +420,7 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
   }
 
   it should "use streaming for NDJSON format" in {
-    CommandExecutor.executeRead(
+    ReadCommands.executeRead(
       newService(),
       ReadCommand(
         "/tmp/test.parquet",
@@ -436,7 +436,7 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
   }
 
   it should "use streaming when streaming flag is set" in {
-    CommandExecutor.executeRead(
+    ReadCommands.executeRead(
       newService(),
       ReadCommand(
         "/tmp/test.parquet",
@@ -630,7 +630,7 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
 
   it should "suppress error output when quiet" in {
     val (code, stderr) = captureStderr {
-      CommandExecutor.reportError("Err", quietOpts)(
+      CommandSupport.reportError("Err", quietOpts)(
         ParqueteerError.FileNotFound("/x")
       )
     }
@@ -642,7 +642,7 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
     val verboseOpts = GlobalOptions(verbose = true, quiet = false)
     val cause       = new RuntimeException("deep cause")
     val (code, stderr) = captureStderr {
-      CommandExecutor.reportError("Err", verboseOpts)(
+      CommandSupport.reportError("Err", verboseOpts)(
         ParqueteerError.IOError(cause)
       )
     }
@@ -707,7 +707,7 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
       java.nio.file.Files.writeString(tmpFile, """[{"id":1,"name":"Alice"}]""")
       val out = new ByteArrayOutputStream()
       Console.withOut(new PrintStream(out)) {
-        CommandExecutor.executeWrite(
+        WriteCommands.executeWrite(
           newService(),
           WriteCommand(
             tmpFile.toString,
@@ -729,7 +729,7 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
 
   it should "return error when dry-run input file not found" in {
     val (code, stderr) = captureStderr {
-      CommandExecutor.executeWrite(
+      WriteCommands.executeWrite(
         newService(),
         WriteCommand(
           "/nonexistent/input.json",
@@ -751,7 +751,7 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
   "executeConvert" should "show dry-run preview for non-parquet input" in {
     val out = new ByteArrayOutputStream()
     Console.withOut(new PrintStream(out)) {
-      CommandExecutor.executeConvert(
+      WriteCommands.executeConvert(
         newService(),
         ConvertCommand(
           "input.csv",
@@ -773,7 +773,7 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
   it should "show dry-run preview for parquet input" in {
     val out = new ByteArrayOutputStream()
     Console.withOut(new PrintStream(out)) {
-      CommandExecutor.executeConvert(
+      WriteCommands.executeConvert(
         newService(),
         ConvertCommand(
           "input.parquet",
@@ -793,7 +793,7 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
 
   it should "return non-zero for unsupported conversion extension pair" in {
     val (code, stderr) = captureStderr {
-      CommandExecutor.executeConvert(
+      WriteCommands.executeConvert(
         newService(),
         ConvertCommand(
           "input.txt",
@@ -973,7 +973,7 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
   // ── executeSchemaDiff ──────────────────────────────────────────────────
 
   "executeSchemaDiff" should "return 0 when schemas are identical" in {
-    CommandExecutor.executeSchemaDiff(
+    InspectCommands.executeSchemaDiff(
       newService(),
       SchemaDiffCommand("/tmp/a.parquet", "/tmp/b.parquet"),
       quietOpts
@@ -986,7 +986,7 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
       metadataResult = scala.util.Failure(new java.io.FileNotFoundException("/nope"))
     )
     val (code, stderr) = captureStderr {
-      CommandExecutor.executeSchemaDiff(
+      InspectCommands.executeSchemaDiff(
         newService(repo),
         SchemaDiffCommand("/nope", "/nope"),
         quietOpts
@@ -999,7 +999,7 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
   it should "output JSON diff when format is JSON" in {
     val out = new ByteArrayOutputStream()
     Console.withOut(new PrintStream(out)) {
-      CommandExecutor.executeSchemaDiff(
+      InspectCommands.executeSchemaDiff(
         newService(),
         SchemaDiffCommand("/tmp/a.parquet", "/tmp/b.parquet", OutputFormat.JSON),
         defaultOpts
@@ -1011,7 +1011,7 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
   it should "output table diff when format is Table" in {
     val out = new ByteArrayOutputStream()
     Console.withOut(new PrintStream(out)) {
-      CommandExecutor.executeSchemaDiff(
+      InspectCommands.executeSchemaDiff(
         newService(),
         SchemaDiffCommand("/tmp/a.parquet", "/tmp/b.parquet", OutputFormat.Table),
         defaultOpts
@@ -1042,7 +1042,7 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
       override def writeRow(row: Map[String, CellValue]): Unit = calls += "row"
       override def end(): Unit                                 = calls += "end"
     }
-    val result = CommandExecutor.runWithDeferredBegin(
+    val result = StreamingOutput.runWithDeferredBegin(
       writer,
       process => { process(Map.empty); process(Map.empty); Right(2L) }
     )
@@ -1057,7 +1057,7 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
       override def writeRow(row: Map[String, CellValue]): Unit = calls += "row"
       override def end(): Unit                                 = calls += "end"
     }
-    val result = CommandExecutor.runWithDeferredBegin(
+    val result = StreamingOutput.runWithDeferredBegin(
       writer,
       _ => Right(0L)
     )
@@ -1073,7 +1073,7 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
       override def end(): Unit                                 = calls += "end"
     }
     val err = ParqueteerError.FileNotFound("/x")
-    val result = CommandExecutor.runWithDeferredBegin(
+    val result = StreamingOutput.runWithDeferredBegin(
       writer,
       _ => Left(err)
     )
@@ -1087,7 +1087,7 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
       override def writeRow(row: Map[String, CellValue]): Unit = ()
       override def end(): Unit = throw new java.io.IOException("flush failed")
     }
-    val result = CommandExecutor.runWithDeferredBegin(
+    val result = StreamingOutput.runWithDeferredBegin(
       writer,
       process => { process(Map.empty); Right(1L) }
     )
@@ -1107,7 +1107,7 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
       process => { process(Map.empty); Right(1L) },
       process => { process(Map.empty); process(Map.empty); Right(2L) }
     )
-    val result = CommandExecutor.runWithDeferredBeginMulti(writer, reads)
+    val result = StreamingOutput.runWithDeferredBeginMulti(writer, reads)
     result shouldBe Right(3L)
     // begin fires once, before the first row of the first read, not once per read
     calls.toList shouldBe List("begin", "row", "row", "row", "end")
@@ -1126,7 +1126,7 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
       _ => Left(err),
       process => { secondReadInvoked = true; process(Map.empty); Right(1L) }
     )
-    val result = CommandExecutor.runWithDeferredBeginMulti(writer, reads)
+    val result = StreamingOutput.runWithDeferredBeginMulti(writer, reads)
     result shouldBe Left(err)
     secondReadInvoked shouldBe false
     // the first read failed before writing any row, so begin() never fired —
@@ -1143,7 +1143,7 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
     }
     val reads: List[(Map[String, CellValue] => Unit) => Either[ParqueteerError, Long]] =
       List(_ => Right(0L), _ => Right(0L))
-    val result = CommandExecutor.runWithDeferredBeginMulti(writer, reads)
+    val result = StreamingOutput.runWithDeferredBeginMulti(writer, reads)
     result shouldBe Right(0L)
     calls.toList shouldBe List("begin", "end")
   }
@@ -1165,7 +1165,7 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
           Right(1L)
         }
       }
-    val result = CommandExecutor.runWithDeferredBeginMulti(writer, reads, parallelism = 3)
+    val result = StreamingOutput.runWithDeferredBeginMulti(writer, reads, parallelism = 3)
     result shouldBe Right(3L)
     written.toList shouldBe List(1, 2, 3)
   }
@@ -1182,7 +1182,7 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
       override def writeRow(row: Map[String, CellValue]): Unit = ()
       override def end(): Unit                                 = ()
     }
-    val result = CommandExecutor.runWithDeferredBeginMulti(writer, reads, parallelism = 3)
+    val result = StreamingOutput.runWithDeferredBeginMulti(writer, reads, parallelism = 3)
     result shouldBe Left(err)
   }
 
@@ -1222,7 +1222,7 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
   "runMultiFileReport" should "print one table block per file and return 0 when all succeed" in {
     val out = new ByteArrayOutputStream()
     Console.withOut(new PrintStream(out)) {
-      val code = CommandExecutor.runMultiFileReport(
+      val code = MultiFileReport.runMultiFileReport(
         List("/a.parquet", "/b.parquet"),
         OutputFormat.Table,
         GlobalOptions()
@@ -1237,7 +1237,7 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
   }
 
   it should "return 1 and skip nothing when one file errors" in {
-    val code = CommandExecutor.runMultiFileReport(
+    val code = MultiFileReport.runMultiFileReport(
       List("/a.parquet", "/b.parquet"),
       OutputFormat.Table,
       GlobalOptions()
@@ -1249,7 +1249,7 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
   }
 
   it should "return 1 when a file renders successfully but is marked unsuccessful" in {
-    val code = CommandExecutor.runMultiFileReport(
+    val code = MultiFileReport.runMultiFileReport(
       List("/a.parquet"),
       OutputFormat.Table,
       GlobalOptions()
@@ -1260,7 +1260,7 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
   it should "wrap per-file JSON text into a single JSON array in JSON mode" in {
     val out = new ByteArrayOutputStream()
     Console.withOut(new PrintStream(out)) {
-      CommandExecutor.runMultiFileReport(
+      MultiFileReport.runMultiFileReport(
         List("/a.parquet", "/b.parquet"),
         OutputFormat.JSON,
         GlobalOptions()
@@ -1273,7 +1273,7 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
   it should "tag each successful JSON element with its own path and an ok status" in {
     val out = new ByteArrayOutputStream()
     Console.withOut(new PrintStream(out)) {
-      CommandExecutor.runMultiFileReport(
+      MultiFileReport.runMultiFileReport(
         List("/a.parquet", "/b.parquet"),
         OutputFormat.JSON,
         GlobalOptions()
@@ -1298,7 +1298,7 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
   it should "tag each errored JSON element with its own path and an error status" in {
     val out = new ByteArrayOutputStream()
     Console.withOut(new PrintStream(out)) {
-      CommandExecutor.runMultiFileReport(
+      MultiFileReport.runMultiFileReport(
         List("/a.parquet", "/b.parquet"),
         OutputFormat.JSON,
         GlobalOptions()
@@ -1324,7 +1324,7 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
   it should "redact credential material from a per-file error's JSON message" in {
     val out = new ByteArrayOutputStream()
     Console.withOut(new PrintStream(out)) {
-      CommandExecutor.runMultiFileReport(
+      MultiFileReport.runMultiFileReport(
         List("/secret.parquet"),
         OutputFormat.JSON,
         GlobalOptions()
@@ -1345,7 +1345,7 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
     val inFlight    = new java.util.concurrent.atomic.AtomicInteger(0)
     val maxObserved = new java.util.concurrent.atomic.AtomicInteger(0)
     val paths       = (1 to 12).map(i => s"/f$i.parquet").toList
-    val code = CommandExecutor.runMultiFileReport(
+    val code = MultiFileReport.runMultiFileReport(
       paths,
       OutputFormat.Table,
       GlobalOptions(quiet = true, fileParallelism = 3)
@@ -1363,7 +1363,7 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
   it should "preserve input order in output even when later files finish first" in {
     val out = new ByteArrayOutputStream()
     Console.withOut(new PrintStream(out)) {
-      CommandExecutor.runMultiFileReport(
+      MultiFileReport.runMultiFileReport(
         List("/slow.parquet", "/fast.parquet"),
         OutputFormat.Table,
         GlobalOptions(fileParallelism = 4)
@@ -1382,7 +1382,7 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
   }
 
   it should "capture a thrown exception from one file without losing the others" in {
-    val code = CommandExecutor.runMultiFileReport(
+    val code = MultiFileReport.runMultiFileReport(
       List("/a.parquet", "/boom.parquet", "/c.parquet"),
       OutputFormat.Table,
       GlobalOptions(quiet = true, fileParallelism = 4)
@@ -1395,7 +1395,7 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
 
   it should "fall back to sequential execution when file-parallelism is 1" in {
     val order = scala.collection.mutable.ListBuffer.empty[String]
-    CommandExecutor.runMultiFileReport(
+    MultiFileReport.runMultiFileReport(
       List("/a.parquet", "/b.parquet", "/c.parquet"),
       OutputFormat.Table,
       GlobalOptions(quiet = true, fileParallelism = 1)
@@ -1410,21 +1410,21 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
 
   "warnIfSchemaModeNoop" should "warn when schema-mode is Union" in {
     val (_, err) = captureStderr {
-      CommandExecutor.warnIfSchemaModeNoop(SchemaMode.Union, defaultOpts)
+      CommandSupport.warnIfSchemaModeNoop(SchemaMode.Union, defaultOpts)
     }
     err should include("--schema-mode has no effect")
   }
 
   it should "stay silent when schema-mode is the default Strict" in {
     val (_, err) = captureStderr {
-      CommandExecutor.warnIfSchemaModeNoop(SchemaMode.Strict, defaultOpts)
+      CommandSupport.warnIfSchemaModeNoop(SchemaMode.Strict, defaultOpts)
     }
     err shouldBe empty
   }
 
   it should "stay silent in quiet mode even for Union" in {
     val (_, err) = captureStderr {
-      CommandExecutor.warnIfSchemaModeNoop(SchemaMode.Union, quietOpts)
+      CommandSupport.warnIfSchemaModeNoop(SchemaMode.Union, quietOpts)
     }
     err shouldBe empty
   }
