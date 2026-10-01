@@ -390,9 +390,11 @@ object ArgumentParser {
         .children(
           arg[String]("<shell>")
             .required()
-            .action((x, c) => c.copy(command = Some(CompletionsCommand(x))))
+            .action((x, c) =>
+              Shell.fromString(x).fold(c)(sh => c.copy(command = Some(CompletionsCommand(sh))))
+            )
             .validate(x =>
-              if List("bash", "zsh", "fish").contains(x.toLowerCase) then success
+              if Shell.fromString(x).isDefined then success
               else failure(s"Unsupported shell: $x. Use bash, zsh, or fish")
             )
             .text("Shell type: bash, zsh, fish")

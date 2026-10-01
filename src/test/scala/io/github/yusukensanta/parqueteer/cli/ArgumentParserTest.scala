@@ -607,4 +607,18 @@ class ArgumentParserTest extends AnyFlatSpec with Matchers {
     parsedCompression("uncompressed") shouldBe Some(CompressionType.Uncompressed)
     parsedCompression("gz") shouldBe Some(CompressionType.Gzip)
   }
+
+  "ArgumentParser completions" should "parse the shell name case-insensitively into a Shell" in {
+    OParser
+      .parse(ArgumentParser.parser, Array("completions", "ZSH"), ArgumentParser.Config())
+      .flatMap(_.command) shouldBe Some(CompletionsCommand(Shell.Zsh))
+  }
+
+  it should "reject an unsupported shell at parse time" in {
+    OParser.parse(
+      ArgumentParser.parser,
+      Array("completions", "powershell"),
+      ArgumentParser.Config()
+    ) shouldBe None
+  }
 }

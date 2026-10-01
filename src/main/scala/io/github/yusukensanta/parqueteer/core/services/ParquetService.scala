@@ -26,7 +26,7 @@ class ParquetService(
     StorageLocationParser
       .parse(path)
       .left
-      .map(msg => ParqueteerError.InvalidFormat(path, msg))
+      .map(msg => ParqueteerError.InvalidLocation(path, msg))
 
   private def requireNotStdin(path: String): Either[ParqueteerError, Unit] =
     if path == "-" then

@@ -66,6 +66,15 @@ object ParqueteerError:
     val exitCode    = 2
     val userMessage = s"Parse error ($format): ${redact(message)}"
 
+  /**
+   * A path/URL that isn't a usable storage location: an unsupported scheme
+   * (ftp://), a malformed URL (s3:/bucket), or wasb[s]://. The parser's
+   * message already says what is wrong and, where it can, what to use instead.
+   */
+  case class InvalidLocation(path: String, message: String) extends ParqueteerError:
+    val exitCode    = 10
+    val userMessage = s"Invalid location \"$path\": ${redact(message)}"
+
   /** The output path already exists; parqueteer never overwrites an existing file. */
   case class OutputExists(path: String) extends ParqueteerError:
     val exitCode = 8
