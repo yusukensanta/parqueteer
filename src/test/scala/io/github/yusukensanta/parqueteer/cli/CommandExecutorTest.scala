@@ -175,30 +175,22 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
   // ── executeCompletions ─────────────────────────────────────────────────
 
   "executeCompletions" should "return 0 for bash" in {
-    CommandExecutor.executeCompletions("bash", quietOpts) shouldBe 0
+    CommandExecutor.executeCompletions(Shell.Bash, quietOpts) shouldBe 0
   }
 
   it should "return 0 for zsh" in {
-    CommandExecutor.executeCompletions("zsh", quietOpts) shouldBe 0
+    CommandExecutor.executeCompletions(Shell.Zsh, quietOpts) shouldBe 0
   }
 
   it should "return 0 for fish" in {
-    CommandExecutor.executeCompletions("fish", quietOpts) shouldBe 0
-  }
-
-  it should "return 1 for unknown shell" in {
-    val (code, stderr) = captureStderr {
-      CommandExecutor.executeCompletions("powershell", quietOpts)
-    }
-    code shouldBe 1
-    stderr should include("Unsupported shell")
+    CommandExecutor.executeCompletions(Shell.Fish, quietOpts) shouldBe 0
   }
 
   // ── execute dispatch ───────────────────────────────────────────────────
 
   "execute" should "dispatch CompletionsCommand" in {
     CommandExecutor.execute(
-      CompletionsCommand("bash"),
+      CompletionsCommand(Shell.Bash),
       newService(),
       quietOpts
     ) shouldBe 0

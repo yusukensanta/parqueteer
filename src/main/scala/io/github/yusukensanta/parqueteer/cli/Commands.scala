@@ -82,4 +82,13 @@ case class CountCommand(
     format: OutputFormat = OutputFormat.Table
 ) extends Command
 
-case class CompletionsCommand(shell: String) extends Command
+/** Shells `parqueteer completions` can generate a script for. */
+enum Shell:
+  case Bash, Zsh, Fish
+
+object Shell:
+
+  def fromString(s: String): Option[Shell] =
+    values.find(_.toString.equalsIgnoreCase(s))
+
+case class CompletionsCommand(shell: Shell) extends Command
