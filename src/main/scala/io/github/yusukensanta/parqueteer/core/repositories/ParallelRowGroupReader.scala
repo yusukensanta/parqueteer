@@ -1,6 +1,7 @@
 package io.github.yusukensanta.parqueteer.core.repositories
 
 import io.github.yusukensanta.parqueteer.core.models.{CellValue, ReadConfig}
+import io.github.yusukensanta.parqueteer.core.util.DaemonThreadFactory
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path as HadoopPath
 import org.apache.parquet.hadoop.ParquetFileReader
@@ -44,13 +45,7 @@ private[repositories] object ParallelRowGroupReader {
 
     val pool = Executors.newFixedThreadPool(
       config.parallelism.max(1),
-      new java.util.concurrent.ThreadFactory {
-        private val counter = new java.util.concurrent.atomic.AtomicInteger(0)
-        override def newThread(r: Runnable): Thread =
-          val t = new Thread(r, s"parqueteer-parallel-read-${counter.getAndIncrement()}")
-          t.setDaemon(true)
-          t
-      }
+      new DaemonThreadFactory("parqueteer-parallel-read")
     )
     try {
       implicit val ec: ExecutionContext = ExecutionContext.fromExecutor(pool)

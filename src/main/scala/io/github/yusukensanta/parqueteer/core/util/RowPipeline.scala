@@ -1,8 +1,7 @@
 package io.github.yusukensanta.parqueteer.core.util
 
 import io.github.yusukensanta.parqueteer.core.models.CellValue
-import java.util.concurrent.{ArrayBlockingQueue, Executors, ThreadFactory}
-import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.{ArrayBlockingQueue, Executors}
 
 /**
  * Feeds `consume` every row of every item in `items`, strictly in item
@@ -53,14 +52,7 @@ object RowPipeline {
   )(consume: Map[String, CellValue] => Unit): Either[E, Long] = {
     val pool = Executors.newFixedThreadPool(
       parallelism.min(items.size),
-      new ThreadFactory {
-        private val counter = new AtomicInteger(0)
-        override def newThread(r: Runnable): Thread = {
-          val t = new Thread(r, s"parqueteer-file-fetch-ahead-${counter.getAndIncrement()}")
-          t.setDaemon(true)
-          t
-        }
-      }
+      new DaemonThreadFactory("parqueteer-file-fetch-ahead")
     )
     val queues: Vector[ArrayBlockingQueue[Event[E]]] =
       Vector.fill(items.size)(new ArrayBlockingQueue[Event[E]](queueCapacity))
