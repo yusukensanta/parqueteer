@@ -2,12 +2,16 @@ package io.github.yusukensanta.parqueteer.cli
 
 import io.github.yusukensanta.parqueteer.core.services.ParquetService
 import io.github.yusukensanta.parqueteer.core.models.*
-import io.github.yusukensanta.parqueteer.core.util.FileExtension
+import io.github.yusukensanta.parqueteer.core.util.{FileExtension, RowBudget}
 import CommandSupport.*
+import DryRunReport.{detail, field}
 import StreamingOutput.*
 
 /** Handlers for the commands that produce a file: write, convert, merge. */
 private[cli] object WriteCommands {
+
+  // CLI spelling of a codec in dry-run output (e.g. "snappy", "uncompressed").
+  private def codec(compression: CompressionType): String = compression.toString.toLowerCase
 
   // Shared by performConvert/executeConvertMulti: parquet → text conversions
   // only ever target one of these three formats.
@@ -37,11 +41,14 @@ private[cli] object WriteCommands {
               reportError("Failed to read input file", globalOptions)(error)
             case Right(rows) =>
               val columns = rows.headOption.map(_.keys.toList).getOrElse(Nil)
-              println(s"Dry run: would write $outputPath")
-              println(s"  Input:       $inputPath (${inputFormat.name})")
-              println(s"  Columns:     ${columns.mkString(", ")}")
-              println(s"  Compression: ${compression.toString.toLowerCase}")
-              0
+              DryRunReport(
+                s"write $outputPath",
+                List(
+                  field("Input", s"$inputPath (${inputFormat.name})"),
+                  field("Columns", columns.mkString(", ")),
+                  field("Compression", codec(compression))
+                )
+              ).print()
           }
         } else {
           service.streamWriteDataFile(inputPath, inputFormat, outputPath, writeConfig) match {
@@ -70,12 +77,12 @@ private[cli] object WriteCommands {
       case Left(err) => reportError("Failed to write file", globalOptions)(err)
       case Right(_) =>
         if dryRun then {
-          println(s"Dry run: would write $outputPath")
-          println(s"  Inputs:      ${inputPaths.size} files matched")
-          inputPaths.foreach(p => println(s"    - $p"))
-          println(s"  Schema mode: $schemaMode")
-          println(s"  Compression: ${compression.toString.toLowerCase}")
-          0
+          DryRunReport(
+            s"write $outputPath",
+            field("Inputs", s"${inputPaths.size} files matched") ::
+              inputPaths.map(p => detail(s"  - $p")) :::
+              List(field("Schema mode", schemaMode), field("Compression", codec(compression)))
+          ).print()
         } else {
           val onProgress: (Int, Int, String) => Unit = (i, n, path) =>
             if !globalOptions.quiet then System.err.println(s"[$i/$n] Writing: $path")
@@ -139,32 +146,28 @@ private[cli] object WriteCommands {
         case Left(error) =>
           reportError("Failed to read input", globalOptions)(error)
         case Right(file) =>
-          println(s"Dry run: would convert $inputPath → $outputPath")
-          println(s"  Input:       $inputPath")
-          file.metadata.foreach(m =>
-            println(
-              s"  File size:   ${CliOutputFormatter.formatBytesForDisplay(m.fileSize)}"
-            )
+          val sizeLine = file.metadata.toList.map(m =>
+            field("File size", CliOutputFormatter.formatBytesForDisplay(m.fileSize))
           )
-          file.schema.foreach { s =>
-            println(s"  Rows:        ${s.totalRowCount}")
-            println(s"  Columns:     ${s.columns.size}")
-            s.columns.headOption.foreach(c =>
-              println(
-                s"  Compression: ${c.compressionType.toLowerCase} → ${compression.toString.toLowerCase}"
+          val schemaLines = file.schema.toList.flatMap { s =>
+            List(field("Rows", s.totalRowCount), field("Columns", s.columns.size)) ++
+              s.columns.headOption.map(c =>
+                field("Compression", s"${c.compressionType.toLowerCase} → ${codec(compression)}")
               )
-            )
           }
-          0
+          DryRunReport(
+            s"convert $inputPath → $outputPath",
+            field("Input", inputPath) :: sizeLine ::: schemaLines
+          ).print()
       }
-    else {
-      println(s"Dry run: would convert $inputPath → $outputPath")
-      println(s"  Input format: $inputExt")
-      println(
-        s"  Compression:  ${compression.toString.toLowerCase} (output)"
-      )
-      0
-    }
+    else
+      DryRunReport(
+        s"convert $inputPath → $outputPath",
+        List(
+          field("Input format", inputExt),
+          field("Compression", s"${codec(compression)} (output)")
+        )
+      ).print()
   }
 
   private[cli] def performConvert(
@@ -244,11 +247,14 @@ private[cli] object WriteCommands {
         )
       case None =>
         if dryRun then {
-          println(s"Dry run: would convert ${inputPaths.size} files → $outputPath")
-          println(s"  Input format: $inputExt")
-          println(s"  Schema mode:  $schemaMode")
-          println(s"  Compression:  ${compression.toString.toLowerCase} (output)")
-          0
+          DryRunReport(
+            s"convert ${inputPaths.size} files → $outputPath",
+            List(
+              field("Input format", inputExt),
+              field("Schema mode", schemaMode),
+              field("Compression", s"${codec(compression)} (output)")
+            )
+          ).print()
         } else {
           val writeConfig = WriteConfig(compressionType = compression)
           val result: Either[ParqueteerError, Long] = (inputExt, outputExt) match {
@@ -315,23 +321,21 @@ private[cli] object WriteCommands {
   ): Either[ParqueteerError, Long] =
     service.checkSchemaCompatibility(inputPaths, schemaMode).flatMap { _ =>
       withSafeTextOutput(outputPath, outFormat) { writer =>
-        // Each closure shares `remaining` by reference, so the row budget
-        // decrements across files as runWithDeferredBeginMulti invokes them
-        // in order — the same running --limit semantics
-        // ParquetService.streamAllFiles uses for multi-file `read`.
-        var remaining = maxRows
+        // Every closure shares one budget, so --limit applies to the
+        // concatenated output, the same semantics ParquetService.streamAllFiles
+        // uses for multi-file `read`.
+        val budget = RowBudget(maxRows)
         val reads: List[(Map[String, CellValue] => Unit) => Either[ParqueteerError, Long]] =
           inputPaths.map { path => process =>
-            if remaining.contains(0L) then Right(0L)
+            if budget.isExhausted then Right(0L)
             else
-              service.streamRead(path, ReadConfig(maxRows = remaining))(process).map { n =>
-                remaining = remaining.map(r => r - n)
+              service.streamRead(path, ReadConfig(maxRows = budget.nextLimit))(process).map { n =>
+                budget.consume(n)
                 n
               }
           }
-        // A running --limit budget is shared (by mutable closure) across
-        // `reads` in file order, so honoring it correctly requires each file
-        // to finish before the next starts — only prefetch ahead when
+        // The budget is consumed in file order, so honoring it requires each
+        // file to finish before the next starts: only prefetch ahead when
         // there's no limit to honor.
         val effectiveParallelism = if maxRows.isDefined then 1 else fileParallelism
         runWithDeferredBeginMulti(writer, reads, effectiveParallelism)
@@ -355,8 +359,7 @@ private[cli] object WriteCommands {
             inputPaths,
             outputPath,
             compression,
-            schemaMode,
-            globalOptions
+            schemaMode
           )
         else {
           val onProgress: (Int, Int, String) => Unit = (i, n, path) =>
@@ -386,22 +389,21 @@ private[cli] object WriteCommands {
       inputPaths: List[String],
       outputPath: String,
       compression: CompressionType,
-      schemaMode: SchemaMode,
-      globalOptions: GlobalOptions
+      schemaMode: SchemaMode
   ): Int = {
-    println(s"Dry run: would merge ${inputPaths.size} files → $outputPath")
-    println(s"  Schema mode:  $schemaMode")
-    println(s"  Compression:  ${compression.toString.toLowerCase}")
-    inputPaths.zipWithIndex.foreach { (path, i) =>
-      service.getFileInfo(path) match {
+    val perFile = inputPaths.zipWithIndex.map { (path, i) =>
+      val summary = service.getFileInfo(path) match {
         case Right(file) =>
           val rows = file.schema.map(_.totalRowCount).getOrElse(0L)
           val cols = file.schema.map(_.columns.size).getOrElse(0)
-          println(s"  [${i + 1}/${inputPaths.size}] $path ($rows rows, $cols columns)")
-        case Left(error) =>
-          println(s"  [${i + 1}/${inputPaths.size}] $path — error: ${error.userMessage}")
+          s"($rows rows, $cols columns)"
+        case Left(error) => s"— error: ${error.userMessage}"
       }
+      detail(s"[${i + 1}/${inputPaths.size}] $path $summary")
     }
-    0
+    DryRunReport(
+      s"merge ${inputPaths.size} files → $outputPath",
+      field("Schema mode", schemaMode) :: field("Compression", codec(compression)) :: perFile
+    ).print()
   }
 }
