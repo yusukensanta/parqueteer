@@ -29,8 +29,8 @@ class ParquetService(
   private def requireNotStdin(path: String): Either[ParqueteerError, Unit] =
     if path == "-" then
       Left(
-        ParqueteerError.InvalidFormat(
-          "-",
+        ParqueteerError.UnsupportedOperation(
+          "stdin",
           "Parquet files require random-access I/O and cannot be read from stdin"
         )
       )
@@ -163,7 +163,7 @@ class ParquetService(
   ): Either[ParqueteerError, Long] =
     if inputPaths.size < 2 then
       Left(
-        ParqueteerError.InvalidFormat(
+        ParqueteerError.UnsupportedOperation(
           "merge",
           "merge requires at least two input files"
         )
@@ -256,7 +256,7 @@ class ParquetService(
    * Combine per-file schemas under the chosen strategy:
    *   - Strict: every input must match the first file's schema exactly.
    *   - Union: collect the union of fields, surfacing per-column type
-   *     conflicts as a single InvalidFormat error. Union-merged fields are
+   *     conflicts as a single SchemaMismatch error. Union-merged fields are
    *     marked optional because not every file is guaranteed to supply them.
    */
   private def mergeSchemas(
@@ -278,9 +278,9 @@ class ParquetService(
             case (i, thisSet) if thisSet != firstSet =>
               val diffMsg = describeSchemaMismatch(firstSet, thisSet)
               Left(
-                ParqueteerError.InvalidFormat(
+                ParqueteerError.SchemaMismatch(
                   inputPaths(i),
-                  s"Schema mismatch at file '${inputPaths(i)}' ($diffMsg). Use --schema-mode union to allow schema differences."
+                  s"$diffMsg. Use --schema-mode union to allow schema differences."
                 )
               )
           }
@@ -301,10 +301,9 @@ class ParquetService(
               .sorted
             if duplicates.nonEmpty then
               Left(
-                ParqueteerError.InvalidFormat(
+                ParqueteerError.SchemaMismatch(
                   inputPaths(fileIdx),
-                  s"File '${inputPaths(fileIdx)}' has duplicate column names: ${duplicates
-                      .mkString(", ")}. " +
+                  s"duplicate column names: ${duplicates.mkString(", ")}. " +
                     "Parquet files with duplicate column names cannot be merged."
                 )
               )
@@ -316,10 +315,9 @@ class ParquetService(
               }
               if conflicts.nonEmpty then
                 Left(
-                  ParqueteerError.InvalidFormat(
+                  ParqueteerError.SchemaMismatch(
                     inputPaths(fileIdx),
-                    s"Type conflicts in union merge at file '${inputPaths(fileIdx)}': ${conflicts
-                        .mkString(", ")}. " +
+                    s"Type conflicts in union merge: ${conflicts.mkString(", ")}. " +
                       "Cannot union-merge columns with incompatible types."
                   )
                 )
@@ -402,12 +400,7 @@ class ParquetService(
         deletePartialOutput(outputLocation)
         Left(ex.error)
       case scala.util.Failure(ex) if isOutputAlreadyExistsError(ex) =>
-        Left(
-          ParqueteerError.InvalidFormat(
-            outputLocation.path,
-            s"Output file already exists: ${outputLocation.path}. Remove it first or choose a different output path."
-          )
-        )
+        Left(ParqueteerError.OutputExists(outputLocation.path))
       case scala.util.Failure(ex) =>
         deletePartialOutput(outputLocation)
         scala.util.Failure(ex).toParqueteerError
@@ -481,7 +474,7 @@ class ParquetService(
     )
     if nestedFields.nonEmpty then
       Left(
-        ParqueteerError.InvalidFormat(
+        ParqueteerError.UnsupportedOperation(
           "merge",
           s"Cannot merge files containing nested columns: ${nestedFields.map(_.name).mkString(", ")}. " +
             "Flatten STRUCT/MAP/LIST columns before merging."
