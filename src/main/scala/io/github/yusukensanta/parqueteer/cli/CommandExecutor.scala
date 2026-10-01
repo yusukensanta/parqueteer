@@ -8,6 +8,7 @@ import io.github.yusukensanta.parqueteer.core.models.{
   ConversionConfig,
   FileStats,
   GlobalOptions,
+  InputFormat,
   OutputFormat,
   ParquetFile,
   ParqueteerError,
@@ -430,25 +431,24 @@ private[cli] object CommandExecutor {
       compressionType = compression,
       rowGroupSize = rowGroupSize.getOrElse(WriteConfig.DefaultRowGroupSize)
     )
-    val formatStr = InputFormat.toServiceString(inputFormat)
     checkOutputWritable(outputPath) match {
       case Left(err) =>
         reportError("Failed to write file", globalOptions)(err)
       case Right(_) =>
         if dryRun then {
-          service.readDataFile(inputPath, formatStr, maxRows = Some(1L)) match {
+          service.readDataFile(inputPath, inputFormat, maxRows = Some(1L)) match {
             case Left(error) =>
               reportError("Failed to read input file", globalOptions)(error)
             case Right(rows) =>
               val columns = rows.headOption.map(_.keys.toList).getOrElse(Nil)
               println(s"Dry run: would write $outputPath")
-              println(s"  Input:       $inputPath ($formatStr)")
+              println(s"  Input:       $inputPath (${inputFormat.name})")
               println(s"  Columns:     ${columns.mkString(", ")}")
               println(s"  Compression: ${compression.toString.toLowerCase}")
               0
           }
         } else {
-          service.streamWriteDataFile(inputPath, formatStr, outputPath, writeConfig) match {
+          service.streamWriteDataFile(inputPath, inputFormat, outputPath, writeConfig) match {
             case Right(_) =>
               if !globalOptions.quiet then println(s"Successfully wrote data to $outputPath")
               0
@@ -474,7 +474,6 @@ private[cli] object CommandExecutor {
       compressionType = compression,
       rowGroupSize = rowGroupSize.getOrElse(WriteConfig.DefaultRowGroupSize)
     )
-    val formatStr = InputFormat.toServiceString(inputFormat)
     checkOutputWritable(outputPath) match {
       case Left(err) => reportError("Failed to write file", globalOptions)(err)
       case Right(_) =>
@@ -490,7 +489,7 @@ private[cli] object CommandExecutor {
             if !globalOptions.quiet then System.err.println(s"[$i/$n] Writing: $path")
           service.writeMultiRawToParquet(
             inputPaths,
-            formatStr,
+            inputFormat,
             outputPath,
             writeConfig,
             schemaMode,
@@ -660,11 +659,11 @@ private[cli] object CommandExecutor {
         service
           .convertParquetFile(inputPath, outputPath, conversionConfig)
           .map(_ => ())
-      case (ext @ ("json" | "ndjson" | "csv" | "ltsv"), "parquet") =>
+      case (InputFormat.FromName(inFormat), "parquet") =>
         service
           .streamWriteDataFile(
             inputPath,
-            ext,
+            inFormat,
             outputPath,
             conversionConfig.writeConfig,
             conversionConfig.maxRows
@@ -814,10 +813,10 @@ private[cli] object CommandExecutor {
                 maxRows,
                 globalOptions.fileParallelism
               )
-            case (ext @ ("json" | "ndjson" | "csv" | "ltsv"), "parquet") =>
+            case (InputFormat.FromName(inFormat), "parquet") =>
               service.writeMultiRawToParquet(
                 inputPaths,
-                ext,
+                inFormat,
                 outputPath,
                 writeConfig,
                 schemaMode,

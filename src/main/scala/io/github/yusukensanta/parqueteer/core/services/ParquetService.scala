@@ -434,7 +434,7 @@ class ParquetService(
 
   def readDataFile(
       path: String,
-      inputFormat: String,
+      inputFormat: InputFormat,
       stdin: java.io.InputStream = System.in,
       maxRows: Option[Long] = None
   ): Either[ParqueteerError, List[Map[String, CellValue]]] =
@@ -444,25 +444,18 @@ class ParquetService(
         .map(RowLimiter.limitList(_, maxRows))
         .toParqueteerError
     else
-      inputFormat.toLowerCase match {
-        case "json" =>
+      inputFormat match {
+        case InputFormat.Json =>
           DataFileReader
             .readJsonFile(path)
             .map(RowLimiter.limitList(_, maxRows))
             .toParqueteerError
-        case "ndjson" =>
+        case InputFormat.NDJson =>
           DataFileReader.readNdjsonFile(path, maxRows).toParqueteerError
-        case "csv" =>
+        case InputFormat.Csv =>
           DataFileReader.readCsvFile(path, maxRows).toParqueteerError
-        case "ltsv" =>
+        case InputFormat.Ltsv =>
           DataFileReader.readLtsvFile(path, maxRows).toParqueteerError
-        case fmt =>
-          Left(
-            ParqueteerError.InvalidFormat(
-              path,
-              s"Unsupported input format: $fmt. Supported: json, ndjson, csv, ltsv"
-            )
-          )
       }
 
   /**
@@ -475,39 +468,30 @@ class ParquetService(
    */
   def streamWriteDataFile(
       inputPath: String,
-      inputFormat: String,
+      inputFormat: InputFormat,
       outputPath: String,
       writeConfig: WriteConfig = WriteConfig(),
       maxRows: Option[Long] = None
   ): Either[ParqueteerError, Long] =
-    if inputPath == "-" then
-      bufferedWriteDataFile(inputPath, inputFormat, outputPath, writeConfig, maxRows)
-    else
-      inputFormat.toLowerCase match {
-        case fmt @ ("ndjson" | "ltsv" | "csv") =>
-          streamOneFormat(inputPath, outputPath, fmt, writeConfig, maxRows)
-        case _ => bufferedWriteDataFile(inputPath, inputFormat, outputPath, writeConfig, maxRows)
-      }
+    if inputPath != "-" && inputFormat.isStreamable then
+      streamOneFormat(inputPath, outputPath, inputFormat, writeConfig, maxRows)
+    else bufferedWriteDataFile(inputPath, inputFormat, outputPath, writeConfig, maxRows)
 
   /**
    * Two-pass bounded-memory write for a single ndjson/ltsv/csv input: infer a
    * schema from one pass over `withRows`, then stream rows from a second pass
    * straight into the writer. `withRows` reopens `inputPath` fresh on each
-   * call — see DataFileReader.withNdjsonRows/withLtsvRows/withCsvRows.
+   * call — see DataFileReader.withRows.
    */
   private def streamOneFormat(
       inputPath: String,
       outputPath: String,
-      inputFormat: String,
+      inputFormat: InputFormat,
       writeConfig: WriteConfig,
       maxRows: Option[Long]
   ): Either[ParqueteerError, Long] = {
     def withRows[A](f: Iterator[Map[String, CellValue]] => A): Try[A] =
-      inputFormat match {
-        case "ndjson" => DataFileReader.withNdjsonRows(inputPath, maxRows)(f)
-        case "ltsv"   => DataFileReader.withLtsvRows(inputPath, maxRows)(f)
-        case "csv"    => DataFileReader.withCsvRows(inputPath, maxRows)(f)
-      }
+      DataFileReader.withRows(inputFormat, inputPath, maxRows)(f)
     for {
       outputLocation <- parseLocation(outputPath)
       schema         <- withRows(repository.inferSchemaFromRows).flatten.toParqueteerError
@@ -522,7 +506,7 @@ class ParquetService(
 
   private def bufferedWriteDataFile(
       inputPath: String,
-      inputFormat: String,
+      inputFormat: InputFormat,
       outputPath: String,
       writeConfig: WriteConfig,
       maxRows: Option[Long]
@@ -542,34 +526,24 @@ class ParquetService(
    */
   def writeMultiRawToParquet(
       paths: List[String],
-      inputFormat: String,
+      inputFormat: InputFormat,
       outputPath: String,
       writeConfig: WriteConfig,
       schemaMode: SchemaMode,
       onProgress: (Int, Int, String) => Unit = (_, _, _) => (),
       fileParallelism: Int = 1
   ): Either[ParqueteerError, Long] =
-    inputFormat.toLowerCase match {
-      case fmt @ ("ndjson" | "csv" | "ltsv") =>
-        streamMultiRawToParquet(
-          paths,
-          fmt,
-          outputPath,
-          writeConfig,
-          schemaMode,
-          onProgress,
-          fileParallelism
-        )
-      case "json" =>
-        bufferedMultiRawToParquet(paths, outputPath, writeConfig, schemaMode, onProgress)
-      case fmt =>
-        Left(
-          ParqueteerError.InvalidFormat(
-            paths.headOption.getOrElse(""),
-            s"Unsupported input format: $fmt. Supported: json, ndjson, csv, ltsv"
-          )
-        )
-    }
+    if inputFormat.isStreamable then
+      streamMultiRawToParquet(
+        paths,
+        inputFormat,
+        outputPath,
+        writeConfig,
+        schemaMode,
+        onProgress,
+        fileParallelism
+      )
+    else bufferedMultiRawToParquet(paths, outputPath, writeConfig, schemaMode, onProgress)
 
   private def bufferedMultiRawToParquet(
       paths: List[String],
@@ -587,7 +561,7 @@ class ParquetService(
     for {
       rowsPerFile <- Eithers.traverse(paths.zipWithIndex) { (path, idx) =>
         onProgress(idx + 1, paths.size, path)
-        readDataFile(path, "json")
+        readDataFile(path, InputFormat.Json)
       }
       perFileSchemas <- Eithers.traverse(rowsPerFile)(inferOne)
       _              <- SchemaReconciler.reconcile(perFileSchemas, paths, schemaMode)
@@ -598,7 +572,7 @@ class ParquetService(
 
   private def streamMultiRawToParquet(
       paths: List[String],
-      inputFormat: String,
+      inputFormat: InputFormat,
       outputPath: String,
       writeConfig: WriteConfig,
       schemaMode: SchemaMode,
@@ -606,11 +580,7 @@ class ParquetService(
       fileParallelism: Int
   ): Either[ParqueteerError, Long] = {
     def withRows[A](path: String)(f: Iterator[Map[String, CellValue]] => Try[A]): Try[A] =
-      (inputFormat match {
-        case "ndjson" => DataFileReader.withNdjsonRows(path, None)(f)
-        case "csv"    => DataFileReader.withCsvRows(path, None)(f)
-        case "ltsv"   => DataFileReader.withLtsvRows(path, None)(f)
-      }).flatten
+      DataFileReader.withRows(inputFormat, path, None)(f).flatten
 
     def inferOne(path: String): Either[ParqueteerError, List[FieldSummary]] =
       withRows(path)(repository.inferSchemaFromRows).toParqueteerError.map(

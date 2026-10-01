@@ -1,6 +1,6 @@
 package io.github.yusukensanta.parqueteer.core.services
 
-import io.github.yusukensanta.parqueteer.core.models.CellValue
+import io.github.yusukensanta.parqueteer.core.models.{CellValue, InputFormat}
 import io.github.yusukensanta.parqueteer.core.util.{CsvParser, LTSVParser, TypeInferrer}
 import scala.util.{Try, Using}
 
@@ -14,6 +14,23 @@ private[services] object DataFileReader {
       )
     )
   }
+
+  /**
+   * Dispatches to the streaming reader for a line-oriented format. JSON arrays
+   * aren't streamable (see InputFormat.isStreamable) and are rejected here.
+   */
+  def withRows[A](format: InputFormat, path: String, maxRows: Option[Long])(
+      f: Iterator[Map[String, CellValue]] => A
+  ): Try[A] =
+    format match {
+      case InputFormat.NDJson => withNdjsonRows(path, maxRows)(f)
+      case InputFormat.Csv    => withCsvRows(path, maxRows)(f)
+      case InputFormat.Ltsv   => withLtsvRows(path, maxRows)(f)
+      case InputFormat.Json =>
+        scala.util.Failure(
+          new IllegalArgumentException("JSON array input cannot be streamed row by row")
+        )
+    }
 
   def readNdjsonFile(
       path: String,
@@ -70,20 +87,18 @@ private[services] object DataFileReader {
     }
 
   def readFromStdin(
-      inputFormat: String,
+      inputFormat: InputFormat,
       stdin: java.io.InputStream = System.in
   ): Try[List[Map[String, CellValue]]] = Try {
     val content =
       Using.resource(
         scala.io.Source.fromInputStream(stdin)(using scala.io.Codec.UTF8)
       )(_.mkString)
-    inputFormat.toLowerCase match {
-      case "json"   => parseJsonContent(content)
-      case "ndjson" => parseNdjsonContent(content)
-      case "csv"    => parseCsvContent(content)
-      case "ltsv"   => parseLtsvContent(content)
-      case fmt =>
-        throw new IllegalArgumentException(s"Unsupported input format: $fmt")
+    inputFormat match {
+      case InputFormat.Json   => parseJsonContent(content)
+      case InputFormat.NDJson => parseNdjsonContent(content)
+      case InputFormat.Csv    => parseCsvContent(content)
+      case InputFormat.Ltsv   => parseLtsvContent(content)
     }
   }
 

@@ -1,24 +1,11 @@
 package io.github.yusukensanta.parqueteer.cli
 
-import io.github.yusukensanta.parqueteer.core.models.{CompressionType, OutputFormat, SchemaMode}
-
-enum InputFormat:
-  case Json, NDJson, Csv, Ltsv
-
-object InputFormat:
-
-  def fromString(s: String): Option[InputFormat] = s.toLowerCase match
-    case "json"   => Some(Json)
-    case "ndjson" => Some(NDJson)
-    case "csv"    => Some(Csv)
-    case "ltsv"   => Some(Ltsv)
-    case _        => None
-
-  def toServiceString(f: InputFormat): String = f match
-    case Json   => "json"
-    case NDJson => "ndjson"
-    case Csv    => "csv"
-    case Ltsv   => "ltsv"
+import io.github.yusukensanta.parqueteer.core.models.{
+  CompressionType,
+  InputFormat,
+  OutputFormat,
+  SchemaMode
+}
 
 sealed trait Command
 
