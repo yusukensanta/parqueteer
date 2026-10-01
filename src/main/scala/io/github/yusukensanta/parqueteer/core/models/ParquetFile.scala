@@ -136,4 +136,23 @@ case class ConversionConfig(
     maxRows: Option[Long] = None
 )
 
-case class FieldSummary(name: String, dataType: String, isOptional: Boolean)
+case class FieldSummary(name: String, dataType: String, isOptional: Boolean) {
+  def isNested: Boolean = NestedType.isNested(dataType)
+}
+
+/**
+ * Canonical prefixes for nested (group) column type names, e.g.
+ * `STRUCT<a:INT32,b:BINARY>`. The single source of truth for both producing
+ * these names and recognising them, so the two can't drift apart.
+ */
+object NestedType {
+  val Struct = "STRUCT"
+  val Map    = "MAP"
+  val List   = "LIST"
+
+  private val prefixes = scala.List(Struct, Map, List)
+
+  def isNested(dataType: String): Boolean = prefixes.exists(dataType.startsWith)
+
+  def struct(fields: String): String = s"$Struct<$fields>"
+}
