@@ -2,6 +2,12 @@ package io.github.yusukensanta.parqueteer.cli
 
 object ShellCompletions {
 
+  def scriptFor(shell: Shell): String = shell match {
+    case Shell.Bash => bash
+    case Shell.Zsh  => zsh
+    case Shell.Fish => fish
+  }
+
   val bash: String =
     """# bash completion for parqueteer
       |# Install: parqueteer completions bash > /etc/bash_completion.d/parqueteer
