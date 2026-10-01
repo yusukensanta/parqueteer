@@ -25,16 +25,7 @@ object EnvConfig {
 
   private[config] def parsedDefaultFormat(env: EnvLookup): Option[OutputFormat] =
     env("PARQUETEER_DEFAULT_FORMAT").flatMap { s =>
-      val parsed = s.toLowerCase match {
-        case "table"    => Some(OutputFormat.Table)
-        case "json"     => Some(OutputFormat.JSON)
-        case "csv"      => Some(OutputFormat.CSV)
-        case "pretty"   => Some(OutputFormat.Pretty)
-        case "markdown" => Some(OutputFormat.Markdown)
-        case "ndjson"   => Some(OutputFormat.NDJSON)
-        case "ltsv"     => Some(OutputFormat.LTSV)
-        case _          => None
-      }
+      val parsed = OutputFormat.fromString(s)
       if parsed.isEmpty then
         io.github.yusukensanta.parqueteer.core.util.Warnings.emit(
           s"PARQUETEER_DEFAULT_FORMAT=$s is not a recognized format; ignoring"

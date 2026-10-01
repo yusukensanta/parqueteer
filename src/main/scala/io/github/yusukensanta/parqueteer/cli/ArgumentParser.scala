@@ -20,11 +20,44 @@ object ArgumentParser {
 
   private val builder = OParser.builder[Config]
 
-  private val validCompressions =
-    List("none", "snappy", "gzip", "lzo", "brotli", "lz4", "zstd")
-
   val parser: OParser[Unit, Config] = {
     import builder.*
+
+    // Shared option definitions: each enum-valued flag is parsed by a single
+    // fromString (so validation and action can't disagree), and options that
+    // recur across subcommands are defined once so their messages can't drift.
+    def enumOpt[C <: Command: reflect.ClassTag, A](
+        name: String,
+        parse: String => Option[A],
+        allowed: String
+    )(set: (C, A) => C) =
+      opt[String](name)
+        .validate(x =>
+          if parse(x).isDefined then success else failure(s"Invalid --$name: $x. Use $allowed")
+        )
+        .action((x, c) => updateCmd[C](c, cmd => parse(x).fold(cmd)(set(cmd, _))))
+
+    def schemaModeOpt[C <: Command: reflect.ClassTag](set: (C, SchemaMode) => C) =
+      enumOpt[C, SchemaMode]("schema-mode", SchemaMode.fromString, "strict or union")(set)
+
+    def compressionOpt[C <: Command: reflect.ClassTag](set: (C, CompressionType) => C) =
+      enumOpt[C, CompressionType](
+        "compression",
+        CompressionType.fromString,
+        "snappy, gzip, zstd, lz4, brotli, or none"
+      )(set)
+
+    def tableOrJsonFormatOpt[C <: Command: reflect.ClassTag](set: (C, OutputFormat) => C) =
+      enumOpt[C, OutputFormat]("format", parseTableOrJson, "table or json")(set)
+
+    def limitOpt[C <: Command: reflect.ClassTag](set: (C, Long) => C) =
+      opt[Long]("limit")
+        .abbr("n")
+        .validate(x =>
+          if x > 0 then success
+          else failure("--limit must be a positive integer")
+        )
+        .action((x, c) => updateCmd[C](c, set(_, x)))
 
     OParser.sequence(
       programName("parqueteer"),
@@ -92,13 +125,7 @@ object ArgumentParser {
             .text(
               "Path to parquet file (local, s3://, gs://, abfss://) (supports glob patterns: *, ?, [], {})"
             ),
-          opt[Long]("limit")
-            .abbr("n")
-            .validate(x =>
-              if x > 0 then success
-              else failure("--limit must be a positive integer")
-            )
-            .action((x, c) => updateCmd[ReadCommand](c, _.copy(maxRows = Some(x))))
+          limitOpt[ReadCommand]((cmd, n) => cmd.copy(maxRows = Some(n)))
             .text("Maximum number of rows to display"),
           opt[Seq[String]]("columns")
             .abbr("c")
@@ -108,25 +135,11 @@ object ArgumentParser {
             .abbr("f")
             .action((x, c) => updateCmd[ReadCommand](c, _.copy(filter = Some(x))))
             .text("Filter expression for rows"),
-          opt[String]("format")
-            .action((x, c) => updateCmd[ReadCommand](c, _.copy(format = parseOutputFormat(x))))
-            .validate(x =>
-              if List(
-                  "table",
-                  "json",
-                  "csv",
-                  "pretty",
-                  "markdown",
-                  "ndjson",
-                  "ltsv"
-                )
-                  .contains(x.toLowerCase)
-              then success
-              else
-                failure(
-                  s"Invalid --format: $x. Use table, json, csv, pretty, markdown, ndjson, or ltsv"
-                )
-            )
+          enumOpt[ReadCommand, OutputFormat](
+            "format",
+            OutputFormat.fromString,
+            "table, json, csv, pretty, markdown, ndjson, or ltsv"
+          )((cmd, f) => cmd.copy(format = f))
             .text(
               "Output format: table, json, csv, pretty, markdown, ndjson, ltsv (default: table)"
             ),
@@ -144,24 +157,7 @@ object ArgumentParser {
             .text(
               "Stream rows progressively (memory-bounded, safe for large files)"
             ),
-          opt[String]("schema-mode")
-            .action((x, c) =>
-              updateCmd[ReadCommand](
-                c,
-                _.copy(schemaMode = x.toLowerCase match {
-                  case "union"  => SchemaMode.Union
-                  case "strict" => SchemaMode.Strict
-                  case other =>
-                    throw new IllegalArgumentException(
-                      s"Invalid --schema-mode: $other. Use strict or union"
-                    )
-                })
-              )
-            )
-            .validate(x =>
-              if List("strict", "union").contains(x.toLowerCase) then success
-              else failure(s"Invalid --schema-mode: $x. Use strict or union")
-            )
+          schemaModeOpt[ReadCommand]((cmd, m) => cmd.copy(schemaMode = m))
             .text(
               "Schema compatibility mode for multi-file glob reads: strict (default) or union"
             )
@@ -178,22 +174,13 @@ object ArgumentParser {
                 Some(
                   InfoCommand(
                     x,
-                    format =
-                      if EnvConfig.parsedDefaultFormat
-                          .contains(OutputFormat.JSON)
-                      then OutputFormat.JSON
-                      else OutputFormat.Table
+                    format = defaultTableOrJsonFormat
                   )
                 )
               )
             )
             .text("Path to parquet file (supports glob patterns: *, ?, [], {})"),
-          opt[String]("format")
-            .action((x, c) => updateCmd[InfoCommand](c, _.copy(format = parseOutputFormat(x))))
-            .validate(x =>
-              if List("table", "json").contains(x.toLowerCase) then success
-              else failure(s"Invalid --format: $x. Use table or json")
-            )
+          tableOrJsonFormatOpt[InfoCommand]((cmd, f) => cmd.copy(format = f))
             .text("Output format: table, json (default: table)"),
           opt[Unit]("verbose")
             .action((_, c) => updateCmd[InfoCommand](c, _.copy(verbose = true)))
@@ -212,33 +199,14 @@ object ArgumentParser {
             .required()
             .action((x, c) => updateCmd[WriteCommand](c, _.copy(outputPath = x)))
             .text("Output parquet file path"),
-          opt[String]("input-format")
-            .action((x, c) =>
-              updateCmd[WriteCommand](
-                c,
-                _.copy(
-                  inputFormat = InputFormat.fromString(x).getOrElse(InputFormat.Json)
-                )
-              )
-            )
-            .validate(x =>
-              if List("json", "ndjson", "csv", "ltsv").contains(x.toLowerCase) then success
-              else failure(s"Invalid --input-format: $x. Use json, ndjson, csv, or ltsv")
-            )
+          enumOpt[WriteCommand, InputFormat](
+            "input-format",
+            InputFormat.fromString,
+            "json, ndjson, csv, or ltsv"
+          )((cmd, f) => cmd.copy(inputFormat = f))
             .text("Input file format: json, ndjson, csv, ltsv (default: json)"),
-          opt[String]("compression")
+          compressionOpt[WriteCommand]((cmd, ct) => cmd.copy(compression = ct))
             .abbr("c")
-            .action((x, c) =>
-              updateCmd[WriteCommand](
-                c,
-                _.copy(compression = parseCompressionType(x))
-              )
-            )
-            .validate(x =>
-              if validCompressions.contains(x.toLowerCase) then success
-              else
-                failure(s"Invalid --compression: $x. Use snappy, gzip, zstd, lz4, brotli, or none")
-            )
             .text(
               "Compression type: none, snappy, gzip, lzo, brotli, lz4, zstd"
             ),
@@ -260,24 +228,7 @@ object ArgumentParser {
             .text(
               "Preview what would be written without performing the operation"
             ),
-          opt[String]("schema-mode")
-            .action((x, c) =>
-              updateCmd[WriteCommand](
-                c,
-                _.copy(schemaMode = x.toLowerCase match {
-                  case "union"  => SchemaMode.Union
-                  case "strict" => SchemaMode.Strict
-                  case other =>
-                    throw new IllegalArgumentException(
-                      s"Invalid --schema-mode: $other. Use strict or union"
-                    )
-                })
-              )
-            )
-            .validate(x =>
-              if List("strict", "union").contains(x.toLowerCase) then success
-              else failure(s"Invalid --schema-mode: $x. Use strict or union")
-            )
+          schemaModeOpt[WriteCommand]((cmd, m) => cmd.copy(schemaMode = m))
             .text(
               "Schema compatibility mode for multi-file glob reads: strict (default) or union"
             )
@@ -311,45 +262,16 @@ object ArgumentParser {
             .required()
             .action((x, c) => updateCmd[ConvertCommand](c, _.copy(outputPath = x)))
             .text("Output file path"),
-          opt[String]("compression")
-            .action((x, c) =>
-              updateCmd[ConvertCommand](
-                c,
-                _.copy(compression = parseCompressionType(x))
-              )
-            )
+          compressionOpt[ConvertCommand]((cmd, ct) => cmd.copy(compression = ct))
             .text("Compression type for output"),
-          opt[Long]("limit")
-            .abbr("n")
-            .validate(x =>
-              if x > 0 then success
-              else failure("--limit must be a positive integer")
-            )
-            .action((x, c) => updateCmd[ConvertCommand](c, _.copy(maxRows = Some(x))))
+          limitOpt[ConvertCommand]((cmd, n) => cmd.copy(maxRows = Some(n)))
             .text("Maximum number of rows to convert"),
           opt[Unit]("dry-run")
             .action((_, c) => updateCmd[ConvertCommand](c, _.copy(dryRun = true)))
             .text(
               "Preview what would be converted without performing the operation"
             ),
-          opt[String]("schema-mode")
-            .action((x, c) =>
-              updateCmd[ConvertCommand](
-                c,
-                _.copy(schemaMode = x.toLowerCase match {
-                  case "union"  => SchemaMode.Union
-                  case "strict" => SchemaMode.Strict
-                  case other =>
-                    throw new IllegalArgumentException(
-                      s"Invalid --schema-mode: $other. Use strict or union"
-                    )
-                })
-              )
-            )
-            .validate(x =>
-              if List("strict", "union").contains(x.toLowerCase) then success
-              else failure(s"Invalid --schema-mode: $x. Use strict or union")
-            )
+          schemaModeOpt[ConvertCommand]((cmd, m) => cmd.copy(schemaMode = m))
             .text(
               "Schema compatibility mode for multi-file glob reads: strict (default) or union"
             )
@@ -361,11 +283,7 @@ object ArgumentParser {
             Some(
               SchemaCommand(
                 "",
-                format = EnvConfig.parsedDefaultFormat
-                  .collect { case f @ (OutputFormat.JSON | OutputFormat.Table) =>
-                    f
-                  }
-                  .getOrElse(OutputFormat.Table)
+                format = defaultTableOrJsonFormat
               )
             )
           )
@@ -375,12 +293,7 @@ object ArgumentParser {
             .optional()
             .action((x, c) => updateCmd[SchemaCommand](c, _.copy(filePath = x)))
             .text("Path to parquet file (supports glob patterns: *, ?, [], {})"),
-          opt[String]("format")
-            .action((x, c) => updateCmd[SchemaCommand](c, _.copy(format = parseOutputFormat(x))))
-            .validate(x =>
-              if List("table", "json").contains(x.toLowerCase) then success
-              else failure(s"Invalid --format: $x. Use table or json")
-            )
+          tableOrJsonFormatOpt[SchemaCommand]((cmd, f) => cmd.copy(format = f))
             .text("Output format: table, json (default: table)"),
           cmd("diff")
             .text("Compare schemas of two parquet files")
@@ -390,11 +303,7 @@ object ArgumentParser {
                   SchemaDiffCommand(
                     "",
                     "",
-                    format =
-                      if EnvConfig.parsedDefaultFormat
-                          .contains(OutputFormat.JSON)
-                      then OutputFormat.JSON
-                      else OutputFormat.Table
+                    format = defaultTableOrJsonFormat
                   )
                 )
               )
@@ -408,17 +317,7 @@ object ArgumentParser {
                 .required()
                 .action((x, c) => updateCmd[SchemaDiffCommand](c, _.copy(file2 = x)))
                 .text("Second parquet file path"),
-              opt[String]("format")
-                .action((x, c) =>
-                  updateCmd[SchemaDiffCommand](
-                    c,
-                    _.copy(format = parseOutputFormat(x))
-                  )
-                )
-                .validate(x =>
-                  if List("table", "json").contains(x.toLowerCase) then success
-                  else failure(s"Invalid --format: $x. Use table or json")
-                )
+              tableOrJsonFormatOpt[SchemaDiffCommand]((cmd, f) => cmd.copy(format = f))
                 .text("Output format: table, json (default: table)")
             )
         ),
@@ -441,38 +340,10 @@ object ArgumentParser {
             .required()
             .action((x, c) => updateCmd[MergeCommand](c, _.copy(outputPath = x)))
             .text("Output parquet file path"),
-          opt[String]("compression")
+          compressionOpt[MergeCommand]((cmd, ct) => cmd.copy(compression = ct))
             .abbr("c")
-            .action((x, c) =>
-              updateCmd[MergeCommand](
-                c,
-                _.copy(compression = parseCompressionType(x))
-              )
-            )
-            .validate(x =>
-              if validCompressions.contains(x.toLowerCase) then success
-              else
-                failure(s"Invalid --compression: $x. Use snappy, gzip, zstd, lz4, brotli, or none")
-            )
             .text("Output compression (default: snappy)"),
-          opt[String]("schema-mode")
-            .action((x, c) =>
-              updateCmd[MergeCommand](
-                c,
-                _.copy(schemaMode = x.toLowerCase match {
-                  case "union"  => SchemaMode.Union
-                  case "strict" => SchemaMode.Strict
-                  case other =>
-                    throw new IllegalArgumentException(
-                      s"Invalid --schema-mode: $other. Use strict or union"
-                    )
-                })
-              )
-            )
-            .validate(x =>
-              if List("strict", "union").contains(x.toLowerCase) then success
-              else failure(s"Invalid --schema-mode: $x. Use strict or union")
-            )
+          schemaModeOpt[MergeCommand]((cmd, m) => cmd.copy(schemaMode = m))
             .text("Schema compatibility mode: strict (default) or union"),
           opt[Unit]("dry-run")
             .action((_, c) => updateCmd[MergeCommand](c, _.copy(dryRun = true)))
@@ -490,22 +361,13 @@ object ArgumentParser {
                 Some(
                   StatsCommand(
                     x,
-                    format =
-                      if EnvConfig.parsedDefaultFormat
-                          .contains(OutputFormat.JSON)
-                      then OutputFormat.JSON
-                      else OutputFormat.Table
+                    format = defaultTableOrJsonFormat
                   )
                 )
               )
             )
             .text("Path to parquet file (supports glob patterns: *, ?, [], {})"),
-          opt[String]("format")
-            .action((x, c) => updateCmd[StatsCommand](c, _.copy(format = parseOutputFormat(x))))
-            .validate(x =>
-              if List("table", "json").contains(x.toLowerCase) then success
-              else failure(s"Invalid --format: $x. Use table or json")
-            )
+          tableOrJsonFormatOpt[StatsCommand]((cmd, f) => cmd.copy(format = f))
             .text("Output format: table, json (default: table)")
         ),
       cmd("count")
@@ -517,12 +379,7 @@ object ArgumentParser {
             .required()
             .action((x, c) => c.copy(command = Some(CountCommand(x))))
             .text("Path to parquet file (supports glob patterns: *, ?, [], {})"),
-          opt[String]("format")
-            .action((x, c) => updateCmd[CountCommand](c, _.copy(format = parseOutputFormat(x))))
-            .validate(x =>
-              if List("table", "json").contains(x.toLowerCase) then success
-              else failure(s"Invalid --format: $x. Use table or json")
-            )
+          tableOrJsonFormatOpt[CountCommand]((cmd, f) => cmd.copy(format = f))
             .text(
               "Output format: table (plain integer) or json (default: table)"
             )
@@ -559,31 +416,15 @@ object ArgumentParser {
       case _            => config
     }
 
-  private def parseOutputFormat(format: String): OutputFormat =
-    format.toLowerCase match {
-      case "table"    => OutputFormat.Table
-      case "json"     => OutputFormat.JSON
-      case "csv"      => OutputFormat.CSV
-      case "pretty"   => OutputFormat.Pretty
-      case "markdown" => OutputFormat.Markdown
-      case "ndjson"   => OutputFormat.NDJSON
-      case "ltsv"     => OutputFormat.LTSV
-      case other =>
-        throw new IllegalArgumentException(s"Unknown format: $other")
-    }
+  private def isTableOrJson(f: OutputFormat): Boolean =
+    f == OutputFormat.Table || f == OutputFormat.JSON
 
-  private def parseCompressionType(compression: String): CompressionType =
-    compression.toLowerCase match {
-      case "none" | "uncompressed" => CompressionType.Uncompressed
-      case "snappy"                => CompressionType.Snappy
-      case "gzip" | "gz"           => CompressionType.Gzip
-      case "lzo"                   => CompressionType.Lzo
-      case "brotli"                => CompressionType.Brotli
-      case "lz4"                   => CompressionType.Lz4
-      case "zstd"                  => CompressionType.Zstd
-      case other =>
-        throw new IllegalArgumentException(s"Unknown compression: $other")
-    }
+  private def parseTableOrJson(s: String): Option[OutputFormat] =
+    OutputFormat.fromString(s).filter(isTableOrJson)
+
+  // PARQUETEER_DEFAULT_FORMAT, for commands that can only render table or json.
+  private def defaultTableOrJsonFormat: OutputFormat =
+    EnvConfig.parsedDefaultFormat.filter(isTableOrJson).getOrElse(OutputFormat.Table)
 
   private def parseSize(sizeStr: String): Long =
     io.github.yusukensanta.parqueteer.core.util.SizeParser.parse(sizeStr)

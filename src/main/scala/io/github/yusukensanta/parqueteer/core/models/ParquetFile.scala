@@ -67,6 +67,12 @@ case class ReadConfig(
 enum OutputFormat:
   case Table, JSON, CSV, Pretty, Markdown, NDJSON, LTSV
 
+object OutputFormat:
+
+  /** Case-insensitive lookup by CLI name: table, json, csv, pretty, markdown, ndjson, ltsv. */
+  def fromString(s: String): Option[OutputFormat] =
+    values.find(_.toString.equalsIgnoreCase(s))
+
 /** Controls Parquet write: compression codec, row group size, page size, dictionary encoding. */
 case class WriteConfig(
     compressionType: CompressionType = CompressionType.Snappy,
@@ -91,6 +97,19 @@ enum CompressionType:
     case Lz4          => "LZ4"
     case Zstd         => "ZSTD"
 
+object CompressionType:
+
+  /** Case-insensitive lookup by CLI name; accepts "none"/"uncompressed" and "gz"/"gzip". */
+  def fromString(s: String): Option[CompressionType] = s.toLowerCase match
+    case "none" | "uncompressed" => Some(Uncompressed)
+    case "snappy"                => Some(Snappy)
+    case "gzip" | "gz"           => Some(Gzip)
+    case "lzo"                   => Some(Lzo)
+    case "brotli"                => Some(Brotli)
+    case "lz4"                   => Some(Lz4)
+    case "zstd"                  => Some(Zstd)
+    case _                       => None
+
 case class ColumnStats(
     name: String,
     dataType: String,
@@ -107,6 +126,11 @@ case class FileStats(
 
 enum SchemaMode:
   case Strict, Union
+
+object SchemaMode:
+
+  def fromString(s: String): Option[SchemaMode] =
+    values.find(_.toString.equalsIgnoreCase(s))
 
 case class ValidationResult(
     isValid: Boolean,
