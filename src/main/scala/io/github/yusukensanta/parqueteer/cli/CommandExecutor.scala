@@ -116,23 +116,12 @@ private[cli] object CommandExecutor {
     }
 
   private[cli] def executeCompletions(
-      shell: String,
+      shell: Shell,
       globalOptions: GlobalOptions
-  ): Int =
-    shell.toLowerCase match {
-      case "bash" =>
-        if !globalOptions.quiet then println(ShellCompletions.bash)
-        0
-      case "zsh" =>
-        if !globalOptions.quiet then println(ShellCompletions.zsh)
-        0
-      case "fish" =>
-        if !globalOptions.quiet then println(ShellCompletions.fish)
-        0
-      case other =>
-        System.err.println(s"[parqueteer] error: Unsupported shell: $other. Use bash, zsh, or fish")
-        1
-    }
+  ): Int = {
+    if !globalOptions.quiet then println(ShellCompletions.scriptFor(shell))
+    0
+  }
 
   private[cli] def executeConfig(
       cmd: ConfigCommand,
