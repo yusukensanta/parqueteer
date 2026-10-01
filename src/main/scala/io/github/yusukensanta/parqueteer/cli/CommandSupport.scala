@@ -6,8 +6,6 @@ import io.github.yusukensanta.parqueteer.core.util.CredentialRedactor
 /** Error reporting and output-path checks shared by every command handler. */
 private[cli] object CommandSupport {
 
-  private[cli] val cloudUriPattern = "^(s3a?|gs|abfss?|wasbs?)://".r
-
   private[cli] def reportError(
       prefix: String,
       opts: GlobalOptions,
@@ -43,7 +41,7 @@ private[cli] object CommandSupport {
   private[cli] def checkOutputWritable(
       outputPath: String
   ): Either[ParqueteerError, Unit] =
-    if cloudUriPattern.findFirstIn(outputPath).isDefined then Right(())
+    if StorageLocationParser.hasCloudScheme(outputPath) then Right(())
     else {
       val parent = java.nio.file.Paths.get(outputPath).toAbsolutePath.getParent
       // Files.isWritable performs a real access() check via the filesystem

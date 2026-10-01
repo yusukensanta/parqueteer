@@ -1,6 +1,7 @@
 package io.github.yusukensanta.parqueteer.cli
 
 import io.github.yusukensanta.parqueteer.core.models.*
+import io.circe.{parser, Json}
 import io.github.yusukensanta.parqueteer.core.util.{CredentialRedactor, DaemonThreadFactory}
 import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.concurrent.duration.Duration
@@ -29,21 +30,21 @@ private[cli] object MultiFileReport {
         val elements = results.map {
           case (path, Right((json, _))) =>
             val parsed =
-              io.circe.parser.parse(json).getOrElse(io.circe.Json.fromString(json))
-            io.circe.Json
+              parser.parse(json).getOrElse(Json.fromString(json))
+            Json
               .obj(
-                "path"   -> io.circe.Json.fromString(path),
-                "status" -> io.circe.Json.fromString("ok")
+                "path"   -> Json.fromString(path),
+                "status" -> Json.fromString("ok")
               )
               .deepMerge(parsed)
           case (path, Left(error)) =>
-            io.circe.Json.obj(
-              "path"   -> io.circe.Json.fromString(path),
-              "status" -> io.circe.Json.fromString("error"),
-              "error"  -> io.circe.Json.fromString(CredentialRedactor.redact(error.userMessage))
+            Json.obj(
+              "path"   -> Json.fromString(path),
+              "status" -> Json.fromString("error"),
+              "error"  -> Json.fromString(CredentialRedactor.redact(error.userMessage))
             )
         }
-        println(io.circe.Json.arr(elements*).spaces2)
+        println(Json.arr(elements*).spaces2)
       } else {
         results.zipWithIndex.foreach { case ((path, result), i) =>
           if i > 0 then println()

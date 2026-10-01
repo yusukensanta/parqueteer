@@ -10,6 +10,7 @@ import io.github.yusukensanta.parqueteer.core.models.{
   SchemaMode
 }
 import io.github.yusukensanta.parqueteer.config.EnvConfig
+import io.github.yusukensanta.parqueteer.core.util.SizeParser
 
 object ArgumentParser {
 
@@ -427,5 +428,5 @@ object ArgumentParser {
     EnvConfig.parsedDefaultFormat.filter(isTableOrJson).getOrElse(OutputFormat.Table)
 
   private def parseSize(sizeStr: String): Long =
-    io.github.yusukensanta.parqueteer.core.util.SizeParser.parse(sizeStr)
+    SizeParser.parse(sizeStr)
 }

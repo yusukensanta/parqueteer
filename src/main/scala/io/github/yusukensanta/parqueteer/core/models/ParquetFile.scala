@@ -1,7 +1,6 @@
 package io.github.yusukensanta.parqueteer.core.models
 
 import java.time.Instant
-import scala.concurrent.duration.{Duration, FiniteDuration}
 
 /** Aggregate view of a Parquet file: location, schema, metadata, content, and row groups. */
 case class ParquetFile(
@@ -17,23 +16,6 @@ case class RowGroupInfo(
     rowCount: Long,
     compressedBytes: Long,
     uncompressedBytes: Long
-)
-
-/** Column-level schema with aggregate row group and row count metadata. */
-case class ParquetSchema(
-    columns: List[ColumnInfo],
-    rowGroupCount: Long,
-    totalRowCount: Long
-)
-
-case class ColumnInfo(
-    name: String,
-    dataType: String,
-    isOptional: Boolean,
-    maxDefinitionLevel: Int,
-    maxRepetitionLevel: Int,
-    compressionType: String,
-    encodings: List[String] = Nil
 )
 
 case class FileMetadata(
@@ -53,130 +35,3 @@ case class FileContent(
     totalRows: Long,
     isPartial: Boolean = false
 )
-
-/** Controls how rows are read: row limit, column projection, filter, output format, parallelism. */
-case class ReadConfig(
-    maxRows: Option[Long] = None,
-    columns: Option[List[String]] = None,
-    filter: Option[String] = None,
-    outputFormat: OutputFormat = OutputFormat.Table,
-    parallelism: Int = 1,
-    readTimeout: FiniteDuration = Duration(5, "minutes")
-)
-
-enum OutputFormat:
-  case Table, JSON, CSV, Pretty, Markdown, NDJSON, LTSV
-
-object OutputFormat:
-
-  /** Case-insensitive lookup by CLI name: table, json, csv, pretty, markdown, ndjson, ltsv. */
-  def fromString(s: String): Option[OutputFormat] =
-    values.find(_.toString.equalsIgnoreCase(s))
-
-/** Controls Parquet write: compression codec, row group size, page size, dictionary encoding. */
-case class WriteConfig(
-    compressionType: CompressionType = CompressionType.Snappy,
-    rowGroupSize: Long = WriteConfig.DefaultRowGroupSize,
-    pageSize: Int = 1024 * 1024,
-    enableDictionary: Boolean = true
-)
-
-object WriteConfig {
-  val DefaultRowGroupSize: Long = 128L * 1024 * 1024
-}
-
-enum CompressionType:
-  case Uncompressed, Snappy, Gzip, Lzo, Brotli, Lz4, Zstd
-
-  def codecName: String = this match
-    case Uncompressed => "UNCOMPRESSED"
-    case Snappy       => "SNAPPY"
-    case Gzip         => "GZIP"
-    case Lzo          => "LZO"
-    case Brotli       => "BROTLI"
-    case Lz4          => "LZ4"
-    case Zstd         => "ZSTD"
-
-object CompressionType:
-
-  /** Case-insensitive lookup by CLI name; accepts "none"/"uncompressed" and "gz"/"gzip". */
-  def fromString(s: String): Option[CompressionType] = s.toLowerCase match
-    case "none" | "uncompressed" => Some(Uncompressed)
-    case "snappy"                => Some(Snappy)
-    case "gzip" | "gz"           => Some(Gzip)
-    case "lzo"                   => Some(Lzo)
-    case "brotli"                => Some(Brotli)
-    case "lz4"                   => Some(Lz4)
-    case "zstd"                  => Some(Zstd)
-    case _                       => None
-
-case class ColumnStats(
-    name: String,
-    dataType: String,
-    nullCount: Long,
-    minValue: Option[String],
-    maxValue: Option[String]
-)
-
-case class FileStats(
-    columns: List[ColumnStats],
-    totalRows: Long,
-    rowGroupCount: Long
-)
-
-enum SchemaMode:
-  case Strict, Union
-
-object SchemaMode:
-
-  def fromString(s: String): Option[SchemaMode] =
-    values.find(_.toString.equalsIgnoreCase(s))
-
-case class ValidationResult(
-    isValid: Boolean,
-    issues: List[String]
-)
-
-case class ColumnChange(
-    name: String,
-    fromType: String,
-    toType: String,
-    fromOptional: Boolean,
-    toOptional: Boolean
-)
-
-/** Result of comparing two Parquet schemas: added, removed, changed, and unchanged columns. */
-case class SchemaDiff(
-    added: List[ColumnInfo],
-    removed: List[ColumnInfo],
-    changed: List[ColumnChange],
-    unchanged: List[String]
-) {
-  def identical: Boolean = added.isEmpty && removed.isEmpty && changed.isEmpty
-}
-
-case class ConversionConfig(
-    writeConfig: WriteConfig = WriteConfig(),
-    maxRows: Option[Long] = None
-)
-
-case class FieldSummary(name: String, dataType: String, isOptional: Boolean) {
-  def isNested: Boolean = NestedType.isNested(dataType)
-}
-
-/**
- * Canonical prefixes for nested (group) column type names, e.g.
- * `STRUCT<a:INT32,b:BINARY>`. The single source of truth for both producing
- * these names and recognising them, so the two can't drift apart.
- */
-object NestedType {
-  val Struct = "STRUCT"
-  val Map    = "MAP"
-  val List   = "LIST"
-
-  private val prefixes = scala.List(Struct, Map, List)
-
-  def isNested(dataType: String): Boolean = prefixes.exists(dataType.startsWith)
-
-  def struct(fields: String): String = s"$Struct<$fields>"
-}

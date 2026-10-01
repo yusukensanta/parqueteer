@@ -12,7 +12,7 @@ import io.github.yusukensanta.parqueteer.core.util.{
   RowLimiter,
   RowPipeline
 }
-import scala.util.Try
+import scala.util.{Failure, Try}
 
 class ParquetService(
     repository: ParquetRepository
@@ -224,9 +224,9 @@ class ParquetService(
   private class MergeStreamException(val error: ParqueteerError)
       extends RuntimeException(error.userMessage, null, true, false)
 
-  private def abortOnReadError(result: scala.util.Try[?]): Unit =
+  private def abortOnReadError(result: Try[?]): Unit =
     result match {
-      case scala.util.Failure(err) =>
+      case Failure(err) =>
         throw new MergeStreamException(
           scala.util
             .Failure(err)
@@ -238,7 +238,7 @@ class ParquetService(
 
   private def deletePartialOutput(outputLocation: StorageLocation): Unit =
     repository.deleteFile(outputLocation) match {
-      case scala.util.Failure(delErr) =>
+      case Failure(delErr) =>
         logger.warn(
           s"Failed to delete partial output at ${outputLocation.path}: ${CredentialRedactor
               .redact(delErr.getMessage)}. Partial file may remain."
@@ -247,7 +247,10 @@ class ParquetService(
     }
 
   // True when the writer never created the output file (pre-existence check),
-  // so we must NOT delete a file this operation didn't write.
+  // so we must NOT delete a file this operation didn't write. The message
+  // fallback covers writers that surface the refusal as a plain IOException
+  // (e.g. some Hadoop FileSystem implementations) rather than one of the
+  // typed FileAlreadyExistsExceptions; keep it in sync with those messages.
   private def isOutputAlreadyExistsError(ex: Throwable): Boolean =
     ex match {
       case _: org.apache.hadoop.fs.FileAlreadyExistsException => true
@@ -260,17 +263,17 @@ class ParquetService(
 
   private def handleStreamWriteResult(
       outputLocation: StorageLocation,
-      writeResult: scala.util.Try[Long]
+      writeResult: Try[Long]
   ): Either[ParqueteerError, Long] =
     writeResult match {
-      case scala.util.Failure(ex: MergeStreamException) =>
+      case Failure(ex: MergeStreamException) =>
         deletePartialOutput(outputLocation)
         Left(ex.error)
-      case scala.util.Failure(ex) if isOutputAlreadyExistsError(ex) =>
+      case Failure(ex) if isOutputAlreadyExistsError(ex) =>
         Left(ParqueteerError.OutputExists(outputLocation.path))
-      case scala.util.Failure(ex) =>
+      case Failure(ex) =>
         deletePartialOutput(outputLocation)
-        scala.util.Failure(ex).toParqueteerError
+        Failure(ex).toParqueteerError
       case other => other.toParqueteerError
     }
 

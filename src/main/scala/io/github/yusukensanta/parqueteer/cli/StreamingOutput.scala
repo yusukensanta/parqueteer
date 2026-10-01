@@ -21,7 +21,7 @@ private[cli] object StreamingOutput {
   )(
       doRead: RowStreamWriter => Either[ParqueteerError, Long]
   ): Either[ParqueteerError, Long] =
-    if cloudUriPattern.findFirstIn(outputPath).isDefined then
+    if StorageLocationParser.hasCloudScheme(outputPath) then
       Left(
         ParqueteerError.UnsupportedOperation(
           outputPath,

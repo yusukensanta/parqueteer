@@ -3,7 +3,7 @@ package io.github.yusukensanta.parqueteer.core.repositories
 import io.github.yusukensanta.parqueteer.core.models.*
 import io.github.yusukensanta.parqueteer.core.models.ParqueteerError.CloudAuthException
 import io.github.yusukensanta.parqueteer.cloud.CloudCredentialManager
-import io.github.yusukensanta.parqueteer.core.util.CredentialRedactor
+import io.github.yusukensanta.parqueteer.core.util.{CredentialRedactor, RowLimiter}
 import com.github.mjakubowski84.parquet4s.{
   Filter,
   ParquetReader,
@@ -23,9 +23,9 @@ import org.apache.parquet.example.data.Group
 import org.apache.parquet.schema.{GroupType, MessageType}
 import org.apache.parquet.schema.Type.Repetition
 import java.io.{FileNotFoundException, IOException}
-import java.nio.file.{Files, Paths}
+import java.nio.file.{AccessDeniedException, Files, Paths}
 import java.util.concurrent.atomic.AtomicBoolean
-import scala.util.{Success, Try, Using}
+import scala.util.{Failure, Success, Try, Using}
 import scala.jdk.CollectionConverters.*
 
 /**
@@ -166,7 +166,7 @@ class HadoopParquetRepository(
       knownStatus: Option[FileStatus]
   ): (SeekableInputStream, Long) = location match {
     case LocalPath(p) =>
-      val localFile = new LocalInputFile(java.nio.file.Paths.get(p))
+      val localFile = new LocalInputFile(Paths.get(p))
       (localFile.newStream(), localFile.getLength)
     case _ =>
       val fs     = path.getFileSystem(conf)
@@ -184,7 +184,7 @@ class HadoopParquetRepository(
       path: HadoopPath,
       conf: Configuration
   ): InputFile = location match {
-    case LocalPath(p) => new LocalInputFile(java.nio.file.Paths.get(p))
+    case LocalPath(p) => new LocalInputFile(Paths.get(p))
     case _            => HadoopInputFile.fromPath(path, conf)
   }
 
@@ -254,7 +254,7 @@ class HadoopParquetRepository(
               val peek =
                 config.filter.isDefined &&
                   config.maxRows.exists(taken.size.toLong >= _) &&
-                  scala.util.Try(baseIter.hasNext).getOrElse(false)
+                  Try(baseIter.hasNext).getOrElse(false)
               (taken, peek)
             }
           }
@@ -272,8 +272,7 @@ class HadoopParquetRepository(
       source: IterableOnce[A],
       maxRows: Option[Long]
   ): Iterator[A] =
-    io.github.yusukensanta.parqueteer.core.util.RowLimiter
-      .limitIterator(source, maxRows)
+    RowLimiter.limitIterator(source, maxRows)
 
   def streamContent(
       file: ParquetFile,
@@ -530,16 +529,16 @@ class HadoopParquetRepository(
         Try(
           ParquetFileReader.open(openInputFile(file.location, path, hadoopConfig))
         ) match {
-          case scala.util.Failure(ex: FileNotFoundException) =>
+          case Failure(ex: FileNotFoundException) =>
             throw ex
-          case scala.util.Failure(ex) =>
+          case Failure(ex) =>
             issues += s"File cannot be opened as Parquet: ${CredentialRedactor.redact(ex.getMessage)}"
-          case scala.util.Success(reader) =>
+          case Success(reader) =>
             Using.resource(reader) { r =>
               Try(r.getFooter) match {
-                case scala.util.Failure(ex) =>
+                case Failure(ex) =>
                   issues += s"Cannot read file footer: ${CredentialRedactor.redact(ex.getMessage)}"
-                case scala.util.Success(footer) =>
+                case Success(footer) =>
                   val schema = footer.getFileMetaData.getSchema
                   if schema.getColumns.isEmpty then issues += "Schema has no columns"
 
@@ -554,18 +553,18 @@ class HadoopParquetRepository(
                     if !readerBroken then {
                       if indicesToCheck.contains(index) then {
                         Try(r.readNextRowGroup()) match {
-                          case scala.util.Failure(ex) =>
+                          case Failure(ex) =>
                             issues += s"Row group $index data is corrupt or truncated: ${CredentialRedactor
                                 .redact(ex.getMessage)}"
                             readerBroken = true
-                          case scala.util.Success(null) =>
+                          case Success(null) =>
                             issues += s"Row group $index returned no data (file may be truncated)"
                             readerBroken = true
                           case _ =>
                         }
                       } else {
                         Try(r.skipNextRowGroup()) match {
-                          case scala.util.Failure(ex) =>
+                          case Failure(ex) =>
                             issues += s"Row group $index could not be skipped: ${CredentialRedactor
                                 .redact(ex.getMessage)}"
                             readerBroken = true
@@ -725,7 +724,7 @@ class HadoopParquetRepository(
           case Some(credManager) =>
             credManager.configureHadoop(effectiveLocation).recoverWith {
               case e if !e.isInstanceOf[CloudAuthException] =>
-                scala.util.Failure(
+                Failure(
                   new CloudAuthException(
                     providerNameFor(effectiveLocation),
                     CredentialRedactor
@@ -756,8 +755,8 @@ class HadoopParquetRepository(
       location: StorageLocation
   )(f: Configuration => Try[A]): Try[A] =
     setupHadoopConfiguration(location).flatMap(f).recoverWith {
-      case e: java.nio.file.AccessDeniedException if isCloudLocation(location) =>
-        scala.util.Failure(
+      case e: AccessDeniedException if isCloudLocation(location) =>
+        Failure(
           new CloudAuthException(
             providerNameFor(location),
             CredentialRedactor.redact(Option(e.getMessage).getOrElse(e.getClass.getSimpleName)),
