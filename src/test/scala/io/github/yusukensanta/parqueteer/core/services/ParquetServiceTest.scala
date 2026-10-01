@@ -1112,7 +1112,7 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
   }
 
   // ── C1: output-already-exists must not delete pre-existing file ───────────
-  "ParquetService.mergeFiles" should "return InvalidFormat and NOT delete when output already exists" in {
+  "ParquetService.mergeFiles" should "return OutputExists and NOT delete when output already exists" in {
     var deleteWasCalled = false
     val alreadyExists =
       new org.apache.hadoop.fs.FileAlreadyExistsException("/out.parquet")
@@ -1133,7 +1133,7 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
       SchemaMode.Strict
     )
     result.isLeft shouldBe true
-    result.left.toOption.get shouldBe a[ParqueteerError.InvalidFormat]
+    result.left.toOption.get shouldBe a[ParqueteerError.OutputExists]
     result.left.toOption.get.userMessage should include("already exists")
     deleteWasCalled shouldBe false
   }
@@ -1162,7 +1162,7 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     deleteWasCalled shouldBe false
   }
 
-  "ParquetService.convertParquetFile" should "return InvalidFormat and NOT delete when output already exists" in {
+  "ParquetService.convertParquetFile" should "return OutputExists and NOT delete when output already exists" in {
     var deleteWasCalled = false
     val alreadyExists =
       new org.apache.hadoop.fs.FileAlreadyExistsException("/out.parquet")
@@ -1181,7 +1181,7 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
       ConversionConfig()
     )
     result.isLeft shouldBe true
-    result.left.toOption.get shouldBe a[ParqueteerError.InvalidFormat]
+    result.left.toOption.get shouldBe a[ParqueteerError.OutputExists]
     result.left.toOption.get.userMessage should include("already exists")
     deleteWasCalled shouldBe false
   }
@@ -1209,7 +1209,8 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
       SchemaMode.Union
     )
     result.isLeft shouldBe true
-    result.left.toOption.get shouldBe a[ParqueteerError.InvalidFormat]
+    result.left.toOption.get shouldBe a[ParqueteerError.SchemaMismatch]
+    result.left.toOption.get.exitCode shouldBe 4
     result.left.toOption.get.userMessage should include(
       "duplicate column names"
     )
@@ -1353,7 +1354,7 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
       service.checkSchemaCompatibility(List("/a.parquet", "/b.parquet"), SchemaMode.Union)
     result.isLeft shouldBe true
     val err = result.left.toOption.get
-    err shouldBe a[ParqueteerError.InvalidFormat]
+    err shouldBe a[ParqueteerError.SchemaMismatch]
     // This call arrives via `read`/`convert --schema-mode union`, not `merge` —
     // the error must not carry the hardcoded "merge" format label from a
     // shared mergeSchemas helper (regression guard for the fix wave).
