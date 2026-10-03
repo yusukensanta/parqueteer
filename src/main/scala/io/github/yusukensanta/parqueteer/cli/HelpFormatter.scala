@@ -99,14 +99,18 @@ object HelpFormatter {
        |  <file>    Path to parquet file (local, s3://, gs://, abfss://)
        |
        |OPTIONS:
-       |  -v, --verbose   Show detailed validation information
-       |      --deep      Fully decompress all row groups (default: spot-check first, last, midpoint)
-       |  -h, --help      Show this help message
+       |  -v, --verbose                   Show detailed validation information
+       |      --deep                      Fully decompress all row groups (default: spot-check first, last, midpoint)
+       |      --expect-schema <file>      Also require the schema to match a contract file, i.e. the
+       |                                  output of `schema --format json` (exit 4 on mismatch)
+       |  -h, --help                      Show this help message
        |
        |EXAMPLES:
        |  parqueteer validate data.parquet
        |  parqueteer validate data.parquet --verbose
        |  parqueteer validate data.parquet --deep
+       |  parqueteer schema data.parquet --format json > contract.json
+       |  parqueteer validate 's3://bucket/daily/*.parquet' --expect-schema contract.json
        |""".stripMargin
 
   private def convertHelp(): String =

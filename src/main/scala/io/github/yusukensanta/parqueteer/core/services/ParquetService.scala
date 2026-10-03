@@ -629,6 +629,32 @@ class ParquetService(
         .toParqueteerError
     } yield ValidationResult(isValid = issues.isEmpty, issues = issues)
 
+  /**
+   * Compares `path`'s schema against a schema contract file (see
+   * SchemaContract): the contract is the "before" side of the diff, the file
+   * the "after", so `added` columns are ones the contract doesn't declare.
+   * A missing contract file is FileNotFound; an unreadable one, ParseError.
+   */
+  def checkSchemaContract(path: String, contractPath: String): Either[ParqueteerError, SchemaDiff] =
+    for {
+      contractJson <- Try(
+        java.nio.file.Files.readString(java.nio.file.Paths.get(contractPath))
+      ).toEither.left.map {
+        // java.nio reports a missing file as NoSuchFileException, which the
+        // generic Try mapping would turn into IOError (exit 1), not FileNotFound.
+        case _: java.nio.file.NoSuchFileException => ParqueteerError.FileNotFound(contractPath)
+        case e                                    => ParqueteerError.IOError(e)
+      }
+      expected <- SchemaContract
+        .parse(contractJson)
+        .left
+        .map(msg => ParqueteerError.ParseError("schema contract", s"$contractPath: $msg"))
+      file <- getFileInfo(path)
+    } yield SchemaReconciler.diff(
+      expected.map(f => ColumnInfo(f.name, f.dataType, f.isOptional, 0, 0, "")),
+      file.schema.map(_.columns).getOrElse(Nil)
+    )
+
   def diffSchemas(
       path1: String,
       path2: String

@@ -72,7 +72,8 @@ object ShellCompletions {
       |           COMPREPLY+=($(compgen -f -- "$cur")) ; return ;;
       |      esac ;;
       |    validate)
-      |      COMPREPLY=($(compgen -W "--verbose --deep" -- "$cur"))
+      |      [[ "$prev" == "--expect-schema" ]] && { COMPREPLY=($(compgen -f -- "$cur")) ; return ; }
+      |      COMPREPLY=($(compgen -W "--verbose --deep --expect-schema" -- "$cur"))
       |           COMPREPLY+=($(compgen -f -X '!*.parquet' -- "$cur")) ; return ;;
       |    convert)
       |      case "$prev" in
@@ -192,6 +193,7 @@ object ShellCompletions {
       |          _arguments \
       |            '--verbose[Show detailed validation output]' \
       |            '--deep[Deep validation (read all row groups)]' \
+      |            '--expect-schema[Schema contract file]:contract file:_files -g "*.json"' \
       |            ':parquet file:_files -g "*.parquet"' ;;
       |        convert)
       |          _arguments \
@@ -286,6 +288,7 @@ object ShellCompletions {
       |# validate
       |complete -c parqueteer -n '__fish_seen_subcommand_from validate' -l verbose -f -d 'Show detailed validation output'
       |complete -c parqueteer -n '__fish_seen_subcommand_from validate' -l deep    -f -d 'Deep validation (read all row groups)'
+      |complete -c parqueteer -n '__fish_seen_subcommand_from validate' -l expect-schema -r -F -d 'Schema contract file'
       |
       |# schema (inspect single file)
       |complete -c parqueteer -n '__fish_seen_subcommand_from schema' -l format -f -a 'table json' -d 'Output format'

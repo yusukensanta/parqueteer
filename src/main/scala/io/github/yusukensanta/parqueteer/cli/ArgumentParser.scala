@@ -277,6 +277,12 @@ object ArgumentParser {
             .action((_, c) => updateCmd[ValidateCommand](c, _.copy(deep = true)))
             .text(
               "Fully decompress all row groups (default: spot-check first, last, midpoint)"
+            ),
+          opt[String]("expect-schema")
+            .action((x, c) => updateCmd[ValidateCommand](c, _.copy(expectSchema = Some(x))))
+            .valueName("<contract.json>")
+            .text(
+              "Also require the schema to match this contract (the output of `schema --format json`); exit 4 on mismatch"
             )
         ),
       cmd("convert")

@@ -206,6 +206,25 @@ parqueteer validate data.parquet --verbose
 parqueteer validate data.parquet --deep
 ```
 
+#### Schema contracts (CI gate)
+
+Check a file's schema against an expected schema kept in git. The contract is
+exactly what `schema --format json` prints, so generate it once from a known-good
+file and commit it:
+
+```bash
+parqueteer schema good.parquet --format json > contracts/events.schema.json
+
+# In CI: integrity checks + exact schema match (column names, types, nullability)
+parqueteer validate 's3://bucket/events/dt=2026-10-03/*.parquet' \
+  --expect-schema contracts/events.schema.json
+```
+
+On a mismatch it prints the same `+`/`-`/`~` diff as `schema diff` (contract →
+file) and exits `4` (single file) or `1` (any file of a glob failed). Only each
+column's `name`, `dataType` and `optional` are compared; encodings and row counts
+in the contract are ignored.
+
 ### Configuration
 
 ```bash
@@ -281,7 +300,7 @@ Every failure maps to a stable exit code, so scripts and CI jobs can branch on
 | `1` | Failure / check failed | I/O error; `validate` found issues; `schema diff` found differences; any file failed in a multi-file (glob) command; output stream broken |
 | `2` | Usage or parse error | Invalid flags or arguments; malformed input data (CSV/JSON/NDJSON/LTSV) |
 | `3` | Not found | Input file does not exist; glob pattern matched no files |
-| `4` | Schema mismatch | Input schemas incompatible under `--schema-mode strict`, union type conflict, or duplicate column names |
+| `4` | Schema mismatch | Input schemas incompatible under `--schema-mode strict`, union type conflict, duplicate column names, or `validate --expect-schema` contract mismatch |
 | `5` | Cloud authentication failed | Missing or invalid S3/GCS/Azure credentials |
 | `6` | Invalid format | Unsupported conversion pair or input format; mixed input formats in one glob |
 | `7` | Invalid filter | `--filter` expression could not be parsed |
