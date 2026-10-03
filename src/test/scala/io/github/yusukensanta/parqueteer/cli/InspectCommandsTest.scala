@@ -270,4 +270,78 @@ class InspectCommandsTest extends CliTestSupport {
       quietOpts
     ) shouldBe 0
   }
+
+  // ── validate --assert ────────────────────────────────────────────────────
+
+  private def asserts(
+      checks: String*
+  ): List[io.github.yusukensanta.parqueteer.core.services.StatsAssertion] =
+    checks.toList.map(c =>
+      io.github.yusukensanta.parqueteer.core.services.StatsAssertion
+        .parse(c)
+        .fold(e => fail(e), identity)
+    )
+
+  "executeValidate --assert" should "exit 0 and print each passing check" in {
+    val (code, out) = captureStdout {
+      InspectCommands.executeValidate(
+        newService(),
+        ValidateCommand(
+          "/tmp/test.parquet",
+          asserts = asserts("rows > 0", "id.nulls == 0", "id.max <= 100")
+        ),
+        defaultOpts
+      )
+    }
+    code shouldBe 0
+    out should include("✓ assert rows > 0 (actual 1)")
+    out should include("✓ assert id.max <= 100 (actual 100)")
+  }
+
+  it should "exit 1 when any check fails, still reporting all of them" in {
+    val (code, out) = captureStdout {
+      InspectCommands.executeValidate(
+        newService(),
+        ValidateCommand("/tmp/test.parquet", asserts = asserts("id.min >= 5", "rows > 0")),
+        defaultOpts
+      )
+    }
+    code shouldBe 1
+    out should include("✗ assert id.min >= 5 (actual 1)")
+    out should include("✓ assert rows > 0")
+  }
+
+  it should "prefer the contract mismatch exit code (4) when both checks fail" in {
+    val contract =
+      contractFile("""{"columns": [{"name": "id", "dataType": "STRING", "optional": false}]}""")
+    val (code, out) = captureStdout {
+      InspectCommands.executeValidate(
+        newService(),
+        ValidateCommand(
+          "/tmp/test.parquet",
+          expectSchema = Some(contract),
+          asserts = asserts("rows > 5")
+        ),
+        defaultOpts
+      )
+    }
+    code shouldBe 4
+    out should include("does not match")
+    out should include("✗ assert rows > 5")
+  }
+
+  "executeValidateMulti --assert" should "fail when a check fails on any matched file" in {
+    InspectCommands.executeValidateMulti(
+      newService(),
+      List("/tmp/a.parquet", "/tmp/b.parquet"),
+      ValidateCommand("/tmp/*.parquet", asserts = asserts("rows > 5")),
+      quietOpts
+    ) shouldBe 1
+    InspectCommands.executeValidateMulti(
+      newService(),
+      List("/tmp/a.parquet", "/tmp/b.parquet"),
+      ValidateCommand("/tmp/*.parquet", asserts = asserts("rows == 1")),
+      quietOpts
+    ) shouldBe 0
+  }
 }

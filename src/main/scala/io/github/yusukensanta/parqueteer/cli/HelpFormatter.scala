@@ -103,6 +103,9 @@ object HelpFormatter {
        |      --deep                      Fully decompress all row groups (default: spot-check first, last, midpoint)
        |      --expect-schema <file>      Also require the schema to match a contract file, i.e. the
        |                                  output of `schema --format json` (exit 4 on mismatch)
+       |      --assert <check>            Data-quality check on footer statistics (repeatable; exit 1
+       |                                  if any fails): rows, row_groups, <column>.nulls|min|max
+       |                                  compared with ==, !=, <, <=, >, >= to a number or "text"
        |  -h, --help                      Show this help message
        |
        |EXAMPLES:
@@ -111,6 +114,7 @@ object HelpFormatter {
        |  parqueteer validate data.parquet --deep
        |  parqueteer schema data.parquet --format json > contract.json
        |  parqueteer validate 's3://bucket/daily/*.parquet' --expect-schema contract.json
+       |  parqueteer validate data.parquet --assert 'rows > 0' --assert 'id.nulls == 0'
        |""".stripMargin
 
   private def convertHelp(): String =

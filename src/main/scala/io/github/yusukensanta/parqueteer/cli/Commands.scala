@@ -1,5 +1,6 @@
 package io.github.yusukensanta.parqueteer.cli
 
+import io.github.yusukensanta.parqueteer.core.services.StatsAssertion
 import io.github.yusukensanta.parqueteer.core.models.{
   CompressionType,
   InputFormat,
@@ -51,7 +52,8 @@ case class ValidateCommand(
     filePath: String,
     verbose: Boolean = false,
     deep: Boolean = false,
-    expectSchema: Option[String] = None
+    expectSchema: Option[String] = None,
+    asserts: List[StatsAssertion] = Nil
 ) extends Command
 
 case class ConvertCommand(

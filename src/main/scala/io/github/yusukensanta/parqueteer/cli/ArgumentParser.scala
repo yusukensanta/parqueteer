@@ -10,6 +10,7 @@ import io.github.yusukensanta.parqueteer.core.models.{
   SchemaMode
 }
 import io.github.yusukensanta.parqueteer.config.EnvConfig
+import io.github.yusukensanta.parqueteer.core.services.StatsAssertion
 import io.github.yusukensanta.parqueteer.core.util.SizeParser
 
 object ArgumentParser {
@@ -277,6 +278,23 @@ object ArgumentParser {
             .action((_, c) => updateCmd[ValidateCommand](c, _.copy(deep = true)))
             .text(
               "Fully decompress all row groups (default: spot-check first, last, midpoint)"
+            ),
+          opt[String]("assert")
+            .unbounded()
+            .valueName("<check>")
+            .validate(x =>
+              StatsAssertion.parse(x).fold(e => failure(s"Invalid --assert: $e"), _ => success)
+            )
+            .action((x, c) =>
+              StatsAssertion
+                .parse(x)
+                .fold(
+                  _ => c,
+                  a => updateCmd[ValidateCommand](c, v => v.copy(asserts = v.asserts :+ a))
+                )
+            )
+            .text(
+              "Data-quality check on footer statistics, repeatable: 'rows > 0', 'id.nulls == 0', 'amount.min >= 0', 'day.max <= \"2026-12-31\"'"
             ),
           opt[String]("expect-schema")
             .action((x, c) => updateCmd[ValidateCommand](c, _.copy(expectSchema = Some(x))))

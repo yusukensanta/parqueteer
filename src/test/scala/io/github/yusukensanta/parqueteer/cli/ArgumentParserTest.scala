@@ -683,4 +683,24 @@ class ArgumentParserTest extends AnyFlatSpec with Matchers {
       ) shouldBe None
     }
   }
+
+  it should "collect repeated --assert checks in order" in {
+    OParser
+      .parse(
+        ArgumentParser.parser,
+        Array("validate", "d.parquet", "--assert", "rows > 0", "--assert", "id.nulls == 0"),
+        ArgumentParser.Config()
+      )
+      .flatMap(_.command)
+      .collect { case v: ValidateCommand => v.asserts.map(_.source) } shouldBe
+      Some(List("rows > 0", "id.nulls == 0"))
+  }
+
+  it should "reject a malformed --assert at parse time" in {
+    OParser.parse(
+      ArgumentParser.parser,
+      Array("validate", "d.parquet", "--assert", "id.avg > 1"),
+      ArgumentParser.Config()
+    ) shouldBe None
+  }
 }
