@@ -225,6 +225,30 @@ file) and exits `4` (single file) or `1` (any file of a glob failed). Only each
 column's `name`, `dataType` and `optional` are compared; encodings and row counts
 in the contract are ignored.
 
+#### Data-quality checks (no data scan)
+
+`--assert` checks values from the file footer's statistics, so it costs about
+the same as `stats` even on large files in S3. Repeat it for several checks;
+every check is reported and the command exits `1` if any fails.
+
+```bash
+parqueteer validate events.parquet \
+  --assert 'rows > 0' \
+  --assert 'user_id.nulls == 0' \
+  --assert 'amount.min >= 0' \
+  --assert 'event_date.max <= "2026-12-31"'
+# ✓ assert rows > 0 (actual 1000)
+# ✗ assert amount.min >= 0 (actual -3.0)
+```
+
+- Subjects: `rows`, `row_groups`, `<column>.nulls`, `<column>.min`, `<column>.max`
+  (nested columns work: `address.city.nulls`)
+- Operators: `==` `!=` `<` `<=` `>` `>=`
+- Numbers compare numerically; a `"quoted"` value compares as text, which orders
+  ISO dates and timestamps correctly
+- A statistic the file doesn't record fails the check: a gate never passes on
+  missing evidence
+
 ### Configuration
 
 ```bash
@@ -297,7 +321,7 @@ Every failure maps to a stable exit code, so scripts and CI jobs can branch on
 | Code | Meaning | Typical cause |
 |------|---------|---------------|
 | `0` | Success | Also: `schema diff` found identical schemas; `validate` found no issues |
-| `1` | Failure / check failed | I/O error; `validate` found issues; `schema diff` found differences; any file failed in a multi-file (glob) command; output stream broken |
+| `1` | Failure / check failed | I/O error; `validate` found issues or an `--assert` check failed; `schema diff` found differences; any file failed in a multi-file (glob) command; output stream broken |
 | `2` | Usage or parse error | Invalid flags or arguments; malformed input data (CSV/JSON/NDJSON/LTSV) |
 | `3` | Not found | Input file does not exist; glob pattern matched no files |
 | `4` | Schema mismatch | Input schemas incompatible under `--schema-mode strict`, union type conflict, duplicate column names, or `validate --expect-schema` contract mismatch |
