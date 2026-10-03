@@ -10,6 +10,22 @@ import StreamingOutput.*
 /** Handlers for the commands that produce a file: write, convert, merge. */
 private[cli] object WriteCommands {
 
+  // The one place CLI writer flags become a WriteConfig, so write, convert
+  // and merge can't drift on defaults.
+  private[cli] def writeConfigFor(
+      compression: CompressionType,
+      rowGroupSize: Option[Long],
+      writer: WriterOptions
+  ): WriteConfig = {
+    val defaults = WriteConfig()
+    WriteConfig(
+      compressionType = compression,
+      rowGroupSize = rowGroupSize.getOrElse(WriteConfig.DefaultRowGroupSize),
+      pageSize = writer.pageSize.getOrElse(defaults.pageSize),
+      enableDictionary = writer.dictionary
+    )
+  }
+
   // CLI spelling of a codec in dry-run output (e.g. "snappy", "uncompressed").
   private def codec(compression: CompressionType): String = compression.toString.toLowerCase
 
@@ -27,10 +43,7 @@ private[cli] object WriteCommands {
       globalOptions: GlobalOptions
   ): Int = {
     import cmd.{inputPath, outputPath, inputFormat, compression, rowGroupSize, dryRun}
-    val writeConfig = WriteConfig(
-      compressionType = compression,
-      rowGroupSize = rowGroupSize.getOrElse(WriteConfig.DefaultRowGroupSize)
-    )
+    val writeConfig = writeConfigFor(compression, rowGroupSize, cmd.writer)
     checkOutputWritable(outputPath) match {
       case Left(err) =>
         reportError("Failed to write file", globalOptions)(err)
@@ -69,10 +82,7 @@ private[cli] object WriteCommands {
       globalOptions: GlobalOptions
   ): Int = {
     import cmd.{outputPath, inputFormat, compression, rowGroupSize, schemaMode, dryRun}
-    val writeConfig = WriteConfig(
-      compressionType = compression,
-      rowGroupSize = rowGroupSize.getOrElse(WriteConfig.DefaultRowGroupSize)
-    )
+    val writeConfig = writeConfigFor(compression, rowGroupSize, cmd.writer)
     checkOutputWritable(outputPath) match {
       case Left(err) => reportError("Failed to write file", globalOptions)(err)
       case Right(_) =>
@@ -111,7 +121,7 @@ private[cli] object WriteCommands {
   ): Int = {
     import cmd.{inputPath, outputPath, compression, maxRows, dryRun}
     val conversionConfig = ConversionConfig(
-      writeConfig = WriteConfig(compressionType = compression),
+      writeConfig = writeConfigFor(compression, None, cmd.writer),
       maxRows = maxRows
     )
 
@@ -256,7 +266,7 @@ private[cli] object WriteCommands {
             )
           ).print()
         } else {
-          val writeConfig = WriteConfig(compressionType = compression)
+          val writeConfig = writeConfigFor(compression, None, cmd.writer)
           val result: Either[ParqueteerError, Long] = (inputExt, outputExt) match {
             case ("parquet", "parquet") =>
               val onProgress: (Int, Int, String) => Unit = (i, n, path) =>
@@ -348,7 +358,7 @@ private[cli] object WriteCommands {
       globalOptions: GlobalOptions
   ): Int = {
     import cmd.{inputPaths, outputPath, compression, schemaMode, dryRun}
-    val writeConfig = WriteConfig(compressionType = compression)
+    val writeConfig = writeConfigFor(compression, None, cmd.writer)
     checkOutputWritable(outputPath) match {
       case Left(err) =>
         reportError("Failed to merge", globalOptions)(err)

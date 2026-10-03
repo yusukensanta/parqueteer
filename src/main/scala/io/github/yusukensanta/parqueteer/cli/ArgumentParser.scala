@@ -51,6 +51,33 @@ object ArgumentParser {
     def tableOrJsonFormatOpt[C <: Command: reflect.ClassTag](set: (C, OutputFormat) => C) =
       enumOpt[C, OutputFormat]("format", parseTableOrJson, "table or json")(set)
 
+    // --page-size / --no-dictionary for every command that writes parquet.
+    def pageSizeOpt[C <: Command: reflect.ClassTag](
+        get: C => WriterOptions,
+        set: (C, WriterOptions) => C
+    ) =
+      opt[String]("page-size")
+        .validate(x =>
+          scala.util.Try(parseSize(x)).toEither match {
+            case Left(e) => failure(e.getMessage)
+            case Right(n) if n <= 0 || n > Int.MaxValue =>
+              failure(s"--page-size must be between 1B and 2GB, got $x")
+            case Right(_) => success
+          }
+        )
+        .action((x, c) =>
+          updateCmd[C](c, cmd => set(cmd, get(cmd).copy(pageSize = Some(parseSize(x).toInt))))
+        )
+        .text("Target data page size (e.g. 64KB, 1MB; default: 1MB)")
+
+    def noDictionaryOpt[C <: Command: reflect.ClassTag](
+        get: C => WriterOptions,
+        set: (C, WriterOptions) => C
+    ) =
+      opt[Unit]("no-dictionary")
+        .action((_, c) => updateCmd[C](c, cmd => set(cmd, get(cmd).copy(dictionary = false))))
+        .text("Disable dictionary encoding (default: enabled)")
+
     def limitOpt[C <: Command: reflect.ClassTag](set: (C, Long) => C) =
       opt[Long]("limit")
         .abbr("n")
@@ -224,6 +251,8 @@ object ArgumentParser {
               )
             )
             .text("Row group size (e.g., 128MB, 1.5GB)"),
+          pageSizeOpt[WriteCommand](_.writer, (cmd, w) => cmd.copy(writer = w)),
+          noDictionaryOpt[WriteCommand](_.writer, (cmd, w) => cmd.copy(writer = w)),
           opt[Unit]("dry-run")
             .action((_, c) => updateCmd[WriteCommand](c, _.copy(dryRun = true)))
             .text(
@@ -273,6 +302,8 @@ object ArgumentParser {
             .text("Compression type for output"),
           limitOpt[ConvertCommand]((cmd, n) => cmd.copy(maxRows = Some(n)))
             .text("Maximum number of rows to convert"),
+          pageSizeOpt[ConvertCommand](_.writer, (cmd, w) => cmd.copy(writer = w)),
+          noDictionaryOpt[ConvertCommand](_.writer, (cmd, w) => cmd.copy(writer = w)),
           opt[Unit]("dry-run")
             .action((_, c) => updateCmd[ConvertCommand](c, _.copy(dryRun = true)))
             .text(
@@ -352,6 +383,8 @@ object ArgumentParser {
             .text("Output compression (default: snappy)"),
           schemaModeOpt[MergeCommand]((cmd, m) => cmd.copy(schemaMode = m))
             .text("Schema compatibility mode: strict (default) or union"),
+          pageSizeOpt[MergeCommand](_.writer, (cmd, w) => cmd.copy(writer = w)),
+          noDictionaryOpt[MergeCommand](_.writer, (cmd, w) => cmd.copy(writer = w)),
           opt[Unit]("dry-run")
             .action((_, c) => updateCmd[MergeCommand](c, _.copy(dryRun = true)))
             .text("Show what would be merged without writing output")

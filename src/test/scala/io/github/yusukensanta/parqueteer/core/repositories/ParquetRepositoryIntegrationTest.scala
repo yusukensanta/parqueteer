@@ -1350,4 +1350,27 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
       BigDecimal("-12345678901234567890.12")
     )
   }
+
+  // ── Writer tuning ────────────────────────────────────────────────────────
+
+  "ParquetRepository writer tuning" should "omit dictionary encodings when enableDictionary is false" taggedAs IntegrationTest in {
+    // Repeated values so the writer would choose a dictionary if allowed.
+    val rows = List.fill(200)(Map("name" -> CellValue.Str("same"), "id" -> CellValue.I64(1L)))
+    def encodingsWith(dictionary: Boolean): Set[String] = {
+      val loc = LocalPath(tempFile().getAbsolutePath)
+      repo
+        .writeContent(loc, rows, None, WriteConfig(enableDictionary = dictionary))
+        .isSuccess shouldBe true
+      repo.readSchema(ParquetFile(loc)).get.columns.flatMap(_.encodings).toSet
+    }
+    encodingsWith(dictionary = true).exists(_.contains("DICTIONARY")) shouldBe true
+    encodingsWith(dictionary = false).exists(_.contains("DICTIONARY")) shouldBe false
+  }
+
+  it should "round-trip data written with a small page size" taggedAs IntegrationTest in {
+    val loc  = LocalPath(tempFile().getAbsolutePath)
+    val rows = (1 to 2000).map(i => Map("id" -> CellValue.I64(i.toLong))).toList
+    repo.writeContent(loc, rows, None, WriteConfig(pageSize = 1024)).isSuccess shouldBe true
+    repo.readContent(ParquetFile(loc), ReadConfig()).get.rows should have length 2000
+  }
 }

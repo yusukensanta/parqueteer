@@ -78,6 +78,8 @@ object HelpFormatter {
        |      --input-format <fmt>      Input format: json, ndjson, csv, ltsv (default: json)
        |  -c, --compression <type>      Compression: none, snappy, gzip, lzo, brotli, lz4, zstd
        |      --row-group-size <size>   Row group size (e.g., 128MB, 1.5GB)
+       |      --page-size <size>        Target data page size (e.g., 64KB, 1MB; default: 1MB)
+       |      --no-dictionary           Disable dictionary encoding (default: enabled)
        |      --dry-run                 Preview what would be written without writing
        |  -h, --help                    Show this help message
        |
@@ -132,6 +134,8 @@ object HelpFormatter {
        |OPTIONS:
        |      --compression <type>   Output compression type
        |  -n, --limit <n>            Maximum number of rows to convert
+       |      --page-size <size>     Target data page size for parquet output (default: 1MB)
+       |      --no-dictionary        Disable dictionary encoding for parquet output
        |      --dry-run              Preview what would be converted without converting
        |  -h, --help                 Show this help message
        |
@@ -196,6 +200,9 @@ object HelpFormatter {
        |  -o, --output <file>         Output parquet file path (required)
        |  -c, --compression <type>    Output compression (default: snappy)
        |      --schema-mode <mode>    Schema compatibility: strict (default) or union
+       |      --page-size <size>      Target data page size (default: 1MB)
+       |      --no-dictionary         Disable dictionary encoding (default: enabled)
+       |      --dry-run               Show what would be merged without writing
        |  -h, --help                  Show this help message
        |
        |EXAMPLES:

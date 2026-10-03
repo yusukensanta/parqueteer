@@ -9,6 +9,16 @@ import io.github.yusukensanta.parqueteer.core.models.{
 
 sealed trait Command
 
+/**
+ * Parquet writer tuning shared by every command that writes parquet (write,
+ * convert, merge). None/true keep the writer defaults (1 MiB pages,
+ * dictionary encoding on).
+ */
+case class WriterOptions(
+    pageSize: Option[Int] = None,
+    dictionary: Boolean = true
+)
+
 case class ReadCommand(
     filePath: String,
     maxRows: Option[Long] = None,
@@ -33,7 +43,8 @@ case class WriteCommand(
     compression: CompressionType = CompressionType.Snappy,
     rowGroupSize: Option[Long] = None,
     dryRun: Boolean = false,
-    schemaMode: SchemaMode = SchemaMode.Strict
+    schemaMode: SchemaMode = SchemaMode.Strict,
+    writer: WriterOptions = WriterOptions()
 ) extends Command
 
 case class ValidateCommand(
@@ -49,7 +60,8 @@ case class ConvertCommand(
     compression: CompressionType = CompressionType.Snappy,
     maxRows: Option[Long] = None,
     dryRun: Boolean = false,
-    schemaMode: SchemaMode = SchemaMode.Strict
+    schemaMode: SchemaMode = SchemaMode.Strict,
+    writer: WriterOptions = WriterOptions()
 ) extends Command
 
 case class ConfigCommand(validate: Boolean = false) extends Command
@@ -70,7 +82,8 @@ case class MergeCommand(
     outputPath: String = "",
     compression: CompressionType = CompressionType.Snappy,
     schemaMode: SchemaMode = SchemaMode.Strict,
-    dryRun: Boolean = false
+    dryRun: Boolean = false,
+    writer: WriterOptions = WriterOptions()
 ) extends Command
 
 case class StatsCommand(

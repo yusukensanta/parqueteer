@@ -622,6 +622,7 @@ class ArgumentParserTest extends AnyFlatSpec with Matchers {
     ) shouldBe None
   }
 
+<<<<<<< HEAD
   "ArgumentParser validate" should "parse --expect-schema" in {
     OParser
       .parse(
@@ -633,4 +634,55 @@ class ArgumentParserTest extends AnyFlatSpec with Matchers {
       ValidateCommand("data.parquet", expectSchema = Some("contract.json"))
     )
   }
+=======
+  "ArgumentParser writer flags" should "parse --page-size and --no-dictionary on write" in {
+    OParser
+      .parse(
+        ArgumentParser.parser,
+        Array("write", "in.json", "out.parquet", "--page-size", "64KB", "--no-dictionary"),
+        ArgumentParser.Config()
+      )
+      .flatMap(_.command)
+      .collect { case w: WriteCommand => w.writer } shouldBe Some(
+      WriterOptions(Some(65536), dictionary = false)
+    )
+  }
+
+  it should "accept them on convert and merge too" in {
+    def writerOf(args: String*) =
+      OParser
+        .parse(ArgumentParser.parser, args.toArray, ArgumentParser.Config())
+        .flatMap(_.command)
+        .collect {
+          case c: ConvertCommand => c.writer
+          case m: MergeCommand   => m.writer
+        }
+    writerOf("convert", "in.csv", "out.parquet", "--no-dictionary") shouldBe Some(
+      WriterOptions(None, dictionary = false)
+    )
+    writerOf("merge", "a.parquet", "b.parquet", "-o", "m.parquet", "--page-size", "1MB") shouldBe
+      Some(WriterOptions(Some(1024 * 1024), dictionary = true))
+  }
+
+  it should "default to the writer defaults when the flags are absent" in {
+    OParser
+      .parse(
+        ArgumentParser.parser,
+        Array("write", "in.json", "out.parquet"),
+        ArgumentParser.Config()
+      )
+      .flatMap(_.command)
+      .collect { case w: WriteCommand => w.writer } shouldBe Some(WriterOptions())
+  }
+
+  it should "reject an unparseable or non-positive --page-size" in {
+    List("abc", "0").foreach { size =>
+      OParser.parse(
+        ArgumentParser.parser,
+        Array("write", "in.json", "out.parquet", "--page-size", size),
+        ArgumentParser.Config()
+      ) shouldBe None
+    }
+  }
+>>>>>>> origin/main
 }

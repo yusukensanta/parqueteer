@@ -66,9 +66,9 @@ object ShellCompletions {
       |      case "$prev" in
       |        --compression|-c) COMPREPLY=($(compgen -W "$compressions" -- "$cur")) ; return ;;
       |        --input-format) COMPREPLY=($(compgen -W "json ndjson csv ltsv" -- "$cur")) ; return ;;
-      |        --row-group-size) return ;;
+      |        --row-group-size|--page-size) return ;;
       |        --schema-mode) COMPREPLY=($(compgen -W "strict union" -- "$cur")) ; return ;;
-      |        *) COMPREPLY=($(compgen -W "--input-format --compression --row-group-size --dry-run --schema-mode" -- "$cur"))
+      |        *) COMPREPLY=($(compgen -W "--input-format --compression --row-group-size --page-size --no-dictionary --dry-run --schema-mode" -- "$cur"))
       |           COMPREPLY+=($(compgen -f -- "$cur")) ; return ;;
       |      esac ;;
       |    validate)
@@ -78,9 +78,9 @@ object ShellCompletions {
       |    convert)
       |      case "$prev" in
       |        --compression) COMPREPLY=($(compgen -W "$compressions" -- "$cur")) ; return ;;
-      |        --limit|-n) return ;;
+      |        --limit|-n|--page-size) return ;;
       |        --schema-mode) COMPREPLY=($(compgen -W "strict union" -- "$cur")) ; return ;;
-      |        *) COMPREPLY=($(compgen -W "--compression --limit --dry-run --schema-mode" -- "$cur"))
+      |        *) COMPREPLY=($(compgen -W "--compression --limit --page-size --no-dictionary --dry-run --schema-mode" -- "$cur"))
       |           COMPREPLY+=($(compgen -f -- "$cur")) ; return ;;
       |      esac ;;
       |    merge)
@@ -88,7 +88,8 @@ object ShellCompletions {
       |        --compression|-c) COMPREPLY=($(compgen -W "$compressions" -- "$cur")) ; return ;;
       |        --schema-mode) COMPREPLY=($(compgen -W "strict union" -- "$cur")) ; return ;;
       |        --output|-o) COMPREPLY=($(compgen -f -- "$cur")) ; return ;;
-      |        *) COMPREPLY=($(compgen -W "--output --compression --schema-mode --dry-run" -- "$cur"))
+      |        --page-size) return ;;
+      |        *) COMPREPLY=($(compgen -W "--output --compression --schema-mode --page-size --no-dictionary --dry-run" -- "$cur"))
       |           COMPREPLY+=($(compgen -f -X '!*.parquet' -- "$cur")) ; return ;;
       |      esac ;;
       |    config)
@@ -182,6 +183,8 @@ object ShellCompletions {
       |            '--input-format[Input format]:format:(json ndjson csv ltsv)' \
       |            '(-c --compression)'{-c,--compression}'[Compression]:type:('"${compressions[*]}"')' \
       |            '--row-group-size[Row group size]:size' \
+      |            '--page-size[Data page size]:size' \
+      |            '--no-dictionary[Disable dictionary encoding]' \
       |            '--dry-run[Preview only]' \
       |            '--schema-mode[Schema mode]:mode:(strict union)' \
       |            ':input file:_files' \
@@ -196,6 +199,8 @@ object ShellCompletions {
       |          _arguments \
       |            '--compression[Compression]:type:('"${compressions[*]}"')' \
       |            '(-n --limit)'{-n,--limit}'[Maximum rows]:count' \
+      |            '--page-size[Data page size]:size' \
+      |            '--no-dictionary[Disable dictionary encoding]' \
       |            '--dry-run[Preview only]' \
       |            '--schema-mode[Schema mode]:mode:(strict union)' \
       |            ':input file:_files' \
@@ -205,6 +210,8 @@ object ShellCompletions {
       |            '(-o --output)'{-o,--output}'[Output file]:output file:_files -g "*.parquet"' \
       |            '(-c --compression)'{-c,--compression}'[Compression]:type:('"${compressions[*]}"')' \
       |            '--schema-mode[Schema mode]:mode:(strict union)' \
+      |            '--page-size[Data page size]:size' \
+      |            '--no-dictionary[Disable dictionary encoding]' \
       |            '--dry-run[Preview only]' \
       |            '*:input parquet files:_files -g "*.parquet"' ;;
       |        config)
@@ -257,12 +264,16 @@ object ShellCompletions {
       |complete -c parqueteer -n '__fish_seen_subcommand_from write' -l input-format   -f -a 'json ndjson csv ltsv' -d 'Input file format'
       |complete -c parqueteer -n '__fish_seen_subcommand_from write' -l compression    -s c -f -a 'none snappy gzip lzo brotli lz4 zstd' -d 'Compression type'
       |complete -c parqueteer -n '__fish_seen_subcommand_from write' -l row-group-size -d 'Row group size'
+      |complete -c parqueteer -n '__fish_seen_subcommand_from write' -l page-size      -d 'Data page size'
+      |complete -c parqueteer -n '__fish_seen_subcommand_from write' -l no-dictionary  -f -d 'Disable dictionary encoding'
       |complete -c parqueteer -n '__fish_seen_subcommand_from write' -l dry-run        -f -d 'Preview only'
       |complete -c parqueteer -n '__fish_seen_subcommand_from write' -l schema-mode    -f -a 'strict union' -d 'Schema mode'
       |
       |# convert
       |complete -c parqueteer -n '__fish_seen_subcommand_from convert' -l compression -f -a 'none snappy gzip lzo brotli lz4 zstd' -d 'Compression type'
       |complete -c parqueteer -n '__fish_seen_subcommand_from convert' -l limit       -s n -d 'Maximum rows'
+      |complete -c parqueteer -n '__fish_seen_subcommand_from convert' -l page-size   -d 'Data page size'
+      |complete -c parqueteer -n '__fish_seen_subcommand_from convert' -l no-dictionary -f -d 'Disable dictionary encoding'
       |complete -c parqueteer -n '__fish_seen_subcommand_from convert' -l dry-run     -f -d 'Preview only'
       |complete -c parqueteer -n '__fish_seen_subcommand_from convert' -l schema-mode -f -a 'strict union' -d 'Schema mode'
       |
@@ -270,6 +281,8 @@ object ShellCompletions {
       |complete -c parqueteer -n '__fish_seen_subcommand_from merge' -l output      -s o -d 'Output file'
       |complete -c parqueteer -n '__fish_seen_subcommand_from merge' -l compression -s c -f -a 'none snappy gzip lzo brotli lz4 zstd' -d 'Compression type'
       |complete -c parqueteer -n '__fish_seen_subcommand_from merge' -l schema-mode -f -a 'strict union' -d 'Schema mode'
+      |complete -c parqueteer -n '__fish_seen_subcommand_from merge' -l page-size   -d 'Data page size'
+      |complete -c parqueteer -n '__fish_seen_subcommand_from merge' -l no-dictionary -f -d 'Disable dictionary encoding'
       |complete -c parqueteer -n '__fish_seen_subcommand_from merge' -l dry-run     -f -d 'Preview only'
       |
       |# validate
