@@ -180,4 +180,22 @@ class WriteCommandsTest extends CliTestSupport {
     code should not be 0
     stderr should include("Unsupported conversion")
   }
+
+  // ── writeConfigFor ───────────────────────────────────────────────────────
+
+  "WriteCommands.writeConfigFor" should "keep writer defaults when no flags are given" in {
+    WriteCommands.writeConfigFor(CompressionType.Zstd, None, WriterOptions()) shouldBe
+      WriteConfig(compressionType = CompressionType.Zstd)
+  }
+
+  it should "apply row group size, page size and dictionary flags" in {
+    val cfg = WriteCommands.writeConfigFor(
+      CompressionType.Snappy,
+      Some(64L * 1024 * 1024),
+      WriterOptions(pageSize = Some(8192), dictionary = false)
+    )
+    cfg.rowGroupSize shouldBe 64L * 1024 * 1024
+    cfg.pageSize shouldBe 8192
+    cfg.enableDictionary shouldBe false
+  }
 }
