@@ -158,4 +158,116 @@ class InspectCommandsTest extends CliTestSupport {
     }
     out.toString("UTF-8") should not be empty
   }
+
+  // ── validate --expect-schema ─────────────────────────────────────────────
+
+  private def contractFile(json: String): String = {
+    val f = java.nio.file.Files.createTempFile("parqueteer_contract_", ".json")
+    f.toFile.deleteOnExit()
+    java.nio.file.Files.writeString(f, json)
+    f.toString
+  }
+
+  private def captureStdout[A](block: => A): (A, String) = {
+    val out    = new ByteArrayOutputStream()
+    val result = Console.withOut(new PrintStream(out))(block)
+    (result, out.toString("UTF-8"))
+  }
+
+  private val matchingContract =
+    """{"columns": [{"name": "id", "dataType": "INT64", "optional": false}]}"""
+
+  "executeValidate --expect-schema" should "accept the contract that `schema --format json` produces" in {
+    val schemaJson = CliOutputFormatter.formatSchemaJson(
+      ParquetFile(LocalPath("/tmp/test.parquet"), schema = Some(defaultSchema))
+    )
+    val (code, out) = captureStdout {
+      InspectCommands.executeValidate(
+        newService(),
+        ValidateCommand("/tmp/test.parquet", expectSchema = Some(contractFile(schemaJson))),
+        defaultOpts
+      )
+    }
+    code shouldBe 0
+    out should include("matches")
+  }
+
+  it should "exit 4 and print the diff when the schema differs" in {
+    val contract = contractFile(
+      """{"columns": [
+        |  {"name": "id", "dataType": "INT32", "optional": false},
+        |  {"name": "email", "dataType": "STRING", "optional": true}
+        |]}""".stripMargin
+    )
+    val (code, out) = captureStdout {
+      InspectCommands.executeValidate(
+        newService(),
+        ValidateCommand("/tmp/test.parquet", expectSchema = Some(contract)),
+        defaultOpts
+      )
+    }
+    code shouldBe 4
+    out should include("does not match")
+    out should include("email")
+  }
+
+  it should "exit 3 when the contract file does not exist" in {
+    val (code, err) = captureStderr {
+      InspectCommands.executeValidate(
+        newService(),
+        ValidateCommand("/tmp/test.parquet", expectSchema = Some("/nonexistent/contract.json")),
+        quietOpts
+      )
+    }
+    code shouldBe 3
+    err should include("Failed to check schema contract")
+  }
+
+  it should "exit 2 when the contract is not a schema document" in {
+    val (code, err) = captureStderr {
+      InspectCommands.executeValidate(
+        newService(),
+        ValidateCommand(
+          "/tmp/test.parquet",
+          expectSchema = Some(contractFile("""{"columns": 1}"""))
+        ),
+        quietOpts
+      )
+    }
+    code shouldBe 2
+    err should include("schema contract")
+  }
+
+  it should "skip the contract check when integrity validation already failed" in {
+    val repo = new FakeParquetRepository(validateResult = Success(List("corrupt page")))
+    InspectCommands.executeValidate(
+      newService(repo),
+      ValidateCommand("/tmp/test.parquet", expectSchema = Some("/nonexistent/contract.json")),
+      quietOpts
+    ) shouldBe 1
+  }
+
+  "executeValidateMulti --expect-schema" should "fail (exit 1) when any matched file breaks the contract" in {
+    val contract =
+      contractFile("""{"columns": [{"name": "id", "dataType": "STRING", "optional": false}]}""")
+    val (code, out) = captureStdout {
+      InspectCommands.executeValidateMulti(
+        newService(),
+        List("/tmp/a.parquet", "/tmp/b.parquet"),
+        ValidateCommand("/tmp/*.parquet", expectSchema = Some(contract)),
+        defaultOpts
+      )
+    }
+    code shouldBe 1
+    out should include("does not match")
+  }
+
+  it should "pass when every matched file matches the contract" in {
+    InspectCommands.executeValidateMulti(
+      newService(),
+      List("/tmp/a.parquet", "/tmp/b.parquet"),
+      ValidateCommand("/tmp/*.parquet", expectSchema = Some(contractFile(matchingContract))),
+      quietOpts
+    ) shouldBe 0
+  }
 }

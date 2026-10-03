@@ -203,6 +203,25 @@ parqueteer validate data.parquet --verbose
 parqueteer validate data.parquet --deep
 ```
 
+#### Schema contracts (CI gate)
+
+Check a file's schema against an expected schema kept in git. The contract is
+exactly what `schema --format json` prints, so generate it once from a known-good
+file and commit it:
+
+```bash
+parqueteer schema good.parquet --format json > contracts/events.schema.json
+
+# In CI: integrity checks + exact schema match (column names, types, nullability)
+parqueteer validate 's3://bucket/events/dt=2026-10-03/*.parquet' \
+  --expect-schema contracts/events.schema.json
+```
+
+On a mismatch it prints the same `+`/`-`/`~` diff as `schema diff` (contract →
+file) and exits `4` (single file) or `1` (any file of a glob failed). Only each
+column's `name`, `dataType` and `optional` are compared; encodings and row counts
+in the contract are ignored.
+
 ### Configuration
 
 ```bash

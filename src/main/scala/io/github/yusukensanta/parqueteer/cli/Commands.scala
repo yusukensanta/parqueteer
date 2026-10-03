@@ -39,7 +39,8 @@ case class WriteCommand(
 case class ValidateCommand(
     filePath: String,
     verbose: Boolean = false,
-    deep: Boolean = false
+    deep: Boolean = false,
+    expectSchema: Option[String] = None
 ) extends Command
 
 case class ConvertCommand(

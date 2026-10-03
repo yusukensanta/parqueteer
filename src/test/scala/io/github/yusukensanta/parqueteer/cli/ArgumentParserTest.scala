@@ -621,4 +621,16 @@ class ArgumentParserTest extends AnyFlatSpec with Matchers {
       ArgumentParser.Config()
     ) shouldBe None
   }
+
+  "ArgumentParser validate" should "parse --expect-schema" in {
+    OParser
+      .parse(
+        ArgumentParser.parser,
+        Array("validate", "data.parquet", "--expect-schema", "contract.json"),
+        ArgumentParser.Config()
+      )
+      .flatMap(_.command) shouldBe Some(
+      ValidateCommand("data.parquet", expectSchema = Some("contract.json"))
+    )
+  }
 }

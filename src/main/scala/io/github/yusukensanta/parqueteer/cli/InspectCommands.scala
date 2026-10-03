@@ -91,7 +91,16 @@ private[cli] object InspectCommands {
             val summary = formatValidateVerboseSchema(service, filePath)
             if summary.nonEmpty then println(summary)
           }
-          0
+          cmd.expectSchema.fold(0)(contract =>
+            service.checkSchemaContract(filePath, contract) match {
+              case Left(error) =>
+                reportError("Failed to check schema contract", globalOptions)(error)
+              case Right(diff) =>
+                println(formatContractResult(filePath, contract, diff))
+                if diff.identical then 0
+                else ParqueteerError.SchemaMismatch(filePath, s"does not match $contract").exitCode
+            }
+          )
         } else {
           println(s"✗ File $filePath has issues:")
           result.issues.foreach(issue => println(s"  - $issue"))
@@ -110,17 +119,36 @@ private[cli] object InspectCommands {
   ): Int = {
     import cmd.{verbose, deep}
     runMultiFileReport(paths, OutputFormat.Table, globalOptions) { path =>
-      service.validateFile(path, deep).map { result =>
-        val text =
-          if result.isValid then {
-            val summary    = if verbose then formatValidateVerboseSchema(service, path) else ""
-            val verboseOut = if summary.nonEmpty then "\n" + summary else ""
-            s"✓ File $path is valid" + verboseOut
-          } else (s"✗ File $path has issues:" :: result.issues.map(i => s"  - $i")).mkString("\n")
-        (text, result.isValid)
+      service.validateFile(path, deep).flatMap { result =>
+        if result.isValid then {
+          val summary    = if verbose then formatValidateVerboseSchema(service, path) else ""
+          val verboseOut = if summary.nonEmpty then "\n" + summary else ""
+          val validText  = s"✓ File $path is valid" + verboseOut
+          cmd.expectSchema.fold(Right((validText, true))) { contract =>
+            service
+              .checkSchemaContract(path, contract)
+              .map(diff =>
+                (validText + "\n" + formatContractResult(path, contract, diff), diff.identical)
+              )
+          }
+        } else
+          Right(
+            (
+              (s"✗ File $path has issues:" :: result.issues.map(i => s"  - $i")).mkString("\n"),
+              false
+            )
+          )
       }
     }
   }
+
+  // One line when the schema matches; otherwise the standard schema-diff
+  // table with the contract as the "before" side.
+  private[cli] def formatContractResult(path: String, contract: String, diff: SchemaDiff): String =
+    if diff.identical then s"✓ Schema of $path matches $contract"
+    else
+      s"✗ Schema of $path does not match $contract\n" +
+        CliOutputFormatter.formatSchemaDiffTable(contract, path, diff)
 
   private[cli] def formatSchemaText(file: ParquetFile, format: OutputFormat): String =
     format match {
