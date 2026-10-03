@@ -135,6 +135,9 @@ parqueteer write data.ltsv output.parquet --input-format ltsv
 # With compression (uncompressed, snappy, gzip, lzo, brotli, lz4, zstd)
 parqueteer write data.csv output.parquet --input-format csv --compression zstd
 
+# Writer tuning (also on convert and merge): smaller pages, no dictionary encoding
+parqueteer write data.json output.parquet --page-size 64KB --no-dictionary
+
 # Dry-run: validate input without writing
 parqueteer write data.json output.parquet --dry-run
 
