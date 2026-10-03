@@ -270,6 +270,40 @@ export PARQUETEER_CONFIG=/path/to/config.yaml
 
 ---
 
+## Exit Codes
+
+Every failure maps to a stable exit code, so scripts and CI jobs can branch on
+*why* a command failed instead of parsing messages.
+
+| Code | Meaning | Typical cause |
+|------|---------|---------------|
+| `0` | Success | Also: `schema diff` found identical schemas; `validate` found no issues |
+| `1` | Failure / check failed | I/O error; `validate` found issues; `schema diff` found differences; any file failed in a multi-file (glob) command; output stream broken |
+| `2` | Usage or parse error | Invalid flags or arguments; malformed input data (CSV/JSON/NDJSON/LTSV) |
+| `3` | Not found | Input file does not exist; glob pattern matched no files |
+| `4` | Schema mismatch | Input schemas incompatible under `--schema-mode strict`, union type conflict, or duplicate column names |
+| `5` | Cloud authentication failed | Missing or invalid S3/GCS/Azure credentials |
+| `6` | Invalid format | Unsupported conversion pair or input format; mixed input formats in one glob |
+| `7` | Invalid filter | `--filter` expression could not be parsed |
+| `8` | Output already exists | parqueteer never overwrites; remove the file or choose another path |
+| `9` | Unsupported operation | e.g. reading parquet from stdin, merging nested columns, text output to a cloud URI |
+| `10` | Invalid location | Unsupported scheme (`ftp://`) or malformed URL (`s3:/bucket`, `wasb://`) |
+
+Code `1` is shared by "the check ran and failed" and generic I/O errors; read
+stderr when you need to tell them apart. Codes `2`–`10` are always errors.
+
+```bash
+parqueteer schema diff expected.parquet actual.parquet --format json > diff.json
+rc=$?
+case $rc in
+  0) echo "schemas match" ;;
+  1) echo "schemas differ (or I/O error, see stderr)"; exit 1 ;;
+  *) echo "could not compare (exit $rc)"; exit 2 ;;
+esac
+```
+
+---
+
 ## Installation
 
 ### Option 1: Homebrew (macOS / Linux)
