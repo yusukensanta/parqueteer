@@ -1,6 +1,46 @@
 package io.github.yusukensanta.parqueteer.cli
 
+import CliSpec.OptSpec
+
+/**
+ * Per-command help. The prose (summary, usage, arguments, examples) is written
+ * here; every OPTIONS section is rendered from the parser via CliSpec, so a
+ * flag can't be added to the parser and forgotten in its help.
+ */
 object HelpFormatter {
+
+  private val HelpWidth = 100
+
+  private val helpOption = OptSpec("help", Some("h"), None, "Show this help message")
+
+  /** The OPTIONS section of `command`'s help: its parser options, then --help. */
+  private[cli] def optionsSection(command: String): String =
+    renderOptions(CliSpec.command(command).fold(Nil)(_.options) :+ helpOption)
+
+  /** Two aligned columns, descriptions word-wrapped to HelpWidth with a hanging indent. */
+  private[cli] def renderOptions(options: List[OptSpec]): String = {
+    def flags(o: OptSpec): String =
+      o.short.fold("    ")(c => s"-$c, ") + s"--${o.long}" + o.valueName.fold("")(v => s" $v")
+    val column = options.map(flags(_).length).maxOption.getOrElse(0) + 3
+    options
+      .map(o => wrap(s"  ${flags(o).padTo(column, ' ')}", o.text, indent = 2 + column))
+      .mkString("\n")
+  }
+
+  private def wrap(prefix: String, text: String, indent: Int): String = {
+    val lines = scala.collection.mutable.ListBuffer(new StringBuilder(prefix))
+    // A quoted example ('rows > 0') is kept on one line.
+    """'[^']*'\S*|\S+""".r.findAllIn(text).foreach { word =>
+      val line = lines.last
+      if line.length > indent && line.length + 1 + word.length > HelpWidth then
+        lines += new StringBuilder(" " * indent).append(word)
+      else {
+        if line.length > indent then line.append(' ')
+        line.append(word)
+      }
+    }
+    lines.map(_.toString).mkString("\n")
+  }
 
   def subcommandHelp(command: String): Option[String] = command match {
     case "read"        => Some(readHelp())
@@ -28,13 +68,7 @@ object HelpFormatter {
        |  <file>    Path to parquet file (local, s3://, gs://, abfss://)
        |
        |OPTIONS:
-       |  -n, --limit <n>           Maximum number of rows to display
-       |  -c, --columns <col,...>   Comma-separated list of columns to display
-       |  -f, --filter <expr>       Filter expression for rows
-       |      --format <fmt>        Output format: table, json, csv, pretty, markdown, ndjson, ltsv (default: table)
-       |      --parallel <n>        Number of parallel threads (default: 1)
-       |      --stream              Stream rows progressively (memory-bounded, safe for large files)
-       |  -h, --help                Show this help message
+${optionsSection("read")}
        |
        |EXAMPLES:
        |  parqueteer read data.parquet
@@ -53,9 +87,7 @@ object HelpFormatter {
        |  <file>    Path to parquet file (local, s3://, gs://, abfss://)
        |
        |OPTIONS:
-       |      --format <fmt>   Output format: table, json (default: table)
-       |      --verbose        Show per-row-group breakdown (index, rows, compressed/uncompressed bytes)
-       |  -h, --help           Show this help message
+${optionsSection("info")}
        |
        |EXAMPLES:
        |  parqueteer info data.parquet
@@ -75,15 +107,7 @@ object HelpFormatter {
        |  <output>   Output parquet file path
        |
        |OPTIONS:
-       |      --input-format <fmt>      Input format: json, ndjson, csv, ltsv (default: json)
-       |  -c, --compression <type>      Compression: none, snappy, gzip, lzo, brotli, lz4, zstd
-       |      --row-group-size <size>   Row group size (e.g., 128MB, 1.5GB)
-       |      --page-size <size>        Target data page size (e.g., 64KB, 1MB; default: 1MB)
-       |      --no-dictionary           Disable dictionary encoding (default: enabled)
-       |      --schema <file>           Write with the column types/nullability in a contract file
-       |                                (the output of `schema --format json`) instead of inferring them
-       |      --dry-run                 Preview what would be written without writing
-       |  -h, --help                    Show this help message
+${optionsSection("write")}
        |
        |EXAMPLES:
        |  parqueteer write data.json output.parquet
@@ -102,14 +126,7 @@ object HelpFormatter {
        |  <file>    Path to parquet file (local, s3://, gs://, abfss://)
        |
        |OPTIONS:
-       |  -v, --verbose                   Show detailed validation information
-       |      --deep                      Fully decompress all row groups (default: spot-check first, last, midpoint)
-       |      --expect-schema <file>      Also require the schema to match a contract file, i.e. the
-       |                                  output of `schema --format json` (exit 4 on mismatch)
-       |      --assert <check>            Data-quality check on footer statistics (repeatable; exit 1
-       |                                  if any fails): rows, row_groups, <column>.nulls|min|max
-       |                                  compared with ==, !=, <, <=, >, >= to a number or "text"
-       |  -h, --help                      Show this help message
+${optionsSection("validate")}
        |
        |EXAMPLES:
        |  parqueteer validate data.parquet
@@ -136,17 +153,12 @@ object HelpFormatter {
        |  parquet → ndjson
        |  parquet → csv
        |  json    → parquet
+       |  ndjson  → parquet
        |  csv     → parquet
+       |  ltsv    → parquet
        |
        |OPTIONS:
-       |      --compression <type>   Output compression type
-       |  -n, --limit <n>            Maximum number of rows to convert
-       |      --page-size <size>     Target data page size for parquet output (default: 1MB)
-       |      --no-dictionary        Disable dictionary encoding for parquet output
-       |      --schema <file>        Text → parquet only: use a contract file's schema instead of
-       |                             inferring one
-       |      --dry-run              Preview what would be converted without converting
-       |  -h, --help                 Show this help message
+${optionsSection("convert")}
        |
        |EXAMPLES:
        |  parqueteer convert data.parquet out.json
@@ -169,8 +181,7 @@ object HelpFormatter {
        |  diff      Compare schemas of two parquet files
        |
        |OPTIONS:
-       |      --format <fmt>   Output format: table, json (default: table)
-       |  -h, --help           Show this help message
+${optionsSection("schema")}
        |
        |EXAMPLES:
        |  parqueteer schema data.parquet
@@ -189,8 +200,7 @@ object HelpFormatter {
        |  <file2>   Second parquet file path
        |
        |OPTIONS:
-       |      --format <fmt>   Output format: table, json (default: table)
-       |  -h, --help           Show this help message
+${optionsSection("schema diff")}
        |
        |EXAMPLES:
        |  parqueteer schema diff old.parquet new.parquet
@@ -207,13 +217,7 @@ object HelpFormatter {
        |  <input>...   Two or more input parquet file paths
        |
        |OPTIONS:
-       |  -o, --output <file>         Output parquet file path (required)
-       |  -c, --compression <type>    Output compression (default: snappy)
-       |      --schema-mode <mode>    Schema compatibility: strict (default) or union
-       |      --page-size <size>      Target data page size (default: 1MB)
-       |      --no-dictionary         Disable dictionary encoding (default: enabled)
-       |      --dry-run               Show what would be merged without writing
-       |  -h, --help                  Show this help message
+${optionsSection("merge")}
        |
        |EXAMPLES:
        |  parqueteer merge a.parquet b.parquet --output merged.parquet
@@ -231,8 +235,7 @@ object HelpFormatter {
        |  <file>    Path to parquet file (local, s3://, gs://, abfss://)
        |
        |OPTIONS:
-       |      --format <fmt>   Output format: table, json (default: table)
-       |  -h, --help           Show this help message
+${optionsSection("stats")}
        |
        |EXAMPLES:
        |  parqueteer stats data.parquet
@@ -249,8 +252,7 @@ object HelpFormatter {
        |  <file>    Path to parquet file (local, s3://, gs://, abfss://)
        |
        |OPTIONS:
-       |      --format <fmt>   Output format: table (plain integer), json (default: table)
-       |  -h, --help           Show this help message
+${optionsSection("count")}
        |
        |EXAMPLES:
        |  parqueteer count data.parquet
@@ -268,7 +270,7 @@ object HelpFormatter {
        |  <shell>   Shell type: bash, zsh, fish
        |
        |OPTIONS:
-       |  -h, --help   Show this help message
+${optionsSection("completions")}
        |
        |EXAMPLES:
        |  parqueteer completions bash >> ~/.bashrc
@@ -283,8 +285,7 @@ object HelpFormatter {
        |  parqueteer config [OPTIONS]
        |
        |OPTIONS:
-       |      --validate   Validate the configuration file instead of displaying it
-       |  -h, --help       Show this help message
+${optionsSection("config")}
        |
        |EXAMPLES:
        |  parqueteer config
@@ -316,14 +317,7 @@ object HelpFormatter {
        |  completions      Generate shell completion scripts
        |
        |GLOBAL OPTIONS:
-       |  -h, --help         Show this help message
-       |  -V, --version      Show version information
-       |  -v, --verbose      Enable verbose output
-       |  -q, --quiet        Suppress non-error output
-       |      --config       Path to configuration file
-       |      --profile      AWS S3 credentials profile (from ~/.aws/credentials)
-       |      --region       AWS S3 region (e.g. us-east-1, ap-northeast-1)
-       |      --color        Color mode: auto, always, never (default: auto)
+${renderOptions(CliSpec.globalOptions)}
        |
        |For detailed command usage, run:
        |  parqueteer <COMMAND> --help

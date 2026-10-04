@@ -125,4 +125,35 @@ class HelpFormatterTest extends AnyFlatSpec with Matchers {
     val h = HelpFormatter.topLevelHelp()
     h should include(io.github.yusukensanta.parqueteer.BuildInfo.version)
   }
+
+  // ── Generated OPTIONS sections ─────────────────────────────────────────
+
+  "HelpFormatter" should "have help for every command the parser defines" in {
+    CliSpec.commands.foreach { c =>
+      withClue(c.path)(HelpFormatter.subcommandHelp(c.path) shouldBe defined)
+    }
+  }
+
+  it should "document every option of every command, with its short flag and value" in {
+    for {
+      c <- CliSpec.commands
+      o <- c.options
+    } {
+      val flags =
+        o.short.fold("    ")(s => s"-$s, ") + s"--${o.long}" + o.valueName.fold("")(" " + _)
+      withClue(s"${c.path} --${o.long}: ")(
+        HelpFormatter.subcommandHelp(c.path).get should include(flags)
+      )
+    }
+  }
+
+  it should "document every global option in the top-level help" in {
+    CliSpec.globalOptions.foreach(o => HelpFormatter.topLevelHelp() should include(s"--${o.long}"))
+  }
+
+  it should "wrap descriptions to 100 columns, keeping quoted examples whole" in {
+    val validate = HelpFormatter.subcommandHelp("validate").get
+    validate.linesIterator.filter(_.startsWith("  ")).foreach(_.length should be <= 100)
+    validate should include("'rows > 0'")
+  }
 }
