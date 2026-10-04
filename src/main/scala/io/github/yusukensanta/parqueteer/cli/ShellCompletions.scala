@@ -1,5 +1,13 @@
 package io.github.yusukensanta.parqueteer.cli
 
+import CliSpec.{CmdSpec, OptSpec, Values}
+
+/**
+ * bash, zsh and fish completion scripts, rendered from CliSpec (i.e. from the
+ * parser), so every command and option the parser accepts is completed —
+ * including the allowed values of enum-valued options — without a second,
+ * hand-maintained list per shell.
+ */
 object ShellCompletions {
 
   def scriptFor(shell: Shell): String = shell match {
@@ -8,311 +16,213 @@ object ShellCompletions {
     case Shell.Fish => fish
   }
 
-  val bash: String =
-    """# bash completion for parqueteer
-      |# Install: parqueteer completions bash > /etc/bash_completion.d/parqueteer
-      |#      or: eval "$(parqueteer completions bash)"
-      |_parqueteer() {
-      |  local cur prev words cword
-      |  _init_completion || return
-      |
-      |  local commands="read info write validate convert merge schema stats count config completions"
-      |  local formats="table json csv pretty markdown ndjson ltsv"
-      |  local compressions="none snappy gzip lzo brotli lz4 zstd"
-      |
-      |  case "${words[1]}" in
-      |    read)
-      |      case "$prev" in
-      |        --format) COMPREPLY=($(compgen -W "$formats" -- "$cur")) ; return ;;
-      |        --schema-mode) COMPREPLY=($(compgen -W "strict union" -- "$cur")) ; return ;;
-      |        --limit|-n|--columns|-c|--filter|-f) return ;;
-      |        *) COMPREPLY=($(compgen -W "--format --limit --columns --filter --parallel --stream --schema-mode" -- "$cur"))
-      |           COMPREPLY+=($(compgen -f -X '!*.parquet' -- "$cur")) ; return ;;
-      |      esac ;;
-      |    info)
-      |      case "$prev" in
-      |        --format) COMPREPLY=($(compgen -W "table json" -- "$cur")) ; return ;;
-      |        *) COMPREPLY=($(compgen -W "--format --verbose" -- "$cur"))
-      |           COMPREPLY+=($(compgen -f -X '!*.parquet' -- "$cur")) ; return ;;
-      |      esac ;;
-      |    schema)
-      |      case "${words[2]}" in
-      |        diff)
-      |          case "$prev" in
-      |            --format) COMPREPLY=($(compgen -W "table json" -- "$cur")) ; return ;;
-      |            *) COMPREPLY=($(compgen -W "--format" -- "$cur"))
-      |               COMPREPLY+=($(compgen -f -X '!*.parquet' -- "$cur")) ; return ;;
-      |          esac ;;
-      |        *)
-      |          case "$prev" in
-      |            --format) COMPREPLY=($(compgen -W "table json" -- "$cur")) ; return ;;
-      |            *) COMPREPLY=($(compgen -W "diff --format" -- "$cur"))
-      |               COMPREPLY+=($(compgen -f -X '!*.parquet' -- "$cur")) ; return ;;
-      |          esac ;;
-      |      esac ;;
-      |    stats)
-      |      case "$prev" in
-      |        --format) COMPREPLY=($(compgen -W "table json" -- "$cur")) ; return ;;
-      |        *) COMPREPLY=($(compgen -W "--format" -- "$cur"))
-      |           COMPREPLY+=($(compgen -f -X '!*.parquet' -- "$cur")) ; return ;;
-      |      esac ;;
-      |    count)
-      |      case "$prev" in
-      |        --format) COMPREPLY=($(compgen -W "table json" -- "$cur")) ; return ;;
-      |        *) COMPREPLY=($(compgen -W "--format" -- "$cur"))
-      |           COMPREPLY+=($(compgen -f -X '!*.parquet' -- "$cur")) ; return ;;
-      |      esac ;;
-      |    write)
-      |      case "$prev" in
-      |        --compression|-c) COMPREPLY=($(compgen -W "$compressions" -- "$cur")) ; return ;;
-      |        --input-format) COMPREPLY=($(compgen -W "json ndjson csv ltsv" -- "$cur")) ; return ;;
-      |        --schema) COMPREPLY=($(compgen -f -- "$cur")) ; return ;;
-      |        --row-group-size|--page-size) return ;;
-      |        --schema-mode) COMPREPLY=($(compgen -W "strict union" -- "$cur")) ; return ;;
-      |        *) COMPREPLY=($(compgen -W "--input-format --compression --row-group-size --page-size --no-dictionary --schema --dry-run --schema-mode" -- "$cur"))
-      |           COMPREPLY+=($(compgen -f -- "$cur")) ; return ;;
-      |      esac ;;
-      |    validate)
-      |      [[ "$prev" == "--expect-schema" ]] && { COMPREPLY=($(compgen -f -- "$cur")) ; return ; }
-      |      [[ "$prev" == "--assert" ]] && return
-      |      COMPREPLY=($(compgen -W "--verbose --deep --expect-schema --assert" -- "$cur"))
-      |           COMPREPLY+=($(compgen -f -X '!*.parquet' -- "$cur")) ; return ;;
-      |    convert)
-      |      case "$prev" in
-      |        --compression) COMPREPLY=($(compgen -W "$compressions" -- "$cur")) ; return ;;
-      |        --limit|-n|--page-size) return ;;
-      |        --schema) COMPREPLY=($(compgen -f -- "$cur")) ; return ;;
-      |        --schema-mode) COMPREPLY=($(compgen -W "strict union" -- "$cur")) ; return ;;
-      |        *) COMPREPLY=($(compgen -W "--compression --limit --page-size --no-dictionary --schema --dry-run --schema-mode" -- "$cur"))
-      |           COMPREPLY+=($(compgen -f -- "$cur")) ; return ;;
-      |      esac ;;
-      |    merge)
-      |      case "$prev" in
-      |        --compression|-c) COMPREPLY=($(compgen -W "$compressions" -- "$cur")) ; return ;;
-      |        --schema-mode) COMPREPLY=($(compgen -W "strict union" -- "$cur")) ; return ;;
-      |        --output|-o) COMPREPLY=($(compgen -f -- "$cur")) ; return ;;
-      |        --page-size) return ;;
-      |        *) COMPREPLY=($(compgen -W "--output --compression --schema-mode --page-size --no-dictionary --dry-run" -- "$cur"))
-      |           COMPREPLY+=($(compgen -f -X '!*.parquet' -- "$cur")) ; return ;;
-      |      esac ;;
-      |    config)
-      |      COMPREPLY=($(compgen -W "--validate" -- "$cur")) ; return ;;
-      |    completions)
-      |      COMPREPLY=($(compgen -W "bash zsh fish" -- "$cur")) ; return ;;
-      |    *)
-      |      COMPREPLY=($(compgen -W "$commands --verbose --quiet --config --color --version --help" -- "$cur")) ; return ;;
-      |  esac
-      |}
-      |complete -F _parqueteer parqueteer""".stripMargin
+  private def flagNames(o: OptSpec): List[String] =
+    s"--${o.long}" :: o.short.map(c => s"-$c").toList
 
-  val zsh: String =
-    """#compdef parqueteer
-      |# zsh completion for parqueteer
-      |# Install: parqueteer completions zsh > "${fpath[1]}/_parqueteer"
-      |#      or: parqueteer completions zsh > ~/.zfunc/_parqueteer  (add ~/.zfunc to fpath)
-      |_parqueteer() {
-      |  local state
-      |  local -a commands formats compressions
-      |
-      |  commands=(
-      |    'read:Display parquet file content'
-      |    'info:File metadata (size, dates, writer version, compression ratio)'
-      |    'write:Create parquet file from input data'
-      |    'validate:Verify parquet file integrity'
-      |    'convert:Convert between parquet and other formats'
-      |    'merge:Combine multiple parquet files into one'
-      |    'schema:Column structure (names, types, nullability, compression)'
-      |    'stats:Column statistics (min, max, null count)'
-      |    'count:Print total row count from footer (no data scan)'
-      |    'config:Show or validate configuration'
-      |    'completions:Generate shell completion scripts'
-      |  )
-      |  formats=(table json csv pretty markdown ndjson ltsv)
-      |  compressions=(none snappy gzip lzo brotli lz4 zstd)
-      |
-      |  _arguments -C \
-      |    '(-v --verbose)'{-v,--verbose}'[Enable verbose output]' \
-      |    '(-q --quiet)'{-q,--quiet}'[Suppress non-error output]' \
-      |    '--config[Path to configuration file]:config file:_files' \
-      |    '--color[Color output mode]:mode:(auto always never)' \
-      |    '(-V --version)'{-V,--version}'[Show version information]' \
-      |    '(-h --help)'{-h,--help}'[Show help information]' \
-      |    '1: :->command' \
-      |    '*: :->args' && return 0
-      |
-      |  case $state in
-      |    command)
-      |      _describe 'command' commands ;;
-      |    args)
-      |      case ${words[2]} in
-      |        read)
-      |          _arguments \
-      |            '(-n --limit)'{-n,--limit}'[Maximum rows]:count' \
-      |            '(-c --columns)'{-c,--columns}'[Columns to display]:columns' \
-      |            '(-f --filter)'{-f,--filter}'[Filter expression]:expr' \
-      |            '--format[Output format]:format:('"${formats[*]}"')' \
-      |            '--parallel[Parallel threads]:count' \
-      |            '--stream[Stream mode]' \
-      |            '--schema-mode[Schema mode]:mode:(strict union)' \
-      |            ':parquet file:_files -g "*.parquet"' ;;
-      |        info)
-      |          _arguments \
-      |            '--format[Output format]:format:(table json)' \
-      |            '--verbose[Show per-row-group breakdown]' \
-      |            ':parquet file:_files -g "*.parquet"' ;;
-      |        schema)
-      |          case ${words[3]} in
-      |            diff)
-      |              _arguments \
-      |                '--format[Output format]:format:(table json)' \
-      |                ':file1:_files -g "*.parquet"' \
-      |                ':file2:_files -g "*.parquet"' ;;
-      |            *)
-      |              _arguments \
-      |                '--format[Output format]:format:(table json)' \
-      |                '1:subcommand or file:(diff)' \
-      |                ':parquet file:_files -g "*.parquet"' ;;
-      |          esac ;;
-      |        stats)
-      |          _arguments \
-      |            '--format[Output format]:format:(table json)' \
-      |            ':parquet file:_files -g "*.parquet"' ;;
-      |        count)
-      |          _arguments \
-      |            '--format[Output format]:format:(table json)' \
-      |            ':parquet file:_files -g "*.parquet"' ;;
-      |        write)
-      |          _arguments \
-      |            '--input-format[Input format]:format:(json ndjson csv ltsv)' \
-      |            '(-c --compression)'{-c,--compression}'[Compression]:type:('"${compressions[*]}"')' \
-      |            '--row-group-size[Row group size]:size' \
-      |            '--page-size[Data page size]:size' \
-      |            '--no-dictionary[Disable dictionary encoding]' \
-      |            '--schema[Schema contract file]:contract file:_files -g "*.json"' \
-      |            '--dry-run[Preview only]' \
-      |            '--schema-mode[Schema mode]:mode:(strict union)' \
-      |            ':input file:_files' \
-      |            ':output parquet file:_files -g "*.parquet"' ;;
-      |        validate)
-      |          _arguments \
-      |            '--verbose[Show detailed validation output]' \
-      |            '--deep[Deep validation (read all row groups)]' \
-      |            '--expect-schema[Schema contract file]:contract file:_files -g "*.json"' \
-      |            '*--assert[Footer-statistics check]:check' \
-      |            ':parquet file:_files -g "*.parquet"' ;;
-      |        convert)
-      |          _arguments \
-      |            '--compression[Compression]:type:('"${compressions[*]}"')' \
-      |            '(-n --limit)'{-n,--limit}'[Maximum rows]:count' \
-      |            '--page-size[Data page size]:size' \
-      |            '--no-dictionary[Disable dictionary encoding]' \
-      |            '--schema[Schema contract file]:contract file:_files -g "*.json"' \
-      |            '--dry-run[Preview only]' \
-      |            '--schema-mode[Schema mode]:mode:(strict union)' \
-      |            ':input file:_files' \
-      |            ':output file:_files' ;;
-      |        merge)
-      |          _arguments \
-      |            '(-o --output)'{-o,--output}'[Output file]:output file:_files -g "*.parquet"' \
-      |            '(-c --compression)'{-c,--compression}'[Compression]:type:('"${compressions[*]}"')' \
-      |            '--schema-mode[Schema mode]:mode:(strict union)' \
-      |            '--page-size[Data page size]:size' \
-      |            '--no-dictionary[Disable dictionary encoding]' \
-      |            '--dry-run[Preview only]' \
-      |            '*:input parquet files:_files -g "*.parquet"' ;;
-      |        config)
-      |          _arguments \
-      |            '--validate[Validate configuration]' ;;
-      |        completions)
-      |          _values 'shell' 'bash' 'zsh' 'fish' ;;
-      |      esac ;;
-      |  esac
-      |}
-      |_parqueteer "$@"""".stripMargin
+  // ── bash ────────────────────────────────────────────────────────────────
 
-  val fish: String =
-    """# fish completion for parqueteer
-      |# Install: parqueteer completions fish > ~/.config/fish/completions/parqueteer.fish
-      |
-      |# Top-level commands
-      |complete -c parqueteer -n '__fish_use_subcommand' -f -a read        -d 'Display parquet file content'
-      |complete -c parqueteer -n '__fish_use_subcommand' -f -a info        -d 'Show file metadata and schema information'
-      |complete -c parqueteer -n '__fish_use_subcommand' -f -a write       -d 'Create parquet file from input data'
-      |complete -c parqueteer -n '__fish_use_subcommand' -f -a validate    -d 'Verify parquet file integrity'
-      |complete -c parqueteer -n '__fish_use_subcommand' -f -a convert     -d 'Convert between parquet and other formats'
-      |complete -c parqueteer -n '__fish_use_subcommand' -f -a merge       -d 'Combine multiple parquet files into one'
-      |complete -c parqueteer -n '__fish_use_subcommand' -f -a schema      -d 'Column structure (names, types, nullability, compression)'
-      |complete -c parqueteer -n '__fish_use_subcommand' -f -a stats       -d 'Column statistics (min, max, null count)'
-      |complete -c parqueteer -n '__fish_use_subcommand' -f -a count       -d 'Print total row count from footer (no data scan)'
-      |complete -c parqueteer -n '__fish_use_subcommand' -f -a config      -d 'Show or validate configuration'
-      |complete -c parqueteer -n '__fish_use_subcommand' -f -a completions -d 'Generate shell completion scripts'
-      |
-      |# Global flags
-      |complete -c parqueteer -l verbose -s v -f -d 'Enable verbose output'
-      |complete -c parqueteer -l quiet   -s q -f -d 'Suppress non-error output'
-      |complete -c parqueteer -l config       -d 'Path to configuration file'
-      |complete -c parqueteer -l color   -f -a 'auto always never' -d 'Color output mode'
-      |
-      |# read
-      |complete -c parqueteer -n '__fish_seen_subcommand_from read' -l format   -f -a 'table json csv pretty markdown ndjson ltsv' -d 'Output format'
-      |complete -c parqueteer -n '__fish_seen_subcommand_from read' -l limit    -s n -d 'Maximum rows'
-      |complete -c parqueteer -n '__fish_seen_subcommand_from read' -l columns  -s c -d 'Columns to display'
-      |complete -c parqueteer -n '__fish_seen_subcommand_from read' -l filter   -s f -d 'Filter expression'
-      |complete -c parqueteer -n '__fish_seen_subcommand_from read' -l parallel -d 'Parallel threads'
-      |complete -c parqueteer -n '__fish_seen_subcommand_from read' -l stream   -f -d 'Stream mode'
-      |complete -c parqueteer -n '__fish_seen_subcommand_from read' -l schema-mode -f -a 'strict union' -d 'Schema mode'
-      |
-      |# info
-      |complete -c parqueteer -n '__fish_seen_subcommand_from info' -l format  -f -a 'table json' -d 'Output format'
-      |complete -c parqueteer -n '__fish_seen_subcommand_from info' -l verbose -f -d 'Show per-row-group breakdown'
-      |
-      |# write
-      |complete -c parqueteer -n '__fish_seen_subcommand_from write' -l input-format   -f -a 'json ndjson csv ltsv' -d 'Input file format'
-      |complete -c parqueteer -n '__fish_seen_subcommand_from write' -l compression    -s c -f -a 'none snappy gzip lzo brotli lz4 zstd' -d 'Compression type'
-      |complete -c parqueteer -n '__fish_seen_subcommand_from write' -l row-group-size -d 'Row group size'
-      |complete -c parqueteer -n '__fish_seen_subcommand_from write' -l page-size      -d 'Data page size'
-      |complete -c parqueteer -n '__fish_seen_subcommand_from write' -l no-dictionary  -f -d 'Disable dictionary encoding'
-      |complete -c parqueteer -n '__fish_seen_subcommand_from write' -l schema         -r -F -d 'Schema contract file'
-      |complete -c parqueteer -n '__fish_seen_subcommand_from write' -l dry-run        -f -d 'Preview only'
-      |complete -c parqueteer -n '__fish_seen_subcommand_from write' -l schema-mode    -f -a 'strict union' -d 'Schema mode'
-      |
-      |# convert
-      |complete -c parqueteer -n '__fish_seen_subcommand_from convert' -l compression -f -a 'none snappy gzip lzo brotli lz4 zstd' -d 'Compression type'
-      |complete -c parqueteer -n '__fish_seen_subcommand_from convert' -l limit       -s n -d 'Maximum rows'
-      |complete -c parqueteer -n '__fish_seen_subcommand_from convert' -l page-size   -d 'Data page size'
-      |complete -c parqueteer -n '__fish_seen_subcommand_from convert' -l no-dictionary -f -d 'Disable dictionary encoding'
-      |complete -c parqueteer -n '__fish_seen_subcommand_from convert' -l schema      -r -F -d 'Schema contract file'
-      |complete -c parqueteer -n '__fish_seen_subcommand_from convert' -l dry-run     -f -d 'Preview only'
-      |complete -c parqueteer -n '__fish_seen_subcommand_from convert' -l schema-mode -f -a 'strict union' -d 'Schema mode'
-      |
-      |# merge
-      |complete -c parqueteer -n '__fish_seen_subcommand_from merge' -l output      -s o -d 'Output file'
-      |complete -c parqueteer -n '__fish_seen_subcommand_from merge' -l compression -s c -f -a 'none snappy gzip lzo brotli lz4 zstd' -d 'Compression type'
-      |complete -c parqueteer -n '__fish_seen_subcommand_from merge' -l schema-mode -f -a 'strict union' -d 'Schema mode'
-      |complete -c parqueteer -n '__fish_seen_subcommand_from merge' -l page-size   -d 'Data page size'
-      |complete -c parqueteer -n '__fish_seen_subcommand_from merge' -l no-dictionary -f -d 'Disable dictionary encoding'
-      |complete -c parqueteer -n '__fish_seen_subcommand_from merge' -l dry-run     -f -d 'Preview only'
-      |
-      |# validate
-      |complete -c parqueteer -n '__fish_seen_subcommand_from validate' -l verbose -f -d 'Show detailed validation output'
-      |complete -c parqueteer -n '__fish_seen_subcommand_from validate' -l deep    -f -d 'Deep validation (read all row groups)'
-      |complete -c parqueteer -n '__fish_seen_subcommand_from validate' -l expect-schema -r -F -d 'Schema contract file'
-      |complete -c parqueteer -n '__fish_seen_subcommand_from validate' -l assert -r -f -d 'Footer-statistics check'
-      |
-      |# schema (inspect single file)
-      |complete -c parqueteer -n '__fish_seen_subcommand_from schema' -l format -f -a 'table json' -d 'Output format'
-      |# schema diff subcommand
-      |complete -c parqueteer -n '__fish_seen_subcommand_from schema; and not __fish_seen_subcommand_from diff' -f -a diff -d 'Compare schemas of two parquet files'
-      |
-      |# stats
-      |complete -c parqueteer -n '__fish_seen_subcommand_from stats' -l format -f -a 'table json' -d 'Output format'
-      |
-      |# count
-      |complete -c parqueteer -n '__fish_seen_subcommand_from count' -l format -f -a 'table json' -d 'Output format'
-      |
-      |# config
-      |complete -c parqueteer -n '__fish_seen_subcommand_from config' -l validate -f -d 'Validate configuration'
-      |
-      |# completions
-      |complete -c parqueteer -n '__fish_seen_subcommand_from completions' -f -a 'bash zsh fish' -d 'Shell type'""".stripMargin
+  lazy val bash: String = {
+    // The COMPREPLY line offering `values`, or None when there is nothing to offer.
+    def compgen(values: Values): Option[String] = values match {
+      case Values.Choice(vs) =>
+        Some(s"""COMPREPLY+=($$(compgen -W "${vs.mkString(" ")}" -- "$$cur"))""")
+      case Values.Files(Some(glob)) =>
+        Some(s"""COMPREPLY+=($$(compgen -f -X '!$glob' -- "$$cur"))""")
+      case Values.Files(None) => Some("""COMPREPLY+=($(compgen -f -- "$cur"))""")
+      case Values.Free        => None
+    }
+
+    // Completion for one command: the value of the option just typed, else
+    // its flags (plus `extraWords`, e.g. subcommand names) and positionals.
+    def block(path: String, options: List[OptSpec], extra: List[String], pad: String) = {
+      val valueCases = options.filter(_.takesValue).map { o =>
+        val offer = compgen(CliSpec.optionValues(path, o)).fold("")(c => s"$c ; ")
+        s"$pad  ${flagNames(o).mkString("|")}) ${offer}return ;;"
+      }
+      val prevCase =
+        if valueCases.isEmpty then Nil
+        else (s"""${pad}case "$$prev" in""" :: valueCases) :+ s"${pad}esac"
+      val words = (extra ++ options.map(o => s"--${o.long}")).mkString(" ")
+      val wordsLine =
+        Option.when(words.nonEmpty)(s"""${pad}COMPREPLY=($$(compgen -W "$words" -- "$$cur"))""")
+      val positional = if path.isEmpty then None else compgen(CliSpec.argumentValues(path))
+      (prevCase ++ wordsLine ++ positional.map(pad + _) :+ s"${pad}return ;;").mkString("\n")
+    }
+
+    val commandCases = CliSpec.topLevelCommands.map { c =>
+      val subs = CliSpec.subcommands(c.path)
+      if subs.isEmpty then s"    ${c.name})\n${block(c.path, c.options, Nil, "      ")}"
+      else {
+        val subCases =
+          subs.map(s => s"        ${s.name})\n${block(s.path, s.options, Nil, "          ")}")
+        val own = s"        *)\n${block(c.path, c.options, subs.map(_.name), "          ")}"
+        s"""    ${c.name})
+           |      case "$${words[2]}" in
+           |${(subCases :+ own).mkString("\n")}
+           |      esac ;;""".stripMargin
+      }
+    }
+    // Before a command: global options and the command names.
+    val global =
+      block("", CliSpec.globalOptions, CliSpec.topLevelCommands.map(_.name), "      ")
+
+    s"""# bash completion for parqueteer
+       |# Install: parqueteer completions bash > /etc/bash_completion.d/parqueteer
+       |#      or: eval "$$(parqueteer completions bash)"
+       |_parqueteer() {
+       |  local cur prev words cword
+       |  _init_completion || return
+       |
+       |  case "$${words[1]}" in
+       |${commandCases.mkString("\n")}
+       |    *)
+       |$global
+       |  esac
+       |}
+       |complete -F _parqueteer parqueteer""".stripMargin
+  }
+
+  // ── zsh ─────────────────────────────────────────────────────────────────
+
+  lazy val zsh: String = {
+    def describe(text: String): String =
+      text.replace("\\", "\\\\").replace("[", "\\[").replace("]", "\\]").replace("'", "'\\''")
+
+    def action(values: Values): String = values match {
+      case Values.Choice(vs)        => s"(${vs.mkString(" ")})"
+      case Values.Files(Some(glob)) => s"""_files -g "$glob""""
+      case Values.Files(None)       => "_files"
+      case Values.Free              => ""
+    }
+
+    def optSpec(path: String, o: OptSpec): String = {
+      val star = if o.repeatable then "*" else ""
+      val value = o.valueName.fold("") { v =>
+        s":${v.stripPrefix("<").stripSuffix(">")}:${action(CliSpec.optionValues(path, o))}"
+      }
+      val body = s"[${describe(o.summary)}]$value'"
+      o.short match {
+        case Some(c) => s"'$star(-$c --${o.long})'{-$c,--${o.long}}'$body"
+        case None    => s"'$star--${o.long}$body"
+      }
+    }
+
+    def positional(path: String): List[String] = CliSpec.argumentValues(path) match {
+      case Values.Free => Nil
+      case v           => List(s"'*:argument:${action(v)}'")
+    }
+
+    def arguments(specs: List[String], pad: String): String =
+      if specs.isEmpty then s"${pad}:"
+      else (s"${pad}_arguments" :: specs.map(spec => s"$pad  $spec")).mkString(" \\\n")
+
+    val commandCases = CliSpec.topLevelCommands.map { c =>
+      val own  = c.options.map(optSpec(c.path, _))
+      val subs = CliSpec.subcommands(c.path)
+      if subs.isEmpty then
+        s"        ${c.name})\n${arguments(own ++ positional(c.path), "          ")} ;;"
+      else {
+        val subCases = subs.map(s =>
+          s"            ${s.name})\n${arguments(s.options.map(optSpec(s.path, _)) ++ positional(s.path), "              ")} ;;"
+        )
+        val subChoice = s"'1:subcommand or file:(${subs.map(_.name).mkString(" ")})'"
+        val ownCase =
+          s"            *)\n${arguments((own :+ subChoice) ++ positional(c.path), "              ")} ;;"
+        s"""        ${c.name})
+           |          case $${words[3]} in
+           |${(subCases :+ ownCase).mkString("\n")}
+           |          esac ;;""".stripMargin
+      }
+    }
+
+    val commandList = CliSpec.topLevelCommands
+      .map(c => s"    '${c.name}:${CliSpec.summarize(c.text).replace("'", "'\\''")}'")
+      .mkString("\n")
+    val globalSpecs = CliSpec.globalOptions.map(o => s"    ${optSpec("", o)} \\").mkString("\n")
+
+    s"""#compdef parqueteer
+       |# zsh completion for parqueteer
+       |# Install: parqueteer completions zsh > "$${fpath[1]}/_parqueteer"
+       |#      or: parqueteer completions zsh > ~/.zfunc/_parqueteer  (add ~/.zfunc to fpath)
+       |_parqueteer() {
+       |  local state
+       |  local -a commands
+       |
+       |  commands=(
+       |$commandList
+       |  )
+       |
+       |  _arguments -C \\
+       |$globalSpecs
+       |    '1: :->command' \\
+       |    '*: :->args' && return 0
+       |
+       |  case $$state in
+       |    command)
+       |      _describe 'command' commands ;;
+       |    args)
+       |      case $${words[2]} in
+       |${commandCases.mkString("\n")}
+       |      esac ;;
+       |  esac
+       |}
+       |_parqueteer "$$@"""".stripMargin
+  }
+
+  // ── fish ────────────────────────────────────────────────────────────────
+
+  lazy val fish: String = {
+    def quote(text: String): String = s"'${text.replace("\\", "\\\\").replace("'", "\\'")}'"
+
+    def optLine(condition: Option[String], path: String, o: OptSpec): String = {
+      val cond  = condition.fold("")(c => s" -n ${quote(c)}")
+      val short = o.short.fold("")(c => s" -s $c")
+      val value =
+        if !o.takesValue then " -f"
+        else
+          CliSpec.optionValues(path, o) match {
+            case Values.Choice(vs) => s" -x -a ${quote(vs.mkString(" "))}"
+            case Values.Files(_)   => " -r -F"
+            case Values.Free       => " -x"
+          }
+      s"complete -c parqueteer$cond -l ${o.long}$short$value -d ${quote(o.summary)}"
+    }
+
+    def commandLines(c: CmdSpec): List[String] = {
+      val parent = c.path.split(' ').init.lastOption
+      val condition =
+        parent.fold(s"__fish_seen_subcommand_from ${c.name}")(_ =>
+          s"__fish_seen_subcommand_from ${c.name}"
+        )
+      val subcommandOffers = CliSpec.subcommands(c.path).map { s =>
+        val cond =
+          s"__fish_seen_subcommand_from ${c.name}; and not __fish_seen_subcommand_from ${s.name}"
+        s"complete -c parqueteer -n ${quote(cond)} -f -a ${s.name} -d ${quote(CliSpec.summarize(s.text))}"
+      }
+      val positional = CliSpec.argumentValues(c.path) match {
+        case Values.Choice(vs) =>
+          List(s"complete -c parqueteer -n ${quote(condition)} -f -a ${quote(vs.mkString(" "))}")
+        case _ => Nil
+      }
+      s"# ${c.path}" :: (c.options.map(
+        optLine(Some(condition), c.path, _)
+      ) ++ subcommandOffers ++ positional)
+    }
+
+    val commands = CliSpec.topLevelCommands.map(c =>
+      s"complete -c parqueteer -n '__fish_use_subcommand' -f -a ${c.name} -d ${quote(CliSpec.summarize(c.text))}"
+    )
+    val sections = CliSpec.commands.map(commandLines(_).mkString("\n"))
+
+    s"""# fish completion for parqueteer
+       |# Install: parqueteer completions fish > ~/.config/fish/completions/parqueteer.fish
+       |
+       |# Commands
+       |${commands.mkString("\n")}
+       |
+       |# Global options
+       |${CliSpec.globalOptions.map(optLine(None, "", _)).mkString("\n")}
+       |
+       |${sections.mkString("\n\n")}""".stripMargin
+  }
 }

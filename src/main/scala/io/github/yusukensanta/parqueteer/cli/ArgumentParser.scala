@@ -12,6 +12,7 @@ import io.github.yusukensanta.parqueteer.core.models.{
 import io.github.yusukensanta.parqueteer.config.EnvConfig
 import io.github.yusukensanta.parqueteer.core.services.StatsAssertion
 import io.github.yusukensanta.parqueteer.core.util.SizeParser
+import CliSpec.Choices
 
 object ArgumentParser {
 
@@ -31,26 +32,32 @@ object ArgumentParser {
     def enumOpt[C <: Command: reflect.ClassTag, A](
         name: String,
         parse: String => Option[A],
-        allowed: String
+        choices: List[String],
+        valueName: String
     )(set: (C, A) => C) =
       opt[String](name)
+        .valueName(valueName)
         .validate(x =>
-          if parse(x).isDefined then success else failure(s"Invalid --$name: $x. Use $allowed")
+          if parse(x).isDefined then success
+          else failure(s"Invalid --$name: $x. Use ${orList(choices)}")
         )
         .action((x, c) => updateCmd[C](c, cmd => parse(x).fold(cmd)(set(cmd, _))))
 
     def schemaModeOpt[C <: Command: reflect.ClassTag](set: (C, SchemaMode) => C) =
-      enumOpt[C, SchemaMode]("schema-mode", SchemaMode.fromString, "strict or union")(set)
+      enumOpt[C, SchemaMode]("schema-mode", SchemaMode.fromString, Choices.schemaModes, "<mode>")(
+        set
+      )
 
     def compressionOpt[C <: Command: reflect.ClassTag](set: (C, CompressionType) => C) =
       enumOpt[C, CompressionType](
         "compression",
         CompressionType.fromString,
-        "snappy, gzip, zstd, lz4, brotli, or none"
+        Choices.compressions,
+        "<type>"
       )(set)
 
     def tableOrJsonFormatOpt[C <: Command: reflect.ClassTag](set: (C, OutputFormat) => C) =
-      enumOpt[C, OutputFormat]("format", parseTableOrJson, "table or json")(set)
+      enumOpt[C, OutputFormat]("format", parseTableOrJson, Choices.tableOrJson, "<fmt>")(set)
 
     // --page-size / --no-dictionary for every command that writes parquet.
     def pageSizeOpt[C <: Command: reflect.ClassTag](
@@ -58,6 +65,7 @@ object ArgumentParser {
         set: (C, WriterOptions) => C
     ) =
       opt[String]("page-size")
+        .valueName("<size>")
         .validate(x =>
           scala.util.Try(parseSize(x)).toEither match {
             case Left(e) => failure(e.getMessage)
@@ -82,6 +90,7 @@ object ArgumentParser {
     def limitOpt[C <: Command: reflect.ClassTag](set: (C, Long) => C) =
       opt[Long]("limit")
         .abbr("n")
+        .valueName("<n>")
         .validate(x =>
           if x > 0 then success
           else failure("--limit must be a positive integer")
@@ -104,15 +113,19 @@ object ArgumentParser {
         .action((_, c) => c.copy(globalOptions = c.globalOptions.copy(quiet = true)))
         .text("Suppress non-error output"),
       opt[String]("config")
+        .valueName("<file>")
         .action((x, c) => c.copy(globalOptions = c.globalOptions.copy(configPath = Some(x))))
         .text("Path to configuration file"),
       opt[String]("profile")
+        .valueName("<name>")
         .action((x, c) => c.copy(globalOptions = c.globalOptions.copy(profile = Some(x))))
         .text("AWS S3 credentials profile (from ~/.aws/credentials)"),
       opt[String]("region")
+        .valueName("<region>")
         .action((x, c) => c.copy(globalOptions = c.globalOptions.copy(region = Some(x))))
         .text("AWS S3 region (e.g. us-east-1, ap-northeast-1)"),
       opt[Int]("file-parallelism")
+        .valueName("<n>")
         .action((x, c) => c.copy(globalOptions = c.globalOptions.copy(fileParallelism = x)))
         .validate(x =>
           if x >= 1 then success
@@ -124,14 +137,15 @@ object ArgumentParser {
             "concurrent connections and in-flight memory (default: 4)"
         ),
       opt[String]("color")
+        .valueName("<mode>")
         .action((x, c) =>
           c.copy(globalOptions =
             c.globalOptions.copy(colorMode = ColorMode.fromString(x).getOrElse(ColorMode.Auto))
           )
         )
         .validate(x =>
-          if List("auto", "always", "never").contains(x.toLowerCase) then success
-          else failure(s"Invalid color mode: $x. Use auto, always, or never")
+          if ColorMode.fromString(x).isDefined then success
+          else failure(s"Invalid color mode: $x. Use ${orList(Choices.colors)}")
         )
         .text("Color output mode: auto, always, never (default: auto)"),
       cmd("read")
@@ -158,21 +172,25 @@ object ArgumentParser {
             .text("Maximum number of rows to display"),
           opt[Seq[String]]("columns")
             .abbr("c")
+            .valueName("<col,...>")
             .action((x, c) => updateCmd[ReadCommand](c, _.copy(columns = Some(x.toList))))
             .text("Comma-separated list of columns to display"),
           opt[String]("filter")
             .abbr("f")
+            .valueName("<expr>")
             .action((x, c) => updateCmd[ReadCommand](c, _.copy(filter = Some(x))))
             .text("Filter expression for rows"),
           enumOpt[ReadCommand, OutputFormat](
             "format",
             OutputFormat.fromString,
-            "table, json, csv, pretty, markdown, ndjson, or ltsv"
+            Choices.formats,
+            "<fmt>"
           )((cmd, f) => cmd.copy(format = f))
             .text(
               "Output format: table, json, csv, pretty, markdown, ndjson, ltsv (default: table)"
             ),
           opt[Int]("parallel")
+            .valueName("<n>")
             .action((x, c) => updateCmd[ReadCommand](c, _.copy(parallelism = x)))
             .validate(x =>
               if x >= 1 then success
@@ -231,7 +249,8 @@ object ArgumentParser {
           enumOpt[WriteCommand, InputFormat](
             "input-format",
             InputFormat.fromString,
-            "json, ndjson, csv, or ltsv"
+            Choices.inputFormats,
+            "<fmt>"
           )((cmd, f) => cmd.copy(inputFormat = f))
             .text("Input file format: json, ndjson, csv, ltsv (default: json)"),
           compressionOpt[WriteCommand]((cmd, ct) => cmd.copy(compression = ct))
@@ -240,6 +259,7 @@ object ArgumentParser {
               "Compression type: none, snappy, gzip, lzo, brotli, lz4, zstd"
             ),
           opt[String]("row-group-size")
+            .valueName("<size>")
             .validate(x =>
               scala.util
                 .Try(parseSize(x))
@@ -332,7 +352,7 @@ object ArgumentParser {
             .valueName("<contract.json>")
             .action((x, c) => updateCmd[ConvertCommand](c, _.copy(schemaFile = Some(x))))
             .text(
-              "Text → parquet only: write with this contract's schema (the output of `schema --format json`) instead of inferring one"
+              "Write parquet from text input with this contract's schema (the output of `schema --format json`) instead of inferring one; not for parquet input"
             ),
           opt[Unit]("dry-run")
             .action((_, c) => updateCmd[ConvertCommand](c, _.copy(dryRun = true)))
@@ -405,6 +425,7 @@ object ArgumentParser {
             .text("Input parquet files (specify two or more)"),
           opt[String]("output")
             .abbr("o")
+            .valueName("<file>")
             .required()
             .action((x, c) => updateCmd[MergeCommand](c, _.copy(outputPath = x)))
             .text("Output parquet file path"),
@@ -464,7 +485,7 @@ object ArgumentParser {
             )
             .validate(x =>
               if Shell.fromString(x).isDefined then success
-              else failure(s"Unsupported shell: $x. Use bash, zsh, or fish")
+              else failure(s"Unsupported shell: $x. Use ${orList(Choices.shells)}")
             )
             .text("Shell type: bash, zsh, fish")
         ),
@@ -478,6 +499,11 @@ object ArgumentParser {
         )
     )
   }
+
+  // "a, b, or c" for error messages.
+  private def orList(choices: List[String]): String =
+    if choices.sizeIs < 2 then choices.mkString
+    else s"${choices.init.mkString(", ")}, or ${choices.last}"
 
   private def updateCmd[C <: Command: reflect.ClassTag](
       config: Config,

@@ -98,4 +98,42 @@ class ShellCompletionsTest extends AnyFlatSpec with Matchers {
   it should "complete shell names for completions subcommand" in {
     ShellCompletions.fish should include("bash zsh fish")
   }
+
+  // ── Generated from CliSpec ─────────────────────────────────────────────
+
+  private val scripts = Shell.values.toList.map(sh => sh -> ShellCompletions.scriptFor(sh))
+
+  "Every completion script" should "offer every option of every command and every global option" in {
+    val options = CliSpec.globalOptions ++ CliSpec.commands.flatMap(_.options)
+    for {
+      (shell, script) <- scripts
+      o               <- options
+    } withClue(s"$shell --${o.long}: ")(script should include(o.long))
+  }
+
+  it should "offer every enum value the parser accepts" in {
+    for {
+      (shell, script) <- scripts
+      values <- List(
+        CliSpec.Choices.formats,
+        CliSpec.Choices.compressions,
+        CliSpec.Choices.inputFormats,
+        CliSpec.Choices.schemaModes,
+        CliSpec.Choices.colors,
+        CliSpec.Choices.shells
+      )
+    } withClue(s"$shell: ")(script should include(values.mkString(" ")))
+  }
+
+  "ShellCompletions.bash" should "be valid bash syntax" in {
+    val bash = new java.io.File("/bin/bash")
+    assume(bash.canExecute, "bash not installed")
+    val file = java.nio.file.Files.createTempFile("parqueteer_completion_", ".bash")
+    file.toFile.deleteOnExit()
+    java.nio.file.Files.writeString(file, ShellCompletions.bash)
+    val proc =
+      new ProcessBuilder(bash.getPath, "-n", file.toString).redirectErrorStream(true).start()
+    val out = new String(proc.getInputStream.readAllBytes())
+    withClue(out)(proc.waitFor() shouldBe 0)
+  }
 }
