@@ -254,6 +254,12 @@ object ArgumentParser {
             .text("Row group size (e.g., 128MB, 1.5GB)"),
           pageSizeOpt[WriteCommand](_.writer, (cmd, w) => cmd.copy(writer = w)),
           noDictionaryOpt[WriteCommand](_.writer, (cmd, w) => cmd.copy(writer = w)),
+          opt[String]("schema")
+            .valueName("<contract.json>")
+            .action((x, c) => updateCmd[WriteCommand](c, _.copy(schemaFile = Some(x))))
+            .text(
+              "Write with the column names, types and nullability in this contract (the output of `schema --format json`) instead of inferring them from the input"
+            ),
           opt[Unit]("dry-run")
             .action((_, c) => updateCmd[WriteCommand](c, _.copy(dryRun = true)))
             .text(
@@ -322,6 +328,12 @@ object ArgumentParser {
             .text("Maximum number of rows to convert"),
           pageSizeOpt[ConvertCommand](_.writer, (cmd, w) => cmd.copy(writer = w)),
           noDictionaryOpt[ConvertCommand](_.writer, (cmd, w) => cmd.copy(writer = w)),
+          opt[String]("schema")
+            .valueName("<contract.json>")
+            .action((x, c) => updateCmd[ConvertCommand](c, _.copy(schemaFile = Some(x))))
+            .text(
+              "Text → parquet only: write with this contract's schema (the output of `schema --format json`) instead of inferring one"
+            ),
           opt[Unit]("dry-run")
             .action((_, c) => updateCmd[ConvertCommand](c, _.copy(dryRun = true)))
             .text(

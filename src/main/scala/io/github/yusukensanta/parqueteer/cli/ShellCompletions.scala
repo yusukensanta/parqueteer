@@ -66,9 +66,10 @@ object ShellCompletions {
       |      case "$prev" in
       |        --compression|-c) COMPREPLY=($(compgen -W "$compressions" -- "$cur")) ; return ;;
       |        --input-format) COMPREPLY=($(compgen -W "json ndjson csv ltsv" -- "$cur")) ; return ;;
+      |        --schema) COMPREPLY=($(compgen -f -- "$cur")) ; return ;;
       |        --row-group-size|--page-size) return ;;
       |        --schema-mode) COMPREPLY=($(compgen -W "strict union" -- "$cur")) ; return ;;
-      |        *) COMPREPLY=($(compgen -W "--input-format --compression --row-group-size --page-size --no-dictionary --dry-run --schema-mode" -- "$cur"))
+      |        *) COMPREPLY=($(compgen -W "--input-format --compression --row-group-size --page-size --no-dictionary --schema --dry-run --schema-mode" -- "$cur"))
       |           COMPREPLY+=($(compgen -f -- "$cur")) ; return ;;
       |      esac ;;
       |    validate)
@@ -80,8 +81,9 @@ object ShellCompletions {
       |      case "$prev" in
       |        --compression) COMPREPLY=($(compgen -W "$compressions" -- "$cur")) ; return ;;
       |        --limit|-n|--page-size) return ;;
+      |        --schema) COMPREPLY=($(compgen -f -- "$cur")) ; return ;;
       |        --schema-mode) COMPREPLY=($(compgen -W "strict union" -- "$cur")) ; return ;;
-      |        *) COMPREPLY=($(compgen -W "--compression --limit --page-size --no-dictionary --dry-run --schema-mode" -- "$cur"))
+      |        *) COMPREPLY=($(compgen -W "--compression --limit --page-size --no-dictionary --schema --dry-run --schema-mode" -- "$cur"))
       |           COMPREPLY+=($(compgen -f -- "$cur")) ; return ;;
       |      esac ;;
       |    merge)
@@ -186,6 +188,7 @@ object ShellCompletions {
       |            '--row-group-size[Row group size]:size' \
       |            '--page-size[Data page size]:size' \
       |            '--no-dictionary[Disable dictionary encoding]' \
+      |            '--schema[Schema contract file]:contract file:_files -g "*.json"' \
       |            '--dry-run[Preview only]' \
       |            '--schema-mode[Schema mode]:mode:(strict union)' \
       |            ':input file:_files' \
@@ -203,6 +206,7 @@ object ShellCompletions {
       |            '(-n --limit)'{-n,--limit}'[Maximum rows]:count' \
       |            '--page-size[Data page size]:size' \
       |            '--no-dictionary[Disable dictionary encoding]' \
+      |            '--schema[Schema contract file]:contract file:_files -g "*.json"' \
       |            '--dry-run[Preview only]' \
       |            '--schema-mode[Schema mode]:mode:(strict union)' \
       |            ':input file:_files' \
@@ -268,6 +272,7 @@ object ShellCompletions {
       |complete -c parqueteer -n '__fish_seen_subcommand_from write' -l row-group-size -d 'Row group size'
       |complete -c parqueteer -n '__fish_seen_subcommand_from write' -l page-size      -d 'Data page size'
       |complete -c parqueteer -n '__fish_seen_subcommand_from write' -l no-dictionary  -f -d 'Disable dictionary encoding'
+      |complete -c parqueteer -n '__fish_seen_subcommand_from write' -l schema         -r -F -d 'Schema contract file'
       |complete -c parqueteer -n '__fish_seen_subcommand_from write' -l dry-run        -f -d 'Preview only'
       |complete -c parqueteer -n '__fish_seen_subcommand_from write' -l schema-mode    -f -a 'strict union' -d 'Schema mode'
       |
@@ -276,6 +281,7 @@ object ShellCompletions {
       |complete -c parqueteer -n '__fish_seen_subcommand_from convert' -l limit       -s n -d 'Maximum rows'
       |complete -c parqueteer -n '__fish_seen_subcommand_from convert' -l page-size   -d 'Data page size'
       |complete -c parqueteer -n '__fish_seen_subcommand_from convert' -l no-dictionary -f -d 'Disable dictionary encoding'
+      |complete -c parqueteer -n '__fish_seen_subcommand_from convert' -l schema      -r -F -d 'Schema contract file'
       |complete -c parqueteer -n '__fish_seen_subcommand_from convert' -l dry-run     -f -d 'Preview only'
       |complete -c parqueteer -n '__fish_seen_subcommand_from convert' -l schema-mode -f -a 'strict union' -d 'Schema mode'
       |
