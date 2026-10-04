@@ -366,39 +366,49 @@ class StatsComputerTest extends AnyFlatSpec with Matchers {
       (Some("2024-02-29T12:34:56Z"), Some("2025-01-01T00:00:00.000000001Z"))
   }
 
-  "formatStatVal" should "format Binary values as UTF-8 strings" in {
-    val bin = Binary.fromString("hello")
-    StatsComputer.formatStatVal(bin, PrimitiveTypeName.BINARY) shouldBe "hello"
+  // ── Ordering fixes (these failed before the StatCodec refactor) ──────
+
+  it should "order BINARY/STRING statistics as unsigned bytes (UTF-8 code-point order)" in {
+    // 'é' is 0xC3 0xA9 in UTF-8; a signed byte compare ranks it below 'a'.
+    StatsComputer.computeTypedMinMax(
+      List(mkBinaryStats("a", "a"), mkBinaryStats("é", "é")),
+      PrimitiveTypeName.BINARY,
+      LogicalTypeAnnotation.stringType()
+    ) shouldBe (Some("a"), Some("é"))
   }
 
-  it should "format non-Binary values with toString" in {
-    StatsComputer.formatStatVal(42, PrimitiveTypeName.INT32) shouldBe "42"
+  it should "order INT96 timestamps chronologically, not by their display text" in {
+    // "…00Z" sorts after "…00.500Z" as text ('Z' > '.'), but is earlier in time.
+    val t0 = java.time.Instant.parse("2024-01-01T00:00:00Z")
+    val t1 = t0.plusMillis(500)
+    StatsComputer.computeTypedMinMax(
+      List(int96Stats(t1, t1), int96Stats(t0, t0)),
+      PrimitiveTypeName.INT96,
+      null
+    ) shouldBe (Some("2024-01-01T00:00:00Z"), Some("2024-01-01T00:00:00.500Z"))
   }
 
-  it should "format FIXED_LEN_BYTE_ARRAY Binary as UTF-8" in {
-    val bin = Binary.fromString("test")
-    StatsComputer.formatStatVal(
-      bin,
-      PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY
-    ) shouldBe "test"
+  it should "skip undecodable INT96 values" in {
+    val pt    = Types.required(PrimitiveTypeName.INT96).named("test")
+    val stats = Statistics.createStats(pt).asInstanceOf[BinaryStatistics]
+    stats.setMinMax(Binary.fromString("short"), Binary.fromString("short"))
+    StatsComputer.computeTypedMinMax(List(stats), PrimitiveTypeName.INT96, null) shouldBe
+      (None, None)
   }
 
-  "numericMinMax" should "return (None, None) for empty list" in {
-    val result = StatsComputer.numericMinMax[Int](
+  "minMax" should "return (None, None) for an empty list" in {
+    StatsComputer.minMax(
       Nil,
-      { case n: java.lang.Integer => n.intValue() }
-    )
-    result shouldBe (None, None)
+      StatsComputer.StatCodec[Int]({ case n: java.lang.Integer => n.intValue() }, _.toString)
+    ) shouldBe (None, None)
   }
 
-  it should "apply filter predicate" in {
+  it should "skip values the codec does not extract" in {
     val stats = List(mkFloatStats(Float.NaN, 10.0f), mkFloatStats(3.0f, Float.NaN))
-    val result = StatsComputer.numericMinMax[Float](
+    StatsComputer.minMax(
       stats,
-      { case n: java.lang.Float => n.floatValue() },
-      filter = v => !v.isNaN
-    )
-    result._1 shouldBe Some("3.0")
-    result._2 shouldBe Some("10.0")
+      StatsComputer
+        .StatCodec[Float]({ case n: java.lang.Float if !n.isNaN => n.floatValue() }, _.toString)
+    ) shouldBe (Some("3.0"), Some("10.0"))
   }
 }
