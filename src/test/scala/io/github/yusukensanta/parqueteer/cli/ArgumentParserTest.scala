@@ -634,6 +634,27 @@ class ArgumentParserTest extends AnyFlatSpec with Matchers {
     )
   }
 
+  "ArgumentParser --schema" should "parse on write and convert" in {
+    def commandOf(args: String*) =
+      OParser.parse(ArgumentParser.parser, args.toArray, ArgumentParser.Config()).flatMap(_.command)
+    commandOf("write", "in.json", "out.parquet", "--schema", "c.json") shouldBe Some(
+      WriteCommand("in.json", "out.parquet", schemaFile = Some("c.json"))
+    )
+    commandOf("convert", "in.csv", "out.parquet", "--schema", "c.json")
+      .collect { case c: ConvertCommand => c.schemaFile } shouldBe Some(Some("c.json"))
+  }
+
+  it should "not be confused with --schema-mode" in {
+    OParser
+      .parse(
+        ArgumentParser.parser,
+        Array("write", "in.json", "out.parquet", "--schema-mode", "union"),
+        ArgumentParser.Config()
+      )
+      .flatMap(_.command)
+      .collect { case w: WriteCommand => w.schemaFile } shouldBe Some(None)
+  }
+
   "ArgumentParser writer flags" should "parse --page-size and --no-dictionary on write" in {
     OParser
       .parse(

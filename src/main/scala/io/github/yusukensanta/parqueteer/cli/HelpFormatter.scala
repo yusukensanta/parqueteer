@@ -80,6 +80,8 @@ object HelpFormatter {
        |      --row-group-size <size>   Row group size (e.g., 128MB, 1.5GB)
        |      --page-size <size>        Target data page size (e.g., 64KB, 1MB; default: 1MB)
        |      --no-dictionary           Disable dictionary encoding (default: enabled)
+       |      --schema <file>           Write with the column types/nullability in a contract file
+       |                                (the output of `schema --format json`) instead of inferring them
        |      --dry-run                 Preview what would be written without writing
        |  -h, --help                    Show this help message
        |
@@ -87,6 +89,7 @@ object HelpFormatter {
        |  parqueteer write data.json output.parquet
        |  parqueteer write data.csv output.parquet --input-format csv --compression zstd
        |  parqueteer write data.json output.parquet --dry-run
+       |  parqueteer write events.ndjson out.parquet --input-format ndjson --schema contract.json
        |""".stripMargin
 
   private def validateHelp(): String =
@@ -140,6 +143,8 @@ object HelpFormatter {
        |  -n, --limit <n>            Maximum number of rows to convert
        |      --page-size <size>     Target data page size for parquet output (default: 1MB)
        |      --no-dictionary        Disable dictionary encoding for parquet output
+       |      --schema <file>        Text → parquet only: use a contract file's schema instead of
+       |                             inferring one
        |      --dry-run              Preview what would be converted without converting
        |  -h, --help                 Show this help message
        |
@@ -147,6 +152,7 @@ object HelpFormatter {
        |  parqueteer convert data.parquet out.json
        |  parqueteer convert data.parquet out.parquet --compression zstd
        |  parqueteer convert data.csv out.parquet
+       |  parqueteer convert data.csv out.parquet --schema contract.json
        |""".stripMargin
 
   private def schemaHelp(): String =

@@ -67,6 +67,14 @@ trait ParquetRepository {
       rows: Iterator[Map[String, CellValue]]
   ): Try[ParquetSchema]
 
+  /**
+   * Fails when a declared schema can't be written (unknown or unsupported
+   * dataType), without touching storage. Defaults to accepting everything so
+   * test doubles needn't implement it.
+   */
+  def validateWriteSchema(@scala.annotation.unused schema: ParquetSchema): Try[Unit] =
+    scala.util.Success(())
+
   def validateFile(file: ParquetFile, deep: Boolean = false): Try[List[String]]
   def readSchemaFields(file: ParquetFile): Try[List[FieldSummary]]
   def deleteFile(location: StorageLocation): Try[Unit]
@@ -506,6 +514,9 @@ class HadoopParquetRepository(
       footerCache.remove(cacheKey)
       result
     }
+
+  override def validateWriteSchema(schema: ParquetSchema): Try[Unit] =
+    Try(ParquetSchemaBuilder.buildMessageType(schema)).map(_ => ())
 
   def inferSchemaFromRows(
       rows: Iterator[Map[String, CellValue]]

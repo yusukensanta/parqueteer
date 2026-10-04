@@ -45,7 +45,8 @@ case class WriteCommand(
     rowGroupSize: Option[Long] = None,
     dryRun: Boolean = false,
     schemaMode: SchemaMode = SchemaMode.Strict,
-    writer: WriterOptions = WriterOptions()
+    writer: WriterOptions = WriterOptions(),
+    schemaFile: Option[String] = None
 ) extends Command
 
 case class ValidateCommand(
@@ -63,7 +64,8 @@ case class ConvertCommand(
     maxRows: Option[Long] = None,
     dryRun: Boolean = false,
     schemaMode: SchemaMode = SchemaMode.Strict,
-    writer: WriterOptions = WriterOptions()
+    writer: WriterOptions = WriterOptions(),
+    schemaFile: Option[String] = None
 ) extends Command
 
 case class ConfigCommand(validate: Boolean = false) extends Command

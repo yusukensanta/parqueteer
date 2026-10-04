@@ -3,8 +3,10 @@ package io.github.yusukensanta.parqueteer.core.repositories
 import io.github.yusukensanta.parqueteer.core.models.{CellValue, CompressionType, ParqueteerError}
 import org.apache.parquet.hadoop.metadata.CompressionCodecName
 import org.apache.parquet.io.api.Binary
-import org.apache.parquet.schema.{LogicalTypeAnnotation, MessageType}
+import org.apache.parquet.schema.{LogicalTypeAnnotation, MessageType, PrimitiveType}
 import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
+import org.apache.parquet.schema.Type.Repetition
+import scala.jdk.CollectionConverters.*
 import org.apache.parquet.example.data.Group
 
 private[repositories] object ParquetWriteOps {
@@ -37,22 +39,121 @@ private[repositories] object ParquetWriteOps {
       java.math.BigInteger.TEN.pow
     )
 
+  /**
+   * Converts a parsed input value to the representation its target column
+   * needs when the two differ. That happens when the write schema is given
+   * explicitly (`--schema`) instead of being inferred from these same values,
+   * and when inference widens a column (e.g. INT64 + DECIMAL → DECIMAL).
+   * Well-defined conversions are applied (INT64→INT32 in range, numbers →
+   * DECIMAL, ISO text → DATE/TIMESTAMP, DATE → TIMESTAMP at UTC midnight,
+   * numeric/boolean text → number/boolean); anything else fails with a
+   * message naming the column instead of a ClassCastException deep inside
+   * the parquet writer. BINARY/STRING columns accept any value (written as
+   * its display text, as before).
+   */
+  private[repositories] def coerceForField(
+      key: String,
+      value: CellValue,
+      field: PrimitiveType
+  ): CellValue = {
+    import CellValue.*
+    def mismatch: Nothing =
+      throw new IllegalArgumentException(
+        s"Column '$key': cannot write ${value.getClass.getSimpleName.toLowerCase} value " +
+          s"'${value.display}' to a ${FooterReader.logicalTypeName(field.getPrimitiveTypeName, field.getLogicalTypeAnnotation)} column"
+      )
+    def parsed[A](text: String)(f: String => A): A =
+      scala.util.Try(f(text.trim)).getOrElse(mismatch)
+
+    Option(field.getLogicalTypeAnnotation) match {
+      case Some(_: LogicalTypeAnnotation.DecimalLogicalTypeAnnotation) =>
+        value match {
+          case Dec(_)                              => value
+          case I32(i)                              => Dec(BigDecimal(i))
+          case I64(l)                              => Dec(BigDecimal(l))
+          case F64(d) if !d.isNaN && !d.isInfinite => Dec(BigDecimal(d))
+          case F32(f) if !f.isNaN && !f.isInfinite => Dec(BigDecimal(f.toString))
+          case Str(text)                           => Dec(parsed(text)(BigDecimal(_)))
+          case _                                   => mismatch
+        }
+      case Some(_: LogicalTypeAnnotation.DateLogicalTypeAnnotation) =>
+        value match {
+          case Date(_)   => value
+          case Str(text) => Date(parsed(text)(java.time.LocalDate.parse))
+          case _         => mismatch
+        }
+      case Some(_: LogicalTypeAnnotation.TimestampLogicalTypeAnnotation) =>
+        value match {
+          case Ts(_)     => value
+          case Date(d)   => Ts(d.atStartOfDay(java.time.ZoneOffset.UTC).toInstant)
+          case Str(text) => Ts(parsed(text)(java.time.Instant.parse))
+          case _         => mismatch
+        }
+      case _ =>
+        field.getPrimitiveTypeName match {
+          case PrimitiveTypeName.BINARY | PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY => value
+          case PrimitiveTypeName.INT32 =>
+            value match {
+              case I32(_)                 => value
+              case I64(l) if l.isValidInt => I32(l.toInt)
+              case Str(text)              => I32(parsed(text)(_.toInt))
+              case _                      => mismatch
+            }
+          case PrimitiveTypeName.INT64 =>
+            value match {
+              case I32(_) | I64(_) | Ts(_) => value
+              case Str(text)               => I64(parsed(text)(_.toLong))
+              case _                       => mismatch
+            }
+          case PrimitiveTypeName.DOUBLE | PrimitiveTypeName.FLOAT =>
+            value match {
+              case I32(_) | I64(_) | F64(_) | F32(_) | Dec(_) => value
+              case Str(text)                                  => F64(parsed(text)(_.toDouble))
+              case _                                          => mismatch
+            }
+          case PrimitiveTypeName.BOOLEAN =>
+            value match {
+              case Bool(_) => value
+              case Str(text) =>
+                text.trim.toLowerCase match {
+                  case "true"  => Bool(true)
+                  case "false" => Bool(false)
+                  case _       => mismatch
+                }
+              case _ => mismatch
+            }
+          case _ => value
+        }
+    }
+  }
+
   def writeRowToGroup(
       group: Group,
       row: Map[String, CellValue],
       schema: MessageType
   ): Unit = {
-    row.foreach { case (key, value) =>
-      if value != CellValue.Null then {
+    // A REQUIRED column with no value would otherwise surface as an opaque
+    // writer error; name the column instead.
+    schema.getFields.asScala.foreach { f =>
+      if f.getRepetition == Repetition.REQUIRED &&
+        row.get(f.getName).forall(_ == CellValue.Null)
+      then
+        throw new ParqueteerError.RowSchemaMismatchException(
+          s"Column '${f.getName}' is required (non-nullable) in the write schema but a row has no value for it"
+        )
+    }
+    row.foreach { case (key, rawValue) =>
+      if rawValue != CellValue.Null then {
         val fieldIndex =
           try schema.getFieldIndex(key)
           catch {
             case _: org.apache.parquet.io.InvalidRecordException =>
               throw new ParqueteerError.RowSchemaMismatchException(
-                s"Column '$key' in input row not found in schema. The schema was inferred from the first batch of rows — all rows must contain a consistent set of columns."
+                s"Column '$key' in input row is not in the write schema (inferred from the input, or given with --schema). All rows must use the schema's columns."
               )
           }
         val fieldType = schema.getType(fieldIndex).asPrimitiveType()
+        val value     = coerceForField(key, rawValue, fieldType)
         val isBinaryField =
           fieldType.getPrimitiveTypeName == PrimitiveTypeName.BINARY
         value match {

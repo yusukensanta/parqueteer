@@ -141,6 +141,9 @@ parqueteer write data.json output.parquet --page-size 64KB --no-dictionary
 # Dry-run: validate input without writing
 parqueteer write data.json output.parquet --dry-run
 
+# Explicit schema instead of inference (same contract format as validate --expect-schema)
+parqueteer write events.ndjson out.parquet --input-format ndjson --schema contracts/events.schema.json
+
 # From stdin
 cat data.json | parqueteer write - output.parquet
 ```
@@ -224,6 +227,24 @@ On a mismatch it prints the same `+`/`-`/`~` diff as `schema diff` (contract →
 file) and exits `4` (single file) or `1` (any file of a glob failed). Only each
 column's `name`, `dataType` and `optional` are compared; encodings and row counts
 in the contract are ignored.
+
+The same contract can drive the *writer*: `write --schema` (and `convert --schema`
+for json/ndjson/csv/ltsv → parquet) uses its column names, types and nullability
+instead of inferring them from the input, so every daily file gets an identical
+schema even when a day's data happens to contain only integers in a DECIMAL
+column or no values at all in an optional one:
+
+```bash
+parqueteer write events.ndjson out.parquet --input-format ndjson \
+  --schema contracts/events.schema.json
+```
+
+Values are converted to the declared type where that is well-defined (integers →
+DECIMAL/DOUBLE, in-range INT64 → INT32, ISO text → DATE/TIMESTAMP, numeric or
+`true`/`false` text → number/boolean). A row with a column the contract lacks, a
+missing value for a non-optional column, or a value that can't be converted fails
+the write with exit `2` and no output file is left behind. Inference is skipped,
+so the input is read once instead of twice.
 
 #### Data-quality checks (no data scan)
 
