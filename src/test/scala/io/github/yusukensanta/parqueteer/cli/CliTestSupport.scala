@@ -23,6 +23,7 @@ trait CliTestSupport extends AnyFlatSpec with Matchers {
       validateResult: Try[List[String]] = Success(List.empty),
       writeResult: Try[Unit] = Success(()),
       statsResult: Try[FileStats] = Success(defaultStats),
+      detailedMetadataResult: Try[ParquetMetadataReport] = Success(MetadataFixtures.report),
       schemaFieldsResult: Try[List[FieldSummary]] = Success(List.empty),
       deleteResult: Try[Unit] = Success(()),
       inferSchemaResult: Try[ParquetSchema] = Success(defaultSchema)
@@ -64,7 +65,10 @@ trait CliTestSupport extends AnyFlatSpec with Matchers {
       writeResult.map { _ =>
         var c = 0L; feed(_ => c += 1); c
       }
-    override def readStats(file: ParquetFile): Try[FileStats]                 = statsResult
+    override def readStats(file: ParquetFile): Try[FileStats] = statsResult
+
+    override def readDetailedMetadata(file: ParquetFile): Try[ParquetMetadataReport] =
+      detailedMetadataResult
     override def readSchemaFields(file: ParquetFile): Try[List[FieldSummary]] = schemaFieldsResult
     override def deleteFile(location: StorageLocation): Try[Unit]             = deleteResult
 

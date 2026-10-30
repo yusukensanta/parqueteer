@@ -73,6 +73,12 @@ private[cli] object CommandExecutor {
           paths => executeStatsMulti(service, paths, cmd, globalOptions)
         )
 
+      case cmd: MetadataCommand =>
+        withResolvedPaths(service, cmd.filePath, "Failed to read metadata", globalOptions)(
+          path => executeMetadata(service, cmd.copy(filePath = path), globalOptions),
+          paths => executeMetadataMulti(service, paths, cmd, globalOptions)
+        )
+
       case cmd: CountCommand =>
         withResolvedPaths(service, cmd.filePath, "Failed to count rows", globalOptions)(
           path => executeCount(service, cmd.copy(filePath = path), globalOptions),

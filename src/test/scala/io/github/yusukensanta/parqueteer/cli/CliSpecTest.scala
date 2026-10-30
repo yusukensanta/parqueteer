@@ -21,6 +21,7 @@ class CliSpecTest extends AnyFlatSpec with Matchers {
       "schema diff",
       "merge",
       "stats",
+      "metadata",
       "count",
       "completions",
       "config"
@@ -73,6 +74,7 @@ class CliSpecTest extends AnyFlatSpec with Matchers {
     "schema diff" -> List("schema", "diff", "a.parquet", "b.parquet"),
     "merge"       -> List("merge", "a.parquet", "b.parquet", "-o", "m.parquet"),
     "stats"       -> List("stats", "a.parquet"),
+    "metadata"    -> List("metadata", "a.parquet"),
     "count"       -> List("count", "a.parquet"),
     "completions" -> List("completions", "bash"),
     "config"      -> List("config")

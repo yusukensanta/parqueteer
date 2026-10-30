@@ -63,6 +63,55 @@ class InspectCommandsTest extends CliTestSupport {
     ) shouldBe 0
   }
 
+  // ── executeMetadata ────────────────────────────────────────────────────
+
+  "executeMetadata" should "return 0 on success" in {
+    InspectCommands.executeMetadata(
+      newService(),
+      MetadataCommand("/tmp/test.parquet", OutputFormat.Table),
+      quietOpts
+    ) shouldBe 0
+  }
+
+  it should "print the table report unless quiet" in {
+    val out = new ByteArrayOutputStream()
+    val code = Console.withOut(new PrintStream(out)) {
+      InspectCommands.executeMetadata(
+        newService(),
+        MetadataCommand("/tmp/test.parquet", OutputFormat.Table),
+        defaultOpts
+      )
+    }
+    code shouldBe 0
+    out.toString should include("File Metadata")
+  }
+
+  it should "print JSON when requested" in {
+    val out = new ByteArrayOutputStream()
+    Console.withOut(new PrintStream(out)) {
+      InspectCommands.executeMetadata(
+        newService(),
+        MetadataCommand("/tmp/test.parquet", OutputFormat.JSON),
+        defaultOpts
+      )
+    }
+    out.toString should include("\"keyValueMetadata\"")
+  }
+
+  it should "return error code on failure" in {
+    val repo = new FakeParquetRepository(
+      detailedMetadataResult = scala.util.Failure(new java.io.IOException("disk error"))
+    )
+    val (code, _) = captureStderr {
+      InspectCommands.executeMetadata(
+        newService(repo),
+        MetadataCommand("/nope", OutputFormat.Table),
+        quietOpts
+      )
+    }
+    code should not be 0
+  }
+
   // ── executeStats ───────────────────────────────────────────────────────
 
   "executeStats" should "return 0 on success" in {

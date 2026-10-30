@@ -99,6 +99,7 @@ object CliApp {
     "schema",
     "schema diff",
     "stats",
+    "metadata",
     "count",
     "config",
     "completions"

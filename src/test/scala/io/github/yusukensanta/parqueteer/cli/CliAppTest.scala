@@ -73,11 +73,20 @@ class CliAppTest extends AnyFlatSpec with Matchers {
         "schema",
         "schema diff",
         "stats",
+        "metadata",
         "count",
         "config",
         "completions"
       )
     CliApp.knownCommands shouldBe expected
+  }
+
+  it should "match every command the parser declares, so --help can't fall back to top-level help" in {
+    CliApp.knownCommands shouldBe CliSpec.commands.map(_.path).toSet
+  }
+
+  "detectSubcommandHelp" should "route metadata --help to the metadata help" in {
+    CliApp.detectSubcommandHelp(Array("metadata", "--help")) shouldBe Some("metadata")
   }
 
   "applyAppConfig" should "prefer CLI opts over app config" in {

@@ -212,6 +212,7 @@ parqueteer/
 │       │   ├── ParquetSchemaBuilder.scala      # Schema construction
 │       │   ├── ParquetWriteOps.scala           # Write/convert operations
 │       │   ├── FooterReader.scala              # Cached footer/metadata reads
+│       │   ├── MetadataReader.scala            # `metadata` command: footer → full report
 │       │   ├── ParallelRowGroupReader.scala    # `--parallel` row group reads
 │       │   └── StatsComputer.scala             # `stats` command column statistics
 │       ├── filters/

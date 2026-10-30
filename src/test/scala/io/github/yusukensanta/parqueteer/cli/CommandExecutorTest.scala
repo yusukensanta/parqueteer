@@ -67,6 +67,14 @@ class CommandExecutorTest extends CliTestSupport {
     ) shouldBe 0
   }
 
+  it should "dispatch MetadataCommand" in {
+    CommandExecutor.execute(
+      MetadataCommand("/tmp/test.parquet"),
+      newService(),
+      quietOpts
+    ) shouldBe 0
+  }
+
   it should "dispatch StatsCommand" in {
     CommandExecutor.execute(
       StatsCommand("/tmp/test.parquet"),
@@ -151,6 +159,17 @@ class CommandExecutorTest extends CliTestSupport {
     }
     code shouldBe 0
     out.toString should not include "unexpected path"
+  }
+
+  "MetadataCommand" should "print one report per matched file for a glob path" in {
+    val service = new ParquetService(multiMatchRepo)
+    val out     = new ByteArrayOutputStream()
+    val code = Console.withOut(new PrintStream(out)) {
+      CommandExecutor.execute(MetadataCommand("/data/*.parquet"), service, GlobalOptions())
+    }
+    code shouldBe 0
+    out.toString should include("==> /data/a.parquet <==")
+    out.toString should include("==> /data/b.parquet <==")
   }
 
   "StatsCommand" should "print one report per matched file for a glob path" in {
