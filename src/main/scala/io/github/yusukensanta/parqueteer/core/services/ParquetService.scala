@@ -2,31 +2,21 @@ package io.github.yusukensanta.parqueteer.core.services
 
 import io.github.yusukensanta.parqueteer.core.models.*
 import io.github.yusukensanta.parqueteer.core.models.ParqueteerError.toParqueteerError
-import io.github.yusukensanta.parqueteer.core.models.StorageLocationParser
 import io.github.yusukensanta.parqueteer.core.repositories.ParquetRepository
-import io.github.yusukensanta.parqueteer.core.filters.FilterParser
-import io.github.yusukensanta.parqueteer.core.util.{
-  Eithers,
-  GlobDetector,
-  RowBudget,
-  RowLimiter,
-  RowPipeline
+import io.github.yusukensanta.parqueteer.core.services.LocationParsing.{
+  parseLocation,
+  parseLocations
 }
+import io.github.yusukensanta.parqueteer.core.filters.FilterParser
+import io.github.yusukensanta.parqueteer.core.util.{GlobDetector, RowBudget}
 import scala.util.Try
 
 class ParquetService(
     repository: ParquetRepository
 ) {
   private val streamWrite = new StreamWriteSupport(repository)
-  import streamWrite.{abortOnReadError, buildExplicitSchema, handleStreamWriteResult, projectRow}
-
-  private def parseLocation(
-      path: String
-  ): Either[ParqueteerError, StorageLocation] =
-    StorageLocationParser
-      .parse(path)
-      .left
-      .map(msg => ParqueteerError.InvalidLocation(path, msg))
+  private val merges      = new MergeOperations(repository, streamWrite)
+  private val rawWrites   = new RawToParquetWriter(repository, streamWrite)
 
   private def requireNotStdin(path: String): Either[ParqueteerError, Unit] =
     if path == "-" then
@@ -160,147 +150,24 @@ class ParquetService(
       onProgress: (Int, Int, String) => Unit = (_, _, _) => (),
       fileParallelism: Int = 1
   ): Either[ParqueteerError, Long] =
-    if inputPaths.size < 2 then
-      Left(
-        ParqueteerError.UnsupportedOperation(
-          "merge",
-          "merge requires at least two input files"
-        )
-      )
-    else
-      for {
-        inputLocations <- parseLocations(inputPaths)
-        schemas        <- readAllSchemas(inputLocations)
-        mergedFields   <- SchemaReconciler.reconcile(schemas, inputPaths, schemaMode)
-        outputLocation <- parseLocation(outputPath)
-        count <- streamMerge(
-          inputLocations,
-          inputPaths,
-          mergedFields,
-          outputLocation,
-          writeConfig,
-          onProgress,
-          fileParallelism
-        )
-      } yield count
+    merges.mergeFiles(inputPaths, outputPath, writeConfig, schemaMode, onProgress, fileParallelism)
 
   def checkSchemaCompatibility(
       paths: List[String],
       schemaMode: SchemaMode
   ): Either[ParqueteerError, Unit] =
-    for {
-      locations <- parseLocations(paths)
-      schemas   <- readAllSchemas(locations)
-      _         <- SchemaReconciler.reconcile(schemas, paths, schemaMode)
-    } yield ()
-
-  /**
-   * Lift a list of paths into a single Either of parsed locations,
-   * short-circuiting on the first malformed path.
-   */
-  private def parseLocations(
-      paths: List[String]
-  ): Either[ParqueteerError, Vector[StorageLocation]] =
-    Eithers.traverse(paths)(parseLocation)
-
-  /**
-   * Read the field-summary schema for each input file, preserving order. Stops
-   * on the first read failure.
-   */
-  private def readAllSchemas(
-      locations: Vector[StorageLocation]
-  ): Either[ParqueteerError, Vector[List[FieldSummary]]] =
-    Eithers.traverse(locations)(loc =>
-      repository.readSchemaFields(ParquetFile(loc)).toParqueteerError
-    )
-
-  /**
-   * Stream rows from each input file into a single output writer. On the first
-   * read failure throws a sentinel exception through the writer so the partial
-   * output is deleted before returning the real error. Returns the count of
-   * rows written on success.
-   */
-  private def streamMerge(
-      inputLocations: Vector[StorageLocation],
-      inputPaths: List[String],
-      mergedFields: List[FieldSummary],
-      outputLocation: StorageLocation,
-      writeConfig: WriteConfig,
-      onProgress: (Int, Int, String) => Unit,
-      fileParallelism: Int
-  ): Either[ParqueteerError, Long] = {
-    val nestedFields = mergedFields.filter(_.isNested)
-    if nestedFields.nonEmpty then
-      Left(
-        ParqueteerError.UnsupportedOperation(
-          "merge",
-          s"Cannot merge files containing nested columns: ${nestedFields.map(_.name).mkString(", ")}. " +
-            "Flatten STRUCT/MAP/LIST columns before merging."
-        )
-      )
-    else {
-      // compression controlled by WriteConfig, not ColumnInfo
-      val explicitSchema                = buildExplicitSchema(mergedFields, compressionCodec = "")
-      val fieldNames                    = mergedFields.map(_.name).toArray
-      val nameToIndex: Map[String, Int] = fieldNames.zipWithIndex.toMap
-      val writeResult = repository
-        .writeContentStream(outputLocation, explicitSchema, writeConfig) { write =>
-          // Up to `fileParallelism` input files are fetched concurrently
-          // ahead of `write`, each buffered through a bounded queue — see
-          // RowPipeline. Output row order still matches inputLocations order
-          // regardless of which file's cloud fetch happens to finish first.
-          val pipelineResult = RowPipeline.run(
-            inputLocations.zipWithIndex.toList,
-            fileParallelism
-          ) { case ((loc, i), sink) =>
-            onProgress(i + 1, inputLocations.size, inputPaths(i))
-            repository
-              .streamContent(ParquetFile(loc), ReadConfig())(row =>
-                sink(projectRow(row, fieldNames, nameToIndex))
-              )
-              .toEither
-          }(write)
-          abortOnReadError(pipelineResult.toTry)
-        }
-
-      handleStreamWriteResult(outputLocation, writeResult)
-    }
-  }
+    merges.checkSchemaCompatibility(paths, schemaMode)
 
   /**
    * Stream parquet → parquet conversion without loading the entire file into
-   * memory. Reads the source schema, opens a streaming writer for the output,
-   * and feeds rows one at a time. Deletes partial output on failure.
+   * memory; deletes partial output on failure.
    */
   def convertParquetFile(
       inputPath: String,
       outputPath: String,
       conversionConfig: ConversionConfig
   ): Either[ParqueteerError, Long] =
-    for {
-      inputLocation  <- parseLocation(inputPath)
-      outputLocation <- parseLocation(outputPath)
-      schemaFields <- repository
-        .readSchemaFields(ParquetFile(inputLocation))
-        .toParqueteerError
-      explicitSchema = buildExplicitSchema(
-        schemaFields,
-        conversionConfig.writeConfig.compressionType.codecName
-      )
-      writeResult = repository.writeContentStream(
-        outputLocation,
-        explicitSchema,
-        conversionConfig.writeConfig
-      ) { write =>
-        val readResult = repository
-          .streamContent(
-            ParquetFile(inputLocation),
-            ReadConfig(maxRows = conversionConfig.maxRows)
-          )(write)
-        abortOnReadError(readResult)
-      }
-      count <- handleStreamWriteResult(outputLocation, writeResult)
-    } yield count
+    merges.convertParquetFile(inputPath, outputPath, conversionConfig)
 
   def getStats(path: String): Either[ParqueteerError, FileStats] =
     for {
@@ -325,12 +192,7 @@ class ParquetService(
       writeConfig: WriteConfig = WriteConfig(),
       schema: Option[ParquetSchema] = None
   ): Either[ParqueteerError, Unit] =
-    for {
-      location <- parseLocation(path)
-      _ <- repository
-        .writeContent(location, data, schema, writeConfig)
-        .toParqueteerError
-    } yield ()
+    rawWrites.writeFile(path, data, writeConfig, schema)
 
   def readDataFile(
       path: String,
@@ -338,34 +200,9 @@ class ParquetService(
       stdin: java.io.InputStream = System.in,
       maxRows: Option[Long] = None
   ): Either[ParqueteerError, List[Map[String, CellValue]]] =
-    if path == "-" then
-      DataFileReader
-        .readFromStdin(inputFormat, stdin)
-        .map(RowLimiter.limitList(_, maxRows))
-        .toParqueteerError
-    else
-      inputFormat match {
-        case InputFormat.Json =>
-          DataFileReader
-            .readJsonFile(path)
-            .map(RowLimiter.limitList(_, maxRows))
-            .toParqueteerError
-        case InputFormat.NDJson =>
-          DataFileReader.readNdjsonFile(path, maxRows).toParqueteerError
-        case InputFormat.Csv =>
-          DataFileReader.readCsvFile(path, maxRows).toParqueteerError
-        case InputFormat.Ltsv =>
-          DataFileReader.readLtsvFile(path, maxRows).toParqueteerError
-      }
+    rawWrites.readDataFile(path, inputFormat, stdin, maxRows)
 
-  /**
-   * Writes a (non-parquet) data file to parquet with bounded memory for NDJSON,
-   * LTSV, and CSV inputs: a first pass folds over the source to infer a schema
-   * without collecting rows into a List, then a second pass re-opens the same
-   * source and streams rows straight into the writer. JSON-array input (a
-   * whole-tree parse) and stdin (single-pass, can't be reopened) fall back to
-   * the fully-buffered readDataFile + writeFile path unchanged.
-   */
+  /** Bounded-memory write of a non-parquet data file; see [[RawToParquetWriter]]. */
   def streamWriteDataFile(
       inputPath: String,
       inputFormat: InputFormat,
@@ -374,32 +211,36 @@ class ParquetService(
       maxRows: Option[Long] = None,
       explicitFields: Option[List[FieldSummary]] = None
   ): Either[ParqueteerError, Long] =
-    explicitWriteSchema(explicitFields, writeConfig).flatMap { schema =>
-      if inputPath != "-" && inputFormat.isStreamable then
-        streamOneFormat(inputPath, outputPath, inputFormat, writeConfig, maxRows, schema)
-      else bufferedWriteDataFile(inputPath, inputFormat, outputPath, writeConfig, maxRows, schema)
-    }
+    rawWrites.streamWriteDataFile(
+      inputPath,
+      inputFormat,
+      outputPath,
+      writeConfig,
+      maxRows,
+      explicitFields
+    )
 
-  /**
-   * Turns `--schema` fields into the ParquetSchema every write path uses, and
-   * checks up front that each declared type is writable — so a typo in the
-   * contract fails before any input is read, not after a full inference pass.
-   */
-  private def explicitWriteSchema(
-      fields: Option[List[FieldSummary]],
-      writeConfig: WriteConfig
-  ): Either[ParqueteerError, Option[ParquetSchema]] =
-    fields match {
-      case None => Right(None)
-      case Some(fs) =>
-        val schema = buildExplicitSchema(fs, writeConfig.compressionType.codecName)
-        repository
-          .validateWriteSchema(schema)
-          .toEither
-          .left
-          .map(e => ParqueteerError.ParseError("schema contract", e.getMessage))
-          .map(_ => Some(schema))
-    }
+  /** Writes several raw input files into ONE parquet output; see [[RawToParquetWriter]]. */
+  def writeMultiRawToParquet(
+      paths: List[String],
+      inputFormat: InputFormat,
+      outputPath: String,
+      writeConfig: WriteConfig,
+      schemaMode: SchemaMode,
+      onProgress: (Int, Int, String) => Unit = (_, _, _) => (),
+      fileParallelism: Int = 1,
+      explicitFields: Option[List[FieldSummary]] = None
+  ): Either[ParqueteerError, Long] =
+    rawWrites.writeMultiRawToParquet(
+      paths,
+      inputFormat,
+      outputPath,
+      writeConfig,
+      schemaMode,
+      onProgress,
+      fileParallelism,
+      explicitFields
+    )
 
   /**
    * Reads a schema contract file (the `schema --format json` output). A
@@ -420,176 +261,6 @@ class ParquetService(
         .left
         .map(msg => ParqueteerError.ParseError("schema contract", s"$contractPath: $msg"))
     } yield fields
-
-  /**
-   * Two-pass bounded-memory write for a single ndjson/ltsv/csv input: infer a
-   * schema from one pass over `withRows`, then stream rows from a second pass
-   * straight into the writer. `withRows` reopens `inputPath` fresh on each
-   * call — see DataFileReader.withRows.
-   */
-  private def streamOneFormat(
-      inputPath: String,
-      outputPath: String,
-      inputFormat: InputFormat,
-      writeConfig: WriteConfig,
-      maxRows: Option[Long],
-      explicitSchema: Option[ParquetSchema]
-  ): Either[ParqueteerError, Long] = {
-    def withRows[A](f: Iterator[Map[String, CellValue]] => A): Try[A] =
-      DataFileReader.withRows(inputFormat, inputPath, maxRows)(f)
-    for {
-      outputLocation <- parseLocation(outputPath)
-      // With --schema the inference pass is skipped: one read of the input.
-      schema <- explicitSchema
-        .map(Right(_))
-        .getOrElse(withRows(repository.inferSchemaFromRows).flatten.toParqueteerError)
-      writeResult = withRows { rows =>
-        repository.writeContentStream(outputLocation, schema, writeConfig)(feed =>
-          rows.foreach(feed)
-        )
-      }.flatten
-      count <- handleStreamWriteResult(outputLocation, writeResult)
-    } yield count
-  }
-
-  private def bufferedWriteDataFile(
-      inputPath: String,
-      inputFormat: InputFormat,
-      outputPath: String,
-      writeConfig: WriteConfig,
-      maxRows: Option[Long],
-      explicitSchema: Option[ParquetSchema]
-  ): Either[ParqueteerError, Long] =
-    for {
-      data <- readDataFile(inputPath, inputFormat, maxRows = maxRows)
-      _    <- writeFile(outputPath, data, writeConfig, explicitSchema)
-    } yield data.size.toLong
-
-  /**
-   * Writes multiple raw (non-parquet) input files into ONE parquet output,
-   * concatenating their rows. JSON inputs are fully buffered (readDataFile
-   * per file); NDJSON/CSV/LTSV inputs use the same bounded-memory two-pass
-   * (infer schema, then stream rows) approach as streamWriteDataFile, with
-   * the merged schema across all matched files computed the same way
-   * mergeFiles does for merging existing parquet files.
-   */
-  def writeMultiRawToParquet(
-      paths: List[String],
-      inputFormat: InputFormat,
-      outputPath: String,
-      writeConfig: WriteConfig,
-      schemaMode: SchemaMode,
-      onProgress: (Int, Int, String) => Unit = (_, _, _) => (),
-      fileParallelism: Int = 1,
-      explicitFields: Option[List[FieldSummary]] = None
-  ): Either[ParqueteerError, Long] =
-    explicitWriteSchema(explicitFields, writeConfig).flatMap { schema =>
-      if inputFormat.isStreamable then
-        streamMultiRawToParquet(
-          paths,
-          inputFormat,
-          outputPath,
-          writeConfig,
-          schemaMode,
-          onProgress,
-          fileParallelism,
-          schema
-        )
-      else bufferedMultiRawToParquet(paths, outputPath, writeConfig, schemaMode, onProgress, schema)
-    }
-
-  private def bufferedMultiRawToParquet(
-      paths: List[String],
-      outputPath: String,
-      writeConfig: WriteConfig,
-      schemaMode: SchemaMode,
-      onProgress: (Int, Int, String) => Unit,
-      explicitSchema: Option[ParquetSchema]
-  ): Either[ParqueteerError, Long] = {
-    def inferOne(rows: List[Map[String, CellValue]]): Either[ParqueteerError, List[FieldSummary]] =
-      repository
-        .inferSchemaFromRows(rows.iterator)
-        .toParqueteerError
-        .map(_.columns.map(c => FieldSummary(c.name, c.dataType, c.isOptional)))
-
-    for {
-      rowsPerFile <- Eithers.traverse(paths.zipWithIndex) { (path, idx) =>
-        onProgress(idx + 1, paths.size, path)
-        readDataFile(path, InputFormat.Json)
-      }
-      // With --schema, each row is checked against the declared schema as it
-      // is written instead, so per-file inference and reconciliation are moot.
-      _ <-
-        if explicitSchema.isDefined then Right(())
-        else
-          Eithers
-            .traverse(rowsPerFile)(inferOne)
-            .flatMap(SchemaReconciler.reconcile(_, paths, schemaMode))
-            .map(_ => ())
-      allRows = rowsPerFile.toList.flatten
-      rowCount <- writeFile(outputPath, allRows, writeConfig, explicitSchema)
-        .map(_ => allRows.size.toLong)
-    } yield rowCount
-  }
-
-  private def streamMultiRawToParquet(
-      paths: List[String],
-      inputFormat: InputFormat,
-      outputPath: String,
-      writeConfig: WriteConfig,
-      schemaMode: SchemaMode,
-      onProgress: (Int, Int, String) => Unit,
-      fileParallelism: Int,
-      explicitSchema: Option[ParquetSchema]
-  ): Either[ParqueteerError, Long] = {
-    def withRows[A](path: String)(f: Iterator[Map[String, CellValue]] => Try[A]): Try[A] =
-      DataFileReader.withRows(inputFormat, path, None)(f).flatten
-
-    def inferOne(path: String): Either[ParqueteerError, List[FieldSummary]] =
-      withRows(path)(repository.inferSchemaFromRows).toParqueteerError.map(
-        _.columns.map(c => FieldSummary(c.name, c.dataType, c.isOptional))
-      )
-
-    for {
-      outputLocation <- parseLocation(outputPath)
-      // With --schema there is no inference pass: rows are written as-is and
-      // checked against the declared schema (unknown column / missing
-      // required column / uncoercible value fail the write).
-      writeSchema <- explicitSchema.map(Right(_)).getOrElse {
-        Eithers
-          .traverse(paths)(inferOne)
-          .flatMap(SchemaReconciler.reconcile(_, paths, schemaMode))
-          .map(buildExplicitSchema(_, writeConfig.compressionType.codecName))
-      }
-      fieldNames  = writeSchema.columns.map(_.name).toArray
-      nameToIndex = fieldNames.zipWithIndex.toMap
-      writeResult = repository.writeContentStream(outputLocation, writeSchema, writeConfig) {
-        write =>
-          // See RowPipeline: up to fileParallelism input files are fetched
-          // concurrently ahead of write, bounded per-file, without reordering
-          // rows relative to paths.
-          val pipelineResult = RowPipeline.run(paths.zipWithIndex.toList, fileParallelism) {
-            case ((path, idx), sink) =>
-              onProgress(idx + 1, paths.size, path)
-              withRows(path) { rows =>
-                Try {
-                  var n = 0L
-                  rows.foreach { row =>
-                    sink(
-                      if explicitSchema.isDefined then row
-                      else projectRow(row, fieldNames, nameToIndex)
-                    )
-                    n += 1
-                  }
-                  n
-                }
-              }.toEither
-          }(write)
-          abortOnReadError(pipelineResult.toTry)
-      }
-      count <- handleStreamWriteResult(outputLocation, writeResult)
-    } yield count
-  }
 
   def validateFile(
       path: String,
