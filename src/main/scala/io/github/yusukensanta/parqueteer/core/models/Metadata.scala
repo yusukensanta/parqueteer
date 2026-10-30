@@ -81,7 +81,9 @@ case class ColumnChunkDetail(
     hasBloomFilter: Boolean,
     hasColumnIndex: Boolean,
     hasOffsetIndex: Boolean,
-    extended: Option[ExtendedChunkDetail] = None
+    extended: Option[ExtendedChunkDetail] = None,
+    pageIndex: Option[PageIndexDetail] = None,
+    pages: Option[List[PageHeaderDetail]] = None
 ) {
   def hasDictionary: Boolean = dictionaryPageOffset.isDefined
 }
@@ -129,4 +131,48 @@ case class ExtendedChunkDetail(
     offsetIndex: Option[FileRegion],
     sizeStatistics: Option[SizeStatisticsDetail],
     isEncrypted: Boolean
+)
+
+// ── Page-level detail (`metadata --index`, `metadata --pages`) ─────────────
+
+/** Which optional, costlier parts of the metadata report to read. */
+case class MetadataOptions(
+    extended: Boolean = false,
+    index: Boolean = false,
+    pages: Boolean = false,
+    columns: Option[List[String]] = None
+) {
+  def needsFileReader: Boolean = index || pages
+}
+
+/**
+ * A chunk's column index and offset index, joined per page. Either index may be
+ * absent (not every writer emits both), so every per-page field is optional.
+ */
+case class PageIndexDetail(boundaryOrder: Option[String], pages: List[IndexedPage])
+
+case class IndexedPage(
+    page: Int,
+    offset: Option[Long],
+    compressedBytes: Option[Int],
+    firstRowIndex: Option[Long],
+    isNullPage: Option[Boolean],
+    nullCount: Option[Long],
+    minValue: Option[String],
+    maxValue: Option[String]
+)
+
+/** One page header as stored in the column chunk. */
+case class PageHeaderDetail(
+    pageType: String,
+    offset: Long,
+    headerBytes: Int,
+    compressedBytes: Int,
+    uncompressedBytes: Int,
+    valueCount: Option[Int],
+    encoding: Option[String],
+    rowCount: Option[Int],
+    nullCount: Option[Int],
+    hasStatistics: Boolean,
+    hasCrc: Boolean
 )

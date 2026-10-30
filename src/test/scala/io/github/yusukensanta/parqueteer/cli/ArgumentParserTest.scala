@@ -3,6 +3,7 @@ package io.github.yusukensanta.parqueteer.cli
 import io.github.yusukensanta.parqueteer.core.models.{
   ColorMode,
   CompressionType,
+  MetadataOptions,
   OutputFormat,
   SchemaMode
 }
@@ -572,6 +573,21 @@ class ArgumentParserTest extends AnyFlatSpec with Matchers {
     )
     result.get.command.get shouldBe
       MetadataCommand("/local/file.parquet", OutputFormat.Table, extended = true)
+  }
+
+  it should "parse metadata --index --pages --columns into MetadataOptions" in {
+    val result = OParser.parse(
+      ArgumentParser.parser,
+      Array("metadata", "f.parquet", "--index", "--pages", "--columns", "id,a.b"),
+      ArgumentParser.Config()
+    )
+    val cmd = result.get.command.get.asInstanceOf[MetadataCommand]
+    cmd.options shouldBe MetadataOptions(
+      index = true,
+      pages = true,
+      columns = Some(List("id", "a.b"))
+    )
+    MetadataCommand("f.parquet").options shouldBe MetadataOptions()
   }
 
   it should "reject invalid format for metadata command" in {

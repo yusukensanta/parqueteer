@@ -219,6 +219,7 @@ parqueteer/
 │       │   ├── FooterReader.scala              # Cached footer/metadata reads
 │       │   ├── MetadataReader.scala            # `metadata` command: footer → full report
 │       │   ├── SchemaTypeReader.scala          # Schema types → logical type detail, group chain, schema tree
+│       │   ├── PageInspector.scala             # `metadata --index/--pages`: column/offset index and page headers
 │       │   ├── ParallelRowGroupReader.scala    # `--parallel` row group reads
 │       │   └── StatsComputer.scala             # `stats` command column statistics
 │       ├── filters/

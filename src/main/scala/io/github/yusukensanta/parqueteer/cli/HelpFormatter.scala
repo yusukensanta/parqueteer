@@ -266,6 +266,11 @@ ${optionsSection("stats")}
        |encoding, size statistics, distinct count, min/max exactness, bloom filter and
        |index regions; per row group the ordinal, offsets and sorting columns; and the
        |column orders and encryption algorithm. It re-reads the footer once more.
+
+--index and --pages read beyond the footer (no data is decoded): --index shows each
+column chunk's column index and offset index per page (null page, null count,
+min/max, offset, first row); --pages lists every page header (type, sizes, value
+count, encoding). Use --columns to limit them, as they can be long.
        |
        |USAGE:
        |  parqueteer metadata [OPTIONS] <file>
@@ -280,6 +285,8 @@ ${optionsSection("metadata")}
        |  parqueteer metadata data.parquet
        |  parqueteer metadata data.parquet --format json
        |  parqueteer metadata data.parquet --extended
+       |  parqueteer metadata data.parquet --index --columns id
+       |  parqueteer metadata data.parquet --pages --format json
        |""".stripMargin
 
   private def countHelp(): String =

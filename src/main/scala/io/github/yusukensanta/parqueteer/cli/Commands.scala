@@ -4,6 +4,7 @@ import io.github.yusukensanta.parqueteer.core.services.StatsAssertion
 import io.github.yusukensanta.parqueteer.core.models.{
   CompressionType,
   InputFormat,
+  MetadataOptions,
   OutputFormat,
   SchemaMode
 }
@@ -99,8 +100,13 @@ case class StatsCommand(
 case class MetadataCommand(
     filePath: String,
     format: OutputFormat = OutputFormat.Table,
-    extended: Boolean = false
-) extends Command
+    extended: Boolean = false,
+    index: Boolean = false,
+    pages: Boolean = false,
+    columns: Option[List[String]] = None
+) extends Command {
+  def options: MetadataOptions = MetadataOptions(extended, index, pages, columns)
+}
 
 case class CountCommand(
     filePath: String,

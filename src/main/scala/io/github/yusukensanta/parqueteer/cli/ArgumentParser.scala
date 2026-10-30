@@ -490,7 +490,18 @@ object ArgumentParser {
             .action((_, c) => updateCmd[MetadataCommand](c, _.copy(extended = true)))
             .text(
               "Also show encoding stats, size statistics, index/bloom regions, sorting columns, column orders"
-            )
+            ),
+          opt[Unit]("index")
+            .action((_, c) => updateCmd[MetadataCommand](c, _.copy(index = true)))
+            .text("Also show each column chunk's column index and offset index, per page"),
+          opt[Unit]("pages")
+            .action((_, c) => updateCmd[MetadataCommand](c, _.copy(pages = true)))
+            .text("Also list every page header (type, size, encoding, value count)"),
+          opt[Seq[String]]("columns")
+            .abbr("c")
+            .valueName("<col,...>")
+            .action((x, c) => updateCmd[MetadataCommand](c, _.copy(columns = Some(x.toList))))
+            .text("Limit --index/--pages to these columns (dot paths)")
         ),
       cmd("count")
         .text(

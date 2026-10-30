@@ -79,15 +79,16 @@ trait ParquetRepository {
   /**
    * Full footer metadata (file, key-value, per-row-group and per-column-chunk
    * detail). Defaults to failing so fake repositories used in unit tests don't
-   * have to implement it to keep compiling. `extended` adds the rarely needed
-   * footer fields (encoding stats, size statistics, index/bloom regions,
-   * sorting columns, column orders, ...), which costs a second footer read.
+   * have to implement it to keep compiling. `options` opts into the costlier
+   * parts: rarely needed footer fields (`extended`, one more footer read) and
+   * the column/offset indexes and page headers (`index`/`pages`, which read
+   * the file beyond its footer).
    */
   def readDetailedMetadata(
       file: ParquetFile,
-      extended: Boolean = false
+      options: MetadataOptions = MetadataOptions()
   ): Try[ParquetMetadataReport] = {
-    val _ = (file, extended)
+    val _ = (file, options)
     Failure(new UnsupportedOperationException("readDetailedMetadata is not implemented"))
   }
 
@@ -674,7 +675,7 @@ class HadoopParquetRepository(
 
   override def readDetailedMetadata(
       file: ParquetFile,
-      extended: Boolean
+      options: MetadataOptions
   ): Try[ParquetMetadataReport] =
     withHadoopConfig(file.location) { hadoopConfig =>
       Try {
@@ -684,17 +685,44 @@ class HadoopParquetRepository(
         val footer = getFooter(file.location, path, hadoopConfig, knownStatus)
         // parquet-java's footer objects drop some thrift fields, so the extended
         // view re-reads the raw footer (the cached one is already parsed).
-        val raw = Option.when(extended) {
+        val raw = Option.when(options.extended) {
           val (stream, len) = openFooterStream(file.location, path, hadoopConfig, knownStatus)
           FooterReader.readRawFileMetaData(stream, len)
         }
-        MetadataReader.build(
+        val report = MetadataReader.build(
           footer,
           fileSize,
           Some(java.time.Instant.ofEpochMilli(modTimeMillis)),
           raw
         )
+        if options.needsFileReader then
+          withPageDetail(report, footer, openInputFile(file.location, path, hadoopConfig), options)
+        else report
       }
+    }
+
+  // Attaches column/offset index and page header detail to the chunks the
+  // caller asked for. Encrypted chunks are skipped: their pages and indexes
+  // can't be read without the key.
+  private def withPageDetail(
+      report: ParquetMetadataReport,
+      footer: FooterInfo,
+      inputFile: InputFile,
+      options: MetadataOptions
+  ): ParquetMetadataReport =
+    Using.resource(ParquetFileReader.open(inputFile)) { reader =>
+      val chunkBlocks = footer.blocks.map(_.getColumns.asScala.toList)
+      report.copy(rowGroups = report.rowGroups.zip(chunkBlocks).map { case (rg, chunks) =>
+        rg.copy(columns = rg.columns.zip(chunks).map { case (detail, chunk) =>
+          if chunk.isEncrypted || !PageInspector.selected(chunk, options.columns) then detail
+          else
+            detail.copy(
+              pageIndex =
+                Option.when(options.index)(PageInspector.pageIndex(reader, chunk)).flatten,
+              pages = Option.when(options.pages)(PageInspector.pageHeaders(inputFile, chunk))
+            )
+        })
+      })
     }
 
   override def globStatus(location: StorageLocation): Try[List[StorageLocation]] =

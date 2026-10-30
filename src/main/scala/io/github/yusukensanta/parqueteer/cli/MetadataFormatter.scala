@@ -87,7 +87,9 @@ private[cli] object MetadataFormatter {
                 "hasBloomFilter"       -> Json.fromBoolean(c.hasBloomFilter),
                 "hasColumnIndex"       -> Json.fromBoolean(c.hasColumnIndex),
                 "hasOffsetIndex"       -> Json.fromBoolean(c.hasOffsetIndex),
-                "extended"             -> c.extended.fold(Json.Null)(_.asJson)
+                "extended"             -> c.extended.fold(Json.Null)(_.asJson),
+                "pageIndex"            -> c.pageIndex.fold(Json.Null)(_.asJson),
+                "pages"                -> c.pages.fold(Json.Null)(_.asJson)
               )
             })
           )
@@ -211,6 +213,82 @@ private[cli] object MetadataFormatter {
       List(header, renderTable(extendedChunkCols, rows))
     }
 
+  private val pageIndexCols = List(
+    Col("Page", 5, rightAligned = true),
+    Col("Offset", 10, rightAligned = true),
+    Col("Bytes", 8, rightAligned = true),
+    Col("First row", 10, rightAligned = true),
+    Col("Null page", 9),
+    Col("Nulls", 8, rightAligned = true),
+    Col("Min", 18),
+    Col("Max", 18)
+  )
+
+  private val pageHeaderCols = List(
+    Col("Type", 14),
+    Col("Offset", 10, rightAligned = true),
+    Col("Header", 6, rightAligned = true),
+    Col("Compressed", 10, rightAligned = true),
+    Col("Uncompressed", 12, rightAligned = true),
+    Col("Values", 8, rightAligned = true),
+    Col("Rows", 8, rightAligned = true),
+    Col("Nulls", 8, rightAligned = true),
+    Col("Encoding", 18),
+    Col("Stats", 5),
+    Col("CRC", 3)
+  )
+
+  private def opt[A](o: Option[A]): String = o.fold("-")(_.toString)
+
+  private def pageDetailSections(rg: RowGroupDetail): List[List[String]] =
+    rg.columns.flatMap { c =>
+      val index = c.pageIndex.toList.map { pi =>
+        List(
+          s"Row Group ${rg.index} / ${c.path}: column & offset index (boundary order ${pi.boundaryOrder
+              .getOrElse("n/a")})",
+          renderTable(
+            pageIndexCols,
+            pi.pages.map { p =>
+              List(
+                p.page.toString,
+                opt(p.offset),
+                opt(p.compressedBytes),
+                opt(p.firstRowIndex),
+                p.isNullPage.fold("-")(v => if v then "Y" else "N"),
+                opt(p.nullCount),
+                p.minValue.getOrElse("-"),
+                p.maxValue.getOrElse("-")
+              )
+            }
+          )
+        )
+      }
+      val headers = c.pages.toList.map { ps =>
+        List(
+          s"Row Group ${rg.index} / ${c.path}: ${ps.size} page headers",
+          renderTable(
+            pageHeaderCols,
+            ps.map { p =>
+              List(
+                p.pageType,
+                p.offset.toString,
+                p.headerBytes.toString,
+                p.compressedBytes.toString,
+                p.uncompressedBytes.toString,
+                opt(p.valueCount),
+                opt(p.rowCount),
+                opt(p.nullCount),
+                p.encoding.getOrElse("-"),
+                if p.hasStatistics then "Y" else "N",
+                if p.hasCrc then "Y" else "N"
+              )
+            }
+          )
+        )
+      }
+      index ++ headers
+    }
+
   def formatTable(report: ParquetMetadataReport): String = {
     val f = report.file
 
@@ -291,8 +369,10 @@ private[cli] object MetadataFormatter {
       report.extended.map(extendedFileSection).toList ++
         report.rowGroups.map(extendedRowGroupSection).filter(_.nonEmpty)
 
+    val pageSections = report.rowGroups.flatMap(pageDetailSections)
+
     (List(fileSection, keyValueSection, schemaSection, columnSection) ++ rowGroupSections ++
-      extendedSections :+ legend)
+      extendedSections ++ pageSections :+ legend)
       .map(_.mkString("\n"))
       .mkString("\n\n")
   }

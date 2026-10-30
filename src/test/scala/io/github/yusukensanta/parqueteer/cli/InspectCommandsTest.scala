@@ -78,10 +78,10 @@ class InspectCommandsTest extends CliTestSupport {
     val repo = new FakeParquetRepository() {
       override def readDetailedMetadata(
           file: ParquetFile,
-          extended: Boolean
+          options: MetadataOptions
       ): Try[ParquetMetadataReport] = {
-        seen = Some(extended)
-        super.readDetailedMetadata(file, extended)
+        seen = Some(options.extended)
+        super.readDetailedMetadata(file, options)
       }
     }
     InspectCommands.executeMetadata(

@@ -33,7 +33,8 @@ class ExtendedMetadataTest extends AnyFlatSpec with Matchers {
   }
 
   it should "add file, row group and chunk detail when extended" in {
-    val report = repo.readDetailedMetadata(ParquetFile(written()), extended = true).get
+    val report =
+      repo.readDetailedMetadata(ParquetFile(written()), MetadataOptions(extended = true)).get
     report.extended.get.columnOrders shouldBe List("TYPE_DEFINED_ORDER", "TYPE_DEFINED_ORDER")
     report.extended.get.encryptionAlgorithm shouldBe None
     val rg = report.rowGroups.head.extended.get
