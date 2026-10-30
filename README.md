@@ -212,6 +212,11 @@ parqueteer metadata data.parquet
 
 # JSON output keeps full key-value values (the table view shortens long ones)
 parqueteer metadata data.parquet --format json
+
+# Also the rarely needed footer fields: page counts per encoding, size statistics,
+# distinct count, min/max exactness, bloom filter / column index / offset index
+# regions, sorting columns, column orders, encryption algorithm
+parqueteer metadata data.parquet --extended
 ```
 
 ### Compare Schemas

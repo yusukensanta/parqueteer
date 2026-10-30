@@ -50,9 +50,16 @@ object JSONFormatter {
 
   import io.github.yusukensanta.parqueteer.core.models.{
     ColumnInfo,
+    EncodingPageCount,
+    ExtendedChunkDetail,
+    ExtendedFileDetail,
+    ExtendedRowGroupDetail,
+    FileRegion,
     GroupInfo,
     LogicalTypeDetail,
-    SchemaNode
+    SchemaNode,
+    SizeStatisticsDetail,
+    SortingColumnDetail
   }
   import java.time.Instant
 
@@ -68,6 +75,14 @@ object JSONFormatter {
       ("type" -> Json.fromString(lt.name)) :: lt.params.map { case (k, v) => k -> paramJson(v) }
     )
   }
+
+  given Encoder[ExtendedFileDetail]     = deriveEncoder[ExtendedFileDetail]
+  given Encoder[SortingColumnDetail]    = deriveEncoder[SortingColumnDetail]
+  given Encoder[ExtendedRowGroupDetail] = deriveEncoder[ExtendedRowGroupDetail]
+  given Encoder[EncodingPageCount]      = deriveEncoder[EncodingPageCount]
+  given Encoder[FileRegion]             = deriveEncoder[FileRegion]
+  given Encoder[SizeStatisticsDetail]   = deriveEncoder[SizeStatisticsDetail]
+  given Encoder[ExtendedChunkDetail]    = deriveEncoder[ExtendedChunkDetail]
 
   given Encoder[GroupInfo] =
     deriveEncoder[GroupInfo]

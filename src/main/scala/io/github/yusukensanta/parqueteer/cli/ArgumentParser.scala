@@ -485,7 +485,12 @@ object ArgumentParser {
             )
             .text("Path to parquet file (supports glob patterns: *, ?, [], {})"),
           tableOrJsonFormatOpt[MetadataCommand]((cmd, f) => cmd.copy(format = f))
-            .text("Output format: table, json (default: table)")
+            .text("Output format: table, json (default: table)"),
+          opt[Unit]("extended")
+            .action((_, c) => updateCmd[MetadataCommand](c, _.copy(extended = true)))
+            .text(
+              "Also show encoding stats, size statistics, index/bloom regions, sorting columns, column orders"
+            )
         ),
       cmd("count")
         .text(

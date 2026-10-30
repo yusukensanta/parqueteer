@@ -262,6 +262,11 @@ ${optionsSection("stats")}
        |(and schema diff) use 'parqueteer schema'; 'schema --detail' is the reference
        |for column types.
        |
+       |--extended adds the rarely needed footer fields: per-chunk page counts by
+       |encoding, size statistics, distinct count, min/max exactness, bloom filter and
+       |index regions; per row group the ordinal, offsets and sorting columns; and the
+       |column orders and encryption algorithm. It re-reads the footer once more.
+       |
        |USAGE:
        |  parqueteer metadata [OPTIONS] <file>
        |
@@ -274,6 +279,7 @@ ${optionsSection("metadata")}
        |EXAMPLES:
        |  parqueteer metadata data.parquet
        |  parqueteer metadata data.parquet --format json
+       |  parqueteer metadata data.parquet --extended
        |""".stripMargin
 
   private def countHelp(): String =

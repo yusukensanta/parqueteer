@@ -564,6 +564,16 @@ class ArgumentParserTest extends AnyFlatSpec with Matchers {
     json.get.command.get shouldBe MetadataCommand("/local/file.parquet", OutputFormat.JSON)
   }
 
+  it should "parse metadata --extended" in {
+    val result = OParser.parse(
+      ArgumentParser.parser,
+      Array("metadata", "/local/file.parquet", "--extended"),
+      ArgumentParser.Config()
+    )
+    result.get.command.get shouldBe
+      MetadataCommand("/local/file.parquet", OutputFormat.Table, extended = true)
+  }
+
   it should "reject invalid format for metadata command" in {
     OParser.parse(
       ArgumentParser.parser,

@@ -65,7 +65,10 @@ trait CliTestSupport extends AnyFlatSpec with Matchers {
       }
     override def readStats(file: ParquetFile): Try[FileStats] = statsResult
 
-    override def readDetailedMetadata(file: ParquetFile): Try[ParquetMetadataReport] =
+    override def readDetailedMetadata(
+        file: ParquetFile,
+        extended: Boolean
+    ): Try[ParquetMetadataReport] =
       detailedMetadataResult
     override def readSchemaFields(file: ParquetFile): Try[List[FieldSummary]] = schemaFieldsResult
     override def deleteFile(location: StorageLocation): Try[Unit]             = deleteResult

@@ -79,10 +79,15 @@ trait ParquetRepository {
   /**
    * Full footer metadata (file, key-value, per-row-group and per-column-chunk
    * detail). Defaults to failing so fake repositories used in unit tests don't
-   * have to implement it to keep compiling.
+   * have to implement it to keep compiling. `extended` adds the rarely needed
+   * footer fields (encoding stats, size statistics, index/bloom regions,
+   * sorting columns, column orders, ...), which costs a second footer read.
    */
-  def readDetailedMetadata(file: ParquetFile): Try[ParquetMetadataReport] = {
-    val _ = file
+  def readDetailedMetadata(
+      file: ParquetFile,
+      extended: Boolean = false
+  ): Try[ParquetMetadataReport] = {
+    val _ = (file, extended)
     Failure(new UnsupportedOperationException("readDetailedMetadata is not implemented"))
   }
 
@@ -667,14 +672,28 @@ class HadoopParquetRepository(
       }
     }
 
-  override def readDetailedMetadata(file: ParquetFile): Try[ParquetMetadataReport] =
+  override def readDetailedMetadata(
+      file: ParquetFile,
+      extended: Boolean
+  ): Try[ParquetMetadataReport] =
     withHadoopConfig(file.location) { hadoopConfig =>
       Try {
         val path = new HadoopPath(file.location.path)
         val (fileSize, modTimeMillis, knownStatus) =
           fileSizeAndMTime(file.location, path, hadoopConfig)
         val footer = getFooter(file.location, path, hadoopConfig, knownStatus)
-        MetadataReader.build(footer, fileSize, Some(java.time.Instant.ofEpochMilli(modTimeMillis)))
+        // parquet-java's footer objects drop some thrift fields, so the extended
+        // view re-reads the raw footer (the cached one is already parsed).
+        val raw = Option.when(extended) {
+          val (stream, len) = openFooterStream(file.location, path, hadoopConfig, knownStatus)
+          FooterReader.readRawFileMetaData(stream, len)
+        }
+        MetadataReader.build(
+          footer,
+          fileSize,
+          Some(java.time.Instant.ofEpochMilli(modTimeMillis)),
+          raw
+        )
       }
     }
 

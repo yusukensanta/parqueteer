@@ -13,7 +13,8 @@ case class ParquetMetadataReport(
     messageSchema: String,
     columns: List[ColumnSchemaDetail],
     rowGroups: List[RowGroupDetail],
-    schemaTree: Option[SchemaNode] = None
+    schemaTree: Option[SchemaNode] = None,
+    extended: Option[ExtendedFileDetail] = None
 )
 
 /**
@@ -60,7 +61,8 @@ case class RowGroupDetail(
     startOffset: Long,
     compressedBytes: Long,
     uncompressedBytes: Long,
-    columns: List[ColumnChunkDetail]
+    columns: List[ColumnChunkDetail],
+    extended: Option[ExtendedRowGroupDetail] = None
 )
 
 /** One column's data inside one row group. */
@@ -78,7 +80,53 @@ case class ColumnChunkDetail(
     maxValue: Option[String],
     hasBloomFilter: Boolean,
     hasColumnIndex: Boolean,
-    hasOffsetIndex: Boolean
+    hasOffsetIndex: Boolean,
+    extended: Option[ExtendedChunkDetail] = None
 ) {
   def hasDictionary: Boolean = dictionaryPageOffset.isDefined
 }
+
+// ── Extended detail (`metadata --extended`) ────────────────────────────────
+
+/** File-level footer fields that are not needed day to day. */
+case class ExtendedFileDetail(
+    columnOrders: List[String],
+    encryptionAlgorithm: Option[String],
+    hasFooterSigningKey: Boolean
+)
+
+case class SortingColumnDetail(column: String, descending: Boolean, nullsFirst: Boolean)
+
+case class ExtendedRowGroupDetail(
+    ordinal: Option[Int],
+    fileOffset: Option[Long],
+    rowIndexOffset: Option[Long],
+    sortingColumns: List[SortingColumnDetail]
+)
+
+/** Number of pages written with a given encoding. */
+case class EncodingPageCount(encoding: String, pages: Int)
+
+/** Where an index or bloom filter lives in the file. */
+case class FileRegion(offset: Long, length: Option[Long])
+
+/** Per-chunk size statistics: unencoded bytes and level histograms. */
+case class SizeStatisticsDetail(
+    unencodedByteArrayDataBytes: Option[Long],
+    repetitionLevelHistogram: List[Long],
+    definitionLevelHistogram: List[Long]
+)
+
+case class ExtendedChunkDetail(
+    dictionaryPages: List[EncodingPageCount],
+    dataPages: List[EncodingPageCount],
+    usesV2Pages: Option[Boolean],
+    distinctCount: Option[Long],
+    isMinExact: Option[Boolean],
+    isMaxExact: Option[Boolean],
+    bloomFilter: Option[FileRegion],
+    columnIndex: Option[FileRegion],
+    offsetIndex: Option[FileRegion],
+    sizeStatistics: Option[SizeStatisticsDetail],
+    isEncrypted: Boolean
+)

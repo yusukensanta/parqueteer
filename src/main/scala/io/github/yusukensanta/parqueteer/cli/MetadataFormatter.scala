@@ -62,6 +62,7 @@ private[cli] object MetadataFormatter {
           )
         }),
         "schemaTree" -> report.schemaTree.fold(Json.Null)(_.asJson),
+        "extended"   -> report.extended.fold(Json.Null)(_.asJson),
         "rowGroups" -> Json.fromValues(report.rowGroups.map { rg =>
           Json.obj(
             "index"             -> Json.fromInt(rg.index),
@@ -69,6 +70,7 @@ private[cli] object MetadataFormatter {
             "startOffset"       -> Json.fromLong(rg.startOffset),
             "compressedBytes"   -> Json.fromLong(rg.compressedBytes),
             "uncompressedBytes" -> Json.fromLong(rg.uncompressedBytes),
+            "extended"          -> rg.extended.fold(Json.Null)(_.asJson),
             "columns" -> Json.fromValues(rg.columns.map { c =>
               Json.obj(
                 "path"                 -> Json.fromString(c.path),
@@ -84,7 +86,8 @@ private[cli] object MetadataFormatter {
                 "maxValue"             -> optStr(c.maxValue),
                 "hasBloomFilter"       -> Json.fromBoolean(c.hasBloomFilter),
                 "hasColumnIndex"       -> Json.fromBoolean(c.hasColumnIndex),
-                "hasOffsetIndex"       -> Json.fromBoolean(c.hasOffsetIndex)
+                "hasOffsetIndex"       -> Json.fromBoolean(c.hasOffsetIndex),
+                "extended"             -> c.extended.fold(Json.Null)(_.asJson)
               )
             })
           )
@@ -142,6 +145,71 @@ private[cli] object MetadataFormatter {
     Col("Max", 16),
     Col("Flags", 5)
   )
+
+  private val extendedChunkCols = List(
+    Col("Column", 30),
+    Col("Dict pages", 22),
+    Col("Data pages", 28),
+    Col("V2", 3),
+    Col("Distinct", 9, rightAligned = true),
+    Col("Exact", 5),
+    Col("Bloom", 14),
+    Col("ColIdx", 14),
+    Col("OffIdx", 14),
+    Col("Unencoded", 10, rightAligned = true)
+  )
+
+  private def region(r: Option[FileRegion]): String =
+    r.fold("-")(x => s"@${x.offset}+${x.length.fold("?")(_.toString)}")
+
+  private def pageCounts(xs: List[EncodingPageCount]): String =
+    if xs.isEmpty then "-" else xs.map(e => s"${e.encoding}:${e.pages}").mkString(",")
+
+  private def triState(b: Option[Boolean]): String = b.fold("-")(v => if v then "Y" else "N")
+
+  private def extendedFileSection(e: ExtendedFileDetail): List[String] =
+    List(
+      "Extended File Detail",
+      "--------------------",
+      s"Column Orders:    ${
+          if e.columnOrders.isEmpty then "(none)" else e.columnOrders.distinct.mkString(", ")
+        }",
+      s"Encryption:       ${e.encryptionAlgorithm.getOrElse("none")}",
+      s"Footer Signing:   ${if e.hasFooterSigningKey then "key metadata present" else "none"}"
+    )
+
+  private def extendedRowGroupSection(rg: RowGroupDetail): List[String] =
+    rg.extended.toList.flatMap { e =>
+      val sorting =
+        if e.sortingColumns.isEmpty then "(none)"
+        else
+          e.sortingColumns
+            .map(sc =>
+              s"${sc.column} ${if sc.descending then "DESC" else "ASC"} NULLS ${
+                  if sc.nullsFirst then "FIRST" else "LAST"
+                }"
+            )
+            .mkString(", ")
+      val header =
+        s"Row Group ${rg.index} (extended): ordinal ${e.ordinal.fold("n/a")(_.toString)}, " +
+          s"file offset ${e.fileOffset.fold("n/a")(_.toString)}, first row index ${e.rowIndexOffset
+              .fold("n/a")(_.toString)}, sorted by $sorting"
+      val rows = rg.columns.flatMap(c => c.extended.map(x => c -> x)).map { case (c, x) =>
+        List(
+          c.path,
+          pageCounts(x.dictionaryPages),
+          pageCounts(x.dataPages),
+          triState(x.usesV2Pages),
+          x.distinctCount.fold("-")(_.toString),
+          s"${triState(x.isMinExact)}/${triState(x.isMaxExact)}",
+          region(x.bloomFilter),
+          region(x.columnIndex),
+          region(x.offsetIndex),
+          x.sizeStatistics.flatMap(_.unencodedByteArrayDataBytes).fold("-")(n => bytes(n))
+        )
+      }
+      List(header, renderTable(extendedChunkCols, rows))
+    }
 
   def formatTable(report: ParquetMetadataReport): String = {
     val f = report.file
@@ -219,7 +287,12 @@ private[cli] object MetadataFormatter {
 
     val legend = List("Flags: D=dictionary page, B=bloom filter, C=column index, O=offset index")
 
-    (List(fileSection, keyValueSection, schemaSection, columnSection) ++ rowGroupSections :+ legend)
+    val extendedSections =
+      report.extended.map(extendedFileSection).toList ++
+        report.rowGroups.map(extendedRowGroupSection).filter(_.nonEmpty)
+
+    (List(fileSection, keyValueSection, schemaSection, columnSection) ++ rowGroupSections ++
+      extendedSections :+ legend)
       .map(_.mkString("\n"))
       .mkString("\n\n")
   }
