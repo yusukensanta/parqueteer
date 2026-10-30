@@ -205,9 +205,11 @@ parqueteer/
 │   └── core/
 │       ├── models/                   # Domain model (CellValue, ParquetFile, ParqueteerError, …)
 │       ├── services/
-│       │   └── ParquetService.scala  # Business logic, Either-based API
+│       │   ├── ParquetService.scala     # Business logic, Either-based API
+│       │   └── StreamWriteSupport.scala # Shared stream-write helpers (cleanup, schema, row projection)
 │       ├── repositories/
 │       │   ├── ParquetRepository.scala        # Parquet I/O orchestration
+│       │   ├── HadoopConfigProvider.scala      # Per-location Hadoop config + cloud auth, cached
 │       │   ├── ParquetRecordDecoder.scala      # Row → Map decoding
 │       │   ├── ParquetSchemaBuilder.scala      # Schema construction
 │       │   ├── ParquetWriteOps.scala           # Write/convert operations

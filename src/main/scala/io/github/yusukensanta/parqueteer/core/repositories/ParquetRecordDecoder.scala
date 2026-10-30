@@ -276,12 +276,6 @@ private[repositories] object ParquetRecordDecoder {
     if transformer.isEmpty then row
     else row.map { case (k, v) => k -> transformer.get(k).fold(v)(_(v)) }
 
-  def postProcessTemporalFields(
-      row: Map[String, CellValue],
-      schema: MessageType
-  ): Map[String, CellValue] =
-    applyTemporalTransformer(row, buildTemporalTransformer(schema))
-
   def decodePageStore(
       pageStore: PageReadStore,
       fileSchema: MessageType,

@@ -82,7 +82,7 @@ class ParquetRecordDecoderTest extends AnyFlatSpec with Matchers {
       .Str("")
   }
 
-  it should "decode DateTimeValue as raw Long (postProcessTemporalFields handles unit conversion)" in {
+  it should "decode DateTimeValue as raw Long (applyTemporalTransformer handles unit conversion)" in {
     val epochMillis = 0L
     val result = ParquetRecordDecoder.decodeValue(
       DateTimeValue(epochMillis, TimestampFormat.Int64Millis)
@@ -120,17 +120,20 @@ class ParquetRecordDecoderTest extends AnyFlatSpec with Matchers {
     )
   }
 
-  // ── postProcessTemporalFields ──────────────────────────────────────────────
+  // ── applyTemporalTransformer ──────────────────────────────────────────────
 
-  "ParquetRecordDecoder.postProcessTemporalFields" should "convert INT32 DATE field from epoch-day Int to LocalDate" in {
+  "ParquetRecordDecoder.applyTemporalTransformer" should "convert INT32 DATE field from epoch-day Int to LocalDate" in {
     val schema: MessageType = MessageTypeParser.parseMessageType(
       """message root {
         |  optional int32 dob (DATE);
         |}""".stripMargin
     )
     // epoch day 0 = 1970-01-01
-    val row    = Map[String, CellValue]("dob" -> CellValue.I32(0))
-    val result = ParquetRecordDecoder.postProcessTemporalFields(row, schema)
+    val row = Map[String, CellValue]("dob" -> CellValue.I32(0))
+    val result = ParquetRecordDecoder.applyTemporalTransformer(
+      row,
+      ParquetRecordDecoder.buildTemporalTransformer(schema)
+    )
     result("dob") shouldBe CellValue.Date(java.time.LocalDate.of(1970, 1, 1))
   }
 
@@ -142,7 +145,10 @@ class ParquetRecordDecoderTest extends AnyFlatSpec with Matchers {
     )
     val epochDay = java.time.LocalDate.of(1990, 6, 15).toEpochDay.toInt
     val row      = Map[String, CellValue]("birth" -> CellValue.I32(epochDay))
-    val result   = ParquetRecordDecoder.postProcessTemporalFields(row, schema)
+    val result = ParquetRecordDecoder.applyTemporalTransformer(
+      row,
+      ParquetRecordDecoder.buildTemporalTransformer(schema)
+    )
     result("birth") shouldBe CellValue.Date(java.time.LocalDate.of(1990, 6, 15))
   }
 
@@ -157,7 +163,10 @@ class ParquetRecordDecoderTest extends AnyFlatSpec with Matchers {
       "id"   -> CellValue.I64(42L),
       "name" -> CellValue.Str("Alice")
     )
-    val result = ParquetRecordDecoder.postProcessTemporalFields(row, schema)
+    val result = ParquetRecordDecoder.applyTemporalTransformer(
+      row,
+      ParquetRecordDecoder.buildTemporalTransformer(schema)
+    )
     result shouldBe row
   }
 
@@ -168,8 +177,11 @@ class ParquetRecordDecoderTest extends AnyFlatSpec with Matchers {
         |}""".stripMargin
     )
     // value is already a Str (already post-processed or unexpected type)
-    val row    = Map[String, CellValue]("dob" -> CellValue.Str("2001-12-01"))
-    val result = ParquetRecordDecoder.postProcessTemporalFields(row, schema)
+    val row = Map[String, CellValue]("dob" -> CellValue.Str("2001-12-01"))
+    val result = ParquetRecordDecoder.applyTemporalTransformer(
+      row,
+      ParquetRecordDecoder.buildTemporalTransformer(schema)
+    )
     result shouldBe row
   }
 
@@ -179,8 +191,11 @@ class ParquetRecordDecoderTest extends AnyFlatSpec with Matchers {
         |  optional int32 dob (DATE);
         |}""".stripMargin
     )
-    val row    = Map.empty[String, CellValue]
-    val result = ParquetRecordDecoder.postProcessTemporalFields(row, schema)
+    val row = Map.empty[String, CellValue]
+    val result = ParquetRecordDecoder.applyTemporalTransformer(
+      row,
+      ParquetRecordDecoder.buildTemporalTransformer(schema)
+    )
     result shouldBe Map.empty[String, CellValue]
   }
 
@@ -197,7 +212,10 @@ class ParquetRecordDecoderTest extends AnyFlatSpec with Matchers {
       "start_date" -> CellValue.I32(startDay),
       "end_date"   -> CellValue.I32(endDay)
     )
-    val result = ParquetRecordDecoder.postProcessTemporalFields(row, schema)
+    val result = ParquetRecordDecoder.applyTemporalTransformer(
+      row,
+      ParquetRecordDecoder.buildTemporalTransformer(schema)
+    )
     result("start_date") shouldBe CellValue.Date(
       java.time.LocalDate.of(2020, 1, 1)
     )
@@ -327,8 +345,11 @@ class ParquetRecordDecoderTest extends AnyFlatSpec with Matchers {
       "message root { optional int64 ts (TIMESTAMP_MICROS); }"
     )
     // -1 microsecond = 1 microsecond before epoch = 1969-12-31T23:59:59.999999Z
-    val row    = Map[String, CellValue]("ts" -> CellValue.I64(-1L))
-    val result = ParquetRecordDecoder.postProcessTemporalFields(row, schema)
+    val row = Map[String, CellValue]("ts" -> CellValue.I64(-1L))
+    val result = ParquetRecordDecoder.applyTemporalTransformer(
+      row,
+      ParquetRecordDecoder.buildTemporalTransformer(schema)
+    )
     result("ts") shouldBe CellValue.Ts(
       java.time.Instant.EPOCH.minus(1L, java.time.temporal.ChronoUnit.MICROS)
     )
@@ -340,7 +361,10 @@ class ParquetRecordDecoderTest extends AnyFlatSpec with Matchers {
     )
     val micros = Long.MinValue / 2
     val row    = Map[String, CellValue]("ts" -> CellValue.I64(micros))
-    val result = ParquetRecordDecoder.postProcessTemporalFields(row, schema)
+    val result = ParquetRecordDecoder.applyTemporalTransformer(
+      row,
+      ParquetRecordDecoder.buildTemporalTransformer(schema)
+    )
     val expectedInstant = java.time.Instant.ofEpochSecond(
       Math.floorDiv(micros, 1_000_000L),
       Math.floorMod(micros, 1_000_000L) * 1000L
@@ -566,7 +590,7 @@ class ParquetRecordDecoderTest extends AnyFlatSpec with Matchers {
     }
   }
 
-  it should "produce the same result as postProcessTemporalFields" in {
+  it should "produce the same result as applyTemporalTransformer" in {
     val schema = MessageTypeParser.parseMessageType(
       """message root {
         |  optional int32 d (DATE);
@@ -584,7 +608,10 @@ class ParquetRecordDecoderTest extends AnyFlatSpec with Matchers {
       ParquetRecordDecoder.buildTemporalTransformer(schema)
     )
     val viaLegacy =
-      ParquetRecordDecoder.postProcessTemporalFields(row, schema)
+      ParquetRecordDecoder.applyTemporalTransformer(
+        row,
+        ParquetRecordDecoder.buildTemporalTransformer(schema)
+      )
     viaTransformer shouldBe viaLegacy
   }
 

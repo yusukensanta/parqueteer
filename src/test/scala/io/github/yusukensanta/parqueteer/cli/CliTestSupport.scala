@@ -31,8 +31,6 @@ trait CliTestSupport extends AnyFlatSpec with Matchers {
 
     override def readContent(file: ParquetFile, config: ReadConfig): Try[FileContent] =
       contentResult
-    override def readSchema(file: ParquetFile): Try[ParquetSchema]  = schemaResult
-    override def readMetadata(file: ParquetFile): Try[FileMetadata] = metadataResult
 
     override def readFileInfo(
         file: ParquetFile

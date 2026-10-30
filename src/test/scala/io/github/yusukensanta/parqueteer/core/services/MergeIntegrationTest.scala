@@ -352,7 +352,7 @@ class MergeIntegrationTest extends AnyFlatSpec with Matchers {
       service.mergeFiles(List(in1, in2), out, WriteConfig(), SchemaMode.Union)
     result.isRight shouldBe true
 
-    val schema = repo.readSchema(ParquetFile(LocalPath(out))).get
+    val schema = repo.readFileInfo(ParquetFile(LocalPath(out))).map(_._1).get
     val idCol  = schema.columns.find(_.name == "id").get
     idCol.isOptional shouldBe false
   }
@@ -387,7 +387,7 @@ class MergeIntegrationTest extends AnyFlatSpec with Matchers {
       service.mergeFiles(List(in1, in2), out, WriteConfig(), SchemaMode.Union)
     result.isRight shouldBe true
 
-    val schema  = repo.readSchema(ParquetFile(LocalPath(out))).get
+    val schema  = repo.readFileInfo(ParquetFile(LocalPath(out))).map(_._1).get
     val idCol   = schema.columns.find(_.name == "id").get
     val nameCol = schema.columns.find(_.name == "name").get
     idCol.isOptional shouldBe false  // required in both

@@ -114,7 +114,7 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
     val loc = LocalPath(tempFile().getAbsolutePath)
     repo.writeContent(loc, sampleData, None).isSuccess shouldBe true
 
-    val result = repo.readSchema(ParquetFile(loc))
+    val result = repo.readFileInfo(ParquetFile(loc)).map(_._1)
     result.isSuccess shouldBe true
     result.get.columns.map(_.name) should contain allOf ("id", "name", "score")
     result.get.totalRowCount shouldBe 3L
@@ -127,7 +127,7 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
     val loc = LocalPath(tempFile().getAbsolutePath)
     repo.writeContent(loc, sampleData, None).isSuccess shouldBe true
 
-    val result = repo.readMetadata(ParquetFile(loc))
+    val result = repo.readFileInfo(ParquetFile(loc)).map(_._2)
     result.isSuccess shouldBe true
     result.get.fileSize should be > 0L
     result.get.createdAt shouldBe None
@@ -138,7 +138,7 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
     val loc = LocalPath(tempFile().getAbsolutePath)
     repo.writeContent(loc, sampleData, None).isSuccess shouldBe true
 
-    val result = repo.readMetadata(ParquetFile(loc))
+    val result = repo.readFileInfo(ParquetFile(loc)).map(_._2)
     result.isSuccess shouldBe true
     val version = result.get.version
     version should (equal("1.0") or equal("2.0"))
@@ -931,7 +931,7 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
     val repo =
       new HadoopParquetRepository(profile = Some("__nonexistent_profile_xyz__"))
     val file   = ParquetFile(S3Location("test-bucket", "key.parquet", None))
-    val result = repo.readSchema(file)
+    val result = repo.readFileInfo(file).map(_._1)
     result.isFailure shouldBe true
     // After our fix, the error should be a CloudAuthException
     result.failed.get shouldBe a[ParqueteerError.CloudAuthException]
@@ -1361,7 +1361,7 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
       repo
         .writeContent(loc, rows, None, WriteConfig(enableDictionary = dictionary))
         .isSuccess shouldBe true
-      repo.readSchema(ParquetFile(loc)).get.columns.flatMap(_.encodings).toSet
+      repo.readFileInfo(ParquetFile(loc)).map(_._1).get.columns.flatMap(_.encodings).toSet
     }
     encodingsWith(dictionary = true).exists(_.contains("DICTIONARY")) shouldBe true
     encodingsWith(dictionary = false).exists(_.contains("DICTIONARY")) shouldBe false

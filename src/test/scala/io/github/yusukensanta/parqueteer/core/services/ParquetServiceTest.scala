@@ -31,12 +31,6 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
         config: ReadConfig
     ): Try[FileContent] = contentResult
 
-    override def readSchema(file: ParquetFile): Try[ParquetSchema] =
-      schemaResult
-
-    override def readMetadata(file: ParquetFile): Try[FileMetadata] =
-      metadataResult
-
     override def readFileInfo(
         file: ParquetFile
     ): Try[(ParquetSchema, FileMetadata, List[RowGroupInfo])] =

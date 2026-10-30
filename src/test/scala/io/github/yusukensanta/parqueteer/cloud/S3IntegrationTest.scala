@@ -161,7 +161,7 @@ class S3IntegrationTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll
     val loc = S3Location(testBucket, "roundtrip/schema.parquet")
     assertSuccess(repo.writeContent(loc, sampleData, None), "write")
 
-    val schema = assertSuccess(repo.readSchema(ParquetFile(loc)), "readSchema")
+    val schema = assertSuccess(repo.readFileInfo(ParquetFile(loc)).map(_._1), "readSchema")
     schema.columns.map(_.name) should contain allOf ("id", "name", "score")
     schema.totalRowCount shouldBe 3L
   }
@@ -175,7 +175,7 @@ class S3IntegrationTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll
     assertSuccess(repo.writeContent(loc, sampleData, None), "write")
 
     val meta =
-      assertSuccess(repo.readMetadata(ParquetFile(loc)), "readMetadata")
+      assertSuccess(repo.readFileInfo(ParquetFile(loc)).map(_._2), "readMetadata")
     meta.fileSize should be > 0L
   }
 
