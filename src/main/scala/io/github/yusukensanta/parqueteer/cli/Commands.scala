@@ -77,6 +77,11 @@ case class StatsCommand(
     format: OutputFormat = OutputFormat.Table
 ) extends Command
 
+case class MetadataCommand(
+    filePath: String,
+    format: OutputFormat = OutputFormat.Table
+) extends Command
+
 case class CountCommand(
     filePath: String,
     format: OutputFormat = OutputFormat.Table

@@ -95,11 +95,11 @@ parqueteer read gs://bucket/data.parquet
 parqueteer read abfss://container@account.dfs.core.windows.net/data.parquet
 
 # Glob patterns match multiple files (also supported by write, convert, merge,
-# info, schema, stats, count, and validate)
+# info, schema, stats, metadata, count, and validate)
 parqueteer read "s3://bucket/2026-*.parquet"
 
 # Fetch up to N matched files concurrently from cloud storage (default: 4).
-# Applies to info, validate, stats, count, schema, merge, and convert — bounds
+# Applies to info, validate, stats, metadata, count, schema, merge, and convert — bounds
 # concurrent connections and in-flight memory instead of opening every match
 # at once. For merge/convert, files are fetched ahead of the single output
 # writer rather than all at once, so output order is unaffected.
@@ -176,6 +176,19 @@ parqueteer stats data.parquet --format json
 
 # From cloud storage
 parqueteer stats s3://bucket/data.parquet
+```
+
+### Full Footer Metadata
+
+```bash
+# Everything the footer says: file info, key-value pairs, message schema,
+# per-column schema details, and per-row-group column chunk details
+# (codec, encodings, sizes, null count, min/max, dictionary/bloom/index presence).
+# No data scan.
+parqueteer metadata data.parquet
+
+# JSON output keeps full key-value values (the table view shortens long ones)
+parqueteer metadata data.parquet --format json
 ```
 
 ### Compare Schemas
@@ -434,6 +447,7 @@ parqueteer read abfss://container@account.dfs.core.windows.net/data.parquet
 | `count` | Print total row count from footer metadata (no data scan) |
 | `schema FILE` | Column structure — names, types, nullability, compression |
 | `stats FILE` | Column statistics — null count, min, max (from file footer) |
+| `metadata FILE` | Full footer metadata — key-value pairs, row groups, per-column chunk details |
 | `schema diff FILE1 FILE2` | Compare schemas of two Parquet files |
 | `write` | Create a Parquet file from JSON, NDJSON, CSV, or LTSV input |
 | `convert` | Convert between Parquet, JSON, CSV, NDJSON, and LTSV formats |

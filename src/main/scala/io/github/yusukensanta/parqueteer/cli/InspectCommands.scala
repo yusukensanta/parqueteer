@@ -219,6 +219,39 @@ private[cli] object InspectCommands {
     }
   }
 
+  private[cli] def formatMetadataText(report: ParquetMetadataReport, format: OutputFormat): String =
+    format match {
+      case OutputFormat.JSON => MetadataFormatter.formatJson(report)
+      case _                 => MetadataFormatter.formatTable(report)
+    }
+
+  private[cli] def executeMetadata(
+      service: ParquetService,
+      cmd: MetadataCommand,
+      globalOptions: GlobalOptions
+  ): Int = {
+    import cmd.{filePath, format}
+    service.getDetailedMetadata(filePath) match {
+      case Right(report) =>
+        if !globalOptions.quiet then println(formatMetadataText(report, format))
+        0
+      case Left(error) =>
+        reportError("Failed to read metadata", globalOptions)(error)
+    }
+  }
+
+  private[cli] def executeMetadataMulti(
+      service: ParquetService,
+      paths: List[String],
+      cmd: MetadataCommand,
+      globalOptions: GlobalOptions
+  ): Int = {
+    import cmd.format
+    runMultiFileReport(paths, format, globalOptions) { path =>
+      service.getDetailedMetadata(path).map(r => (formatMetadataText(r, format), true))
+    }
+  }
+
   private[cli] def formatCountText(count: Long, format: OutputFormat): String =
     format match {
       case OutputFormat.JSON => CliOutputFormatter.formatCountJson(count)

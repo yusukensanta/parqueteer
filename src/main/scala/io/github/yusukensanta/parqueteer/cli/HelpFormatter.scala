@@ -12,6 +12,7 @@ object HelpFormatter {
     case "schema diff" => Some(schemaDiffHelp())
     case "merge"       => Some(mergeHelp())
     case "stats"       => Some(statsHelp())
+    case "metadata"    => Some(metadataHelp())
     case "count"       => Some(countHelp())
     case "completions" => Some(completionsHelp())
     case "config"      => Some(configHelp())
@@ -218,6 +219,29 @@ object HelpFormatter {
        |  parqueteer stats data.parquet --format json
        |""".stripMargin
 
+  private def metadataHelp(): String =
+    s"""parqueteer metadata - Show full footer metadata (no data scan)
+       |
+       |Reports file-level fields, key-value metadata, the message schema, per-column
+       |schema details (logical type, levels, field id), and for every row group the
+       |per-column chunk detail: codec, encodings, sizes, null count, min/max, and
+       |whether a dictionary page, bloom filter, column index or offset index exists.
+       |
+       |USAGE:
+       |  parqueteer metadata [OPTIONS] <file>
+       |
+       |ARGUMENTS:
+       |  <file>    Path to parquet file (local, s3://, gs://, abfss://)
+       |
+       |OPTIONS:
+       |      --format <fmt>   Output format: table, json (default: table)
+       |  -h, --help           Show this help message
+       |
+       |EXAMPLES:
+       |  parqueteer metadata data.parquet
+       |  parqueteer metadata data.parquet --format json
+       |""".stripMargin
+
   private def countHelp(): String =
     s"""parqueteer count - Print total row count from footer metadata (no data scan)
        |
@@ -281,6 +305,7 @@ object HelpFormatter {
        |  schema           Column structure (names, types, nullability, compression)
        |  schema diff      Compare column structures of two parquet files
        |  stats            Column statistics (min, max, null count) from row group metadata
+       |  metadata         Full footer metadata (key-value pairs, row groups, column chunks)
        |  count            Total row count from footer metadata (no data scan)
        |
        |DATA COMMANDS:

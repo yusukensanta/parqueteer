@@ -420,6 +420,14 @@ class ParquetService(
         .toParqueteerError
     } yield stats
 
+  def getDetailedMetadata(path: String): Either[ParqueteerError, ParquetMetadataReport] =
+    for {
+      location <- parseLocation(path)
+      report <- repository
+        .readDetailedMetadata(ParquetFile(location))
+        .toParqueteerError
+    } yield report
+
   def writeFile(
       path: String,
       data: List[Map[String, CellValue]],

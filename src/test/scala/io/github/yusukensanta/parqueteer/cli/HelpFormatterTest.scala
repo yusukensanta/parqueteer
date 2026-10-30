@@ -68,6 +68,13 @@ class HelpFormatterTest extends AnyFlatSpec with Matchers {
     h.get should include("parqueteer stats")
   }
 
+  it should "return Some for metadata" in {
+    val h = HelpFormatter.subcommandHelp("metadata")
+    h shouldBe defined
+    h.get should include("parqueteer metadata")
+    h.get should include("--format")
+  }
+
   it should "return Some for count" in {
     val h = HelpFormatter.subcommandHelp("count")
     h shouldBe defined

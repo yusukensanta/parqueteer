@@ -73,6 +73,16 @@ trait ParquetRepository {
   def readStats(file: ParquetFile): Try[FileStats]
 
   /**
+   * Full footer metadata (file, key-value, per-row-group and per-column-chunk
+   * detail). Defaults to failing so fake repositories used in unit tests don't
+   * have to implement it to keep compiling.
+   */
+  def readDetailedMetadata(file: ParquetFile): Try[ParquetMetadataReport] = {
+    val _ = file
+    Failure(new UnsupportedOperationException("readDetailedMetadata is not implemented"))
+  }
+
+  /**
    * Expand a glob pattern (containing *, ?, [, {) into the concrete files it
    * matches, sorted by path. A location with no glob metacharacters is
    * expected to already have been filtered out by the caller — this default
@@ -361,21 +371,29 @@ class HadoopParquetRepository(
     (f.length(), f.lastModified())
   }
 
+  // Size + mtime (+ the FileStatus, when one had to be fetched, so getFooter
+  // can reuse it instead of issuing a second HEAD on cloud storage).
+  private def fileSizeAndMTime(
+      location: StorageLocation,
+      path: HadoopPath,
+      hadoopConfig: Configuration
+  ): (Long, Long, Option[FileStatus]) = location match {
+    case LocalPath(p) =>
+      val (size, mtime) = localFileSizeAndMTime(p)
+      (size, mtime, None)
+    case _ =>
+      val status = path.getFileSystem(hadoopConfig).getFileStatus(path)
+      (status.getLen, status.getModificationTime, Some(status))
+  }
+
   def readFileInfo(
       file: ParquetFile
   ): Try[(ParquetSchema, FileMetadata, List[RowGroupInfo])] =
     withHadoopConfig(file.location) { hadoopConfig =>
       Try {
         val path = new HadoopPath(file.location.path)
-        val (fileSize, modTimeMillis, knownStatus): (Long, Long, Option[FileStatus]) =
-          file.location match {
-            case LocalPath(p) =>
-              val (size, mtime) = localFileSizeAndMTime(p)
-              (size, mtime, None)
-            case _ =>
-              val status = path.getFileSystem(hadoopConfig).getFileStatus(path)
-              (status.getLen, status.getModificationTime, Some(status))
-          }
+        val (fileSize, modTimeMillis, knownStatus) =
+          fileSizeAndMTime(file.location, path, hadoopConfig)
         val FooterInfo(msgSchema, blocks, version, createdBy, _) =
           getFooter(file.location, path, hadoopConfig, knownStatus)
         val ratio        = calculateCompressionRatio(blocks)
@@ -669,6 +687,17 @@ class HadoopParquetRepository(
         }
 
         FileStats(columns, totalRows, blocks.size.toLong)
+      }
+    }
+
+  override def readDetailedMetadata(file: ParquetFile): Try[ParquetMetadataReport] =
+    withHadoopConfig(file.location) { hadoopConfig =>
+      Try {
+        val path = new HadoopPath(file.location.path)
+        val (fileSize, modTimeMillis, knownStatus) =
+          fileSizeAndMTime(file.location, path, hadoopConfig)
+        val footer = getFooter(file.location, path, hadoopConfig, knownStatus)
+        MetadataReader.build(footer, fileSize, Some(java.time.Instant.ofEpochMilli(modTimeMillis)))
       }
     }
 

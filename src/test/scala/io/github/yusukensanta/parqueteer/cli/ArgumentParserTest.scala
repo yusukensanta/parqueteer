@@ -548,6 +548,38 @@ class ArgumentParserTest extends AnyFlatSpec with Matchers {
     result shouldBe None
   }
 
+  it should "parse metadata command with default and explicit format" in {
+    val plain = OParser.parse(
+      ArgumentParser.parser,
+      Array("metadata", "/local/file.parquet"),
+      ArgumentParser.Config()
+    )
+    plain.get.command.get shouldBe MetadataCommand("/local/file.parquet", OutputFormat.Table)
+
+    val json = OParser.parse(
+      ArgumentParser.parser,
+      Array("metadata", "/local/file.parquet", "--format", "json"),
+      ArgumentParser.Config()
+    )
+    json.get.command.get shouldBe MetadataCommand("/local/file.parquet", OutputFormat.JSON)
+  }
+
+  it should "reject invalid format for metadata command" in {
+    OParser.parse(
+      ArgumentParser.parser,
+      Array("metadata", "a.parquet", "--format", "csv"),
+      ArgumentParser.Config()
+    ) shouldBe None
+  }
+
+  it should "require a file for the metadata command" in {
+    OParser.parse(
+      ArgumentParser.parser,
+      Array("metadata"),
+      ArgumentParser.Config()
+    ) shouldBe None
+  }
+
   it should "parse count command correctly" in {
     val result = OParser.parse(
       ArgumentParser.parser,

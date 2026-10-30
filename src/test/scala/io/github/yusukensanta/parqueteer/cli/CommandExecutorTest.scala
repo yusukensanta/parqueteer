@@ -18,6 +18,7 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
       validateResult: Try[List[String]] = Success(List.empty),
       writeResult: Try[Unit] = Success(()),
       statsResult: Try[FileStats] = Success(defaultStats),
+      detailedMetadataResult: Try[ParquetMetadataReport] = Success(MetadataFixtures.report),
       schemaFieldsResult: Try[List[FieldSummary]] = Success(List.empty),
       deleteResult: Try[Unit] = Success(()),
       inferSchemaResult: Try[ParquetSchema] = Success(defaultSchema)
@@ -59,7 +60,10 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
       writeResult.map { _ =>
         var c = 0L; feed(_ => c += 1); c
       }
-    override def readStats(file: ParquetFile): Try[FileStats]                 = statsResult
+    override def readStats(file: ParquetFile): Try[FileStats] = statsResult
+
+    override def readDetailedMetadata(file: ParquetFile): Try[ParquetMetadataReport] =
+      detailedMetadataResult
     override def readSchemaFields(file: ParquetFile): Try[List[FieldSummary]] = schemaFieldsResult
     override def deleteFile(location: StorageLocation): Try[Unit]             = deleteResult
 
@@ -284,6 +288,84 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
     code should not be 0
   }
 
+  // ── executeMetadata ────────────────────────────────────────────────────
+
+  "executeMetadata" should "return 0 on success" in {
+    InspectCommands.executeMetadata(
+      newService(),
+      MetadataCommand("/tmp/test.parquet", OutputFormat.Table),
+      quietOpts
+    ) shouldBe 0
+  }
+
+  it should "print the table report unless quiet" in {
+    val out = new ByteArrayOutputStream()
+    val code = Console.withOut(new PrintStream(out)) {
+      InspectCommands.executeMetadata(
+        newService(),
+        MetadataCommand("/tmp/test.parquet", OutputFormat.Table),
+        defaultOpts
+      )
+    }
+    code shouldBe 0
+    out.toString should include("File Metadata")
+  }
+
+  it should "print JSON when requested" in {
+    val out = new ByteArrayOutputStream()
+    Console.withOut(new PrintStream(out)) {
+      InspectCommands.executeMetadata(
+        newService(),
+        MetadataCommand("/tmp/test.parquet", OutputFormat.JSON),
+        defaultOpts
+      )
+    }
+    out.toString should include("\"keyValueMetadata\"")
+  }
+
+  it should "return error code on failure" in {
+    val repo = new FakeParquetRepository(
+      detailedMetadataResult = scala.util.Failure(new java.io.IOException("disk error"))
+    )
+    val (code, _) = captureStderr {
+      InspectCommands.executeMetadata(
+        newService(repo),
+        MetadataCommand("/nope", OutputFormat.Table),
+        quietOpts
+      )
+    }
+    code should not be 0
+  }
+
+  "the default readDetailedMetadata" should "fail so unimplemented fakes are visible" in {
+    val bare = new ParquetRepository {
+      def readContent(file: ParquetFile, config: ReadConfig) = ???
+      def streamContent(file: ParquetFile, config: ReadConfig)(
+          process: Map[String, CellValue] => Unit
+      ) = ???
+      def readSchema(file: ParquetFile)   = ???
+      def readFileInfo(file: ParquetFile) = ???
+      def readMetadata(file: ParquetFile) = ???
+      def writeContent(
+          location: StorageLocation,
+          data: List[Map[String, CellValue]],
+          schema: Option[ParquetSchema],
+          config: WriteConfig
+      ) = ???
+      def writeContentStream(
+          location: StorageLocation,
+          schema: ParquetSchema,
+          config: WriteConfig
+      )(feed: (Map[String, CellValue] => Unit) => Unit) = ???
+      def inferSchemaFromRows(rows: Iterator[Map[String, CellValue]]) = ???
+      def validateFile(file: ParquetFile, deep: Boolean)              = ???
+      def readSchemaFields(file: ParquetFile)                         = ???
+      def deleteFile(location: StorageLocation)                       = ???
+      def readStats(file: ParquetFile)                                = ???
+    }
+    bare.readDetailedMetadata(ParquetFile(LocalPath("/x"))).isFailure shouldBe true
+  }
+
   // ── executeSchemaInfo ──────────────────────────────────────────────────
 
   "executeSchemaInfo" should "return 2 when filePath is empty" in {
@@ -493,6 +575,14 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
     ) shouldBe 0
   }
 
+  it should "dispatch MetadataCommand" in {
+    CommandExecutor.execute(
+      MetadataCommand("/tmp/test.parquet"),
+      newService(),
+      quietOpts
+    ) shouldBe 0
+  }
+
   it should "dispatch CountCommand" in {
     CommandExecutor.execute(
       CountCommand("/tmp/test.parquet"),
@@ -579,6 +669,17 @@ class CommandExecutorTest extends AnyFlatSpec with Matchers {
       quietOpts
     )
     code shouldBe 0
+  }
+
+  "MetadataCommand" should "print one report per matched file for a glob path" in {
+    val service = new ParquetService(multiMatchRepo)
+    val out     = new ByteArrayOutputStream()
+    val code = Console.withOut(new PrintStream(out)) {
+      CommandExecutor.execute(MetadataCommand("/data/*.parquet"), service, GlobalOptions())
+    }
+    code shouldBe 0
+    out.toString should include("==> /data/a.parquet <==")
+    out.toString should include("==> /data/b.parquet <==")
   }
 
   "CountCommand" should "print one count per matched file for a glob path" in {

@@ -92,7 +92,7 @@ object ArgumentParser {
         )
         .text(
           "Max cloud files fetched concurrently for multi-file/glob commands " +
-            "(info, validate, stats, count, schema info, merge, convert) — bounds " +
+            "(info, validate, stats, metadata, count, schema info, merge, convert) — bounds " +
             "concurrent connections and in-flight memory (default: 4)"
         ),
       opt[String]("color")
@@ -369,6 +369,27 @@ object ArgumentParser {
             )
             .text("Path to parquet file (supports glob patterns: *, ?, [], {})"),
           tableOrJsonFormatOpt[StatsCommand]((cmd, f) => cmd.copy(format = f))
+            .text("Output format: table, json (default: table)")
+        ),
+      cmd("metadata")
+        .text(
+          "Show full footer metadata (key-value pairs, row groups, per-column chunk details)"
+        )
+        .children(
+          arg[String]("<file>")
+            .required()
+            .action((x, c) =>
+              c.copy(command =
+                Some(
+                  MetadataCommand(
+                    x,
+                    format = defaultTableOrJsonFormat
+                  )
+                )
+              )
+            )
+            .text("Path to parquet file (supports glob patterns: *, ?, [], {})"),
+          tableOrJsonFormatOpt[MetadataCommand]((cmd, f) => cmd.copy(format = f))
             .text("Output format: table, json (default: table)")
         ),
       cmd("count")

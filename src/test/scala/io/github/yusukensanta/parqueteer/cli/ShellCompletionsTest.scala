@@ -21,6 +21,7 @@ class ShellCompletionsTest extends AnyFlatSpec with Matchers {
       "merge",
       "schema",
       "stats",
+      "metadata",
       "config",
       "completions"
     )
@@ -54,6 +55,7 @@ class ShellCompletionsTest extends AnyFlatSpec with Matchers {
       "merge",
       "schema",
       "stats",
+      "metadata",
       "config",
       "completions"
     )
@@ -82,6 +84,7 @@ class ShellCompletionsTest extends AnyFlatSpec with Matchers {
       "merge",
       "schema",
       "stats",
+      "metadata",
       "config",
       "completions"
     )
