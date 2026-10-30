@@ -180,13 +180,18 @@ private[cli] object InspectCommands {
       s"✗ Schema of $path does not match $contract\n" +
         CliOutputFormatter.formatSchemaDiffTable(contract, path, diff)
 
-  private[cli] def formatSchemaText(file: ParquetFile, format: OutputFormat): String =
+  private[cli] def formatSchemaText(
+      file: ParquetFile,
+      format: OutputFormat,
+      detail: Boolean = false
+  ): String =
     format match {
       case OutputFormat.JSON => CliOutputFormatter.formatSchemaJson(file)
       case _ =>
         file.schema match {
-          case Some(schema) => new TableFormatter().formatSchema(schema)
-          case None         => "No schema information available"
+          case Some(schema) if detail => new TableFormatter().formatSchemaDetail(schema)
+          case Some(schema)           => new TableFormatter().formatSchema(schema)
+          case None                   => "No schema information available"
         }
     }
 
@@ -205,7 +210,7 @@ private[cli] object InspectCommands {
         case Left(error) =>
           reportError("Failed to read schema", globalOptions)(error)
         case Right(file) =>
-          if !globalOptions.quiet then println(formatSchemaText(file, cmd.format))
+          if !globalOptions.quiet then println(formatSchemaText(file, cmd.format, cmd.detail))
           0
       }
 
@@ -213,10 +218,11 @@ private[cli] object InspectCommands {
       service: ParquetService,
       paths: List[String],
       format: OutputFormat,
+      detail: Boolean,
       globalOptions: GlobalOptions
   ): Int =
     runMultiFileReport(paths, format, globalOptions) { path =>
-      service.getFileInfo(path).map(file => (formatSchemaText(file, format), true))
+      service.getFileInfo(path).map(file => (formatSchemaText(file, format, detail), true))
     }
 
   private[cli] def executeSchemaDiff(

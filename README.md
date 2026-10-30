@@ -169,7 +169,16 @@ parqueteer schema data.parquet
 
 # JSON output (for scripting)
 parqueteer schema data.parquet --format json
+
+# Physical type and the full logical type annotation with its parameters
+# (e.g. TIMESTAMP(unit=MICROS, isAdjustedToUTC=true), INTEGER(bitWidth=16, isSigned=false))
+parqueteer schema data.parquet --detail
 ```
+
+`schema --format json` always carries `physicalType`, `typeLength`, a structured
+`logicalType` (`{"type": "TIMESTAMP", "unit": "MICROS", "isAdjustedToUTC": true}`)
+and the legacy `convertedType` next to the compact `dataType`, which is unchanged
+so existing schema contracts keep working.
 
 ### Column Statistics
 

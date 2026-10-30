@@ -61,7 +61,7 @@ private[cli] object CommandExecutor {
       case cmd: SchemaCommand =>
         withResolvedPaths(service, cmd.filePath, "Failed to read schema", globalOptions)(
           path => executeSchemaInfo(service, cmd.copy(filePath = path), globalOptions),
-          paths => executeSchemaInfoMulti(service, paths, cmd.format, globalOptions)
+          paths => executeSchemaInfoMulti(service, paths, cmd.format, cmd.detail, globalOptions)
         )
 
       case cmd: SchemaDiffCommand =>

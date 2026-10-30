@@ -121,6 +121,43 @@ class TableFormatter extends OutputFormatter {
     sb.toString
   }
 
+  /**
+   * Like [[formatSchema]] but shows the physical type and the full logical type
+   * annotation with its parameters (`schema --detail`).
+   */
+  def formatSchemaDetail(schema: ParquetSchema): String = {
+    val sb = new StringBuilder()
+    sb.append("Schema Information (detail)\n")
+    sb.append("===========================\n\n")
+    sb.append(s"Total Columns: ${schema.columns.size}\n")
+    sb.append(s"Row Groups: ${schema.rowGroupCount}\n")
+    sb.append(s"Total Rows: ${schema.totalRowCount}\n\n")
+    sb.append("Columns:\n")
+
+    val headers = List("Name", "Physical", "Logical", "Converted", "Optional")
+    val widths  = List(30, 24, 54, 14, 10)
+    sb.append(drawTopBorder(widths)).append("\n")
+    sb.append(drawRow(headers, widths)).append("\n")
+    sb.append(drawSeparator(widths)).append("\n")
+    schema.columns.foreach { col =>
+      val physical = col.typeLength.fold(col.physicalType)(n => s"${col.physicalType}($n)")
+      sb.append(
+        drawRow(
+          List(
+            truncate(col.name, 30),
+            physical,
+            col.logicalType.fold("-")(_.render),
+            col.convertedType.getOrElse("-"),
+            if col.isOptional then "Yes" else "No"
+          ),
+          widths
+        )
+      ).append("\n")
+    }
+    sb.append(drawBottomBorder(widths))
+    sb.toString
+  }
+
   override def formatMetadata(metadata: FileMetadata): String = {
     val sb = new StringBuilder()
 

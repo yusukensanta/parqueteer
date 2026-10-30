@@ -14,8 +14,25 @@ case class ColumnInfo(
     maxDefinitionLevel: Int,
     maxRepetitionLevel: Int,
     compressionType: String,
-    encodings: List[String] = Nil
+    encodings: List[String] = Nil,
+    physicalType: String = "",
+    typeLength: Option[Int] = None,
+    logicalType: Option[LogicalTypeDetail] = None,
+    convertedType: Option[String] = None
 )
+
+/**
+ * A column's logical type annotation with all of its parameters, e.g.
+ * `TIMESTAMP` with `unit=MICROS`, `isAdjustedToUTC=true`. Parameter values are
+ * rendered as strings; `true`/`false` and integers are emitted as native JSON
+ * booleans/numbers by the JSON output.
+ */
+case class LogicalTypeDetail(name: String, params: List[(String, String)] = Nil) {
+
+  def render: String =
+    if params.isEmpty then name
+    else s"$name(${params.map { case (k, v) => s"$k=$v" }.mkString(", ")})"
+}
 
 case class FieldSummary(name: String, dataType: String, isOptional: Boolean) {
   def isNested: Boolean = NestedType.isNested(dataType)

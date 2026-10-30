@@ -72,7 +72,8 @@ case class ConfigCommand(validate: Boolean = false) extends Command
 
 case class SchemaCommand(
     filePath: String,
-    format: OutputFormat = OutputFormat.Table
+    format: OutputFormat = OutputFormat.Table,
+    detail: Boolean = false
 ) extends Command
 
 case class SchemaDiffCommand(

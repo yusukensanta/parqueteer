@@ -1,6 +1,6 @@
 package io.github.yusukensanta.parqueteer.core.repositories
 
-import io.github.yusukensanta.parqueteer.core.models.{ColumnInfo, ParquetSchema}
+import io.github.yusukensanta.parqueteer.core.models.{ColumnInfo, LogicalTypeDetail, ParquetSchema}
 import org.apache.parquet.hadoop.metadata.{BlockMetaData, ParquetMetadata}
 import org.apache.parquet.io.SeekableInputStream
 import org.apache.parquet.format.converter.ParquetMetadataConverter
@@ -121,7 +121,15 @@ private[repositories] object FooterReader {
         compressionType = chunk.map(_.getCodec.name()).getOrElse("UNKNOWN"),
         encodings = chunk
           .map(_.getEncodings.asScala.map(_.name()).toList.sorted.distinct)
-          .getOrElse(Nil)
+          .getOrElse(Nil),
+        physicalType = pt.getPrimitiveTypeName.name(),
+        typeLength = Option.when(pt.getPrimitiveTypeName == PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY)(
+          pt.getTypeLength
+        ),
+        logicalType = Option(pt.getLogicalTypeAnnotation).map(describeLogicalType),
+        convertedType = Option(pt.getLogicalTypeAnnotation)
+          .flatMap(a => Option(a.toOriginalType))
+          .map(_.name)
       )
     }.toList
     ParquetSchema(
@@ -157,4 +165,33 @@ private[repositories] object FooterReader {
             case _                                      => primitive.name()
           }
       }
+
+  /** Full logical type annotation with every parameter the footer carries. */
+  def describeLogicalType(annotation: LogicalTypeAnnotation): LogicalTypeDetail =
+    annotation match {
+      case ts: TimestampLogicalTypeAnnotation =>
+        LogicalTypeDetail(
+          "TIMESTAMP",
+          List("unit" -> ts.getUnit.name, "isAdjustedToUTC" -> ts.isAdjustedToUTC.toString)
+        )
+      case t: TimeLogicalTypeAnnotation =>
+        LogicalTypeDetail(
+          "TIME",
+          List("unit" -> t.getUnit.name, "isAdjustedToUTC" -> t.isAdjustedToUTC.toString)
+        )
+      case i: IntLogicalTypeAnnotation =>
+        LogicalTypeDetail(
+          "INTEGER",
+          List("bitWidth" -> i.getBitWidth.toString, "isSigned" -> i.isSigned.toString)
+        )
+      case d: DecimalLogicalTypeAnnotation =>
+        LogicalTypeDetail(
+          "DECIMAL",
+          List("precision" -> d.getPrecision.toString, "scale" -> d.getScale.toString)
+        )
+      case other =>
+        LogicalTypeDetail(
+          other.getClass.getSimpleName.stripSuffix("LogicalTypeAnnotation").toUpperCase
+        )
+    }
 }

@@ -383,6 +383,11 @@ object ArgumentParser {
             .text("Path to parquet file (supports glob patterns: *, ?, [], {})"),
           tableOrJsonFormatOpt[SchemaCommand]((cmd, f) => cmd.copy(format = f))
             .text("Output format: table, json (default: table)"),
+          opt[Unit]("detail")
+            .action((_, c) => updateCmd[SchemaCommand](c, _.copy(detail = true)))
+            .text(
+              "Show physical type and full logical type annotation (unit, isAdjustedToUTC, bitWidth, ...)"
+            ),
           cmd("diff")
             .text("Compare schemas of two parquet files")
             .action((_, c) =>
