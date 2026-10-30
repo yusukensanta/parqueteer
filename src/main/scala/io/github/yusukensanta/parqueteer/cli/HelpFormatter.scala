@@ -171,6 +171,12 @@ ${optionsSection("convert")}
   private def schemaHelp(): String =
     s"""parqueteer schema - Show column structure (names, types, nullability, compression)
        |
+       |Describes what the data looks like: one row per leaf column. --detail adds the
+       |physical type, the full logical type annotation (unit, isAdjustedToUTC, bitWidth,
+       |...), definition/repetition levels, field id and the LIST/MAP groups a column
+       |sits under. For how the file is stored (row groups, encodings, statistics,
+       |key-value metadata) use 'parqueteer metadata'.
+       |
        |USAGE:
        |  parqueteer schema [OPTIONS] <file>
        |  parqueteer schema diff <file1> <file2>
@@ -251,6 +257,10 @@ ${optionsSection("stats")}
        |schema details (logical type, levels, field id), and for every row group the
        |per-column chunk detail: codec, encodings, sizes, null count, min/max, and
        |whether a dictionary page, bloom filter, column index or offset index exists.
+       |
+       |Describes how the file is stored. For a contract-friendly, per-column type view
+       |(and schema diff) use 'parqueteer schema'; 'schema --detail' is the reference
+       |for column types.
        |
        |USAGE:
        |  parqueteer metadata [OPTIONS] <file>

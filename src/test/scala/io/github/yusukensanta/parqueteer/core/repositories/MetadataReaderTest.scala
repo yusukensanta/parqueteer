@@ -44,6 +44,13 @@ class MetadataReaderTest extends AnyFlatSpec with Matchers {
     report.messageSchema should include("name")
   }
 
+  it should "include the structured schema tree" in {
+    val (report, _) = written()
+    report.schemaTree.map(_.children.map(_.name)) shouldBe Some(List("id", "name"))
+    report.schemaTree.get.children.head.physicalType shouldBe Some("INT64")
+    report.columns.forall(_.groups.isEmpty) shouldBe true
+  }
+
   it should "describe each leaf column's schema" in {
     val (report, _) = written()
     report.columns.map(_.path) shouldBe List("id", "name")

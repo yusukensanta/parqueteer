@@ -176,9 +176,17 @@ parqueteer schema data.parquet --detail
 ```
 
 `schema --format json` always carries `physicalType`, `typeLength`, a structured
-`logicalType` (`{"type": "TIMESTAMP", "unit": "MICROS", "isAdjustedToUTC": true}`)
-and the legacy `convertedType` next to the compact `dataType`, which is unchanged
-so existing schema contracts keep working.
+`logicalType` (`{"type": "TIMESTAMP", "unit": "MICROS", "isAdjustedToUTC": true}`),
+the legacy `convertedType`, the definition/repetition levels, the field id and
+`groups` (the groups above the column, with their LIST/MAP annotations) next to
+the compact `dataType`, which is unchanged so existing schema contracts keep
+working.
+
+**`schema` vs `metadata`:** `schema` describes what the data looks like (one row
+per column: names, types, nullability, nesting; contracts and `schema diff`).
+`metadata` describes how the file is stored (footer, key-value pairs, row groups,
+column chunks, encodings, statistics, indexes). `schema --detail` is the reference
+for column types; `metadata` carries the same per-column facts only as context.
 
 ### Column Statistics
 

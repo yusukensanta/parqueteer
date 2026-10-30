@@ -18,8 +18,27 @@ case class ColumnInfo(
     physicalType: String = "",
     typeLength: Option[Int] = None,
     logicalType: Option[LogicalTypeDetail] = None,
-    convertedType: Option[String] = None
+    convertedType: Option[String] = None,
+    groups: List[GroupInfo] = Nil,
+    fieldId: Option[Int] = None
 )
+
+/**
+ * A group (struct / LIST / MAP wrapper) on the path from the schema root to a
+ * leaf column. LIST and MAP are annotations on the group, not on the leaf, so
+ * this is the only place they surface in a leaf-per-row view.
+ */
+case class GroupInfo(
+    name: String,
+    repetition: String,
+    logicalType: Option[LogicalTypeDetail] = None,
+    convertedType: Option[String] = None,
+    fieldId: Option[Int] = None
+) {
+
+  /** `tags=LIST` for an annotated group, `None` for a plain struct group. */
+  def annotation: Option[String] = logicalType.map(lt => s"$name=${lt.render}")
+}
 
 /**
  * A column's logical type annotation with all of its parameters, e.g.

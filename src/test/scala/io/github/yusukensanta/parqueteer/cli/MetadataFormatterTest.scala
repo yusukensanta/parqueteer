@@ -1,6 +1,7 @@
 package io.github.yusukensanta.parqueteer.cli
 
 import io.circe.parser
+import io.github.yusukensanta.parqueteer.core.models.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -132,5 +133,51 @@ class MetadataFormatterTest extends AnyFlatSpec with Matchers {
     MetadataFormatter.formatTable(long) should include("(500 chars)")
     MetadataFormatter.formatTable(long) should not include ("y" * 500)
     MetadataFormatter.formatJson(long) should include("y" * 500)
+  }
+
+  "MetadataFormatter.formatJson" should "include groups per column and the schema tree" in {
+    val tree = SchemaNode(
+      "m",
+      None,
+      None,
+      None,
+      None,
+      None,
+      None,
+      List(
+        SchemaNode(
+          "tags",
+          Some("OPTIONAL"),
+          None,
+          None,
+          Some(LogicalTypeDetail("LIST")),
+          Some("LIST"),
+          None,
+          Nil
+        )
+      )
+    )
+    val base = MetadataFixtures.report
+    val report = base.copy(
+      schemaTree = Some(tree),
+      columns = base.columns.map(c =>
+        c.copy(groups = List(GroupInfo("tags", "OPTIONAL", Some(LogicalTypeDetail("LIST")))))
+      )
+    )
+    val json = io.circe.parser.parse(MetadataFormatter.formatJson(report)).toOption.get.hcursor
+    json.downField("columns").downN(0).downField("groups").downN(0).get[String]("name") shouldBe
+      Right("tags")
+    json
+      .downField("schemaTree")
+      .downField("children")
+      .downN(0)
+      .downField("logicalType")
+      .get[String]("type") shouldBe Right("LIST")
+  }
+
+  it should "emit a null schemaTree when none was read" in {
+    val json =
+      io.circe.parser.parse(MetadataFormatter.formatJson(MetadataFixtures.report)).toOption.get
+    json.hcursor.downField("schemaTree").focus shouldBe Some(io.circe.Json.Null)
   }
 }

@@ -66,10 +66,14 @@ private[cli] object CliOutputFormatter {
   // schema contracts are written and read in that form.
   private def physicalAndLogicalFields(c: ColumnInfo): List[(String, Json)] =
     List(
-      "physicalType"  -> Json.fromString(c.physicalType),
-      "typeLength"    -> c.typeLength.fold(Json.Null)(Json.fromInt),
-      "logicalType"   -> c.logicalType.fold(Json.Null)(_.asJson),
-      "convertedType" -> c.convertedType.fold(Json.Null)(Json.fromString)
+      "physicalType"       -> Json.fromString(c.physicalType),
+      "typeLength"         -> c.typeLength.fold(Json.Null)(Json.fromInt),
+      "logicalType"        -> c.logicalType.fold(Json.Null)(_.asJson),
+      "convertedType"      -> c.convertedType.fold(Json.Null)(Json.fromString),
+      "groups"             -> c.groups.asJson,
+      "fieldId"            -> c.fieldId.fold(Json.Null)(Json.fromInt),
+      "maxDefinitionLevel" -> Json.fromInt(c.maxDefinitionLevel),
+      "maxRepetitionLevel" -> Json.fromInt(c.maxRepetitionLevel)
     )
 
   def formatSchemaJson(file: ParquetFile): String =
