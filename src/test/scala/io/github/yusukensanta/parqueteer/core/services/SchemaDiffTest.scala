@@ -14,20 +14,12 @@ class SchemaDiffTest extends AnyFlatSpec with Matchers {
       metadata: FileMetadata
   ) extends ParquetRepository {
 
-    override def readSchema(file: ParquetFile): Try[ParquetSchema] =
-      if file.location.path.contains("file1") then Success(schema1)
-      else Success(schema2)
-
-    override def readMetadata(file: ParquetFile): Try[FileMetadata] =
-      Success(metadata)
-
     override def readFileInfo(
         file: ParquetFile
-    ): Try[(ParquetSchema, FileMetadata, List[RowGroupInfo])] =
-      for {
-        s <- readSchema(file)
-        m <- readMetadata(file)
-      } yield (s, m, Nil)
+    ): Try[(ParquetSchema, FileMetadata, List[RowGroupInfo])] = {
+      val schema = if file.location.path.contains("file1") then schema1 else schema2
+      Success((schema, metadata, Nil))
+    }
 
     override def readContent(
         file: ParquetFile,

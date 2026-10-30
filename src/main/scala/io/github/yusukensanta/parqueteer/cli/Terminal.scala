@@ -1,7 +1,5 @@
 package io.github.yusukensanta.parqueteer.cli
 
-import io.github.yusukensanta.parqueteer.core.models.*
-
 /** Terminal capability detection. */
 private[cli] object Terminal {
 
@@ -20,7 +18,4 @@ private[cli] object Terminal {
       catch case _: NoSuchMethodException => true
     }
   }
-
-  private[cli] def showStatus(opts: GlobalOptions): Boolean =
-    !opts.quiet && isStdoutTTY
 }

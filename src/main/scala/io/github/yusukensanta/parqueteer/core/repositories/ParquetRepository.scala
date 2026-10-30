@@ -1,8 +1,6 @@
 package io.github.yusukensanta.parqueteer.core.repositories
 
 import io.github.yusukensanta.parqueteer.core.models.*
-import io.github.yusukensanta.parqueteer.core.models.ParqueteerError.CloudAuthException
-import io.github.yusukensanta.parqueteer.cloud.CloudCredentialManager
 import io.github.yusukensanta.parqueteer.core.util.{CredentialRedactor, RowLimiter}
 import com.github.mjakubowski84.parquet4s.{
   Filter,
@@ -23,7 +21,7 @@ import org.apache.parquet.example.data.Group
 import org.apache.parquet.schema.{GroupType, MessageType}
 import org.apache.parquet.schema.Type.Repetition
 import java.io.{FileNotFoundException, IOException}
-import java.nio.file.{AccessDeniedException, Files, Paths}
+import java.nio.file.{Files, Paths}
 import java.util.concurrent.atomic.AtomicBoolean
 import scala.util.{Failure, Success, Try, Using}
 import scala.jdk.CollectionConverters.*
@@ -39,12 +37,10 @@ trait ParquetRepository {
       file: ParquetFile,
       config: ReadConfig
   )(process: Map[String, CellValue] => Unit): Try[Long]
-  def readSchema(file: ParquetFile): Try[ParquetSchema]
 
   def readFileInfo(
       file: ParquetFile
   ): Try[(ParquetSchema, FileMetadata, List[RowGroupInfo])]
-  def readMetadata(file: ParquetFile): Try[FileMetadata]
 
   def writeContent(
       location: StorageLocation,
@@ -120,22 +116,15 @@ object HadoopParquetRepository {
     new AtomicBoolean(false)
 }
 
-// The Hadoop Configuration cache is keyed on storage location type + bucket/region.
-// For S3, the cached Configuration holds a credentials-*provider* class name
-// (fs.s3a.aws.credentials.provider), not resolved key/secret/session-token
-// values — S3A instantiates and re-invokes that provider per request, so env
-// var rotation and short-lived session/IMDS token refresh both work correctly
-// without needing a new repository instance mid-process.
 class HadoopParquetRepository(
     profile: Option[String] = None,
     region: Option[String] = None,
     s3EndpointUrl: Option[String] = None
 ) extends ParquetRepository {
 
-  private val HadoopConfigCacheMaxSize = 64
-  private val FooterCacheMaxSize       = 1024
+  private val FooterCacheMaxSize = 1024
 
-  private val hadoopConfigCache = new LruCache[String, Configuration](HadoopConfigCacheMaxSize)
+  private val configProvider = new HadoopConfigProvider(profile, region, s3EndpointUrl)
 
   // Caches the parsed footer per file path for the lifetime of this repository
   // instance. Bounded so large multi-file merges don't grow it unboundedly.
@@ -145,20 +134,9 @@ class HadoopParquetRepository(
     ParquetRepository.CacheStats(
       footerHits = footerCache.hits,
       footerMisses = footerCache.misses,
-      configHits = hadoopConfigCache.hits,
-      configMisses = hadoopConfigCache.misses
+      configHits = configProvider.hits,
+      configMisses = configProvider.misses
     )
-
-  private def configCacheKey(location: StorageLocation): String =
-    location match {
-      case LocalPath(_) => "local"
-      case S3Location(bucket, _, r) =>
-        s"s3:$bucket:${r.orElse(region).getOrElse("")}"
-      case GCSLocation(bucket, _) =>
-        s"gcs:$bucket"
-      case AzureLocation(account, cont, _) =>
-        s"azure:${profile.getOrElse("")}:$account/$cont"
-    }
 
   // Close S3A/GCS/ABFS connection pools on JVM exit to prevent background thread leaks
   if HadoopParquetRepository.shutdownHookRegistered.compareAndSet(false, true) then
@@ -357,15 +335,6 @@ class HadoopParquetRepository(
     }
   }
 
-  def readSchema(file: ParquetFile): Try[ParquetSchema] =
-    withHadoopConfig(file.location) { hadoopConfig =>
-      Try {
-        val path   = new HadoopPath(file.location.path)
-        val footer = getFooter(file.location, path, hadoopConfig)
-        FooterReader.buildParquetSchema(footer.schema, footer.blocks)
-      }
-    }
-
   // Size + mtime for FileMetadata. Takes no Configuration/FileSystem — for
   // local paths this is the only extra Hadoop touch readFileInfo needed
   // beyond the footer read, so keeping it Hadoop-free here (rather than via
@@ -435,9 +404,6 @@ class HadoopParquetRepository(
         (parsedSchema, metadata, rowGroups)
       }
     }
-
-  def readMetadata(file: ParquetFile): Try[FileMetadata] =
-    readFileInfo(file).map { case (_, meta, _) => meta }
 
   private def buildWriter(
       parquetSchema: MessageType,
@@ -516,7 +482,7 @@ class HadoopParquetRepository(
         var count   = 0L
         val factory = new SimpleGroupFactory(parquetSchema)
         // Using preserves the feed exception as primary and adds close failure as suppressed,
-        // preventing writer.close() from masking the original MergeStreamException.
+        // preventing writer.close() from masking the original feed exception.
         scala.util
           .Using(buildWriter(parquetSchema, location, hadoopConfig, config)) { w =>
             feed { row =>
@@ -735,75 +701,8 @@ class HadoopParquetRepository(
     if uri.getScheme == "file" then uri.getPath else status.getPath.toString
   }
 
-  private def providerNameFor(location: StorageLocation): String = location match {
-    case _: S3Location    => "S3"
-    case _: GCSLocation   => "GCS"
-    case _: AzureLocation => "Azure"
-    case _                => "cloud storage"
-  }
-
-  private def isCloudLocation(location: StorageLocation): Boolean = location match {
-    case _: S3Location | _: GCSLocation | _: AzureLocation => true
-    case _                                                 => false
-  }
-
-  private def setupHadoopConfiguration(
-      location: StorageLocation
-  ): Try[Configuration] = {
-    val key = configCacheKey(location)
-    hadoopConfigCache.get(key) match {
-      case Some(cfg) =>
-        Success(new Configuration(cfg))
-      case None =>
-        val effectiveLocation = (location, region) match {
-          case (s3: S3Location, Some(r)) => s3.copy(region = Some(r))
-          case _                         => location
-        }
-        val result = CloudCredentialManager
-          .forLocation(effectiveLocation, profile, s3EndpointUrl) match {
-          case Some(credManager) =>
-            credManager.configureHadoop(effectiveLocation).recoverWith {
-              case e if !e.isInstanceOf[CloudAuthException] =>
-                Failure(
-                  new CloudAuthException(
-                    providerNameFor(effectiveLocation),
-                    CredentialRedactor
-                      .redact(Option(e.getMessage).getOrElse(e.getClass.getSimpleName)),
-                    e
-                  )
-                )
-            }
-          case None => Success(new Configuration())
-        }
-        // INVARIANT: cached Configuration must never be mutated after this put.
-        // Callers always get a shallow copy (new Configuration(cfg)); mutating the
-        // cached original while another thread copies it is not thread-safe.
-        result.foreach(cfg => hadoopConfigCache.put(key, cfg))
-        result.map(new Configuration(_))
-    }
-  }
-
-  // Credential *resolution* is no longer eager (S3A resolves/refreshes its own
-  // provider chain per request — see S3CredentialManager) — an invalid or
-  // unauthorized identity now only surfaces once Hadoop actually attempts a
-  // cloud operation, as java.nio.file.AccessDeniedException, not at
-  // setupHadoopConfiguration time. Reclassify it as CloudAuthException here so
-  // the CLI still reports "cloud authentication failed" instead of a raw I/O
-  // error — scoped to cloud locations only, so a real local-filesystem
-  // permission error isn't mislabeled as a cloud auth failure.
-  private def withHadoopConfig[A](
-      location: StorageLocation
-  )(f: Configuration => Try[A]): Try[A] =
-    setupHadoopConfiguration(location).flatMap(f).recoverWith {
-      case e: AccessDeniedException if isCloudLocation(location) =>
-        Failure(
-          new CloudAuthException(
-            providerNameFor(location),
-            CredentialRedactor.redact(Option(e.getMessage).getOrElse(e.getClass.getSimpleName)),
-            e
-          )
-        )
-    }
+  private def withHadoopConfig[A](location: StorageLocation)(f: Configuration => Try[A]): Try[A] =
+    configProvider.withConfig(location)(f)
 
   private def calculateCompressionRatio(
       rowGroups: List[BlockMetaData]
