@@ -9,6 +9,7 @@ import io.github.yusukensanta.parqueteer.core.util.{
   CredentialRedactor,
   Eithers,
   GlobDetector,
+  RowBudget,
   RowLimiter,
   RowPipeline
 }
@@ -25,7 +26,7 @@ class ParquetService(
     StorageLocationParser
       .parse(path)
       .left
-      .map(msg => ParqueteerError.InvalidFormat(path, msg))
+      .map(msg => ParqueteerError.InvalidLocation(path, msg))
 
   private def requireNotStdin(path: String): Either[ParqueteerError, Unit] =
     if path == "-" then
@@ -108,22 +109,19 @@ class ParquetService(
       locations: Vector[StorageLocation],
       readConfig: ReadConfig
   )(process: Map[String, CellValue] => Unit): Either[ParqueteerError, Long] = {
-    var remaining                      = readConfig.maxRows
+    val budget                         = RowBudget(readConfig.maxRows)
     var total                          = 0L
     var error: Option[ParqueteerError] = None
     val it                             = locations.iterator
-    while error.isEmpty && it.hasNext && !remaining.contains(0L) do {
-      val loc           = it.next()
-      val perFileConfig = readConfig.copy(maxRows = remaining)
+    while error.isEmpty && it.hasNext && !budget.isExhausted do {
+      val perFileConfig = readConfig.copy(maxRows = budget.nextLimit)
       repository
-        .streamContent(ParquetFile(loc), perFileConfig) { row =>
-          process(row)
-          total += 1
-          remaining = remaining.map(_ - 1)
-        }
+        .streamContent(ParquetFile(it.next()), perFileConfig)(process)
         .toParqueteerError match {
-        case Left(e)  => error = Some(e)
-        case Right(_) => ()
+        case Left(e) => error = Some(e)
+        case Right(n) =>
+          budget.consume(n)
+          total += n
       }
     }
     error.toLeft(total)
@@ -431,12 +429,13 @@ class ParquetService(
   def writeFile(
       path: String,
       data: List[Map[String, CellValue]],
-      writeConfig: WriteConfig = WriteConfig()
+      writeConfig: WriteConfig = WriteConfig(),
+      schema: Option[ParquetSchema] = None
   ): Either[ParqueteerError, Unit] =
     for {
       location <- parseLocation(path)
       _ <- repository
-        .writeContent(location, data, None, writeConfig)
+        .writeContent(location, data, schema, writeConfig)
         .toParqueteerError
     } yield ()
 
@@ -479,11 +478,55 @@ class ParquetService(
       inputFormat: InputFormat,
       outputPath: String,
       writeConfig: WriteConfig = WriteConfig(),
-      maxRows: Option[Long] = None
+      maxRows: Option[Long] = None,
+      explicitFields: Option[List[FieldSummary]] = None
   ): Either[ParqueteerError, Long] =
-    if inputPath != "-" && inputFormat.isStreamable then
-      streamOneFormat(inputPath, outputPath, inputFormat, writeConfig, maxRows)
-    else bufferedWriteDataFile(inputPath, inputFormat, outputPath, writeConfig, maxRows)
+    explicitWriteSchema(explicitFields, writeConfig).flatMap { schema =>
+      if inputPath != "-" && inputFormat.isStreamable then
+        streamOneFormat(inputPath, outputPath, inputFormat, writeConfig, maxRows, schema)
+      else bufferedWriteDataFile(inputPath, inputFormat, outputPath, writeConfig, maxRows, schema)
+    }
+
+  /**
+   * Turns `--schema` fields into the ParquetSchema every write path uses, and
+   * checks up front that each declared type is writable — so a typo in the
+   * contract fails before any input is read, not after a full inference pass.
+   */
+  private def explicitWriteSchema(
+      fields: Option[List[FieldSummary]],
+      writeConfig: WriteConfig
+  ): Either[ParqueteerError, Option[ParquetSchema]] =
+    fields match {
+      case None => Right(None)
+      case Some(fs) =>
+        val schema = buildExplicitSchema(fs, writeConfig.compressionType.codecName)
+        repository
+          .validateWriteSchema(schema)
+          .toEither
+          .left
+          .map(e => ParqueteerError.ParseError("schema contract", e.getMessage))
+          .map(_ => Some(schema))
+    }
+
+  /**
+   * Reads a schema contract file (the `schema --format json` output). A
+   * missing file is FileNotFound; an unreadable one, ParseError.
+   */
+  def readSchemaContract(contractPath: String): Either[ParqueteerError, List[FieldSummary]] =
+    for {
+      contractJson <- Try(
+        java.nio.file.Files.readString(java.nio.file.Paths.get(contractPath))
+      ).toEither.left.map {
+        // java.nio reports a missing file as NoSuchFileException, which the
+        // generic Try mapping would turn into IOError (exit 1), not FileNotFound.
+        case _: java.nio.file.NoSuchFileException => ParqueteerError.FileNotFound(contractPath)
+        case e                                    => ParqueteerError.IOError(e)
+      }
+      fields <- SchemaContract
+        .parse(contractJson)
+        .left
+        .map(msg => ParqueteerError.ParseError("schema contract", s"$contractPath: $msg"))
+    } yield fields
 
   /**
    * Two-pass bounded-memory write for a single ndjson/ltsv/csv input: infer a
@@ -496,13 +539,17 @@ class ParquetService(
       outputPath: String,
       inputFormat: InputFormat,
       writeConfig: WriteConfig,
-      maxRows: Option[Long]
+      maxRows: Option[Long],
+      explicitSchema: Option[ParquetSchema]
   ): Either[ParqueteerError, Long] = {
     def withRows[A](f: Iterator[Map[String, CellValue]] => A): Try[A] =
       DataFileReader.withRows(inputFormat, inputPath, maxRows)(f)
     for {
       outputLocation <- parseLocation(outputPath)
-      schema         <- withRows(repository.inferSchemaFromRows).flatten.toParqueteerError
+      // With --schema the inference pass is skipped: one read of the input.
+      schema <- explicitSchema
+        .map(Right(_))
+        .getOrElse(withRows(repository.inferSchemaFromRows).flatten.toParqueteerError)
       writeResult = withRows { rows =>
         repository.writeContentStream(outputLocation, schema, writeConfig)(feed =>
           rows.foreach(feed)
@@ -517,11 +564,12 @@ class ParquetService(
       inputFormat: InputFormat,
       outputPath: String,
       writeConfig: WriteConfig,
-      maxRows: Option[Long]
+      maxRows: Option[Long],
+      explicitSchema: Option[ParquetSchema]
   ): Either[ParqueteerError, Long] =
     for {
       data <- readDataFile(inputPath, inputFormat, maxRows = maxRows)
-      _    <- writeFile(outputPath, data, writeConfig)
+      _    <- writeFile(outputPath, data, writeConfig, explicitSchema)
     } yield data.size.toLong
 
   /**
@@ -539,26 +587,31 @@ class ParquetService(
       writeConfig: WriteConfig,
       schemaMode: SchemaMode,
       onProgress: (Int, Int, String) => Unit = (_, _, _) => (),
-      fileParallelism: Int = 1
+      fileParallelism: Int = 1,
+      explicitFields: Option[List[FieldSummary]] = None
   ): Either[ParqueteerError, Long] =
-    if inputFormat.isStreamable then
-      streamMultiRawToParquet(
-        paths,
-        inputFormat,
-        outputPath,
-        writeConfig,
-        schemaMode,
-        onProgress,
-        fileParallelism
-      )
-    else bufferedMultiRawToParquet(paths, outputPath, writeConfig, schemaMode, onProgress)
+    explicitWriteSchema(explicitFields, writeConfig).flatMap { schema =>
+      if inputFormat.isStreamable then
+        streamMultiRawToParquet(
+          paths,
+          inputFormat,
+          outputPath,
+          writeConfig,
+          schemaMode,
+          onProgress,
+          fileParallelism,
+          schema
+        )
+      else bufferedMultiRawToParquet(paths, outputPath, writeConfig, schemaMode, onProgress, schema)
+    }
 
   private def bufferedMultiRawToParquet(
       paths: List[String],
       outputPath: String,
       writeConfig: WriteConfig,
       schemaMode: SchemaMode,
-      onProgress: (Int, Int, String) => Unit
+      onProgress: (Int, Int, String) => Unit,
+      explicitSchema: Option[ParquetSchema]
   ): Either[ParqueteerError, Long] = {
     def inferOne(rows: List[Map[String, CellValue]]): Either[ParqueteerError, List[FieldSummary]] =
       repository
@@ -571,10 +624,18 @@ class ParquetService(
         onProgress(idx + 1, paths.size, path)
         readDataFile(path, InputFormat.Json)
       }
-      perFileSchemas <- Eithers.traverse(rowsPerFile)(inferOne)
-      _              <- SchemaReconciler.reconcile(perFileSchemas, paths, schemaMode)
+      // With --schema, each row is checked against the declared schema as it
+      // is written instead, so per-file inference and reconciliation are moot.
+      _ <-
+        if explicitSchema.isDefined then Right(())
+        else
+          Eithers
+            .traverse(rowsPerFile)(inferOne)
+            .flatMap(SchemaReconciler.reconcile(_, paths, schemaMode))
+            .map(_ => ())
       allRows = rowsPerFile.toList.flatten
-      rowCount <- writeFile(outputPath, allRows, writeConfig).map(_ => allRows.size.toLong)
+      rowCount <- writeFile(outputPath, allRows, writeConfig, explicitSchema)
+        .map(_ => allRows.size.toLong)
     } yield rowCount
   }
 
@@ -585,7 +646,8 @@ class ParquetService(
       writeConfig: WriteConfig,
       schemaMode: SchemaMode,
       onProgress: (Int, Int, String) => Unit,
-      fileParallelism: Int
+      fileParallelism: Int,
+      explicitSchema: Option[ParquetSchema]
   ): Either[ParqueteerError, Long] = {
     def withRows[A](path: String)(f: Iterator[Map[String, CellValue]] => Try[A]): Try[A] =
       DataFileReader.withRows(inputFormat, path, None)(f).flatten
@@ -597,12 +659,18 @@ class ParquetService(
 
     for {
       outputLocation <- parseLocation(outputPath)
-      perFileSchemas <- Eithers.traverse(paths)(inferOne)
-      mergedFields   <- SchemaReconciler.reconcile(perFileSchemas, paths, schemaMode)
-      explicitSchema = buildExplicitSchema(mergedFields, writeConfig.compressionType.codecName)
-      fieldNames     = mergedFields.map(_.name).toArray
-      nameToIndex    = fieldNames.zipWithIndex.toMap
-      writeResult = repository.writeContentStream(outputLocation, explicitSchema, writeConfig) {
+      // With --schema there is no inference pass: rows are written as-is and
+      // checked against the declared schema (unknown column / missing
+      // required column / uncoercible value fail the write).
+      writeSchema <- explicitSchema.map(Right(_)).getOrElse {
+        Eithers
+          .traverse(paths)(inferOne)
+          .flatMap(SchemaReconciler.reconcile(_, paths, schemaMode))
+          .map(buildExplicitSchema(_, writeConfig.compressionType.codecName))
+      }
+      fieldNames  = writeSchema.columns.map(_.name).toArray
+      nameToIndex = fieldNames.zipWithIndex.toMap
+      writeResult = repository.writeContentStream(outputLocation, writeSchema, writeConfig) {
         write =>
           // See RowPipeline: up to fileParallelism input files are fetched
           // concurrently ahead of write, bounded per-file, without reordering
@@ -614,7 +682,10 @@ class ParquetService(
                 Try {
                   var n = 0L
                   rows.foreach { row =>
-                    sink(projectRow(row, fieldNames, nameToIndex))
+                    sink(
+                      if explicitSchema.isDefined then row
+                      else projectRow(row, fieldNames, nameToIndex)
+                    )
                     n += 1
                   }
                   n
@@ -638,6 +709,21 @@ class ParquetService(
         .validateFile(file, deep)
         .toParqueteerError
     } yield ValidationResult(isValid = issues.isEmpty, issues = issues)
+
+  /**
+   * Compares `path`'s schema against a schema contract file (see
+   * SchemaContract): the contract is the "before" side of the diff, the file
+   * the "after", so `added` columns are ones the contract doesn't declare.
+   * A missing contract file is FileNotFound; an unreadable one, ParseError.
+   */
+  def checkSchemaContract(path: String, contractPath: String): Either[ParqueteerError, SchemaDiff] =
+    for {
+      expected <- readSchemaContract(contractPath)
+      file     <- getFileInfo(path)
+    } yield SchemaReconciler.diff(
+      expected.map(f => ColumnInfo(f.name, f.dataType, f.isOptional, 0, 0, "")),
+      file.schema.map(_.columns).getOrElse(Nil)
+    )
 
   def diffSchemas(
       path1: String,

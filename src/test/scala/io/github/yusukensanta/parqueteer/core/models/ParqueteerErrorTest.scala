@@ -84,7 +84,8 @@ class ParqueteerErrorTest extends AnyFlatSpec with Matchers {
       ParqueteerError.InvalidFormat("f", "m"),
       ParqueteerError.FilterParseError("e", "m"),
       ParqueteerError.OutputExists("p"),
-      ParqueteerError.UnsupportedOperation("s", "m")
+      ParqueteerError.UnsupportedOperation("s", "m"),
+      ParqueteerError.InvalidLocation("p", "m")
     )
     val codes = errors.map(_.exitCode)
     codes.distinct.size shouldBe codes.size
@@ -100,8 +101,19 @@ class ParqueteerErrorTest extends AnyFlatSpec with Matchers {
       ParqueteerError.InvalidFormat("f", "m"),
       ParqueteerError.FilterParseError("e", "m"),
       ParqueteerError.OutputExists("p"),
-      ParqueteerError.UnsupportedOperation("s", "m")
+      ParqueteerError.UnsupportedOperation("s", "m"),
+      ParqueteerError.InvalidLocation("p", "m")
     )
     errors.foreach(e => e.exitCode should be > 0)
+  }
+
+  "ParqueteerError.InvalidLocation" should "name the location, not a format, and exit 10" in {
+    val err = ParqueteerError.InvalidLocation(
+      "ftp://host/f",
+      "Unsupported storage location format: ftp://host/f"
+    )
+    err.exitCode shouldBe 10
+    err.userMessage should startWith("Invalid location \"ftp://host/f\"")
+    err.userMessage should not include "supported formats"
   }
 }

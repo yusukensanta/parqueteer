@@ -714,4 +714,83 @@ class ParquetWriteOpsTest extends AnyFlatSpec with Matchers {
       )
     }
   }
+
+  // ── coerceForField ─────────────────────────────────────────────────────
+
+  private def fieldOf(decl: String) =
+    MessageTypeParser.parseMessageType(s"message root { $decl }").getType(0).asPrimitiveType()
+
+  "ParquetWriteOps.coerceForField" should "narrow an in-range INT64 to INT32" in {
+    ParquetWriteOps.coerceForField("n", CellValue.I64(7L), fieldOf("optional int32 n;")) shouldBe
+      CellValue.I32(7)
+  }
+
+  it should "reject an out-of-range INT64 for an INT32 column, naming the column" in {
+    val ex = intercept[IllegalArgumentException] {
+      ParquetWriteOps.coerceForField(
+        "n",
+        CellValue.I64(Long.MaxValue),
+        fieldOf("optional int32 n;")
+      )
+    }
+    ex.getMessage should include("Column 'n'")
+    ex.getMessage should include("INT32")
+  }
+
+  it should "turn integers and numeric text into DECIMAL" in {
+    val dec = fieldOf("optional int64 d (DECIMAL(10,2));")
+    ParquetWriteOps.coerceForField("d", CellValue.I64(5L), dec) shouldBe CellValue.Dec(
+      BigDecimal(5)
+    )
+    ParquetWriteOps.coerceForField("d", CellValue.Str("1.25"), dec) shouldBe
+      CellValue.Dec(BigDecimal("1.25"))
+  }
+
+  it should "parse ISO text into DATE and TIMESTAMP, and widen DATE to TIMESTAMP at UTC midnight" in {
+    val day = java.time.LocalDate.parse("2026-01-02")
+    ParquetWriteOps.coerceForField(
+      "d",
+      CellValue.Str("2026-01-02"),
+      fieldOf("optional int32 d (DATE);")
+    ) shouldBe
+      CellValue.Date(day)
+    val ts = fieldOf("optional int64 t (TIMESTAMP(MILLIS,true));")
+    ParquetWriteOps.coerceForField("t", CellValue.Date(day), ts) shouldBe
+      CellValue.Ts(java.time.Instant.parse("2026-01-02T00:00:00Z"))
+    ParquetWriteOps.coerceForField("t", CellValue.Str("2026-01-02T03:04:05Z"), ts) shouldBe
+      CellValue.Ts(java.time.Instant.parse("2026-01-02T03:04:05Z"))
+  }
+
+  it should "parse boolean text and reject anything else for a BOOLEAN column" in {
+    val b = fieldOf("optional boolean b;")
+    ParquetWriteOps.coerceForField("b", CellValue.Str("TRUE"), b) shouldBe CellValue.Bool(true)
+    an[IllegalArgumentException] should be thrownBy
+      ParquetWriteOps.coerceForField("b", CellValue.Str("yes"), b)
+  }
+
+  it should "pass any value through to a STRING column" in {
+    ParquetWriteOps.coerceForField(
+      "s",
+      CellValue.I32(1),
+      fieldOf("optional binary s (STRING);")
+    ) shouldBe CellValue.I32(1)
+  }
+
+  it should "reject non-numeric text for a numeric column" in {
+    an[IllegalArgumentException] should be thrownBy
+      ParquetWriteOps.coerceForField("x", CellValue.Str("abc"), fieldOf("optional int64 x;"))
+  }
+
+  "ParquetWriteOps.writeRowToGroup" should "name a REQUIRED column the row leaves empty" in {
+    val mt = MessageTypeParser.parseMessageType(
+      "message root { required int32 id; optional binary s (STRING); }"
+    )
+    val group = new SimpleGroupFactory(mt).newGroup()
+    val ex = intercept[
+      io.github.yusukensanta.parqueteer.core.models.ParqueteerError.RowSchemaMismatchException
+    ] {
+      ParquetWriteOps.writeRowToGroup(group, Map("s" -> CellValue.Str("x")), mt)
+    }
+    ex.getMessage should include("Column 'id' is required")
+  }
 }

@@ -639,4 +639,121 @@ class ArgumentParserTest extends AnyFlatSpec with Matchers {
     parsedCompression("uncompressed") shouldBe Some(CompressionType.Uncompressed)
     parsedCompression("gz") shouldBe Some(CompressionType.Gzip)
   }
+
+  "ArgumentParser completions" should "parse the shell name case-insensitively into a Shell" in {
+    OParser
+      .parse(ArgumentParser.parser, Array("completions", "ZSH"), ArgumentParser.Config())
+      .flatMap(_.command) shouldBe Some(CompletionsCommand(Shell.Zsh))
+  }
+
+  it should "reject an unsupported shell at parse time" in {
+    OParser.parse(
+      ArgumentParser.parser,
+      Array("completions", "powershell"),
+      ArgumentParser.Config()
+    ) shouldBe None
+  }
+
+  "ArgumentParser validate" should "parse --expect-schema" in {
+    OParser
+      .parse(
+        ArgumentParser.parser,
+        Array("validate", "data.parquet", "--expect-schema", "contract.json"),
+        ArgumentParser.Config()
+      )
+      .flatMap(_.command) shouldBe Some(
+      ValidateCommand("data.parquet", expectSchema = Some("contract.json"))
+    )
+  }
+
+  "ArgumentParser --schema" should "parse on write and convert" in {
+    def commandOf(args: String*) =
+      OParser.parse(ArgumentParser.parser, args.toArray, ArgumentParser.Config()).flatMap(_.command)
+    commandOf("write", "in.json", "out.parquet", "--schema", "c.json") shouldBe Some(
+      WriteCommand("in.json", "out.parquet", schemaFile = Some("c.json"))
+    )
+    commandOf("convert", "in.csv", "out.parquet", "--schema", "c.json")
+      .collect { case c: ConvertCommand => c.schemaFile } shouldBe Some(Some("c.json"))
+  }
+
+  it should "not be confused with --schema-mode" in {
+    OParser
+      .parse(
+        ArgumentParser.parser,
+        Array("write", "in.json", "out.parquet", "--schema-mode", "union"),
+        ArgumentParser.Config()
+      )
+      .flatMap(_.command)
+      .collect { case w: WriteCommand => w.schemaFile } shouldBe Some(None)
+  }
+
+  "ArgumentParser writer flags" should "parse --page-size and --no-dictionary on write" in {
+    OParser
+      .parse(
+        ArgumentParser.parser,
+        Array("write", "in.json", "out.parquet", "--page-size", "64KB", "--no-dictionary"),
+        ArgumentParser.Config()
+      )
+      .flatMap(_.command)
+      .collect { case w: WriteCommand => w.writer } shouldBe Some(
+      WriterOptions(Some(65536), dictionary = false)
+    )
+  }
+
+  it should "accept them on convert and merge too" in {
+    def writerOf(args: String*) =
+      OParser
+        .parse(ArgumentParser.parser, args.toArray, ArgumentParser.Config())
+        .flatMap(_.command)
+        .collect {
+          case c: ConvertCommand => c.writer
+          case m: MergeCommand   => m.writer
+        }
+    writerOf("convert", "in.csv", "out.parquet", "--no-dictionary") shouldBe Some(
+      WriterOptions(None, dictionary = false)
+    )
+    writerOf("merge", "a.parquet", "b.parquet", "-o", "m.parquet", "--page-size", "1MB") shouldBe
+      Some(WriterOptions(Some(1024 * 1024), dictionary = true))
+  }
+
+  it should "default to the writer defaults when the flags are absent" in {
+    OParser
+      .parse(
+        ArgumentParser.parser,
+        Array("write", "in.json", "out.parquet"),
+        ArgumentParser.Config()
+      )
+      .flatMap(_.command)
+      .collect { case w: WriteCommand => w.writer } shouldBe Some(WriterOptions())
+  }
+
+  it should "reject an unparseable or non-positive --page-size" in {
+    List("abc", "0").foreach { size =>
+      OParser.parse(
+        ArgumentParser.parser,
+        Array("write", "in.json", "out.parquet", "--page-size", size),
+        ArgumentParser.Config()
+      ) shouldBe None
+    }
+  }
+
+  it should "collect repeated --assert checks in order" in {
+    OParser
+      .parse(
+        ArgumentParser.parser,
+        Array("validate", "d.parquet", "--assert", "rows > 0", "--assert", "id.nulls == 0"),
+        ArgumentParser.Config()
+      )
+      .flatMap(_.command)
+      .collect { case v: ValidateCommand => v.asserts.map(_.source) } shouldBe
+      Some(List("rows > 0", "id.nulls == 0"))
+  }
+
+  it should "reject a malformed --assert at parse time" in {
+    OParser.parse(
+      ArgumentParser.parser,
+      Array("validate", "d.parquet", "--assert", "id.avg > 1"),
+      ArgumentParser.Config()
+    ) shouldBe None
+  }
 }

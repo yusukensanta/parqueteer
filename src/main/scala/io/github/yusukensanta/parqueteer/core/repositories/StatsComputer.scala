@@ -6,199 +6,141 @@ import org.apache.parquet.io.api.Binary
 import org.apache.parquet.schema.LogicalTypeAnnotation
 import org.apache.parquet.schema.LogicalTypeAnnotation.*
 import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
+import java.time.{Instant, LocalDate}
 
 /**
  * Pure computation of typed min/max statistics from Parquet column chunks.
  * Extracted from HadoopParquetRepository for testability and separation of concerns.
+ *
+ * Each column type is described by a [[StatCodec]]: how to pull a typed value
+ * out of a chunk's raw min/max, how to order those values, and how to render
+ * the winner. Min/max is always chosen on the typed values and rendered only
+ * afterwards, so ordering never depends on the display text.
  */
 object StatsComputer {
+
+  /**
+   * @param extract the typed value of a raw statistic, or no match to skip it
+   *                (wrong boxed type, NaN, undecodable bytes)
+   * @param render  display text of the chosen min or max
+   */
+  final private[repositories] case class StatCodec[T](
+      extract: PartialFunction[Any, T],
+      render: T => String
+  )(using val ordering: Ordering[T])
 
   def computeTypedMinMax(
       withValues: List[Statistics[?]],
       typeName: PrimitiveTypeName,
       logicalType: LogicalTypeAnnotation
   ): (Option[String], Option[String]) =
+    minMax(withValues, codecFor(typeName, logicalType))
+
+  private[repositories] def minMax[T](
+      withValues: List[Statistics[?]],
+      codec: StatCodec[T]
+  ): (Option[String], Option[String]) = {
+    given Ordering[T] = codec.ordering
+    def values(side: Statistics[?] => Any): List[T] =
+      withValues.flatMap(s => Option(side(s)).collect(codec.extract))
+    (
+      values(_.genericGetMin()).minOption.map(codec.render),
+      values(_.genericGetMax()).maxOption.map(codec.render)
+    )
+  }
+
+  private[repositories] def codecFor(
+      typeName: PrimitiveTypeName,
+      logicalType: LogicalTypeAnnotation
+  ): StatCodec[?] =
     logicalType match {
       case _: DateLogicalTypeAnnotation =>
-        val (mn, mx) = numericMinMax[Int](
-          withValues,
-          { case n: java.lang.Integer => n.intValue() }
-        )
-        (
-          mn.map(v => java.time.LocalDate.ofEpochDay(v.toLong).toString),
-          mx.map(v => java.time.LocalDate.ofEpochDay(v.toLong).toString)
-        )
-
+        StatCodec(int32, d => LocalDate.ofEpochDay(d.toLong).toString)
       case ts: TimestampLogicalTypeAnnotation =>
-        def rawToInstant(raw: String): String = {
-          val v = raw.toLong
-          ts.getUnit match {
-            case LogicalTypeAnnotation.TimeUnit.MICROS =>
-              java.time.Instant
-                .ofEpochSecond(
-                  Math.floorDiv(v, 1_000_000L),
-                  Math.floorMod(v, 1_000_000L) * 1000L
-                )
-                .toString
-            case LogicalTypeAnnotation.TimeUnit.NANOS =>
-              java.time.Instant
-                .ofEpochSecond(
-                  Math.floorDiv(v, 1_000_000_000L),
-                  Math.floorMod(v, 1_000_000_000L)
-                )
-                .toString
-            case _ => java.time.Instant.ofEpochMilli(v).toString
-          }
-        }
-        val (mn, mx) = numericMinMax[Long](
-          withValues,
-          { case n: java.lang.Long => n.longValue() }
-        )
-        (mn.map(rawToInstant), mx.map(rawToInstant))
-
+        StatCodec(int64, v => instantOf(v, ts.getUnit).toString)
       case dec: DecimalLogicalTypeAnnotation =>
-        val scale = dec.getScale
-        def applyScale(raw: String): String =
-          new java.math.BigDecimal(
-            new java.math.BigInteger(raw),
-            scale
-          ).toPlainString
-        if typeName == PrimitiveTypeName.INT32 then {
-          val (mn, mx) = numericMinMax[Int](
-            withValues,
-            { case n: java.lang.Integer => n.intValue() }
-          )
-          (mn.map(applyScale), mx.map(applyScale))
-        } else if typeName == PrimitiveTypeName.INT64 then {
-          val (mn, mx) = numericMinMax[Long](
-            withValues,
-            { case n: java.lang.Long => n.longValue() }
-          )
-          (mn.map(applyScale), mx.map(applyScale))
-        } else {
-          def fromBin(v: Any): Option[scala.math.BigDecimal] =
-            PartialFunction.condOpt(v) { case bin: Binary =>
-              scala.math.BigDecimal(
-                new java.math.BigDecimal(
-                  new java.math.BigInteger(bin.getBytes),
-                  scale
-                )
-              )
-            }
-          val mins =
-            withValues.flatMap(s => Option(s.genericGetMin()).flatMap(fromBin))
-          val maxs =
-            withValues.flatMap(s => Option(s.genericGetMax()).flatMap(fromBin))
-          (
-            mins.minOption.map(_.underlying.toPlainString),
-            maxs.maxOption.map(_.underlying.toPlainString)
-          )
-        }
-
+        decimalCodec(typeName, dec.getScale)
       case _ =>
         typeName match {
-          case PrimitiveTypeName.INT32 =>
-            numericMinMax[Int](
-              withValues,
-              { case n: java.lang.Integer => n.intValue() }
-            )
-          case PrimitiveTypeName.INT64 =>
-            numericMinMax[Long](
-              withValues,
-              { case n: java.lang.Long => n.longValue() }
-            )
-          case PrimitiveTypeName.FLOAT =>
-            numericMinMax[Float](
-              withValues,
-              { case n: java.lang.Float => n.floatValue() },
-              filter = v => !v.isNaN
-            )
-          case PrimitiveTypeName.DOUBLE =>
-            numericMinMax[Double](
-              withValues,
-              { case n: java.lang.Double => n.doubleValue() },
-              filter = v => !v.isNaN
-            )
-          case PrimitiveTypeName.BOOLEAN =>
-            val mins = withValues.flatMap(s =>
-              Option(s.genericGetMin()).collect { case b: java.lang.Boolean =>
-                b.booleanValue()
-              }
-            )
-            val maxs = withValues.flatMap(s =>
-              Option(s.genericGetMax()).collect { case b: java.lang.Boolean =>
-                b.booleanValue()
-              }
-            )
-            (mins.minOption.map(_.toString), maxs.maxOption.map(_.toString))
-          case PrimitiveTypeName.INT96 =>
-            def decodeInt96Stat(v: Any): Option[String] = v match {
-              case b: Binary if b.length() == 12 =>
-                ParquetRecordDecoder.decodeInt96Binary(b.getBytes) match {
-                  case CellValue.Ts(inst) => Some(inst.toString)
-                  case _                  => None
-                }
-              case _ => None
-            }
-            val minStrs =
-              withValues.flatMap(s => Option(s.genericGetMin()).flatMap(decodeInt96Stat))
-            val maxStrs =
-              withValues.flatMap(s => Option(s.genericGetMax()).flatMap(decodeInt96Stat))
-            (minStrs.minOption, maxStrs.maxOption)
-          case _ =>
-            if typeName == PrimitiveTypeName.BINARY ||
-              typeName == PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY
-            then {
-              implicit val binOrd: Ordering[Binary] =
-                (a, b) => java.util.Arrays.compare(a.getBytes, b.getBytes)
-              val mins = withValues.flatMap(s =>
-                Option(s.genericGetMin()).collect { case b: Binary =>
-                  b
-                }
-              )
-              val maxs = withValues.flatMap(s =>
-                Option(s.genericGetMax()).collect { case b: Binary =>
-                  b
-                }
-              )
-              (
-                mins.minOption.map(_.toStringUsingUTF8),
-                maxs.maxOption.map(_.toStringUsingUTF8)
-              )
-            } else {
-              val minVal = withValues
-                .flatMap(s => Option(s.genericGetMin()).map(v => formatStatVal(v, typeName)))
-                .minOption
-              val maxVal = withValues
-                .flatMap(s => Option(s.genericGetMax()).map(v => formatStatVal(v, typeName)))
-                .maxOption
-              (minVal, maxVal)
-            }
+          case PrimitiveTypeName.INT32   => StatCodec(int32, _.toString)
+          case PrimitiveTypeName.INT64   => StatCodec(int64, _.toString)
+          case PrimitiveTypeName.FLOAT   => StatCodec(float32, _.toString)
+          case PrimitiveTypeName.DOUBLE  => StatCodec(float64, _.toString)
+          case PrimitiveTypeName.BOOLEAN => StatCodec(boolean, _.toString)
+          case PrimitiveTypeName.INT96 => StatCodec(int96Instant, _.toString)(using instantOrdering)
+          case _ => // BINARY, FIXED_LEN_BYTE_ARRAY
+            StatCodec(binary, _.toStringUsingUTF8)(using unsignedBinaryOrdering)
         }
     }
 
-  private[repositories] def numericMinMax[T: Ordering](
-      withValues: List[Statistics[?]],
-      extract: PartialFunction[Any, T],
-      filter: T => Boolean = (_: T) => true
-  ): (Option[String], Option[String]) = {
-    val mins =
-      withValues.flatMap(s => Option(s.genericGetMin()).collect(extract).filter(filter))
-    val maxs =
-      withValues.flatMap(s => Option(s.genericGetMax()).collect(extract).filter(filter))
-    (mins.minOption.map(_.toString), maxs.maxOption.map(_.toString))
+  private def decimalCodec(typeName: PrimitiveTypeName, scale: Int): StatCodec[?] = {
+    def scaled(unscaled: java.math.BigInteger): String =
+      new java.math.BigDecimal(unscaled, scale).toPlainString
+    typeName match {
+      case PrimitiveTypeName.INT32 =>
+        StatCodec(int32, v => scaled(java.math.BigInteger.valueOf(v.toLong)))
+      case PrimitiveTypeName.INT64 =>
+        StatCodec(int64, v => scaled(java.math.BigInteger.valueOf(v)))
+      case _ => // BINARY / FIXED_LEN_BYTE_ARRAY: big-endian two's-complement unscaled value
+        StatCodec[BigDecimal](
+          { case b: Binary =>
+            BigDecimal(new java.math.BigDecimal(new java.math.BigInteger(b.getBytes), scale))
+          },
+          _.underlying.toPlainString
+        )
+    }
   }
 
-  private[repositories] def formatStatVal(
-      value: Any,
-      typeName: PrimitiveTypeName
-  ): String =
-    typeName match {
-      case PrimitiveTypeName.BINARY | PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY =>
-        value match {
-          case b: Binary => b.toStringUsingUTF8
-          case other     => other.toString
-        }
-      case _ => value.toString
+  // ── Raw statistic extractors ────────────────────────────────────────────
+
+  private val int32: PartialFunction[Any, Int]  = { case n: java.lang.Integer => n.intValue() }
+  private val int64: PartialFunction[Any, Long] = { case n: java.lang.Long => n.longValue() }
+
+  private val boolean: PartialFunction[Any, Boolean] = { case b: java.lang.Boolean =>
+    b.booleanValue()
+  }
+
+  // NaN min/max carries no ordering information, so it is skipped.
+  private val float32: PartialFunction[Any, Float] = {
+    case n: java.lang.Float if !n.isNaN => n.floatValue()
+  }
+
+  private val float64: PartialFunction[Any, Double] = {
+    case n: java.lang.Double if !n.isNaN => n.doubleValue()
+  }
+  private val binary: PartialFunction[Any, Binary] = { case b: Binary => b }
+
+  private val int96Instant: PartialFunction[Any, Instant] = Function.unlift {
+    case b: Binary if b.length() == 12 =>
+      ParquetRecordDecoder.decodeInt96Binary(b.getBytes) match {
+        case CellValue.Ts(instant) => Some(instant)
+        case _                     => None
+      }
+    case _ => None
+  }
+
+  // ── Orderings ───────────────────────────────────────────────────────────
+
+  private val instantOrdering: Ordering[Instant] = Ordering.fromLessThan(_.isBefore(_))
+
+  // Parquet orders BINARY/STRING statistics as unsigned bytes, which for UTF-8
+  // is code-point order; a signed compare would put every non-ASCII character
+  // (lead byte >= 0x80) before 'A'.
+  private val unsignedBinaryOrdering: Ordering[Binary] =
+    (a, b) => java.util.Arrays.compareUnsigned(a.getBytes, b.getBytes)
+
+  private def instantOf(value: Long, unit: LogicalTypeAnnotation.TimeUnit): Instant =
+    unit match {
+      case LogicalTypeAnnotation.TimeUnit.MICROS =>
+        Instant.ofEpochSecond(
+          Math.floorDiv(value, 1_000_000L),
+          Math.floorMod(value, 1_000_000L) * 1000L
+        )
+      case LogicalTypeAnnotation.TimeUnit.NANOS =>
+        Instant.ofEpochSecond(
+          Math.floorDiv(value, 1_000_000_000L),
+          Math.floorMod(value, 1_000_000_000L)
+        )
+      case _ => Instant.ofEpochMilli(value)
     }
 }

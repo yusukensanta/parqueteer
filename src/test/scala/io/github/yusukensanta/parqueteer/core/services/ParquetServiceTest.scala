@@ -147,6 +147,8 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     val service = new ParquetService(new FakeParquetRepository())
     val result  = service.readFile("ftp://unsupported/path")
     result.isLeft shouldBe true
+    result.left.toOption.get shouldBe a[ParqueteerError.InvalidLocation]
+    result.left.toOption.get.exitCode shouldBe 10
   }
 
   // ── getFileInfo ───────────────────────────────────────────────────────────

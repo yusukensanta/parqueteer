@@ -1,5 +1,6 @@
 package io.github.yusukensanta.parqueteer.cli
 
+import io.github.yusukensanta.parqueteer.core.services.StatsAssertion
 import io.github.yusukensanta.parqueteer.core.models.{
   CompressionType,
   InputFormat,
@@ -8,6 +9,16 @@ import io.github.yusukensanta.parqueteer.core.models.{
 }
 
 sealed trait Command
+
+/**
+ * Parquet writer tuning shared by every command that writes parquet (write,
+ * convert, merge). None/true keep the writer defaults (1 MiB pages,
+ * dictionary encoding on).
+ */
+case class WriterOptions(
+    pageSize: Option[Int] = None,
+    dictionary: Boolean = true
+)
 
 case class ReadCommand(
     filePath: String,
@@ -33,13 +44,17 @@ case class WriteCommand(
     compression: CompressionType = CompressionType.Snappy,
     rowGroupSize: Option[Long] = None,
     dryRun: Boolean = false,
-    schemaMode: SchemaMode = SchemaMode.Strict
+    schemaMode: SchemaMode = SchemaMode.Strict,
+    writer: WriterOptions = WriterOptions(),
+    schemaFile: Option[String] = None
 ) extends Command
 
 case class ValidateCommand(
     filePath: String,
     verbose: Boolean = false,
-    deep: Boolean = false
+    deep: Boolean = false,
+    expectSchema: Option[String] = None,
+    asserts: List[StatsAssertion] = Nil
 ) extends Command
 
 case class ConvertCommand(
@@ -48,7 +63,9 @@ case class ConvertCommand(
     compression: CompressionType = CompressionType.Snappy,
     maxRows: Option[Long] = None,
     dryRun: Boolean = false,
-    schemaMode: SchemaMode = SchemaMode.Strict
+    schemaMode: SchemaMode = SchemaMode.Strict,
+    writer: WriterOptions = WriterOptions(),
+    schemaFile: Option[String] = None
 ) extends Command
 
 case class ConfigCommand(validate: Boolean = false) extends Command
@@ -69,7 +86,8 @@ case class MergeCommand(
     outputPath: String = "",
     compression: CompressionType = CompressionType.Snappy,
     schemaMode: SchemaMode = SchemaMode.Strict,
-    dryRun: Boolean = false
+    dryRun: Boolean = false,
+    writer: WriterOptions = WriterOptions()
 ) extends Command
 
 case class StatsCommand(
@@ -87,4 +105,13 @@ case class CountCommand(
     format: OutputFormat = OutputFormat.Table
 ) extends Command
 
-case class CompletionsCommand(shell: String) extends Command
+/** Shells `parqueteer completions` can generate a script for. */
+enum Shell:
+  case Bash, Zsh, Fish
+
+object Shell:
+
+  def fromString(s: String): Option[Shell] =
+    values.find(_.toString.equalsIgnoreCase(s))
+
+case class CompletionsCommand(shell: Shell) extends Command

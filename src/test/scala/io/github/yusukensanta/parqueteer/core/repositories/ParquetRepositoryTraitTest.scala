@@ -51,4 +51,35 @@ class ParquetRepositoryTraitTest extends AnyFlatSpec with Matchers {
     val stats = stub.cacheStats()
     stats shouldBe ParquetRepository.CacheStats(0L, 0L, 0L, 0L)
   }
+
+  "ParquetRepository.readDetailedMetadata" should "fail by default so unimplemented repositories are visible" in {
+    import scala.util.Try
+    import io.github.yusukensanta.parqueteer.core.models.*
+    val stub = new ParquetRepository {
+      def readContent(f: ParquetFile, c: ReadConfig) = Try(???)
+      def streamContent(f: ParquetFile, c: ReadConfig)(
+          p: Map[String, CellValue] => Unit
+      ) = Try(???)
+      def readSchema(f: ParquetFile)   = Try(???)
+      def readFileInfo(f: ParquetFile) = Try(???)
+      def readMetadata(f: ParquetFile) = Try(???)
+      def writeContent(
+          l: StorageLocation,
+          d: List[Map[String, CellValue]],
+          s: Option[ParquetSchema],
+          c: WriteConfig
+      ) = Try(???)
+      def writeContentStream(
+          l: StorageLocation,
+          s: ParquetSchema,
+          c: WriteConfig
+      )(feed: (Map[String, CellValue] => Unit) => Unit) = Try(???)
+      def validateFile(f: ParquetFile, deep: Boolean)                 = Try(???)
+      def readSchemaFields(f: ParquetFile)                            = Try(???)
+      def deleteFile(l: StorageLocation)                              = Try(???)
+      def readStats(f: ParquetFile)                                   = Try(???)
+      def inferSchemaFromRows(rows: Iterator[Map[String, CellValue]]) = Try(???)
+    }
+    stub.readDetailedMetadata(ParquetFile(LocalPath("/x"))).isFailure shouldBe true
+  }
 }

@@ -1,6 +1,6 @@
 package io.github.yusukensanta.parqueteer.cli
 
-import io.github.yusukensanta.parqueteer.core.services.ParquetService
+import io.github.yusukensanta.parqueteer.core.services.{ParquetService, StatsAssertion}
 import io.github.yusukensanta.parqueteer.core.models.*
 import io.github.yusukensanta.parqueteer.core.formatters.TableFormatter
 import CommandSupport.*
@@ -91,7 +91,30 @@ private[cli] object InspectCommands {
             val summary = formatValidateVerboseSchema(service, filePath)
             if summary.nonEmpty then println(summary)
           }
-          0
+          // Run every requested check so one report shows all failures;
+          // the exit code reports the most specific one (contract before
+          // assertions, matching the order they are printed).
+          val contractCode = cmd.expectSchema.fold(0)(contract =>
+            service.checkSchemaContract(filePath, contract) match {
+              case Left(error) =>
+                reportError("Failed to check schema contract", globalOptions)(error)
+              case Right(diff) =>
+                println(formatContractResult(filePath, contract, diff))
+                if diff.identical then 0
+                else ParqueteerError.SchemaMismatch(filePath, s"does not match $contract").exitCode
+            }
+          )
+          val assertCode =
+            if cmd.asserts.isEmpty then 0
+            else
+              service.getStats(filePath) match {
+                case Left(error) => reportError("Failed to read statistics", globalOptions)(error)
+                case Right(stats) =>
+                  val results = cmd.asserts.map(StatsAssertion.evaluate(_, stats))
+                  println(formatAssertResults(results))
+                  if results.forall(_.ok) then 0 else 1
+              }
+          if contractCode != 0 then contractCode else assertCode
         } else {
           println(s"✗ File $filePath has issues:")
           result.issues.foreach(issue => println(s"  - $issue"))
@@ -110,17 +133,52 @@ private[cli] object InspectCommands {
   ): Int = {
     import cmd.{verbose, deep}
     runMultiFileReport(paths, OutputFormat.Table, globalOptions) { path =>
-      service.validateFile(path, deep).map { result =>
-        val text =
-          if result.isValid then {
-            val summary    = if verbose then formatValidateVerboseSchema(service, path) else ""
-            val verboseOut = if summary.nonEmpty then "\n" + summary else ""
-            s"✓ File $path is valid" + verboseOut
-          } else (s"✗ File $path has issues:" :: result.issues.map(i => s"  - $i")).mkString("\n")
-        (text, result.isValid)
+      service.validateFile(path, deep).flatMap { result =>
+        if result.isValid then {
+          val summary    = if verbose then formatValidateVerboseSchema(service, path) else ""
+          val verboseOut = if summary.nonEmpty then "\n" + summary else ""
+          val validText  = s"✓ File $path is valid" + verboseOut
+          for {
+            contract <- cmd.expectSchema.fold(Right(None))(contract =>
+              service
+                .checkSchemaContract(path, contract)
+                .map(diff => Some((formatContractResult(path, contract, diff), diff.identical)))
+            )
+            asserted <-
+              if cmd.asserts.isEmpty then Right(None)
+              else
+                service.getStats(path).map { stats =>
+                  val results = cmd.asserts.map(StatsAssertion.evaluate(_, stats))
+                  Some((formatAssertResults(results), results.forall(_.ok)))
+                }
+          } yield {
+            val checks = List(contract, asserted).flatten
+            ((validText :: checks.map(_._1)).mkString("\n"), checks.forall(_._2))
+          }
+        } else
+          Right(
+            (
+              (s"✗ File $path has issues:" :: result.issues.map(i => s"  - $i")).mkString("\n"),
+              false
+            )
+          )
       }
     }
   }
+
+  // One ✓/✗ line per assertion, with the value the footer actually holds.
+  private[cli] def formatAssertResults(results: List[StatsAssertion.Result]): String =
+    results
+      .map(r => s"${if r.ok then "✓" else "✗"} assert ${r.assertion.source} (${r.detail})")
+      .mkString("\n")
+
+  // One line when the schema matches; otherwise the standard schema-diff
+  // table with the contract as the "before" side.
+  private[cli] def formatContractResult(path: String, contract: String, diff: SchemaDiff): String =
+    if diff.identical then s"✓ Schema of $path matches $contract"
+    else
+      s"✗ Schema of $path does not match $contract\n" +
+        CliOutputFormatter.formatSchemaDiffTable(contract, path, diff)
 
   private[cli] def formatSchemaText(file: ParquetFile, format: OutputFormat): String =
     format match {

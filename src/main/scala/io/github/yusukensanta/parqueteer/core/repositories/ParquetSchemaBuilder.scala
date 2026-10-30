@@ -210,7 +210,7 @@ private[repositories] object ParquetSchemaBuilder {
         (PrimitiveTypeName.INT64, Some(timestampNanosAnnotation), None)
       case "STRING" => (PrimitiveTypeName.BINARY, Some(stringAnnotation), None)
       case "BINARY" => (PrimitiveTypeName.BINARY, None, None)
-      case "INT96" =>
+      case "INT96" | "TIMESTAMP(INT96)" =>
         throw new IllegalArgumentException(
           "INT96 is deprecated in the Parquet spec and not supported for writing. " +
             "Use TIMESTAMP or TIMESTAMP_MILLIS instead."

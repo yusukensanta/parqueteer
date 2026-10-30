@@ -135,8 +135,14 @@ parqueteer write data.ltsv output.parquet --input-format ltsv
 # With compression (uncompressed, snappy, gzip, lzo, brotli, lz4, zstd)
 parqueteer write data.csv output.parquet --input-format csv --compression zstd
 
+# Writer tuning (also on convert and merge): smaller pages, no dictionary encoding
+parqueteer write data.json output.parquet --page-size 64KB --no-dictionary
+
 # Dry-run: validate input without writing
 parqueteer write data.json output.parquet --dry-run
+
+# Explicit schema instead of inference (same contract format as validate --expect-schema)
+parqueteer write events.ndjson out.parquet --input-format ndjson --schema contracts/events.schema.json
 
 # From stdin
 cat data.json | parqueteer write - output.parquet
@@ -216,6 +222,67 @@ parqueteer validate data.parquet --verbose
 parqueteer validate data.parquet --deep
 ```
 
+#### Schema contracts (CI gate)
+
+Check a file's schema against an expected schema kept in git. The contract is
+exactly what `schema --format json` prints, so generate it once from a known-good
+file and commit it:
+
+```bash
+parqueteer schema good.parquet --format json > contracts/events.schema.json
+
+# In CI: integrity checks + exact schema match (column names, types, nullability)
+parqueteer validate 's3://bucket/events/dt=2026-10-03/*.parquet' \
+  --expect-schema contracts/events.schema.json
+```
+
+On a mismatch it prints the same `+`/`-`/`~` diff as `schema diff` (contract →
+file) and exits `4` (single file) or `1` (any file of a glob failed). Only each
+column's `name`, `dataType` and `optional` are compared; encodings and row counts
+in the contract are ignored.
+
+The same contract can drive the *writer*: `write --schema` (and `convert --schema`
+for json/ndjson/csv/ltsv → parquet) uses its column names, types and nullability
+instead of inferring them from the input, so every daily file gets an identical
+schema even when a day's data happens to contain only integers in a DECIMAL
+column or no values at all in an optional one:
+
+```bash
+parqueteer write events.ndjson out.parquet --input-format ndjson \
+  --schema contracts/events.schema.json
+```
+
+Values are converted to the declared type where that is well-defined (integers →
+DECIMAL/DOUBLE, in-range INT64 → INT32, ISO text → DATE/TIMESTAMP, numeric or
+`true`/`false` text → number/boolean). A row with a column the contract lacks, a
+missing value for a non-optional column, or a value that can't be converted fails
+the write with exit `2` and no output file is left behind. Inference is skipped,
+so the input is read once instead of twice.
+
+#### Data-quality checks (no data scan)
+
+`--assert` checks values from the file footer's statistics, so it costs about
+the same as `stats` even on large files in S3. Repeat it for several checks;
+every check is reported and the command exits `1` if any fails.
+
+```bash
+parqueteer validate events.parquet \
+  --assert 'rows > 0' \
+  --assert 'user_id.nulls == 0' \
+  --assert 'amount.min >= 0' \
+  --assert 'event_date.max <= "2026-12-31"'
+# ✓ assert rows > 0 (actual 1000)
+# ✗ assert amount.min >= 0 (actual -3.0)
+```
+
+- Subjects: `rows`, `row_groups`, `<column>.nulls`, `<column>.min`, `<column>.max`
+  (nested columns work: `address.city.nulls`)
+- Operators: `==` `!=` `<` `<=` `>` `>=`
+- Numbers compare numerically; a `"quoted"` value compares as text, which orders
+  ISO dates and timestamps correctly
+- A statistic the file doesn't record fails the check: a gate never passes on
+  missing evidence
+
 ### Configuration
 
 ```bash
@@ -277,6 +344,40 @@ export PARQUETEER_CONFIG=/path/to/config.yaml
 ```
 
 **Precedence**: CLI flags > environment variables > defaults
+
+---
+
+## Exit Codes
+
+Every failure maps to a stable exit code, so scripts and CI jobs can branch on
+*why* a command failed instead of parsing messages.
+
+| Code | Meaning | Typical cause |
+|------|---------|---------------|
+| `0` | Success | Also: `schema diff` found identical schemas; `validate` found no issues |
+| `1` | Failure / check failed | I/O error; `validate` found issues or an `--assert` check failed; `schema diff` found differences; any file failed in a multi-file (glob) command; output stream broken |
+| `2` | Usage or parse error | Invalid flags or arguments; malformed input data (CSV/JSON/NDJSON/LTSV) |
+| `3` | Not found | Input file does not exist; glob pattern matched no files |
+| `4` | Schema mismatch | Input schemas incompatible under `--schema-mode strict`, union type conflict, duplicate column names, or `validate --expect-schema` contract mismatch |
+| `5` | Cloud authentication failed | Missing or invalid S3/GCS/Azure credentials |
+| `6` | Invalid format | Unsupported conversion pair or input format; mixed input formats in one glob |
+| `7` | Invalid filter | `--filter` expression could not be parsed |
+| `8` | Output already exists | parqueteer never overwrites; remove the file or choose another path |
+| `9` | Unsupported operation | e.g. reading parquet from stdin, merging nested columns, text output to a cloud URI |
+| `10` | Invalid location | Unsupported scheme (`ftp://`) or malformed URL (`s3:/bucket`, `wasb://`) |
+
+Code `1` is shared by "the check ran and failed" and generic I/O errors; read
+stderr when you need to tell them apart. Codes `2`–`10` are always errors.
+
+```bash
+parqueteer schema diff expected.parquet actual.parquet --format json > diff.json
+rc=$?
+case $rc in
+  0) echo "schemas match" ;;
+  1) echo "schemas differ (or I/O error, see stderr)"; exit 1 ;;
+  *) echo "could not compare (exit $rc)"; exit 2 ;;
+esac
+```
 
 ---
 
