@@ -187,6 +187,7 @@ ${optionsSection("schema")}
        |EXAMPLES:
        |  parqueteer schema data.parquet
        |  parqueteer schema data.parquet --format json
+       |  parqueteer schema data.parquet --detail
        |  parqueteer schema diff old.parquet new.parquet
        |""".stripMargin
 

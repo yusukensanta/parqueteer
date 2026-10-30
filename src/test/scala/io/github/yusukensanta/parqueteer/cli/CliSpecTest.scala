@@ -29,7 +29,7 @@ class CliSpecTest extends AnyFlatSpec with Matchers {
   }
 
   it should "attach each option to its own command, not to a parent or sibling" in {
-    CliSpec.command("schema").get.options.map(_.long) shouldBe List("format")
+    CliSpec.command("schema").get.options.map(_.long) shouldBe List("format", "detail")
     CliSpec.command("schema diff").get.options.map(_.long) shouldBe List("format")
     CliSpec.command("merge").get.options.map(_.long) shouldBe
       List("output", "compression", "schema-mode", "page-size", "no-dictionary", "dry-run")

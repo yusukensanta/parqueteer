@@ -8,6 +8,8 @@ import io.github.yusukensanta.parqueteer.core.models.{
   SchemaDiff
 }
 import io.circe.Json
+import io.circe.syntax.*
+import io.github.yusukensanta.parqueteer.core.formatters.JSONFormatter.given
 
 private[cli] object CliOutputFormatter {
 
@@ -59,6 +61,17 @@ private[cli] object CliOutputFormatter {
     (header :: sep :: rows).mkString("\n")
   }
 
+  // Additive to the compact `dataType`: physical type, structured logical type
+  // annotation and legacy converted type. `dataType` is left untouched because
+  // schema contracts are written and read in that form.
+  private def physicalAndLogicalFields(c: ColumnInfo): List[(String, Json)] =
+    List(
+      "physicalType"  -> Json.fromString(c.physicalType),
+      "typeLength"    -> c.typeLength.fold(Json.Null)(Json.fromInt),
+      "logicalType"   -> c.logicalType.fold(Json.Null)(_.asJson),
+      "convertedType" -> c.convertedType.fold(Json.Null)(Json.fromString)
+    )
+
   def formatSchemaJson(file: ParquetFile): String =
     file.schema.fold(Json.obj().spaces2) { s =>
       Json
@@ -66,11 +79,13 @@ private[cli] object CliOutputFormatter {
           "totalRowCount" -> Json.fromLong(s.totalRowCount),
           "rowGroupCount" -> Json.fromLong(s.rowGroupCount),
           "columns" -> Json.fromValues(s.columns.map { c =>
-            Json.obj(
-              "name"      -> Json.fromString(c.name),
-              "dataType"  -> Json.fromString(c.dataType),
-              "optional"  -> Json.fromBoolean(c.isOptional),
-              "encodings" -> Json.fromValues(c.encodings.map(Json.fromString))
+            Json.fromFields(
+              List(
+                "name"      -> Json.fromString(c.name),
+                "dataType"  -> Json.fromString(c.dataType),
+                "optional"  -> Json.fromBoolean(c.isOptional),
+                "encodings" -> Json.fromValues(c.encodings.map(Json.fromString))
+              ) ++ physicalAndLogicalFields(c)
             )
           })
         )
