@@ -1,6 +1,7 @@
 package io.github.yusukensanta.parqueteer.cli
 
 import io.github.yusukensanta.parqueteer.core.models.*
+import io.github.yusukensanta.parqueteer.core.util.ByteFormatter
 import io.circe.Json
 
 /** Renders a [[ParquetMetadataReport]] as a human-readable table or as JSON. */
@@ -88,68 +89,129 @@ private[cli] object MetadataFormatter {
       .spaces2
   }
 
+  private case class Col(title: String, width: Int, rightAligned: Boolean = false)
+
+  // Fixed-width table: header, dashed rule, rows. Trailing padding is stripped
+  // so the last column doesn't leave whitespace at the end of each line.
+  private def renderTable(cols: List[Col], rows: List[List[String]]): String = {
+    def line(cells: List[String]): String =
+      cols
+        .zip(cells)
+        .map { case (c, v) => s"%${if c.rightAligned then "" else "-"}${c.width}s".format(v) }
+        .mkString(" ")
+        .stripTrailing()
+    val header = line(cols.map(_.title))
+    (header :: "-" * header.length :: rows.map(line)).mkString("\n")
+  }
+
+  private def bytes(n: Long): String = ByteFormatter.format(n)
+
+  private def flags(c: ColumnChunkDetail): String =
+    List(
+      c.hasDictionary  -> "D",
+      c.hasBloomFilter -> "B",
+      c.hasColumnIndex -> "C",
+      c.hasOffsetIndex -> "O"
+    ).map { case (present, letter) => if present then letter else "-" }.mkString
+
+  private val columnSchemaCols = List(
+    Col("Column", 30),
+    Col("Physical", 22),
+    Col("Logical", 28),
+    Col("Repetition", 10),
+    Col("Def", 3, rightAligned = true),
+    Col("Rep", 3, rightAligned = true),
+    Col("Len", 4, rightAligned = true),
+    Col("Id", 4, rightAligned = true)
+  )
+
+  private val chunkCols = List(
+    Col("Column", 30),
+    Col("Codec", 12),
+    Col("Encodings", 34),
+    Col("Values", 10, rightAligned = true),
+    Col("Compressed", 12, rightAligned = true),
+    Col("Uncompressed", 12, rightAligned = true),
+    Col("Nulls", 8, rightAligned = true),
+    Col("Min", 16),
+    Col("Max", 16),
+    Col("Flags", 5)
+  )
+
   def formatTable(report: ParquetMetadataReport): String = {
-    val sb = new StringBuilder
-    val f  = report.file
+    val f = report.file
 
-    sb.append("File Metadata\n=============\n")
-    sb.append(
-      s"File Size:       ${CliOutputFormatter.formatBytesForDisplay(f.fileSize)} (${f.fileSize} bytes)\n"
+    val fileSection = List(
+      "File Metadata",
+      "=============",
+      s"File Size:       ${bytes(f.fileSize)} (${f.fileSize} bytes)"
+    ) ++ f.modifiedAt.map(t => s"Modified:        $t") ++ List(
+      s"Format Version:  ${f.version}",
+      s"Created By:      ${f.createdBy.getOrElse("n/a")}",
+      s"Rows:            ${f.rowCount}",
+      s"Row Groups:      ${f.rowGroupCount}",
+      s"Columns:         ${f.columnCount}"
     )
-    f.modifiedAt.foreach(t => sb.append(s"Modified:        $t\n"))
-    sb.append(s"Format Version:  ${f.version}\n")
-    sb.append(s"Created By:      ${f.createdBy.getOrElse("n/a")}\n")
-    sb.append(s"Rows:            ${f.rowCount}\n")
-    sb.append(s"Row Groups:      ${f.rowGroupCount}\n")
-    sb.append(s"Columns:         ${f.columnCount}\n")
 
-    sb.append("\nKey-Value Metadata\n------------------\n")
-    if report.keyValueMetadata.isEmpty then sb.append("(none)\n")
-    else
-      report.keyValueMetadata.foreach { case (k, v) =>
-        sb.append(s"$k = ${truncateKeyValue(v, MaxKeyValueDisplayLength)}\n")
-      }
-
-    sb.append("\nMessage Schema\n--------------\n")
-    sb.append(report.messageSchema.stripTrailing()).append("\n")
-
-    sb.append("\nColumn Schema\n-------------\n")
-    val schemaHeader =
-      f"${"Column"}%-30s ${"Physical"}%-22s ${"Logical"}%-28s ${"Repetition"}%-10s ${"Def"}%3s ${"Rep"}%3s ${"Len"}%4s ${"Id"}%4s"
-    sb.append(schemaHeader + "\n").append("-" * schemaHeader.length + "\n")
-    report.columns.foreach { c =>
-      sb.append(
-        f"${c.path}%-30s ${c.physicalType}%-22s ${c.logicalType
-            .getOrElse("-")}%-28s ${c.repetition}%-10s ${c.maxDefinitionLevel}%3d ${c.maxRepetitionLevel}%3d ${c.typeLength
-            .fold("-")(_.toString)}%4s ${c.fieldId.fold("-")(_.toString)}%4s\n"
+    val keyValueSection = List("Key-Value Metadata", "------------------") ++
+      (if report.keyValueMetadata.isEmpty then List("(none)")
+       else
+         report.keyValueMetadata.map { case (k, v) =>
+           s"$k = ${truncateKeyValue(v, MaxKeyValueDisplayLength)}"
+         }
       )
-    }
 
-    report.rowGroups.foreach { rg =>
-      sb.append(
-        s"\nRow Group ${rg.index}: ${rg.rowCount} rows, " +
-          s"${CliOutputFormatter.formatBytesForDisplay(rg.compressedBytes)} compressed, " +
-          s"${CliOutputFormatter.formatBytesForDisplay(rg.uncompressedBytes)} uncompressed, " +
-          s"offset ${rg.startOffset}\n"
+    val schemaSection =
+      List("Message Schema", "--------------", report.messageSchema.stripTrailing())
+
+    val columnSection = List(
+      "Column Schema",
+      "-------------",
+      renderTable(
+        columnSchemaCols,
+        report.columns.map { c =>
+          List(
+            c.path,
+            c.physicalType,
+            c.logicalType.getOrElse("-"),
+            c.repetition,
+            c.maxDefinitionLevel.toString,
+            c.maxRepetitionLevel.toString,
+            c.typeLength.fold("-")(_.toString),
+            c.fieldId.fold("-")(_.toString)
+          )
+        }
       )
-      val header =
-        f"${"Column"}%-30s ${"Codec"}%-12s ${"Encodings"}%-34s ${"Values"}%10s ${"Compressed"}%12s ${"Uncompressed"}%12s ${"Nulls"}%8s ${"Min"}%-16s ${"Max"}%-16s ${"Flags"}%-5s"
-      sb.append(header + "\n").append("-" * header.length + "\n")
-      rg.columns.foreach { c =>
-        val flags =
-          (if c.hasDictionary then "D" else "-") +
-            (if c.hasBloomFilter then "B" else "-") +
-            (if c.hasColumnIndex then "C" else "-") +
-            (if c.hasOffsetIndex then "O" else "-")
-        sb.append(
-          f"${c.path}%-30s ${c.codec}%-12s ${c.encodings.mkString(",")}%-34s ${c.valueCount}%10d ${CliOutputFormatter
-              .formatBytesForDisplay(c.compressedBytes)}%12s ${CliOutputFormatter
-              .formatBytesForDisplay(c.uncompressedBytes)}%12s ${c.nullCount.fold("n/a")(_.toString)}%8s ${c.minValue
-              .getOrElse("n/a")}%-16s ${c.maxValue.getOrElse("n/a")}%-16s $flags%-5s\n"
+    )
+
+    val rowGroupSections = report.rowGroups.map { rg =>
+      List(
+        s"Row Group ${rg.index}: ${rg.rowCount} rows, ${bytes(rg.compressedBytes)} compressed, " +
+          s"${bytes(rg.uncompressedBytes)} uncompressed, offset ${rg.startOffset}",
+        renderTable(
+          chunkCols,
+          rg.columns.map { c =>
+            List(
+              c.path,
+              c.codec,
+              c.encodings.mkString(","),
+              c.valueCount.toString,
+              bytes(c.compressedBytes),
+              bytes(c.uncompressedBytes),
+              c.nullCount.fold("n/a")(_.toString),
+              c.minValue.getOrElse("n/a"),
+              c.maxValue.getOrElse("n/a"),
+              flags(c)
+            )
+          }
         )
-      }
+      )
     }
-    sb.append("\nFlags: D=dictionary page, B=bloom filter, C=column index, O=offset index")
-    sb.toString
+
+    val legend = List("Flags: D=dictionary page, B=bloom filter, C=column index, O=offset index")
+
+    (List(fileSection, keyValueSection, schemaSection, columnSection) ++ rowGroupSections :+ legend)
+      .map(_.mkString("\n"))
+      .mkString("\n\n")
   }
 }
