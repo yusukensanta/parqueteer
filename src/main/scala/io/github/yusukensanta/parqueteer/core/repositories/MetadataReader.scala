@@ -3,6 +3,7 @@ package io.github.yusukensanta.parqueteer.core.repositories
 import io.github.yusukensanta.parqueteer.core.models.*
 import org.apache.parquet.column.ColumnDescriptor
 import org.apache.parquet.hadoop.metadata.{BlockMetaData, ColumnChunkMetaData}
+import org.apache.parquet.schema.MessageType
 import java.time.Instant
 import scala.jdk.CollectionConverters.*
 
@@ -32,12 +33,13 @@ private[repositories] object MetadataReader {
       keyValueMetadata = footer.metadata.getFileMetaData.getKeyValueMetaData.asScala.toList
         .sortBy(_._1),
       messageSchema = footer.schema.toString,
-      columns = descriptors.map(columnSchema),
-      rowGroups = footer.blocks.zipWithIndex.map { case (block, idx) => rowGroup(block, idx) }
+      columns = descriptors.map(columnSchema(footer.schema, _)),
+      rowGroups = footer.blocks.zipWithIndex.map { case (block, idx) => rowGroup(block, idx) },
+      schemaTree = Some(SchemaTypeReader.tree(footer.schema))
     )
   }
 
-  private def columnSchema(col: ColumnDescriptor): ColumnSchemaDetail = {
+  private def columnSchema(root: MessageType, col: ColumnDescriptor): ColumnSchemaDetail = {
     val pt = col.getPrimitiveType
     ColumnSchemaDetail(
       path = col.getPath.mkString("."),
@@ -48,7 +50,8 @@ private[repositories] object MetadataReader {
       maxRepetitionLevel = col.getMaxRepetitionLevel,
       // Only FIXED_LEN_BYTE_ARRAY carries a meaningful length; others report 0.
       typeLength = Option(pt.getTypeLength).filter(_ > 0),
-      fieldId = Option(pt.getId).map(_.intValue)
+      fieldId = Option(pt.getId).map(_.intValue),
+      groups = SchemaTypeReader.groupsAbove(root, col.getPath)
     )
   }
 

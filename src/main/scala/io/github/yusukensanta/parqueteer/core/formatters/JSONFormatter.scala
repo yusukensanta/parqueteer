@@ -48,7 +48,12 @@ class JSONFormatter extends OutputFormatter {
 
 object JSONFormatter {
 
-  import io.github.yusukensanta.parqueteer.core.models.{ColumnInfo, LogicalTypeDetail}
+  import io.github.yusukensanta.parqueteer.core.models.{
+    ColumnInfo,
+    GroupInfo,
+    LogicalTypeDetail,
+    SchemaNode
+  }
   import java.time.Instant
 
   // {"type": "TIMESTAMP", "unit": "MICROS", "isAdjustedToUTC": true}
@@ -63,6 +68,12 @@ object JSONFormatter {
       ("type" -> Json.fromString(lt.name)) :: lt.params.map { case (k, v) => k -> paramJson(v) }
     )
   }
+
+  given Encoder[GroupInfo] =
+    deriveEncoder[GroupInfo]
+
+  given Encoder[SchemaNode] =
+    deriveEncoder[SchemaNode]
 
   given Encoder[ColumnInfo] =
     deriveEncoder[ColumnInfo]

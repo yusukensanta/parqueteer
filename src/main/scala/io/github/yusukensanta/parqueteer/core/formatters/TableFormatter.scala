@@ -134,8 +134,9 @@ class TableFormatter extends OutputFormatter {
     sb.append(s"Total Rows: ${schema.totalRowCount}\n\n")
     sb.append("Columns:\n")
 
-    val headers = List("Name", "Physical", "Logical", "Converted", "Optional")
-    val widths  = List(30, 24, 54, 14, 10)
+    val headers =
+      List("Name", "Physical", "Logical", "Converted", "Optional", "Def/Rep", "Id", "Groups")
+    val widths = List(28, 24, 46, 10, 8, 7, 4, 28)
     sb.append(drawTopBorder(widths)).append("\n")
     sb.append(drawRow(headers, widths)).append("\n")
     sb.append(drawSeparator(widths)).append("\n")
@@ -144,11 +145,17 @@ class TableFormatter extends OutputFormatter {
       sb.append(
         drawRow(
           List(
-            truncate(col.name, 30),
+            truncate(col.name, 28),
             physical,
             col.logicalType.fold("-")(_.render),
             col.convertedType.getOrElse("-"),
-            if col.isOptional then "Yes" else "No"
+            if col.isOptional then "Yes" else "No",
+            s"${col.maxDefinitionLevel}/${col.maxRepetitionLevel}",
+            col.fieldId.fold("-")(_.toString),
+            col.groups.flatMap(_.annotation).mkString(", ") match {
+              case "" => "-"
+              case s  => s
+            }
           ),
           widths
         )

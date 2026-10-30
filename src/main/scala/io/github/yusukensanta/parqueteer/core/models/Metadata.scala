@@ -12,7 +12,23 @@ case class ParquetMetadataReport(
     keyValueMetadata: List[(String, String)],
     messageSchema: String,
     columns: List[ColumnSchemaDetail],
-    rowGroups: List[RowGroupDetail]
+    rowGroups: List[RowGroupDetail],
+    schemaTree: Option[SchemaNode] = None
+)
+
+/**
+ * One node of the schema tree: the root message, a group or a primitive leaf.
+ * `physicalType`/`typeLength` are set for leaves only.
+ */
+case class SchemaNode(
+    name: String,
+    repetition: Option[String],
+    physicalType: Option[String],
+    typeLength: Option[Int],
+    logicalType: Option[LogicalTypeDetail],
+    convertedType: Option[String],
+    fieldId: Option[Int],
+    children: List[SchemaNode]
 )
 
 case class FileDetail(
@@ -34,7 +50,8 @@ case class ColumnSchemaDetail(
     maxDefinitionLevel: Int,
     maxRepetitionLevel: Int,
     typeLength: Option[Int],
-    fieldId: Option[Int]
+    fieldId: Option[Int],
+    groups: List[GroupInfo] = Nil
 )
 
 case class RowGroupDetail(

@@ -115,4 +115,44 @@ class SchemaDetailTest extends AnyFlatSpec with Matchers {
       .parse(json)
       .map(_.map(_.name)) shouldBe Right(schema.columns.map(_.name))
   }
+
+  "group annotations" should "surface LIST and MAP on the leaves under them" in {
+    col("tags.list.element").groups.map(_.name) shouldBe List("tags", "list")
+    col("tags.list.element").groups.flatMap(_.annotation) shouldBe List("tags=LIST")
+    col("attrs.key_value.key").groups.flatMap(_.annotation) shouldBe List("attrs=MAP")
+    col("attrs.key_value.value").groups.head.repetition shouldBe "OPTIONAL"
+  }
+
+  it should "leave plain struct groups unannotated and top-level columns without groups" in {
+    col("addr.city").groups.map(_.name) shouldBe List("addr")
+    col("addr.city").groups.flatMap(_.annotation) shouldBe Nil
+    col("plain").groups shouldBe Nil
+  }
+
+  "schema --detail" should "show groups, levels and field ids" in {
+    val out = new TableFormatter().formatSchemaDetail(schema)
+    out should include("tags=LIST")
+    out should include("attrs=MAP")
+    out should include("Def/Rep")
+    out.linesIterator.filter(_.contains("tags.list.element")).toList.head should include("3/1")
+  }
+
+  it should "emit groups, levels and fieldId in JSON" in {
+    val file = ParquetFile(LocalPath("/tmp/x.parquet"), schema = Some(schema))
+    val cols = parser
+      .parse(CliOutputFormatter.formatSchemaJson(file))
+      .toOption
+      .get
+      .hcursor
+      .downField("columns")
+      .focus
+      .get
+      .asArray
+      .get
+    val tags = cols.find(_.hcursor.get[String]("name") == Right("tags.list.element")).get.hcursor
+    tags.downField("groups").downN(0).downField("logicalType").get[String]("type") shouldBe
+      Right("LIST")
+    tags.get[Int]("maxRepetitionLevel") shouldBe Right(1)
+    tags.downField("fieldId").focus shouldBe Some(Json.Null)
+  }
 }

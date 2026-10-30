@@ -3,6 +3,8 @@ package io.github.yusukensanta.parqueteer.cli
 import io.github.yusukensanta.parqueteer.core.models.*
 import io.github.yusukensanta.parqueteer.core.util.ByteFormatter
 import io.circe.Json
+import io.circe.syntax.*
+import io.github.yusukensanta.parqueteer.core.formatters.JSONFormatter.given
 
 /** Renders a [[ParquetMetadataReport]] as a human-readable table or as JSON. */
 private[cli] object MetadataFormatter {
@@ -55,9 +57,11 @@ private[cli] object MetadataFormatter {
             "maxDefinitionLevel" -> Json.fromInt(c.maxDefinitionLevel),
             "maxRepetitionLevel" -> Json.fromInt(c.maxRepetitionLevel),
             "typeLength"         -> optInt(c.typeLength),
-            "fieldId"            -> optInt(c.fieldId)
+            "fieldId"            -> optInt(c.fieldId),
+            "groups"             -> c.groups.asJson
           )
         }),
+        "schemaTree" -> report.schemaTree.fold(Json.Null)(_.asJson),
         "rowGroups" -> Json.fromValues(report.rowGroups.map { rg =>
           Json.obj(
             "index"             -> Json.fromInt(rg.index),
@@ -122,7 +126,8 @@ private[cli] object MetadataFormatter {
     Col("Def", 3, rightAligned = true),
     Col("Rep", 3, rightAligned = true),
     Col("Len", 4, rightAligned = true),
-    Col("Id", 4, rightAligned = true)
+    Col("Id", 4, rightAligned = true),
+    Col("Groups", 30)
   )
 
   private val chunkCols = List(
@@ -178,7 +183,11 @@ private[cli] object MetadataFormatter {
             c.maxDefinitionLevel.toString,
             c.maxRepetitionLevel.toString,
             c.typeLength.fold("-")(_.toString),
-            c.fieldId.fold("-")(_.toString)
+            c.fieldId.fold("-")(_.toString),
+            c.groups.flatMap(_.annotation).mkString(", ") match {
+              case "" => "-"
+              case s  => s
+            }
           )
         }
       )
