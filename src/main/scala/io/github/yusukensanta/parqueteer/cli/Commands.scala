@@ -98,7 +98,8 @@ case class StatsCommand(
 
 case class MetadataCommand(
     filePath: String,
-    format: OutputFormat = OutputFormat.Table
+    format: OutputFormat = OutputFormat.Table,
+    extended: Boolean = false
 ) extends Command
 
 case class CountCommand(

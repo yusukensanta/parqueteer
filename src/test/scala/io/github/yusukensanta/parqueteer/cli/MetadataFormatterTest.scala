@@ -180,4 +180,66 @@ class MetadataFormatterTest extends AnyFlatSpec with Matchers {
       io.circe.parser.parse(MetadataFormatter.formatJson(MetadataFixtures.report)).toOption.get
     json.hcursor.downField("schemaTree").focus shouldBe Some(io.circe.Json.Null)
   }
+
+  private val extendedChunk = ExtendedChunkDetail(
+    dictionaryPages = List(EncodingPageCount("PLAIN", 1)),
+    dataPages = List(EncodingPageCount("RLE_DICTIONARY", 3)),
+    usesV2Pages = Some(true),
+    distinctCount = Some(7L),
+    isMinExact = Some(true),
+    isMaxExact = Some(false),
+    bloomFilter = Some(FileRegion(900L, Some(64L))),
+    columnIndex = Some(FileRegion(100L, Some(20L))),
+    offsetIndex = Some(FileRegion(120L, None)),
+    sizeStatistics = Some(SizeStatisticsDetail(Some(2048L), List(5L), List(1L, 4L))),
+    isEncrypted = false
+  )
+
+  private val extendedReport = {
+    val base = MetadataFixtures.report
+    base.copy(
+      extended = Some(ExtendedFileDetail(List("TYPE_DEFINED_ORDER"), Some("AES_GCM_V1"), true)),
+      rowGroups = base.rowGroups.map(rg =>
+        rg.copy(
+          extended = Some(
+            ExtendedRowGroupDetail(
+              Some(0),
+              Some(4L),
+              Some(0L),
+              List(SortingColumnDetail("id", descending = false, nullsFirst = false))
+            )
+          ),
+          columns = rg.columns.map(_.copy(extended = Some(extendedChunk)))
+        )
+      )
+    )
+  }
+
+  "formatTable with extended detail" should "add file, row group and chunk sections" in {
+    val out = MetadataFormatter.formatTable(extendedReport)
+    out should include("Extended File Detail")
+    out should include("Encryption:       AES_GCM_V1")
+    out should include("sorted by id ASC NULLS LAST")
+    out should include("RLE_DICTIONARY:3")
+    out should include("@900+64")
+    out should include("@120+?")
+    out should include("Y/N")
+  }
+
+  it should "not print extended sections for a plain report" in {
+    MetadataFormatter.formatTable(report) should not include "Extended"
+  }
+
+  "formatJson with extended detail" should "nest chunk, row group and file extras" in {
+    val json = parser.parse(MetadataFormatter.formatJson(extendedReport)).toOption.get.hcursor
+    json.downField("extended").get[Boolean]("hasFooterSigningKey") shouldBe Right(true)
+    val rg = json.downField("rowGroups").downN(0)
+    rg.downField("extended").downField("sortingColumns").downN(0).get[String]("column") shouldBe
+      Right("id")
+    val chunk = rg.downField("columns").downN(0).downField("extended")
+    chunk.get[Long]("distinctCount") shouldBe Right(7L)
+    chunk.downField("bloomFilter").get[Long]("offset") shouldBe Right(900L)
+    chunk.downField("sizeStatistics").get[List[Long]]("definitionLevelHistogram") shouldBe
+      Right(List(1L, 4L))
+  }
 }

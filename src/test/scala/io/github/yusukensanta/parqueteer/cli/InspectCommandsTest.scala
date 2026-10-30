@@ -3,7 +3,7 @@ package io.github.yusukensanta.parqueteer.cli
 import io.github.yusukensanta.parqueteer.core.models.*
 import org.scalatest.flatspec.AnyFlatSpec
 import java.io.{ByteArrayOutputStream, PrintStream}
-import scala.util.Success
+import scala.util.{Success, Try}
 
 class InspectCommandsTest extends CliTestSupport {
 
@@ -71,6 +71,31 @@ class InspectCommandsTest extends CliTestSupport {
       MetadataCommand("/tmp/test.parquet", OutputFormat.Table),
       quietOpts
     ) shouldBe 0
+  }
+
+  it should "pass --extended through to the repository" in {
+    var seen: Option[Boolean] = None
+    val repo = new FakeParquetRepository() {
+      override def readDetailedMetadata(
+          file: ParquetFile,
+          extended: Boolean
+      ): Try[ParquetMetadataReport] = {
+        seen = Some(extended)
+        super.readDetailedMetadata(file, extended)
+      }
+    }
+    InspectCommands.executeMetadata(
+      newService(repo),
+      MetadataCommand("/tmp/test.parquet", OutputFormat.Table, extended = true),
+      quietOpts
+    )
+    seen shouldBe Some(true)
+    InspectCommands.executeMetadata(
+      newService(repo),
+      MetadataCommand("/tmp/test.parquet", OutputFormat.Table),
+      quietOpts
+    )
+    seen shouldBe Some(false)
   }
 
   it should "print the table report unless quiet" in {

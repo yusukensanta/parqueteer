@@ -81,6 +81,19 @@ private[repositories] object FooterReader {
     )
   }
 
+  /**
+   * The raw thrift footer, for fields parquet-java's metadata objects drop
+   * (column orders, sorting columns, distinct count, min/max exactness,
+   * encryption algorithm). The stream is closed afterwards.
+   */
+  def readRawFileMetaData(
+      stream: SeekableInputStream,
+      fileLen: Long
+  ): org.apache.parquet.format.FileMetaData =
+    org.apache.parquet.format.Util.readFileMetaData(
+      new ByteArrayInputStream(readFooterBytes(stream, fileLen))
+    )
+
   def parseFooter(footerBytes: Array[Byte]): ParquetMetadata =
     metadataConverter.readParquetMetadata(
       new ByteArrayInputStream(footerBytes),

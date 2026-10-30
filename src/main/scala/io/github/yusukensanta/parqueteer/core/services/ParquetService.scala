@@ -178,11 +178,14 @@ class ParquetService(
         .toParqueteerError
     } yield stats
 
-  def getDetailedMetadata(path: String): Either[ParqueteerError, ParquetMetadataReport] =
+  def getDetailedMetadata(
+      path: String,
+      extended: Boolean = false
+  ): Either[ParqueteerError, ParquetMetadataReport] =
     for {
       location <- parseLocation(path)
       report <- repository
-        .readDetailedMetadata(ParquetFile(location))
+        .readDetailedMetadata(ParquetFile(location), extended)
         .toParqueteerError
     } yield report
 

@@ -294,8 +294,8 @@ private[cli] object InspectCommands {
       cmd: MetadataCommand,
       globalOptions: GlobalOptions
   ): Int = {
-    import cmd.{filePath, format}
-    service.getDetailedMetadata(filePath) match {
+    import cmd.{extended, filePath, format}
+    service.getDetailedMetadata(filePath, extended) match {
       case Right(report) =>
         if !globalOptions.quiet then println(formatMetadataText(report, format))
         0
@@ -310,9 +310,9 @@ private[cli] object InspectCommands {
       cmd: MetadataCommand,
       globalOptions: GlobalOptions
   ): Int = {
-    import cmd.format
+    import cmd.{extended, format}
     runMultiFileReport(paths, format, globalOptions) { path =>
-      service.getDetailedMetadata(path).map(r => (formatMetadataText(r, format), true))
+      service.getDetailedMetadata(path, extended).map(r => (formatMetadataText(r, format), true))
     }
   }
 
