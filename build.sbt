@@ -198,24 +198,28 @@ lazy val root = (project in file("."))
         "com.fasterxml.jackson.core" % "jackson-databind"    % "2.22.4",
         "com.fasterxml.jackson.core" % "jackson-annotations" % "2.22",
 
+        // Guava: gcs-connector excludes it above, but other transitive paths still pull it in.
+        // CVE-2026-102554 (HIGH) fixed in 33.7.2; pinned to the current release.
+        "com.google.guava" % "guava" % "33.7.2-jre",
+
         // io.opentelemetry.* pulled transitively via google-cloud-storage/gcs-connector.
         // Declared explicitly (not just in dependencyOverrides below) for the same
         // reason as Jackson above: the generated POM Trivy scans only lists direct
         // libraryDependencies entries, not dependencyOverrides, so an override-only
         // pin is invisible to the scanner even though it's the version actually
-        // resolved on the classpath. CVE-2026-45292 (MEDIUM) fixed in 1.62.0; pinned
-        // to 1.64.0 (current clean release). All modules share opentelemetry-java's
+        // resolved on the classpath. CVE-2026-45292 (MEDIUM) fixed in 1.62.0 and
+        // CVE-2026-118259 (MEDIUM) fixed in 1.67.0; pinned to 1.67.0 (current release). All modules share opentelemetry-java's
         // lockstep release train and must move together to avoid binary-incompatible
         // api/sdk skew.
-        "io.opentelemetry" % "opentelemetry-api"                             % "1.65.0",
-        "io.opentelemetry" % "opentelemetry-common"                          % "1.65.0",
-        "io.opentelemetry" % "opentelemetry-context"                         % "1.65.0",
-        "io.opentelemetry" % "opentelemetry-sdk"                             % "1.65.0",
-        "io.opentelemetry" % "opentelemetry-sdk-common"                      % "1.65.0",
-        "io.opentelemetry" % "opentelemetry-sdk-extension-autoconfigure-spi" % "1.65.0",
-        "io.opentelemetry" % "opentelemetry-sdk-logs"                        % "1.65.0",
-        "io.opentelemetry" % "opentelemetry-sdk-metrics"                     % "1.65.0",
-        "io.opentelemetry" % "opentelemetry-sdk-trace"                       % "1.65.0",
+        "io.opentelemetry" % "opentelemetry-api"                             % "1.67.0",
+        "io.opentelemetry" % "opentelemetry-common"                          % "1.67.0",
+        "io.opentelemetry" % "opentelemetry-context"                         % "1.67.0",
+        "io.opentelemetry" % "opentelemetry-sdk"                             % "1.67.0",
+        "io.opentelemetry" % "opentelemetry-sdk-common"                      % "1.67.0",
+        "io.opentelemetry" % "opentelemetry-sdk-extension-autoconfigure-spi" % "1.67.0",
+        "io.opentelemetry" % "opentelemetry-sdk-logs"                        % "1.67.0",
+        "io.opentelemetry" % "opentelemetry-sdk-metrics"                     % "1.67.0",
+        "io.opentelemetry" % "opentelemetry-sdk-trace"                       % "1.67.0",
 
         // Testing
         "org.scalatest"     %% "scalatest"       % scalatestVersion           % Test,
@@ -264,20 +268,21 @@ lazy val root = (project in file("."))
         "com.fasterxml.jackson.core" % "jackson-core"        % "2.22.4",
         "com.fasterxml.jackson.core" % "jackson-databind"    % "2.22.4",
         "com.fasterxml.jackson.core" % "jackson-annotations" % "2.22",
+        "com.google.guava"           % "guava"                % "33.7.2-jre", // CVE-2026-102554 (HIGH) fixed in 33.7.2
         // io.opentelemetry.* pulled transitively via google-cloud-storage/gcs-connector.
-        // CVE-2026-45292 (MEDIUM) — unbounded memory allocation parsing oversized W3C
-        // baggage headers; fixed in 1.62.0. Pinned to 1.65.0 (current release);
+        // CVE-2026-118259 (MEDIUM) fixed in 1.67.0; CVE-2026-45292 (MEDIUM) — unbounded memory allocation parsing oversized W3C
+        // baggage headers; fixed in 1.62.0. Pinned to 1.67.0 (current release);
         // all modules below share opentelemetry-java's lockstep release train, so they
         // must move together to avoid binary-incompatible api/sdk skew.
-        "io.opentelemetry" % "opentelemetry-api"                             % "1.65.0",
-        "io.opentelemetry" % "opentelemetry-common"                          % "1.65.0",
-        "io.opentelemetry" % "opentelemetry-context"                         % "1.65.0",
-        "io.opentelemetry" % "opentelemetry-sdk"                             % "1.65.0",
-        "io.opentelemetry" % "opentelemetry-sdk-common"                      % "1.65.0",
-        "io.opentelemetry" % "opentelemetry-sdk-extension-autoconfigure-spi" % "1.65.0",
-        "io.opentelemetry" % "opentelemetry-sdk-logs"                        % "1.65.0",
-        "io.opentelemetry" % "opentelemetry-sdk-metrics"                     % "1.65.0",
-        "io.opentelemetry" % "opentelemetry-sdk-trace"                       % "1.65.0"
+        "io.opentelemetry" % "opentelemetry-api"                             % "1.67.0",
+        "io.opentelemetry" % "opentelemetry-common"                          % "1.67.0",
+        "io.opentelemetry" % "opentelemetry-context"                         % "1.67.0",
+        "io.opentelemetry" % "opentelemetry-sdk"                             % "1.67.0",
+        "io.opentelemetry" % "opentelemetry-sdk-common"                      % "1.67.0",
+        "io.opentelemetry" % "opentelemetry-sdk-extension-autoconfigure-spi" % "1.67.0",
+        "io.opentelemetry" % "opentelemetry-sdk-logs"                        % "1.67.0",
+        "io.opentelemetry" % "opentelemetry-sdk-metrics"                     % "1.67.0",
+        "io.opentelemetry" % "opentelemetry-sdk-trace"                       % "1.67.0"
       )
     },
     assembly / assemblyMergeStrategy := {
