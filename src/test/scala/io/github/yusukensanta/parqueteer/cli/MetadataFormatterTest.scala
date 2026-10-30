@@ -74,6 +74,19 @@ class MetadataFormatterTest extends AnyFlatSpec with Matchers {
     out should include("Flags: D=dictionary page")
   }
 
+  it should "not leave trailing whitespace on any line" in {
+    val lines = MetadataFormatter.formatTable(report).linesIterator.toList
+    lines.filter(l => l != l.stripTrailing()) shouldBe Nil
+  }
+
+  it should "draw each table rule as wide as its header" in {
+    val lines = MetadataFormatter.formatTable(report).linesIterator.toList
+    // Section underlines are short; table rules span the whole header row.
+    val tableRules = lines.zipWithIndex.filter { case (l, _) => l.startsWith("-" * 40) }
+    tableRules should have size 2 // column schema + the one row group's chunks
+    tableRules.foreach { case (rule, i) => rule.length shouldBe lines(i - 1).length }
+  }
+
   it should "print n/a for missing min/max/null count" in {
     val out = MetadataFormatter.formatTable(report)
     out should include("n/a")

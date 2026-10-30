@@ -40,7 +40,7 @@ Parqueteer is a **Parquet lifecycle tool for pipelines** — the gap between bas
 - Schema operations: `schema`, `schema diff`, `validate`, `info` — designed to wire into CI/CD and data quality gates
 - Cloud-native Parquet I/O: read, write, merge across local, S3, GCS, and Azure
 - Format conversion: JSON/CSV ↔ Parquet with compression control
-- Operational inspection: `stats`, column-level metadata — quick answers without a query engine
+- Operational inspection: `stats`, `metadata` (key-value pairs, row groups, per-column chunk details) — quick answers without a query engine
 
 **Out of scope:**
 - **SQL analytics, joins, aggregations** — use [DuckDB](https://duckdb.org/) for ad-hoc queries
