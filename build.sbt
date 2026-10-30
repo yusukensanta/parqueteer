@@ -190,10 +190,13 @@ lazy val root = (project in file("."))
         // patched version rather than Hadoop's older transitive declaration.
         // CVE-2026-54512 + CVE-2026-54513 (HIGH) fixed in 2.18.8;
         // GHSA-mhm7-754m-9p8w + CVE-2026-54515 + CVE-2026-59889 (MEDIUM) fixed in 2.18.9;
+        // CVE-2026-68497 + CVE-2026-89407 + CVE-2026-89425 + CVE-2026-91776 + CVE-2026-91777 (HIGH) and
+        // CVE-2026-19032 + CVE-2026-83557 (MEDIUM) fixed in 2.18.11 / 2.22.3;
+        // pinned to the latest release line (2.22.4); jackson-annotations 2.x ships as 2.22.
         // keep all three jackson-core artifacts aligned to prevent version skew.
-        "com.fasterxml.jackson.core" % "jackson-core"        % "2.18.9",
-        "com.fasterxml.jackson.core" % "jackson-databind"    % "2.18.9",
-        "com.fasterxml.jackson.core" % "jackson-annotations" % "2.18.9",
+        "com.fasterxml.jackson.core" % "jackson-core"        % "2.22.4",
+        "com.fasterxml.jackson.core" % "jackson-databind"    % "2.22.4",
+        "com.fasterxml.jackson.core" % "jackson-annotations" % "2.22",
 
         // io.opentelemetry.* pulled transitively via google-cloud-storage/gcs-connector.
         // Declared explicitly (not just in dependencyOverrides below) for the same
@@ -254,10 +257,13 @@ lazy val root = (project in file("."))
         // GHSA-72hv-8253-57qq (async parser DoS) fixed in 2.18.6;
         // CVE-2026-54512 + CVE-2026-54513 (HIGH) fixed in 2.18.8;
         // GHSA-mhm7-754m-9p8w + CVE-2026-54515 + CVE-2026-59889 (MEDIUM) fixed in 2.18.9;
+        // CVE-2026-68497 + CVE-2026-89407 + CVE-2026-89425 + CVE-2026-91776 + CVE-2026-91777 (HIGH) and
+        // CVE-2026-19032 + CVE-2026-83557 (MEDIUM) fixed in 2.18.11 / 2.22.3;
+        // pinned to the latest release line (2.22.4); jackson-annotations 2.x ships as 2.22.
         // pin all three Jackson artifacts together to prevent version skew.
-        "com.fasterxml.jackson.core" % "jackson-core"        % "2.18.9",
-        "com.fasterxml.jackson.core" % "jackson-databind"    % "2.18.9",
-        "com.fasterxml.jackson.core" % "jackson-annotations" % "2.18.9",
+        "com.fasterxml.jackson.core" % "jackson-core"        % "2.22.4",
+        "com.fasterxml.jackson.core" % "jackson-databind"    % "2.22.4",
+        "com.fasterxml.jackson.core" % "jackson-annotations" % "2.22",
         // io.opentelemetry.* pulled transitively via google-cloud-storage/gcs-connector.
         // CVE-2026-45292 (MEDIUM) — unbounded memory allocation parsing oversized W3C
         // baggage headers; fixed in 1.62.0. Pinned to 1.65.0 (current release);
