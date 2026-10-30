@@ -67,7 +67,7 @@ trait CliTestSupport extends AnyFlatSpec with Matchers {
 
     override def readDetailedMetadata(
         file: ParquetFile,
-        extended: Boolean
+        options: MetadataOptions
     ): Try[ParquetMetadataReport] =
       detailedMetadataResult
     override def readSchemaFields(file: ParquetFile): Try[List[FieldSummary]] = schemaFieldsResult

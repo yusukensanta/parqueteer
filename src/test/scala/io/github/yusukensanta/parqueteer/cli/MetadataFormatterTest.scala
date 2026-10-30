@@ -242,4 +242,109 @@ class MetadataFormatterTest extends AnyFlatSpec with Matchers {
     chunk.downField("sizeStatistics").get[List[Long]]("definitionLevelHistogram") shouldBe
       Right(List(1L, 4L))
   }
+
+  private val pagedReport = {
+    val base = MetadataFixtures.report
+    base.copy(rowGroups =
+      base.rowGroups.map(rg =>
+        rg.copy(columns =
+          rg.columns.map(c =>
+            c.copy(
+              pageIndex = Some(
+                PageIndexDetail(
+                  Some("ASCENDING"),
+                  List(
+                    IndexedPage(
+                      0,
+                      Some(4L),
+                      Some(120),
+                      Some(0L),
+                      Some(false),
+                      Some(0L),
+                      Some("1"),
+                      Some("50")
+                    ),
+                    IndexedPage(
+                      1,
+                      Some(124L),
+                      Some(80),
+                      Some(50L),
+                      Some(true),
+                      Some(50L),
+                      None,
+                      None
+                    )
+                  )
+                )
+              ),
+              pages = Some(
+                List(
+                  PageHeaderDetail(
+                    "DICTIONARY_PAGE",
+                    4L,
+                    20,
+                    100,
+                    110,
+                    Some(5),
+                    Some("PLAIN"),
+                    None,
+                    None,
+                    false,
+                    false
+                  ),
+                  PageHeaderDetail(
+                    "DATA_PAGE_V2",
+                    124L,
+                    25,
+                    80,
+                    90,
+                    Some(50),
+                    Some("RLE_DICTIONARY"),
+                    Some(50),
+                    Some(3),
+                    true,
+                    true
+                  )
+                )
+              )
+            )
+          )
+        )
+      )
+    )
+  }
+
+  "formatTable with page detail" should "print an index table and a page header table per column" in {
+    val out = MetadataFormatter.formatTable(pagedReport)
+    out should include("Row Group 0 / id: column & offset index (boundary order ASCENDING)")
+    out should include("Row Group 0 / name: 2 page headers")
+    out should include("DICTIONARY_PAGE")
+    out should include("RLE_DICTIONARY")
+    out.linesIterator.filter(_.trim.startsWith("1 ")).exists(_.contains("Y")) shouldBe true
+  }
+
+  it should "not print page sections for a plain report" in {
+    MetadataFormatter.formatTable(report) should not include "page headers"
+    MetadataFormatter.formatTable(report) should not include "column & offset index"
+  }
+
+  "formatJson with page detail" should "nest pageIndex and pages per chunk, null when absent" in {
+    val json = parser.parse(MetadataFormatter.formatJson(pagedReport)).toOption.get.hcursor
+    val c0   = json.downField("rowGroups").downN(0).downField("columns").downN(0)
+    c0.downField("pageIndex").get[String]("boundaryOrder") shouldBe Right("ASCENDING")
+    c0.downField("pageIndex").downField("pages").downN(1).get[Boolean]("isNullPage") shouldBe Right(
+      true
+    )
+    c0.downField("pages").downN(0).get[String]("pageType") shouldBe Right("DICTIONARY_PAGE")
+
+    val plain = parser.parse(MetadataFormatter.formatJson(report)).toOption.get.hcursor
+    plain
+      .downField("rowGroups")
+      .downN(0)
+      .downField("columns")
+      .downN(0)
+      .downField("pages")
+      .focus shouldBe
+      Some(io.circe.Json.Null)
+  }
 }

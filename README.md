@@ -217,6 +217,12 @@ parqueteer metadata data.parquet --format json
 # distinct count, min/max exactness, bloom filter / column index / offset index
 # regions, sorting columns, column orders, encryption algorithm
 parqueteer metadata data.parquet --extended
+
+# Page-level detail (reads past the footer, decodes no data): per-page column
+# index / offset index (null pages, null counts, min/max, offsets, first row),
+# and every page header (type, sizes, value count, encoding). Limit with --columns.
+parqueteer metadata data.parquet --index --columns id
+parqueteer metadata data.parquet --pages --format json
 ```
 
 ### Compare Schemas

@@ -56,7 +56,10 @@ object JSONFormatter {
     ExtendedRowGroupDetail,
     FileRegion,
     GroupInfo,
+    IndexedPage,
     LogicalTypeDetail,
+    PageHeaderDetail,
+    PageIndexDetail,
     SchemaNode,
     SizeStatisticsDetail,
     SortingColumnDetail
@@ -76,6 +79,9 @@ object JSONFormatter {
     )
   }
 
+  given Encoder[IndexedPage]            = deriveEncoder[IndexedPage]
+  given Encoder[PageIndexDetail]        = deriveEncoder[PageIndexDetail]
+  given Encoder[PageHeaderDetail]       = deriveEncoder[PageHeaderDetail]
   given Encoder[ExtendedFileDetail]     = deriveEncoder[ExtendedFileDetail]
   given Encoder[SortingColumnDetail]    = deriveEncoder[SortingColumnDetail]
   given Encoder[ExtendedRowGroupDetail] = deriveEncoder[ExtendedRowGroupDetail]

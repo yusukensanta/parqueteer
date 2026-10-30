@@ -180,12 +180,12 @@ class ParquetService(
 
   def getDetailedMetadata(
       path: String,
-      extended: Boolean = false
+      options: MetadataOptions = MetadataOptions()
   ): Either[ParqueteerError, ParquetMetadataReport] =
     for {
       location <- parseLocation(path)
       report <- repository
-        .readDetailedMetadata(ParquetFile(location), extended)
+        .readDetailedMetadata(ParquetFile(location), options)
         .toParqueteerError
     } yield report
 
