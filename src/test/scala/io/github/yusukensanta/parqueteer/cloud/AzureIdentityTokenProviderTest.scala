@@ -68,6 +68,20 @@ class AzureIdentityTokenProviderTest extends AnyFlatSpec with Matchers {
     ex.getCause shouldBe a[RuntimeException]
   }
 
+  it should "put the hint first and the per-credential detail after a separator" in {
+    val stub = new StubCredential(
+      Mono.error(new CredentialUnavailableException("Azure CLI not installed"))
+    )
+    val p = new AzureIdentityTokenProvider
+    p.useCredential(stub)
+
+    val ex                = intercept[AzureTokenException](p.getAccessToken())
+    val (summary, detail) = AzureTokenException.split(ex.getMessage)
+    summary should include("az login")
+    summary should not include "Azure CLI not installed"
+    detail shouldBe Some("Azure CLI not installed")
+  }
+
   it should "redact secrets from the credential error message" in {
     val stub = new StubCredential(
       Mono.error(
@@ -83,7 +97,20 @@ class AzureIdentityTokenProviderTest extends AnyFlatSpec with Matchers {
     ex.getMessage should not include "SECRETSIG123"
   }
 
-  it should "fail clearly when used before initialize" in {
+  "AzureTokenException.split" should "return the whole text and no detail when there is no separator" in {
+    AzureTokenException.split("plain message") shouldBe ("plain message", None)
+  }
+
+  it should "split at the first separator only" in {
+    val msg =
+      s"head${AzureTokenException.DetailSeparator}one${AzureTokenException.DetailSeparator}two"
+    AzureTokenException.split(msg) shouldBe (
+      "head",
+      Some(s"one${AzureTokenException.DetailSeparator}two")
+    )
+  }
+
+  "AzureIdentityTokenProvider" should "fail clearly when used before initialize" in {
     val ex = intercept[IOException](new AzureIdentityTokenProvider().getAccessToken())
     ex.getMessage should include("not initialized")
   }

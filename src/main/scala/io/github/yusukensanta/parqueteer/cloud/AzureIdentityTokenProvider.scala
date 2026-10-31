@@ -16,6 +16,18 @@ import java.util.Date
  */
 class AzureTokenException(message: String, cause: Throwable) extends IOException(message, cause)
 
+object AzureTokenException {
+
+  /** Splits the one-line hint from the per-credential detail that follows it. */
+  val DetailSeparator: String = "\n[details]\n"
+
+  def split(message: String): (String, Option[String]) =
+    message.indexOf(DetailSeparator) match {
+      case -1 => (message, None)
+      case i  => (message.substring(0, i), Some(message.substring(i + DetailSeparator.length)))
+    }
+}
+
 /**
  * Bridges azure-identity credentials to the ABFS driver.
  *
@@ -55,10 +67,11 @@ class AzureIdentityTokenProvider extends CustomTokenProviderAdaptee {
       token.getToken
     } catch {
       case e: RuntimeException =>
+        val detail = CredentialRedactor
+          .redact(Option(e.getMessage).getOrElse(e.getClass.getSimpleName))
         throw new AzureTokenException(
-          s"Could not get an Azure access token: ${CredentialRedactor
-              .redact(Option(e.getMessage).getOrElse(e.getClass.getSimpleName))}. " +
-            "Run `az login`, or set AZURE_AUTH_METHOD to service_principal, shared_key or sas_token.",
+          s"Could not get an Azure access token. Run `az login`, or set AZURE_AUTH_METHOD to " +
+            s"service_principal, shared_key or sas_token.${AzureTokenException.DetailSeparator}$detail",
           e
         )
     }

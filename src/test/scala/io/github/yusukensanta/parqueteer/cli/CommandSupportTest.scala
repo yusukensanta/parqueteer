@@ -46,6 +46,30 @@ class CommandSupportTest extends CliTestSupport {
     stderr should include("Try --help")
   }
 
+  it should "show cloud auth detail only with --verbose" in {
+    val err          = ParqueteerError.CloudAuthError("Azure", "short", Some("Env: unavailable"))
+    val (_, quiet)   = captureStderr(CommandSupport.reportError("E", defaultOpts)(err))
+    val (_, verbose) = captureStderr(
+      CommandSupport.reportError("E", defaultOpts.copy(verbose = true))(err)
+    )
+    quiet should include("short")
+    quiet should not include "Env: unavailable"
+    verbose should include("[verbose]")
+    verbose should include("Env: unavailable")
+  }
+
+  it should "redact credentials in cloud auth detail" in {
+    val err = ParqueteerError.CloudAuthError(
+      "Azure",
+      "short",
+      Some("AccessKey=AKIAIOSFODNN7EXAMPLE leaked")
+    )
+    val (_, verbose) = captureStderr(
+      CommandSupport.reportError("E", defaultOpts.copy(verbose = true))(err)
+    )
+    verbose should not include "AKIAIOSFODNN7EXAMPLE"
+  }
+
   // ── checkOutputWritable ────────────────────────────────────────────────
 
   "checkOutputWritable" should "pass cloud URIs without filesystem check" in {

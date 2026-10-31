@@ -52,9 +52,8 @@ private[repositories] class HadoopConfigProvider(
           )
         )
       case e if isCloudLocation(location) && azureTokenFailureMessage(e).isDefined =>
-        Failure(
-          new CloudAuthException(providerNameFor(location), azureTokenFailureMessage(e).get, e)
-        )
+        val (summary, detail) = AzureTokenException.split(azureTokenFailureMessage(e).get)
+        Failure(new CloudAuthException(providerNameFor(location), summary, e, detail))
     }
 
   private val MaxCauseDepth = 10
