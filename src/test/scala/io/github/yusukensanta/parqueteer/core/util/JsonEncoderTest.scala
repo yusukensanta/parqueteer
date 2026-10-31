@@ -54,7 +54,7 @@ class JsonEncoderTest extends AnyFlatSpec with Matchers {
   }
 
   it should "encode CellValue.Bytes as Base64 string" in {
-    val bytes = "hello".getBytes
+    val bytes  = "hello".getBytes
     val result = JsonEncoder.encode(
       CellValue.Bytes(scala.collection.immutable.ArraySeq.unsafeWrapArray(bytes))
     )

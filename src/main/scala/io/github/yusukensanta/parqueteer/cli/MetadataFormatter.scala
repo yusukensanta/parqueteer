@@ -48,7 +48,7 @@ private[cli] object MetadataFormatter {
           report.keyValueMetadata.map { case (k, v) => k -> Json.fromString(v) }
         ),
         "messageSchema" -> Json.fromString(report.messageSchema),
-        "columns" -> Json.fromValues(report.columns.map { c =>
+        "columns"       -> Json.fromValues(report.columns.map { c =>
           Json.obj(
             "path"               -> Json.fromString(c.path),
             "physicalType"       -> Json.fromString(c.physicalType),
@@ -63,7 +63,7 @@ private[cli] object MetadataFormatter {
         }),
         "schemaTree" -> report.schemaTree.fold(Json.Null)(_.asJson),
         "extended"   -> report.extended.fold(Json.Null)(_.asJson),
-        "rowGroups" -> Json.fromValues(report.rowGroups.map { rg =>
+        "rowGroups"  -> Json.fromValues(report.rowGroups.map { rg =>
           Json.obj(
             "index"             -> Json.fromInt(rg.index),
             "rowCount"          -> Json.fromLong(rg.rowCount),
@@ -71,7 +71,7 @@ private[cli] object MetadataFormatter {
             "compressedBytes"   -> Json.fromLong(rg.compressedBytes),
             "uncompressedBytes" -> Json.fromLong(rg.uncompressedBytes),
             "extended"          -> rg.extended.fold(Json.Null)(_.asJson),
-            "columns" -> Json.fromValues(rg.columns.map { c =>
+            "columns"           -> Json.fromValues(rg.columns.map { c =>
               Json.obj(
                 "path"                 -> Json.fromString(c.path),
                 "codec"                -> Json.fromString(c.codec),
@@ -309,8 +309,7 @@ private[cli] object MetadataFormatter {
        else
          report.keyValueMetadata.map { case (k, v) =>
            s"$k = ${truncateKeyValue(v, MaxKeyValueDisplayLength)}"
-         }
-      )
+         })
 
     val schemaSection =
       List("Message Schema", "--------------", report.messageSchema.stripTrailing())

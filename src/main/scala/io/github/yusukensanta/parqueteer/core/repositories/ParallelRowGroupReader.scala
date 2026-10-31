@@ -28,7 +28,7 @@ private[repositories] object ParallelRowGroupReader {
       footerMeta: ParquetMetadata
   ): List[Map[String, CellValue]] = {
     val selectedBlocks = config.maxRows match {
-      case None => blocks
+      case None        => blocks
       case Some(limit) =>
         var cumulative = 0L
         blocks.takeWhile { block =>
@@ -49,7 +49,7 @@ private[repositories] object ParallelRowGroupReader {
     )
     try {
       implicit val ec: ExecutionContext = ExecutionContext.fromExecutor(pool)
-      val requestedNames =
+      val requestedNames                =
         requestedSchema.getColumns.asScala.map(_.getPath.mkString(".")).toSet
       val nullRowsAllotted = new AtomicLong(
         config.maxRows.getOrElse(Long.MaxValue)
@@ -97,7 +97,7 @@ private[repositories] object ParallelRowGroupReader {
       requestedNames: Set[String],
       nullRowsAllotted: AtomicLong
   ): List[Map[String, CellValue]] = {
-    val colChunks = block.getColumns.asScala.toList
+    val colChunks      = block.getColumns.asScala.toList
     val relevantChunks =
       if requestedNames.isEmpty then colChunks
       else colChunks.filter(c => requestedNames.contains(c.getPath.toDotString))
@@ -120,7 +120,7 @@ private[repositories] object ParallelRowGroupReader {
       List.fill(rowsToFabricate)(nullRow)
     } else {
       val rangeStart = relevantChunks.map(_.getStartingPos).min
-      val rangeEnd =
+      val rangeEnd   =
         relevantChunks.map(c => c.getStartingPos + c.getTotalSize).max
       val readOptions = ParquetReadOptions
         .builder()

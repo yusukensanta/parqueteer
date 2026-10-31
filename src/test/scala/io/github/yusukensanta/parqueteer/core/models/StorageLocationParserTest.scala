@@ -91,13 +91,13 @@ class StorageLocationParserTest extends AnyFlatSpec with Matchers {
   "StorageLocationParser.parse" should "reject s3:/bucket/key with a helpful suggestion" in {
     val result = StorageLocationParser.parse("s3:/bucket/key")
     result.isLeft shouldBe true
-    result.left.get should include("s3://bucket/key")
+    result.swap.getOrElse(fail("expected Left")) should include("s3://bucket/key")
   }
 
   it should "reject gs:/bucket/path with a helpful suggestion" in {
     val result = StorageLocationParser.parse("gs:/bucket/path")
     result.isLeft shouldBe true
-    result.left.get should include("gs://bucket/path")
+    result.swap.getOrElse(fail("expected Left")) should include("gs://bucket/path")
   }
 
   it should "still parse s3://bucket/key correctly after the new guard" in {
@@ -177,7 +177,7 @@ class StorageLocationParserTest extends AnyFlatSpec with Matchers {
     result.left.toOption.get should include("wasb")
   }
 
-  "StorageLocationParser.hasCloudScheme" should "recognise every supported remote scheme" in {
+  "StorageLocationParser.hasCloudScheme" should "recognise every supported remote scheme" in
     List(
       "s3://b/k",
       "s3a://b/k",
@@ -188,10 +188,8 @@ class StorageLocationParserTest extends AnyFlatSpec with Matchers {
       "wasbs://x"
     )
       .foreach(StorageLocationParser.hasCloudScheme(_) shouldBe true)
-  }
 
-  it should "treat local and unknown-scheme paths as non-cloud" in {
+  it should "treat local and unknown-scheme paths as non-cloud" in
     List("/tmp/out.csv", "out.csv", "./s3://not-a-scheme", "ftp://host/file", "S3://upper")
       .foreach(StorageLocationParser.hasCloudScheme(_) shouldBe false)
-  }
 }

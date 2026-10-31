@@ -121,7 +121,7 @@ private[cli] object WriteCommands {
     import cmd.{outputPath, inputFormat, compression, rowGroupSize, schemaMode, dryRun, schemaFile}
     val writeConfig = writeConfigFor(compression, rowGroupSize, cmd.writer)
     checkOutputWritable(outputPath).flatMap(_ => loadWriteSchema(service, schemaFile)) match {
-      case Left(err) => reportError("Failed to write file", globalOptions)(err)
+      case Left(err)     => reportError("Failed to write file", globalOptions)(err)
       case Right(fields) =>
         if dryRun then {
           DryRunReport(
@@ -172,7 +172,7 @@ private[cli] object WriteCommands {
       else loadWriteSchema(service, schemaFile)
 
     fieldsOrError match {
-      case Left(error) => reportError("Failed to convert file", globalOptions)(error)
+      case Left(error)   => reportError("Failed to convert file", globalOptions)(error)
       case Right(fields) =>
         if dryRun then
           runConvertDryRun(
@@ -320,7 +320,7 @@ private[cli] object WriteCommands {
       case None => loadWriteSchema(service, schemaFile)
     }
     fieldsOrError match {
-      case Left(error) => reportError("Failed to convert file", globalOptions)(error)
+      case Left(error)   => reportError("Failed to convert file", globalOptions)(error)
       case Right(fields) =>
         if dryRun then {
           DryRunReport(
@@ -333,7 +333,7 @@ private[cli] object WriteCommands {
             )
           ).print()
         } else {
-          val writeConfig = writeConfigFor(compression, None, cmd.writer)
+          val writeConfig                           = writeConfigFor(compression, None, cmd.writer)
           val result: Either[ParqueteerError, Long] = (inputExt, outputExt) match {
             case ("parquet", "parquet") =>
               val onProgress: (Int, Int, String) => Unit = (i, n, path) =>

@@ -26,10 +26,10 @@ object JsonEncoder {
         f.isNegInfinity,
         Json.fromFloatOrNull(f)
       )
-    case CellValue.Bool(b) => Json.fromBoolean(b)
-    case CellValue.Dec(bd) => Json.fromBigDecimal(bd)
-    case CellValue.Date(d) => Json.fromString(d.toString)
-    case CellValue.Ts(i)   => Json.fromString(i.toString)
+    case CellValue.Bool(b)  => Json.fromBoolean(b)
+    case CellValue.Dec(bd)  => Json.fromBigDecimal(bd)
+    case CellValue.Date(d)  => Json.fromString(d.toString)
+    case CellValue.Ts(i)    => Json.fromString(i.toString)
     case CellValue.Bytes(b) =>
       Json.fromString(java.util.Base64.getEncoder.encodeToString(b.toArray))
   }

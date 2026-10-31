@@ -90,7 +90,7 @@ class CliAppTest extends AnyFlatSpec with Matchers {
   }
 
   "applyAppConfig" should "prefer CLI opts over app config" in {
-    val opts = GlobalOptions(profile = Some("cli-profile"), region = Some("us-west-2"))
+    val opts   = GlobalOptions(profile = Some("cli-profile"), region = Some("us-west-2"))
     val appCfg = AppConfig(cloud =
       CloudConfig(s3 = S3Config(profile = Some("file-profile"), defaultRegion = Some("eu-west-1")))
     )
@@ -100,7 +100,7 @@ class CliAppTest extends AnyFlatSpec with Matchers {
   }
 
   it should "fill missing opts from app config" in {
-    val opts = GlobalOptions()
+    val opts   = GlobalOptions()
     val appCfg = AppConfig(cloud =
       CloudConfig(s3 = S3Config(profile = Some("file-profile"), defaultRegion = Some("eu-west-1")))
     )
@@ -124,7 +124,7 @@ class CliAppTest extends AnyFlatSpec with Matchers {
   }
 
   it should "prefer CLI s3EndpointUrl over config" in {
-    val opts = GlobalOptions(s3EndpointUrl = Some("http://cli-host:9000"))
+    val opts   = GlobalOptions(s3EndpointUrl = Some("http://cli-host:9000"))
     val appCfg =
       AppConfig(cloud = CloudConfig(s3 = S3Config(endpointUrl = Some("http://config-host:9000"))))
     val result = CliApp.applyAppConfig(opts, appCfg)

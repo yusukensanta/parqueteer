@@ -1,7 +1,7 @@
 ThisBuild / organization := "io.github.yusukensanta"
 // Version managed by sbt-ci-release from git tags
 name                     := "parqueteer"
-ThisBuild / scalaVersion := "3.7.4"
+ThisBuild / scalaVersion := "3.10.0"
 
 // sbt-ci-release configuration
 ThisBuild / versionScheme := Some("early-semver")
@@ -13,7 +13,10 @@ ThisBuild / scalacOptions ++= Seq(
   "-language:implicitConversions",
   "-unchecked",
   "-Werror",
-  "-Wunused:all"
+  "-Wunused:all",
+  // Scala 3.10 coverage instrumentation skips initializers over 3000 tree nodes
+  // and warns; the CLI parser definition is one such value. Not actionable.
+  "-Wconf:msg=Skipping coverage instrumentation:s"
 )
 
 // Target: 80%. Current baseline: ~75% stmt / ~68% branch.
@@ -108,16 +111,16 @@ lazy val root = (project in file("."))
     libraryDependencies ++= {
       val parquet4sVersion           = "2.23.0"
       val circeVersion               = "0.14.17"
-      val circeYamlV12Version        = "0.16.1"
-      val scoptVersion               = "4.1.0"
+      val circeYamlV12Version        = "1.15.0"
+      val scoptVersion               = "4.2.0"
       val slf4jVersion               = "2.0.20"
       val scalatestVersion           = "3.2.20"
-      val scalamockVersion           = "7.5.5"
+      val scalamockVersion           = "7.6.2"
       val scalatestScalacheckVersion = "3.2.19.0"
-      val awsSdkVersion              = "2.53.3"
-      val googleCloudStorageVersion  = "2.71.0"
-      val azureStorageVersion        = "12.35.0"
-      val azureIdentityVersion       = "1.16.3"
+      val awsSdkVersion              = "2.57.8"
+      val googleCloudStorageVersion  = "2.76.0"
+      val azureStorageVersion        = "12.35.2"
+      val azureIdentityVersion       = "1.19.0"
       val hadoopVersion              = "3.5.0"
       val gcsConnectorVersion        = "4.0.9"
 
@@ -233,7 +236,7 @@ lazy val root = (project in file("."))
     // CVE-2026-55833, CVE-2026-56745/56746/56819, CVE-2026-59898/59899/59900/59921 fixed 4.1.136.Final.
     // Prior override covered only 7 of 19 modules; 12 modules resolved at mixed 4.1.112-4.1.133.
     dependencyOverrides ++= {
-      val nettyVersion = "4.1.139.Final"
+      val nettyVersion = "4.2.19.Final"
       Seq(
         "io.netty" % "netty-common"                       % nettyVersion,
         "io.netty" % "netty-buffer"                       % nettyVersion,
@@ -255,7 +258,7 @@ lazy val root = (project in file("."))
         "io.netty" % "netty-resolver-dns-classes-macos"   % nettyVersion,
         "io.netty" % "netty-resolver-dns-native-macos"    % nettyVersion,
         // Transitive CVE patches
-        "org.xerial.snappy" % "snappy-java" % "1.1.10.8", // CVE-2023-43642 + CVE-2023-34455; 1.1.10.8 is current clean release
+        "org.xerial.snappy" % "snappy-java" % "1.1.10.12", // CVE-2023-43642 + CVE-2023-34455; 1.1.10.8 is current clean release
         "com.nimbusds" % "nimbus-jose-jwt" % "10.10", // CVE-2025-53864 — deeply nested JSON DoS (fixed >=10.0.2; 10.9.1 is current)
         "net.minidev" % "json-smart" % "2.6.0", // CVE-2024-57699 — nested JSON stack exhaustion DoS (nimbus transitive)
         // GHSA-72hv-8253-57qq (async parser DoS) fixed in 2.18.6;

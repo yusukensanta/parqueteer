@@ -11,11 +11,10 @@ class NestedTypeTest extends AnyFlatSpec with Matchers {
     NestedType.isNested("LIST<STRING>") shouldBe true
   }
 
-  it should "reject primitive and logical type names" in {
+  it should "reject primitive and logical type names" in
     List("INT64", "STRING", "DECIMAL(10,2)", "TIMESTAMP_MILLIS").foreach(
       NestedType.isNested(_) shouldBe false
     )
-  }
 
   "NestedType.struct" should "produce a name isNested recognises" in {
     NestedType.isNested(NestedType.struct("a:INT32")) shouldBe true

@@ -75,7 +75,7 @@ class InspectCommandsTest extends CliTestSupport {
 
   it should "pass --extended through to the repository" in {
     var seen: Option[Boolean] = None
-    val repo = new FakeParquetRepository() {
+    val repo                  = new FakeParquetRepository() {
       override def readDetailedMetadata(
           file: ParquetFile,
           options: MetadataOptions
@@ -99,7 +99,7 @@ class InspectCommandsTest extends CliTestSupport {
   }
 
   it should "print the table report unless quiet" in {
-    val out = new ByteArrayOutputStream()
+    val out  = new ByteArrayOutputStream()
     val code = Console.withOut(new PrintStream(out)) {
       InspectCommands.executeMetadata(
         newService(),

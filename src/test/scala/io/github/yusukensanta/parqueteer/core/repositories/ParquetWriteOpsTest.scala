@@ -252,8 +252,8 @@ class ParquetWriteOpsTest extends AnyFlatSpec with Matchers {
   }
 
   it should "write CellValue.Bytes as raw binary without UTF-8 encoding" in {
-    val mt    = schema("message root { required binary data; }")
-    val group = new SimpleGroupFactory(mt).newGroup()
+    val mt       = schema("message root { required binary data; }")
+    val group    = new SimpleGroupFactory(mt).newGroup()
     val rawBytes =
       Array[Byte](0xde.toByte, 0xad.toByte, 0xbe.toByte, 0xef.toByte)
     ParquetWriteOps.writeRowToGroup(
@@ -291,7 +291,7 @@ class ParquetWriteOpsTest extends AnyFlatSpec with Matchers {
     val mt =
       MessageTypeParser.parseMessageType("message root { required int32 age; }")
     val group = new SimpleGroupFactory(mt).newGroup()
-    val ex = intercept[ParqueteerError.RowSchemaMismatchException] {
+    val ex    = intercept[ParqueteerError.RowSchemaMismatchException] {
       ParquetWriteOps.writeRowToGroup(
         group,
         Map("age" -> CellValue.I32(30), "unknown" -> CellValue.Str("x")),
@@ -308,7 +308,7 @@ class ParquetWriteOpsTest extends AnyFlatSpec with Matchers {
     )
     val group       = new SimpleGroupFactory(mt).newGroup()
     val extremeDate = java.time.LocalDate.of(999999999, 1, 1)
-    val ex = intercept[IllegalArgumentException] {
+    val ex          = intercept[IllegalArgumentException] {
       ParquetWriteOps.writeRowToGroup(
         group,
         Map("d" -> CellValue.Date(extremeDate)),
@@ -323,7 +323,7 @@ class ParquetWriteOpsTest extends AnyFlatSpec with Matchers {
     val mt = MessageTypeParser.parseMessageType(
       "message root { required int64 ts (TIMESTAMP_MICROS); }"
     )
-    val group = new SimpleGroupFactory(mt).newGroup()
+    val group            = new SimpleGroupFactory(mt).newGroup()
     val farFutureInstant =
       java.time.Instant.ofEpochSecond(Long.MaxValue / 1_000_000L + 1)
     val ex = intercept[IllegalArgumentException] {
@@ -490,7 +490,7 @@ class ParquetWriteOpsTest extends AnyFlatSpec with Matchers {
         |}""".stripMargin
     )
     val group = new SimpleGroupFactory(mt).newGroup()
-    val row = Map[String, CellValue](
+    val row   = Map[String, CellValue](
       "id"    -> CellValue.I64(1L),
       "name"  -> CellValue.Str("Bob"),
       "score" -> CellValue.F64(7.5)
@@ -564,13 +564,12 @@ class ParquetWriteOpsTest extends AnyFlatSpec with Matchers {
       "message root { required binary price (DECIMAL(5,2)); }"
     )
     val group = new SimpleGroupFactory(mt).newGroup()
-    an[IllegalArgumentException] should be thrownBy {
+    an[IllegalArgumentException] should be thrownBy
       ParquetWriteOps.writeRowToGroup(
         group,
         Map("price" -> CellValue.Dec(BigDecimal("1000.00"))),
         mt
       )
-    }
   }
 
   it should "not throw for DECIMAL value at the precision boundary for BINARY encoding" in {
@@ -579,13 +578,12 @@ class ParquetWriteOpsTest extends AnyFlatSpec with Matchers {
       "message root { required binary price (DECIMAL(5,2)); }"
     )
     val group = new SimpleGroupFactory(mt).newGroup()
-    noException should be thrownBy {
+    noException should be thrownBy
       ParquetWriteOps.writeRowToGroup(
         group,
         Map("price" -> CellValue.Dec(BigDecimal("999.99"))),
         mt
       )
-    }
     val bytes = group.getBinary("price", 0).getBytes
     new java.math.BigInteger(bytes) shouldBe java.math.BigInteger.valueOf(
       99999L
@@ -600,13 +598,12 @@ class ParquetWriteOpsTest extends AnyFlatSpec with Matchers {
       "message root { required int32 amount (DECIMAL(4,2)); }"
     )
     val group = new SimpleGroupFactory(mt).newGroup()
-    an[IllegalArgumentException] should be thrownBy {
+    an[IllegalArgumentException] should be thrownBy
       ParquetWriteOps.writeRowToGroup(
         group,
         Map("amount" -> CellValue.Dec(BigDecimal("99.995"))),
         mt
       )
-    }
   }
 
   it should "throw when DECIMAL value exceeds declared precision for INT64 encoding after rounding" in {
@@ -615,13 +612,12 @@ class ParquetWriteOpsTest extends AnyFlatSpec with Matchers {
       "message root { required int64 amount (DECIMAL(4,2)); }"
     )
     val group = new SimpleGroupFactory(mt).newGroup()
-    an[IllegalArgumentException] should be thrownBy {
+    an[IllegalArgumentException] should be thrownBy
       ParquetWriteOps.writeRowToGroup(
         group,
         Map("amount" -> CellValue.Dec(BigDecimal("99.995"))),
         mt
       )
-    }
   }
 
   it should "not throw for DECIMAL value within precision for INT32 encoding" in {
@@ -630,13 +626,12 @@ class ParquetWriteOpsTest extends AnyFlatSpec with Matchers {
       "message root { required int32 amount (DECIMAL(4,2)); }"
     )
     val group = new SimpleGroupFactory(mt).newGroup()
-    noException should be thrownBy {
+    noException should be thrownBy
       ParquetWriteOps.writeRowToGroup(
         group,
         Map("amount" -> CellValue.Dec(BigDecimal("99.99"))),
         mt
       )
-    }
     group.getInteger("amount", 0) shouldBe 9999
   }
 
@@ -706,13 +701,12 @@ class ParquetWriteOpsTest extends AnyFlatSpec with Matchers {
     // Patch the precision to 39 via reflection is not easily doable; instead verify
     // that precision=38 (max valid) does NOT throw.
     val group = new SimpleGroupFactory(mt).newGroup()
-    noException should be thrownBy {
+    noException should be thrownBy
       ParquetWriteOps.writeRowToGroup(
         group,
         Map("price" -> CellValue.Dec(BigDecimal("9.99"))),
         mt
       )
-    }
   }
 
   // ── coerceForField ─────────────────────────────────────────────────────
@@ -786,7 +780,7 @@ class ParquetWriteOpsTest extends AnyFlatSpec with Matchers {
       "message root { required int32 id; optional binary s (STRING); }"
     )
     val group = new SimpleGroupFactory(mt).newGroup()
-    val ex = intercept[
+    val ex    = intercept[
       io.github.yusukensanta.parqueteer.core.models.ParqueteerError.RowSchemaMismatchException
     ] {
       ParquetWriteOps.writeRowToGroup(group, Map("s" -> CellValue.Str("x")), mt)

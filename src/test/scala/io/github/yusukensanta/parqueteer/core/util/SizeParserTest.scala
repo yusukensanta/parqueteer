@@ -83,18 +83,16 @@ class SizeParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyCh
   // ── Property-based: ByteFormatter.format → SizeParser.parse never throws ─
   // For any positive Long, the formatted string must be re-parseable.
 
-  "SizeParser.parse (property)" should "never throw for any ByteFormatter output" in {
+  "SizeParser.parse (property)" should "never throw for any ByteFormatter output" in
     forAll(Gen.posNum[Long]) { n =>
       val formatted = ByteFormatter.format(n)
       noException should be thrownBy SizeParser.parse(formatted)
     }
-  }
 
-  it should "return a non-negative result for any ByteFormatter output" in {
+  it should "return a non-negative result for any ByteFormatter output" in
     forAll(Gen.posNum[Long]) { n =>
       SizeParser.parse(ByteFormatter.format(n)) should be >= 0L
     }
-  }
 
   it should "reject fractional bytes (no unit or B unit)" in {
     an[IllegalArgumentException] should be thrownBy SizeParser.parse("1.5")

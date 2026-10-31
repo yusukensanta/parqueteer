@@ -23,7 +23,7 @@ class SchemaReconcilerTest extends AnyFlatSpec with Matchers {
   }
 
   it should "name the first mismatching file" in {
-    val a = List(f("id", "INT64"))
+    val a      = List(f("id", "INT64"))
     val result =
       SchemaReconciler.reconcile(Vector(a, a, List(f("id", "INT32"))), paths, SchemaMode.Strict)
     result.left.toOption.get shouldBe ParqueteerError.SchemaMismatch(
@@ -75,7 +75,7 @@ class SchemaReconcilerTest extends AnyFlatSpec with Matchers {
 
   "SchemaReconciler.diff" should "classify added, removed, changed and unchanged columns" in {
     def col(n: String, t: String, opt: Boolean = false) = ColumnInfo(n, t, opt, 0, 0, "")
-    val d = SchemaReconciler.diff(
+    val d                                               = SchemaReconciler.diff(
       List(col("a", "INT32"), col("b", "STRING"), col("c", "INT64")),
       List(col("a", "INT32"), col("c", "INT64", opt = true), col("d", "DOUBLE"))
     )

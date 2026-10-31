@@ -140,9 +140,7 @@ private[repositories] object FooterReader {
           pt.getTypeLength
         ),
         logicalType = Option(pt.getLogicalTypeAnnotation).map(SchemaTypeReader.describeLogicalType),
-        convertedType = Option(pt.getLogicalTypeAnnotation)
-          .flatMap(a => Option(a.toOriginalType))
-          .map(_.name),
+        convertedType = SchemaTypeReader.convertedOf(pt),
         groups = SchemaTypeReader.groupsAbove(msgSchema, col.getPath),
         fieldId = Option(pt.getId).map(_.intValue)
       )
@@ -161,16 +159,16 @@ private[repositories] object FooterReader {
     if annotation == null then primitive.name()
     else
       annotation match {
-        case _: DateLogicalTypeAnnotation => "DATE"
+        case _: DateLogicalTypeAnnotation       => "DATE"
         case ts: TimestampLogicalTypeAnnotation =>
           ts.getUnit match {
             case LogicalTypeAnnotation.TimeUnit.MICROS => "TIMESTAMP_MICROS"
             case LogicalTypeAnnotation.TimeUnit.NANOS  => "TIMESTAMP_NANOS"
             case _                                     => "TIMESTAMP_MILLIS"
           }
-        case _: StringLogicalTypeAnnotation => "STRING"
-        case _: EnumLogicalTypeAnnotation   => "STRING"
-        case _: JsonLogicalTypeAnnotation   => "STRING"
+        case _: StringLogicalTypeAnnotation    => "STRING"
+        case _: EnumLogicalTypeAnnotation      => "STRING"
+        case _: JsonLogicalTypeAnnotation      => "STRING"
         case dec: DecimalLogicalTypeAnnotation =>
           s"DECIMAL(${dec.getPrecision},${dec.getScale})"
         case _ =>

@@ -16,14 +16,14 @@ private[cli] object CliOutputFormatter {
   def formatInfoJson(file: ParquetFile, verbose: Boolean = false): String =
     file.metadata.fold(Json.obj().spaces2) { m =>
       val base = Json.obj(
-        "fileSize" -> Json.fromLong(m.fileSize),
+        "fileSize"        -> Json.fromLong(m.fileSize),
         "compressionType" -> m.compressionType
           .fold(Json.Null)(Json.fromString),
-        "rows"       -> file.schema.fold(Json.Null)(s => Json.fromLong(s.totalRowCount)),
-        "rowGroups"  -> file.schema.fold(Json.Null)(s => Json.fromLong(s.rowGroupCount)),
-        "columns"    -> file.schema.fold(Json.Null)(s => Json.fromInt(s.columns.size)),
-        "createdAt"  -> m.createdAt.fold(Json.Null)(t => Json.fromString(t.toString)),
-        "modifiedAt" -> m.modifiedAt.fold(Json.Null)(t => Json.fromString(t.toString)),
+        "rows"             -> file.schema.fold(Json.Null)(s => Json.fromLong(s.totalRowCount)),
+        "rowGroups"        -> file.schema.fold(Json.Null)(s => Json.fromLong(s.rowGroupCount)),
+        "columns"          -> file.schema.fold(Json.Null)(s => Json.fromInt(s.columns.size)),
+        "createdAt"        -> m.createdAt.fold(Json.Null)(t => Json.fromString(t.toString)),
+        "modifiedAt"       -> m.modifiedAt.fold(Json.Null)(t => Json.fromString(t.toString)),
         "compressionRatio" -> m.compressionRatio
           .fold(Json.Null)(Json.fromDoubleOrNull),
         "avgRowGroupSizeBytes" -> m.avgRowGroupSizeBytes
@@ -54,7 +54,7 @@ private[cli] object CliOutputFormatter {
   def formatRowGroupsTable(rowGroups: List[RowGroupInfo]): String = {
     val header =
       f"${"#"}%5s ${"Rows"}%12s ${"Compressed"}%14s ${"Uncompressed"}%14s"
-    val sep = "-" * header.length
+    val sep  = "-" * header.length
     val rows = rowGroups.map { rg =>
       f"${rg.index}%5d ${rg.rowCount}%12d ${formatBytesForDisplay(rg.compressedBytes)}%14s ${formatBytesForDisplay(rg.uncompressedBytes)}%14s"
     }
@@ -82,7 +82,7 @@ private[cli] object CliOutputFormatter {
         .obj(
           "totalRowCount" -> Json.fromLong(s.totalRowCount),
           "rowGroupCount" -> Json.fromLong(s.rowGroupCount),
-          "columns" -> Json.fromValues(s.columns.map { c =>
+          "columns"       -> Json.fromValues(s.columns.map { c =>
             Json.fromFields(
               List(
                 "name"      -> Json.fromString(c.name),
@@ -106,7 +106,7 @@ private[cli] object CliOutputFormatter {
     sb.append(header + "\n")
     sb.append("-" * header.length + "\n")
     stats.columns.foreach { col =>
-      val nulls = if col.nullCount < 0 then "n/a" else col.nullCount.toString
+      val nulls   = if col.nullCount < 0 then "n/a" else col.nullCount.toString
       val nullPct =
         if col.nullCount < 0 || stats.totalRows == 0 then "n/a"
         else f"${col.nullCount.toDouble / stats.totalRows * 100}%.1f%%"
@@ -124,7 +124,7 @@ private[cli] object CliOutputFormatter {
       .obj(
         "totalRows"     -> Json.fromLong(stats.totalRows),
         "rowGroupCount" -> Json.fromLong(stats.rowGroupCount),
-        "columns" -> Json.fromValues(stats.columns.map { col =>
+        "columns"       -> Json.fromValues(stats.columns.map { col =>
           val nullPct =
             if col.nullCount < 0 || stats.totalRows == 0 then Json.Null
             else
@@ -132,8 +132,8 @@ private[cli] object CliOutputFormatter {
                 col.nullCount.toDouble / stats.totalRows * 100
               )
           Json.obj(
-            "name"     -> Json.fromString(col.name),
-            "dataType" -> Json.fromString(col.dataType),
+            "name"      -> Json.fromString(col.name),
+            "dataType"  -> Json.fromString(col.dataType),
             "nullCount" -> (if col.nullCount < 0 then Json.Null
                             else Json.fromLong(col.nullCount)),
             "nullPercent" -> nullPct,
@@ -192,7 +192,7 @@ private[cli] object CliOutputFormatter {
         "identical" -> Json.fromBoolean(diff.identical),
         "added"     -> Json.fromValues(diff.added.map(colJson)),
         "removed"   -> Json.fromValues(diff.removed.map(colJson)),
-        "changed" -> Json.fromValues(diff.changed.map { c =>
+        "changed"   -> Json.fromValues(diff.changed.map { c =>
           Json.obj(
             "name"          -> Json.fromString(c.name),
             "from_type"     -> Json.fromString(c.fromType),

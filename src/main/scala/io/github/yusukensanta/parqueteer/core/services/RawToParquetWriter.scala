@@ -25,7 +25,7 @@ private[services] class RawToParquetWriter(
   ): Either[ParqueteerError, Unit] =
     for {
       location <- parseLocation(path)
-      _ <- repository
+      _        <- repository
         .writeContent(location, data, schema, writeConfig)
         .toParqueteerError
     } yield ()
@@ -88,7 +88,7 @@ private[services] class RawToParquetWriter(
       writeConfig: WriteConfig
   ): Either[ParqueteerError, Option[ParquetSchema]] =
     fields match {
-      case None => Right(None)
+      case None     => Right(None)
       case Some(fs) =>
         val schema = buildExplicitSchema(fs, writeConfig.compressionType.codecName)
         repository

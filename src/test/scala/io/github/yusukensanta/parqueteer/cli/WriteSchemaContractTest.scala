@@ -191,7 +191,7 @@ class WriteSchemaContractTest extends AnyFlatSpec with Matchers {
     val dir      = tempDir()
     val contract = file(dir, "c.json", this.contract)
     val out      = new ByteArrayOutputStream()
-    val code = Console.withOut(new PrintStream(out)) {
+    val code     = Console.withOut(new PrintStream(out)) {
       WriteCommands.executeWrite(
         service,
         WriteCommand(

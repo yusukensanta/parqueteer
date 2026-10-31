@@ -24,7 +24,7 @@ private[repositories] object PageInspector {
       val pageCount =
         offset.map(_.getPageCount).orElse(column.map(_.getNullPages.size)).getOrElse(0)
       val pages = (0 until pageCount).toList.map { i =>
-        val isNull = column.map(_.getNullPages.get(i).booleanValue)
+        val isNull     = column.map(_.getNullPages.get(i).booleanValue)
         val (min, max) = column match {
           case Some(ci) if !isNull.contains(true) =>
             typedMinMax(chunk, ci.getMinValues.get(i), ci.getMaxValues.get(i), nullCount(ci, i))

@@ -172,11 +172,10 @@ class CredentialRedactorTest extends AnyFlatSpec with Matchers with ScalaCheckPr
     )
     .map(_.mkString)
 
-  "CredentialRedactor.redact (property)" should "leave credential-free strings unchanged" in {
+  "CredentialRedactor.redact (property)" should "leave credential-free strings unchanged" in
     forAll(safeStr) { s =>
       CredentialRedactor.redact(s) shouldBe s
     }
-  }
 
   it should "always redact the secret portion of an Authorization header" in {
     val secretGen = Gen.listOfN(16, Gen.alphaNumChar).map(_.mkString)

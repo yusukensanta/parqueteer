@@ -87,7 +87,7 @@ private[cli] object CommandExecutor {
 
       case cmd: MergeCommand =>
         resolveAllGlobs(service, cmd.inputPaths) match {
-          case Left(error) => reportError("Failed to merge", globalOptions)(error)
+          case Left(error)          => reportError("Failed to merge", globalOptions)(error)
           case Right(expandedPaths) =>
             executeMerge(service, cmd.copy(inputPaths = expandedPaths), globalOptions)
         }

@@ -41,9 +41,8 @@ class InputFormatTest extends AnyFlatSpec with Matchers {
     InputFormat.Ltsv.name shouldBe "ltsv"
   }
 
-  it should "round-trip with fromString for all variants" in {
+  it should "round-trip with fromString for all variants" in
     InputFormat.values.foreach(fmt => InputFormat.fromString(fmt.name) shouldBe Some(fmt))
-  }
 
   "InputFormat.isStreamable" should "be false only for JSON arrays" in {
     InputFormat.values.filterNot(_.isStreamable).toList shouldBe List(InputFormat.Json)

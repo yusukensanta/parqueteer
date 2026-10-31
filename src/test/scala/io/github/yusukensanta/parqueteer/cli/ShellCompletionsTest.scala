@@ -117,7 +117,7 @@ class ShellCompletionsTest extends AnyFlatSpec with Matchers {
   it should "offer every enum value the parser accepts" in {
     for {
       (shell, script) <- scripts
-      values <- List(
+      values          <- List(
         CliSpec.Choices.formats,
         CliSpec.Choices.compressions,
         CliSpec.Choices.inputFormats,

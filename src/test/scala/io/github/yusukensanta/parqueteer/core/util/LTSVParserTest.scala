@@ -59,15 +59,13 @@ class LTSVParserTest extends AnyFlatSpec with Matchers {
   }
 
   it should "throw IllegalArgumentException for a field without colon" in {
-    an[IllegalArgumentException] should be thrownBy {
+    an[IllegalArgumentException] should be thrownBy
       LTSVParser.parse("nocolon\n")
-    }
   }
 
   it should "throw IllegalArgumentException for invalid label characters" in {
-    an[IllegalArgumentException] should be thrownBy {
+    an[IllegalArgumentException] should be thrownBy
       LTSVParser.parse("bad label:value\n")
-    }
   }
 
   it should "allow records with different labels (self-describing)" in {

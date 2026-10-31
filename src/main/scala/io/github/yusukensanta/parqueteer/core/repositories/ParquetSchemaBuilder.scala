@@ -14,7 +14,7 @@ private[repositories] object ParquetSchemaBuilder {
   ): MessageType = {
     val columnSet   = columns.toSet
     val schemaNames = fileSchema.getFields.asScala.map(_.getName).toSet
-    val fields = fileSchema.getFields.asScala
+    val fields      = fileSchema.getFields.asScala
       .filter(f => columnSet.contains(f.getName))
       .toList
     if fields.isEmpty then {
@@ -141,7 +141,7 @@ private[repositories] object ParquetSchemaBuilder {
 
     val builder = Types.buildMessage()
     seenKeys.toList.foreach { key =>
-      val rank = rankByKey.getOrElse(key, TypeRank.String)
+      val rank                            = rankByKey.getOrElse(key, TypeRank.String)
       val (primitive, annotation, length) =
         if rank == TypeRank.Decimal then {
           val (maxScale, maxIntDigits) =
@@ -196,20 +196,20 @@ private[repositories] object ParquetSchemaBuilder {
       dataType: String
   ): (PrimitiveTypeName, Option[LogicalTypeAnnotation], Option[Int]) =
     dataType.toUpperCase match {
-      case "INT32" | "INT"  => (PrimitiveTypeName.INT32, None, None)
-      case "INT64" | "LONG" => (PrimitiveTypeName.INT64, None, None)
-      case "DOUBLE"         => (PrimitiveTypeName.DOUBLE, None, None)
-      case "FLOAT"          => (PrimitiveTypeName.FLOAT, None, None)
-      case "BOOLEAN"        => (PrimitiveTypeName.BOOLEAN, None, None)
-      case "DATE"           => (PrimitiveTypeName.INT32, Some(dateAnnotation), None)
+      case "INT32" | "INT"                  => (PrimitiveTypeName.INT32, None, None)
+      case "INT64" | "LONG"                 => (PrimitiveTypeName.INT64, None, None)
+      case "DOUBLE"                         => (PrimitiveTypeName.DOUBLE, None, None)
+      case "FLOAT"                          => (PrimitiveTypeName.FLOAT, None, None)
+      case "BOOLEAN"                        => (PrimitiveTypeName.BOOLEAN, None, None)
+      case "DATE"                           => (PrimitiveTypeName.INT32, Some(dateAnnotation), None)
       case "TIMESTAMP" | "TIMESTAMP_MILLIS" =>
         (PrimitiveTypeName.INT64, Some(timestampMillisAnnotation), None)
       case "TIMESTAMP_MICROS" =>
         (PrimitiveTypeName.INT64, Some(timestampMicrosAnnotation), None)
       case "TIMESTAMP_NANOS" =>
         (PrimitiveTypeName.INT64, Some(timestampNanosAnnotation), None)
-      case "STRING" => (PrimitiveTypeName.BINARY, Some(stringAnnotation), None)
-      case "BINARY" => (PrimitiveTypeName.BINARY, None, None)
+      case "STRING"                     => (PrimitiveTypeName.BINARY, Some(stringAnnotation), None)
+      case "BINARY"                     => (PrimitiveTypeName.BINARY, None, None)
       case "INT96" | "TIMESTAMP(INT96)" =>
         throw new IllegalArgumentException(
           "INT96 is deprecated in the Parquet spec and not supported for writing. " +
@@ -328,13 +328,13 @@ private[repositories] object ParquetSchemaBuilder {
   private def rankToParquetType(
       rank: TypeRank
   ): (PrimitiveTypeName, Option[LogicalTypeAnnotation]) = rank match {
-    case TypeRank.Int     => (PrimitiveTypeName.INT32, None)
-    case TypeRank.Long    => (PrimitiveTypeName.INT64, None)
-    case TypeRank.Float   => (PrimitiveTypeName.FLOAT, None)
-    case TypeRank.Double  => (PrimitiveTypeName.DOUBLE, None)
-    case TypeRank.Decimal => (PrimitiveTypeName.BINARY, Some(decimalAnnotation))
-    case TypeRank.Boolean => (PrimitiveTypeName.BOOLEAN, None)
-    case TypeRank.Date    => (PrimitiveTypeName.INT32, Some(dateAnnotation))
+    case TypeRank.Int       => (PrimitiveTypeName.INT32, None)
+    case TypeRank.Long      => (PrimitiveTypeName.INT64, None)
+    case TypeRank.Float     => (PrimitiveTypeName.FLOAT, None)
+    case TypeRank.Double    => (PrimitiveTypeName.DOUBLE, None)
+    case TypeRank.Decimal   => (PrimitiveTypeName.BINARY, Some(decimalAnnotation))
+    case TypeRank.Boolean   => (PrimitiveTypeName.BOOLEAN, None)
+    case TypeRank.Date      => (PrimitiveTypeName.INT32, Some(dateAnnotation))
     case TypeRank.Timestamp =>
       (PrimitiveTypeName.INT64, Some(timestampMillisAnnotation))
     case TypeRank.String => (PrimitiveTypeName.BINARY, Some(stringAnnotation))

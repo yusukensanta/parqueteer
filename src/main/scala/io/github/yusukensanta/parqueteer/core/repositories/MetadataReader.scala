@@ -93,7 +93,7 @@ private[repositories] object MetadataReader {
       chunk: ColumnChunkMetaData,
       rawChunk: Option[format.ColumnChunk]
   ): ColumnChunkDetail = {
-    val stats = Option(chunk.getStatistics)
+    val stats                = Option(chunk.getStatistics)
     val (minValue, maxValue) = stats
       .filter(s => !s.isEmpty && s.hasNonNullValue)
       .map(s =>

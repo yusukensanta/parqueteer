@@ -331,7 +331,7 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
     repo.writeContent(loc, sampleData, None).isSuccess shouldBe true
 
     val sequential = repo.readContent(ParquetFile(loc), ReadConfig()).get
-    val parallel =
+    val parallel   =
       repo.readContent(ParquetFile(loc), ReadConfig(parallelism = 4)).get
 
     parallel.rows.map(_("name")).toSet shouldBe sequential.rows
@@ -341,7 +341,7 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
   }
 
   it should "read multiple row groups in parallel and return all rows" taggedAs IntegrationTest in {
-    val loc = LocalPath(tempFile().getAbsolutePath)
+    val loc      = LocalPath(tempFile().getAbsolutePath)
     val manyRows = (1 to 30)
       .map(i =>
         Map[String, CellValue](
@@ -363,7 +363,7 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
   }
 
   it should "respect maxRows limit in parallel mode" taggedAs IntegrationTest in {
-    val loc = LocalPath(tempFile().getAbsolutePath)
+    val loc      = LocalPath(tempFile().getAbsolutePath)
     val manyRows = (1 to 20)
       .map(i =>
         Map[String, CellValue](
@@ -386,7 +386,7 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
   }
 
   it should "return exactly maxRows rows when parallel + maxRows spans fewer row groups than total" taggedAs IntegrationTest in {
-    val loc = LocalPath(tempFile().getAbsolutePath)
+    val loc  = LocalPath(tempFile().getAbsolutePath)
     val rows = (1 to 100)
       .map(i => Map[String, CellValue]("id" -> CellValue.I64(i.toLong)))
       .toList
@@ -403,7 +403,7 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
   }
 
   it should "project columns in parallel mode" taggedAs IntegrationTest in {
-    val loc = LocalPath(tempFile().getAbsolutePath)
+    val loc      = LocalPath(tempFile().getAbsolutePath)
     val manyRows = (1 to 10)
       .map(i =>
         Map[String, CellValue](
@@ -640,8 +640,8 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
   }
 
   it should "write and read back TIMESTAMP (Instant) values as Instant" taggedAs IntegrationTest in {
-    val ts1 = java.time.Instant.parse("2024-01-01T08:00:00Z")
-    val ts2 = java.time.Instant.parse("2024-06-15T23:59:59Z")
+    val ts1  = java.time.Instant.parse("2024-01-01T08:00:00Z")
+    val ts2  = java.time.Instant.parse("2024-06-15T23:59:59Z")
     val data = List(
       Map[String, CellValue](
         "event" -> CellValue.Str("login"),
@@ -794,7 +794,7 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
       Map[String, CellValue]("amount" -> CellValue.Dec(BigDecimal("-9.99"))),
       Map[String, CellValue]("amount" -> CellValue.Dec(BigDecimal("1000.00")))
     )
-    val loc = LocalPath(tempFile().getAbsolutePath)
+    val loc    = LocalPath(tempFile().getAbsolutePath)
     val schema = io.github.yusukensanta.parqueteer.core.models.ParquetSchema(
       columns = List(
         io.github.yusukensanta.parqueteer.core.models.ColumnInfo(
@@ -833,7 +833,7 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
   }
 
   it should "spot-check (deep=false default) a multi-row-group file with no issues" taggedAs IntegrationTest in {
-    val loc = LocalPath(tempFile().getAbsolutePath)
+    val loc  = LocalPath(tempFile().getAbsolutePath)
     val rows = (1 to 5)
       .map(i => Map[String, CellValue]("id" -> CellValue.I64(i.toLong)))
       .toList
@@ -847,7 +847,7 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
   }
 
   it should "deep-validate a multi-row-group file with no issues" taggedAs IntegrationTest in {
-    val loc = LocalPath(tempFile().getAbsolutePath)
+    val loc  = LocalPath(tempFile().getAbsolutePath)
     val rows = (1 to 5)
       .map(i => Map[String, CellValue]("id" -> CellValue.I64(i.toLong)))
       .toList
@@ -864,7 +864,7 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
   // indices {0, 2, 3} and skips index 1. If skipNextRowGroup throws it must
   // be collected into issues (not escape as Failure).
   it should "spot-check a 4-row-group file collecting any skipNextRowGroup failure as an issue" taggedAs IntegrationTest in {
-    val loc = LocalPath(tempFile().getAbsolutePath)
+    val loc  = LocalPath(tempFile().getAbsolutePath)
     val rows = (1 to 4)
       .map(i => Map[String, CellValue]("id" -> CellValue.I64(i.toLong)))
       .toList
@@ -887,7 +887,7 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
       rowGroupCount = 0L,
       totalRowCount = 0L
     )
-    val loc = LocalPath(tempFile().getAbsolutePath)
+    val loc    = LocalPath(tempFile().getAbsolutePath)
     val result = repo.writeContentStream(loc, schema) { write =>
       write(
         Map(
@@ -968,7 +968,7 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
     val f       = tempFile()
     val conf    = new org.apache.hadoop.conf.Configuration()
     val factory = new SimpleGroupFactory(microsSchema)
-    val writer = ExampleParquetWriter
+    val writer  = ExampleParquetWriter
       .builder(new org.apache.hadoop.fs.Path(f.getAbsolutePath))
       .withType(microsSchema)
       .withConf(conf)
@@ -1138,7 +1138,7 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
   }
 
   it should "parallel readContent with maxRows smaller than result set returns exactly maxRows rows" taggedAs IntegrationTest in {
-    val loc = LocalPath(tempFile().getAbsolutePath)
+    val loc  = LocalPath(tempFile().getAbsolutePath)
     val rows = (1 to 20)
       .map(i => Map[String, CellValue]("n" -> CellValue.I64(i.toLong)))
       .toList
@@ -1197,7 +1197,7 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
     import org.apache.hadoop.fs.Path as HadoopPath
     import org.apache.hadoop.conf.Configuration
 
-    val loc = LocalPath(tempFile().getAbsolutePath)
+    val loc    = LocalPath(tempFile().getAbsolutePath)
     val schema = MessageTypeParser.parseMessageType(
       """message test {
         |  required int64 id;
@@ -1302,7 +1302,7 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
   }
 
   it should "round-trip a DECIMAL column through the INT64 tier (precision 10-18)" taggedAs IntegrationTest in {
-    val loc = LocalPath(tempFile().getAbsolutePath)
+    val loc  = LocalPath(tempFile().getAbsolutePath)
     val data = List(
       Map(
         "amount" -> CellValue.Dec(BigDecimal("123456789012.3456"))
@@ -1336,7 +1336,7 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
 
   it should "round-trip a negative DECIMAL value through the FIXED_LEN_BYTE_ARRAY tier" taggedAs IntegrationTest in {
     // Exercises sign-extension padding on the negative side, not just zero-padding.
-    val loc = LocalPath(tempFile().getAbsolutePath)
+    val loc  = LocalPath(tempFile().getAbsolutePath)
     val data = List(
       Map(
         "total" -> CellValue.Dec(BigDecimal("-12345678901234567890.12"))
