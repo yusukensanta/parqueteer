@@ -3,13 +3,10 @@ name: CI
 on:
   push:
     branches: [main]
+  # No paths filter: the build jobs are required status checks on main, so they
+  # must report on every PR (including docs-only ones) or the PR can never merge.
   pull_request:
     branches: [main]
-    paths:
-      - '**/*.scala'
-      - '**/*.sbt'
-      - 'project/**'
-      - '.github/workflows/**'
 
 permissions:
   contents: read
