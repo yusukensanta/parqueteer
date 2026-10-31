@@ -1,5 +1,6 @@
 package io.github.yusukensanta.parqueteer.core.repositories
 
+import io.github.yusukensanta.parqueteer.cloud.AzureTokenException
 import io.github.yusukensanta.parqueteer.core.models.*
 import io.github.yusukensanta.parqueteer.core.models.ParqueteerError.CloudAuthException
 import org.apache.hadoop.conf.Configuration
@@ -44,5 +45,53 @@ class HadoopConfigProviderTest extends AnyFlatSpec with Matchers {
     )
     result.failed.get shouldBe a[CloudAuthException]
     result.failed.get.asInstanceOf[CloudAuthException].provider shouldBe "S3"
+  }
+
+  it should "report a nested Azure token failure as a CloudAuthException with its own message" in {
+    val tokenFailure =
+      new AzureTokenException("Could not get an Azure access token. Run `az login`", null)
+    val wrapped = new java.io.IOException(
+      "Invalid configuration value detected for fs.azure.account.hns.enabled",
+      new RuntimeException("abfs wrapper", tokenFailure)
+    )
+    val result =
+      provider().withConfig(AzureLocation("acct", "ctr", "x.parquet"))(_ => Failure(wrapped))
+
+    val err = result.failed.get.asInstanceOf[CloudAuthException]
+    err.provider shouldBe "Azure"
+    err.getMessage should include("az login")
+    err.getMessage should not include "hns.enabled"
+  }
+
+  it should "recover the token failure ABFS flattened into an HttpException message" in {
+    val flattened = new java.io.IOException(
+      "HTTP Error -1CustomTokenProvider getAccessToken threw " +
+        "io.github.yusukensanta.parqueteer.cloud.AzureTokenException : " +
+        "Could not get an Azure access token: no session. Run `az login`."
+    )
+    val wrapped = new java.io.IOException(
+      "Invalid configuration value detected for fs.azure.account.hns.enabled",
+      new RuntimeException("Status code: -1", flattened)
+    )
+    val result =
+      provider().withConfig(AzureLocation("acct", "ctr", "x.parquet"))(_ => Failure(wrapped))
+
+    val err = result.failed.get.asInstanceOf[CloudAuthException]
+    err.getMessage shouldBe "Could not get an Azure access token: no session. Run `az login`."
+  }
+
+  it should "leave an unrelated I/O error on an Azure path untouched" in {
+    val other  = new java.io.IOException("connection reset")
+    val result =
+      provider().withConfig(AzureLocation("acct", "ctr", "x.parquet"))(_ => Failure(other))
+    result shouldBe Failure(other)
+  }
+
+  it should "not loop forever on a cyclic cause chain" in {
+    val a = new RuntimeException("a")
+    val b = new RuntimeException("b", a)
+    a.initCause(b)
+    val result = provider().withConfig(AzureLocation("acct", "ctr", "x.parquet"))(_ => Failure(a))
+    result shouldBe Failure(a)
   }
 }

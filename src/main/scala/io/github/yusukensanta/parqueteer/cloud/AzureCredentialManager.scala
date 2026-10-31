@@ -33,9 +33,12 @@ class AzureCredentialManager extends CloudCredentialManager {
 
           // Configure based on authentication method
           val authMethod =
-            env("AZURE_AUTH_METHOD").getOrElse("managed_identity")
+            env("AZURE_AUTH_METHOD").getOrElse(AzureIdentityTokenProvider.KindDefault)
 
           authMethod match {
+            case kind @ (AzureIdentityTokenProvider.KindDefault |
+                AzureIdentityTokenProvider.KindAzureCli) =>
+              configureIdentity(conf, azureLocation, kind)
             case "managed_identity" =>
               configureManagedIdentity(conf, azureLocation)
             case "service_principal" =>
@@ -59,6 +62,24 @@ class AzureCredentialManager extends CloudCredentialManager {
       case _ =>
         Failure(new IllegalArgumentException("Expected AzureLocation"))
     }
+
+  // Tokens come from azure-identity (including the `az login` session) through
+  // AzureIdentityTokenProvider, which ABFS loads for auth.type=Custom.
+  private def configureIdentity(
+      conf: Configuration,
+      location: AzureLocation,
+      kind: String
+  ): Unit = {
+    conf.set(
+      s"fs.azure.account.auth.type.${location.account}.dfs.core.windows.net",
+      "Custom"
+    )
+    conf.set(
+      s"fs.azure.account.oauth.provider.type.${location.account}.dfs.core.windows.net",
+      classOf[AzureIdentityTokenProvider].getName
+    )
+    conf.set(AzureIdentityTokenProvider.CredentialKey, kind)
+  }
 
   private def configureManagedIdentity(
       conf: Configuration,
