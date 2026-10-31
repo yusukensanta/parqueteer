@@ -24,6 +24,8 @@ private[cli] object CommandSupport {
           cause.getStackTrace.foreach(f =>
             System.err.println(s"\tat ${CredentialRedactor.redact(f.toString)}")
           )
+        case ParqueteerError.CloudAuthError(_, _, Some(detail)) =>
+          System.err.println(s"[verbose] ${CredentialRedactor.redact(detail)}")
         case _ => ()
       }
     error.exitCode

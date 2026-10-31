@@ -42,7 +42,12 @@ object ParqueteerError:
   private def redact(s: String): String =
     CredentialRedactor.redact(s)
 
-  case class CloudAuthError(provider: String, message: String) extends ParqueteerError:
+  /**
+   * `detail` is the long form (e.g. why each credential in a chain failed). It is not part of
+   * `userMessage`; `--verbose` prints it separately.
+   */
+  case class CloudAuthError(provider: String, message: String, detail: Option[String] = None)
+      extends ParqueteerError:
     val exitCode = 5
 
     val userMessage =
@@ -94,7 +99,8 @@ object ParqueteerError:
   class CloudAuthException(
       val provider: String,
       message: String,
-      cause: Throwable = null
+      cause: Throwable = null,
+      val detail: Option[String] = None
   ) extends RuntimeException(message, cause)
 
   class FilterParseException(val expression: String, message: String)
@@ -113,7 +119,7 @@ object ParqueteerError:
       t.toEither.left.map {
         case e: FilterParseException =>
           FilterParseError(e.expression, e.getMessage)
-        case e: CloudAuthException => CloudAuthError(e.provider, e.getMessage)
+        case e: CloudAuthException => CloudAuthError(e.provider, e.getMessage, e.detail)
         // RowSchemaMismatchException extends IllegalArgumentException — must precede it.
         case e: RowSchemaMismatchException =>
           ParseError(

@@ -48,8 +48,10 @@ class HadoopConfigProviderTest extends AnyFlatSpec with Matchers {
   }
 
   it should "report a nested Azure token failure as a CloudAuthException with its own message" in {
-    val tokenFailure =
-      new AzureTokenException("Could not get an Azure access token. Run `az login`", null)
+    val tokenFailure = new AzureTokenException(
+      s"Could not get an Azure access token. Run `az login`${AzureTokenException.DetailSeparator}Env: unavailable",
+      null
+    )
     val wrapped = new java.io.IOException(
       "Invalid configuration value detected for fs.azure.account.hns.enabled",
       new RuntimeException("abfs wrapper", tokenFailure)
@@ -59,15 +61,15 @@ class HadoopConfigProviderTest extends AnyFlatSpec with Matchers {
 
     val err = result.failed.get.asInstanceOf[CloudAuthException]
     err.provider shouldBe "Azure"
-    err.getMessage should include("az login")
-    err.getMessage should not include "hns.enabled"
+    err.getMessage shouldBe "Could not get an Azure access token. Run `az login`"
+    err.detail shouldBe Some("Env: unavailable")
   }
 
   it should "recover the token failure ABFS flattened into an HttpException message" in {
     val flattened = new java.io.IOException(
       "HTTP Error -1CustomTokenProvider getAccessToken threw " +
         "io.github.yusukensanta.parqueteer.cloud.AzureTokenException : " +
-        "Could not get an Azure access token: no session. Run `az login`."
+        s"Could not get an Azure access token. Run `az login`.${AzureTokenException.DetailSeparator}Env: unavailable\nCLI: run az login"
     )
     val wrapped = new java.io.IOException(
       "Invalid configuration value detected for fs.azure.account.hns.enabled",
@@ -77,7 +79,8 @@ class HadoopConfigProviderTest extends AnyFlatSpec with Matchers {
       provider().withConfig(AzureLocation("acct", "ctr", "x.parquet"))(_ => Failure(wrapped))
 
     val err = result.failed.get.asInstanceOf[CloudAuthException]
-    err.getMessage shouldBe "Could not get an Azure access token: no session. Run `az login`."
+    err.getMessage shouldBe "Could not get an Azure access token. Run `az login`."
+    err.detail shouldBe Some("Env: unavailable\nCLI: run az login")
   }
 
   it should "leave an unrelated I/O error on an Azure path untouched" in {

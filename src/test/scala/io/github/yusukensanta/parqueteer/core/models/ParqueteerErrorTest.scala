@@ -37,6 +37,13 @@ class ParqueteerErrorTest extends AnyFlatSpec with Matchers {
     result shouldBe Left(ParqueteerError.CloudAuthError("S3", "credentials expired"))
   }
 
+  it should "carry the CloudAuthException detail into CloudAuthError without printing it" in {
+    val ex  = new ParqueteerError.CloudAuthException("Azure", "short", null, Some("long detail"))
+    val err = Try[Unit](throw ex).toParqueteerError.left.toOption.get
+    err shouldBe ParqueteerError.CloudAuthError("Azure", "short", Some("long detail"))
+    err.userMessage should not include "long detail"
+  }
+
   it should "map FileNotFoundException to FileNotFound with path extraction" in {
     val ex = new java.io.FileNotFoundException("/tmp/missing.parquet (No such file or directory)")
     val result = Try[Unit](throw ex).toParqueteerError
