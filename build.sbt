@@ -113,7 +113,7 @@ lazy val root = (project in file("."))
       val slf4jVersion               = "2.0.18"
       val scalatestVersion           = "3.2.20"
       val scalamockVersion           = "7.5.5"
-      val scalatestScalacheckVersion = "3.2.18.0"
+      val scalatestScalacheckVersion = "3.2.19.0"
       val awsSdkVersion              = "2.53.3"
       val googleCloudStorageVersion  = "2.71.0"
       val azureStorageVersion        = "12.35.0"
@@ -224,7 +224,7 @@ lazy val root = (project in file("."))
         // Testing
         "org.scalatest"     %% "scalatest"       % scalatestVersion           % Test,
         "org.scalamock"     %% "scalamock"       % scalamockVersion           % Test,
-        "org.scalatestplus" %% "scalacheck-1-17" % scalatestScalacheckVersion % Test
+        "org.scalatestplus" %% "scalacheck-1-18" % scalatestScalacheckVersion % Test
       )
     },
     // Force Netty to 4.1.137.Final across all modules (pinned; free of all known CVEs).
