@@ -236,7 +236,7 @@ lazy val root = (project in file("."))
     // CVE-2026-55833, CVE-2026-56745/56746/56819, CVE-2026-59898/59899/59900/59921 fixed 4.1.136.Final.
     // Prior override covered only 7 of 19 modules; 12 modules resolved at mixed 4.1.112-4.1.133.
     dependencyOverrides ++= {
-      val nettyVersion = "4.1.139.Final"
+      val nettyVersion = "4.2.19.Final"
       Seq(
         "io.netty" % "netty-common"                       % nettyVersion,
         "io.netty" % "netty-buffer"                       % nettyVersion,
