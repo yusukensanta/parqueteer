@@ -4,32 +4,33 @@
 //> using scala "3.7.3"
 //> using dep "io.circe::circe-core:0.14.10"
 
-import io.circe._
-import io.circe.syntax._
+import io.circe.*
+import io.circe.syntax.*
 
 // ============================================
 // Example 1: WITHOUT implicit (Manual)
 // ============================================
 
 object ManualEncoders {
+
   // No 'implicit' keyword
   val anyEncoder: Encoder[Any] = Encoder.instance {
-    case null      => Json.Null
-    case s: String => Json.fromString(s)
-    case i: Int    => Json.fromInt(i)
-    case d: Double => Json.fromDouble(d).getOrElse(Json.Null)
+    case null       => Json.Null
+    case s: String  => Json.fromString(s)
+    case i: Int     => Json.fromInt(i)
+    case d: Double  => Json.fromDouble(d).getOrElse(Json.Null)
     case b: Boolean => Json.fromBoolean(b)
-    case other     => Json.fromString(other.toString)
+    case other      => Json.fromString(other.toString)
   }
 
   val mapEncoder: Encoder[Map[String, Any]] = Encoder.instance { map =>
     Json.obj(map.map { case (k, v) =>
-      k -> anyEncoder.apply(v)  // Must call anyEncoder manually
+      k -> anyEncoder.apply(v) // Must call anyEncoder manually
     }.toSeq*)
   }
 
   val listMapEncoder: Encoder[List[Map[String, Any]]] = Encoder.instance { list =>
-    Json.fromValues(list.map(mapEncoder.apply))  // Must call mapEncoder manually
+    Json.fromValues(list.map(mapEncoder.apply)) // Must call mapEncoder manually
   }
 }
 
@@ -38,19 +39,20 @@ object ManualEncoders {
 // ============================================
 
 object ImplicitEncoders {
+
   // With 'implicit' keyword
   implicit val anyEncoder: Encoder[Any] = Encoder.instance {
-    case null      => Json.Null
-    case s: String => Json.fromString(s)
-    case i: Int    => Json.fromInt(i)
-    case d: Double => Json.fromDouble(d).getOrElse(Json.Null)
+    case null       => Json.Null
+    case s: String  => Json.fromString(s)
+    case i: Int     => Json.fromInt(i)
+    case d: Double  => Json.fromDouble(d).getOrElse(Json.Null)
     case b: Boolean => Json.fromBoolean(b)
-    case other     => Json.fromString(other.toString)
+    case other      => Json.fromString(other.toString)
   }
 
   implicit val mapEncoder: Encoder[Map[String, Any]] = Encoder.instance { map =>
     Json.obj(map.map { case (k, v) =>
-      k -> anyEncoder.apply(v)  // Could also use implicitly[Encoder[Any]]
+      k -> anyEncoder.apply(v) // Could also use implicitly[Encoder[Any]]
     }.toSeq*)
   }
 
@@ -66,8 +68,8 @@ object ImplicitEncoders {
 @main def compareImplicits(): Unit = {
   // Sample data (like Parquet row data)
   val rows: List[Map[String, Any]] = List(
-    Map("name" -> "Alice", "age" -> 30, "salary" -> 75000.50),
-    Map("name" -> "Bob", "age" -> 25, "salary" -> 65000.00),
+    Map("name" -> "Alice", "age"   -> 30, "salary" -> 75000.50),
+    Map("name" -> "Bob", "age"     -> 25, "salary" -> 65000.00),
     Map("name" -> "Charlie", "age" -> 35, "salary" -> 85000.75)
   )
 
@@ -90,7 +92,7 @@ object ImplicitEncoders {
   println("=" * 60)
 
   // Import implicit encoders
-  import ImplicitEncoders._
+  import ImplicitEncoders.*
 
   // Compiler automatically finds and uses listMapEncoder
   val json2 = rows.asJson
@@ -125,7 +127,7 @@ object ImplicitEncoders {
   println("=" * 60)
   println("Verification: Both produce same output?")
   println("=" * 60)
-  println(s"json1 == json2: ${json1 == json2}")  // Should be true
+  println(s"json1 == json2: ${json1 == json2}") // Should be true
 
   // ============================================
   // Demonstration: Nested implicit resolution
@@ -161,7 +163,7 @@ object ImplicitEncoders {
 
   // WITH implicit - compiler handles it
   def processAutomatic(data: List[Map[String, Any]]): String = {
-    import ImplicitEncoders._
+    import ImplicitEncoders.*
     val json = data.asJson
     json.noSpaces
   }
@@ -201,8 +203,8 @@ object ImplicitEncoders {
 
   // Solution: Import the implicit
   {
-    import ImplicitEncoders._
-    val json = rows.asJson  // ✅ Works!
+    import ImplicitEncoders.*
+    val json = rows.asJson // ✅ Works!
     println("After import: Works perfectly")
   }
 
