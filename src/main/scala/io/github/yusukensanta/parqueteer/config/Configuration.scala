@@ -37,7 +37,6 @@ case class GCSConfig(
 
 case class AzureConfig(
     accountName: Option[String] = None,
-    authMethod: String = "managed_identity",
     bufferSize: String = "64MB"
 )
 
