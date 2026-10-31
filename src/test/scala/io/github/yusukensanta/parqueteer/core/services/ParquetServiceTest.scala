@@ -1043,8 +1043,8 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
       SchemaMode.Strict
     )
     result.isLeft shouldBe true
-    result.left.get.userMessage should include("nested")
-    result.left.get.userMessage should include("STRUCT")
+    result.swap.getOrElse(fail("expected Left")).userMessage should include("nested")
+    result.swap.getOrElse(fail("expected Left")).userMessage should include("STRUCT")
   }
 
   // ── mergeFiles compression propagation ───────────────────────────────────

@@ -140,9 +140,7 @@ private[repositories] object FooterReader {
           pt.getTypeLength
         ),
         logicalType = Option(pt.getLogicalTypeAnnotation).map(SchemaTypeReader.describeLogicalType),
-        convertedType = Option(pt.getLogicalTypeAnnotation)
-          .flatMap(a => Option(a.toOriginalType))
-          .map(_.name),
+        convertedType = SchemaTypeReader.convertedOf(pt),
         groups = SchemaTypeReader.groupsAbove(msgSchema, col.getPath),
         fieldId = Option(pt.getId).map(_.intValue)
       )

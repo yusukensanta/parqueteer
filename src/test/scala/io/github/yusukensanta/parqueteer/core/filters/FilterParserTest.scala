@@ -387,7 +387,7 @@ class FilterParserTest extends AnyFlatSpec with Matchers {
     val s      = new MessageType("test", List(groupField).asJava)
     val result = FilterParser.parseWithSchema("address IS NULL", s)
     result shouldBe a[Left[?, ?]]
-    result.left.get.message should include("nested column")
+    result.swap.getOrElse(fail("expected Left")).message should include("nested column")
   }
 
   it should "fail at parse time for IS NULL on an invalid dotted path" in {
