@@ -107,7 +107,7 @@ lazy val root = (project in file("."))
     },
     libraryDependencies ++= {
       val parquet4sVersion           = "2.23.0"
-      val circeVersion               = "0.14.16"
+      val circeVersion               = "0.14.17"
       val circeYamlV12Version        = "0.16.1"
       val scoptVersion               = "4.1.0"
       val slf4jVersion               = "2.0.18"
