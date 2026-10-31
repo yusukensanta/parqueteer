@@ -44,21 +44,7 @@ class GCSCredentialManager extends CloudCredentialManager {
           )
 
           // Authentication configuration
-          resolveCredentials() match {
-            case Success(credentialsPath) =>
-              conf.set("google.cloud.auth.service.account.enable", "true")
-              conf.set(
-                "google.cloud.auth.service.account.json.keyfile",
-                credentialsPath
-              )
-
-            case Failure(error) =>
-              conf.set("google.cloud.auth.service.account.enable", "false")
-              logger.warn(
-                "Using application default credentials: {}",
-                CredentialRedactor.redact(Option(error.getMessage).getOrElse(""))
-              )
-          }
+          applyAuth(conf, resolveCredentials())
 
           // Project ID configuration
           sys.env
@@ -98,6 +84,35 @@ class GCSCredentialManager extends CloudCredentialManager {
       case _ =>
         Failure(new IllegalArgumentException("Expected GCSLocation"))
     }
+
+  // gcs-connector 3.x+ selects the mechanism with an explicit fs.gs.auth.type;
+  // the older google.cloud.auth.service.account.* keys are ignored and the
+  // connector silently falls back to COMPUTE_ENGINE. SERVICE_ACCOUNT_JSON_KEYFILE
+  // only accepts service-account keys, so any other credential file (for example
+  // the authorized_user file written by `gcloud auth application-default login`)
+  // goes through Application Default Credentials instead.
+  private[cloud] def applyAuth(conf: Configuration, credentials: Try[String]): Unit =
+    credentials match {
+      case Success(path) if isServiceAccountKey(path) =>
+        conf.set("fs.gs.auth.type", "SERVICE_ACCOUNT_JSON_KEYFILE")
+        conf.set("fs.gs.auth.service.account.json.keyfile", path)
+
+      case Success(_) =>
+        conf.set("fs.gs.auth.type", "APPLICATION_DEFAULT")
+
+      case Failure(error) =>
+        conf.set("fs.gs.auth.type", "APPLICATION_DEFAULT")
+        logger.warn(
+          "Using application default credentials: {}",
+          CredentialRedactor.redact(Option(error.getMessage).getOrElse(""))
+        )
+    }
+
+  private val ServiceAccountType = """"type"\s*:\s*"service_account"""".r
+
+  private def isServiceAccountKey(path: String): Boolean =
+    Try(ServiceAccountType.findFirstIn(Files.readString(Paths.get(path))).isDefined)
+      .getOrElse(false)
 
   private def resolveCredentials(): Try[String] =
     CloudCredentialManager.firstSuccess(
