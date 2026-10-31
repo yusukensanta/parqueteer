@@ -13,10 +13,10 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build-and-release:
+  build:
     runs-on: ubuntu-latest
     permissions:
-      contents: write # Required for creating releases
+      contents: read
 
     outputs:
       version: ${{ steps.version.outputs.VERSION }}
@@ -153,29 +153,46 @@ jobs:
           echo "Generated checksums:"
           cat checksums.txt
 
-      - name: Prepare release artifacts
-        id: artifacts
-        env:
-          VERSION: ${{ steps.version.outputs.VERSION }}
-        run: |
-          echo "TGZ_FILE=target/universal/parqueteer-${VERSION}.tgz" >> $GITHUB_OUTPUT
-          echo "ZIP_FILE=target/universal/parqueteer-${VERSION}.zip" >> $GITHUB_OUTPUT
-          echo "CHECKSUMS=target/universal/checksums.txt" >> $GITHUB_OUTPUT
+      - name: Verify release artifacts exist
+        run: ls -lh target/universal/
 
-          # Verify files exist
-          ls -lh target/universal/
+      - name: Upload build artifacts to workflow
+        # actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: parqueteer-${{ steps.version.outputs.VERSION }}
+          path: |
+            target/universal/*.tgz
+            target/universal/*.zip
+            target/universal/checksums.txt
+          retention-days: 30
+
+  # The only job that can write repository contents; it runs no build steps.
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Required for creating releases
+
+    steps:
+      - name: Download release artifacts
+        # actions/download-artifact@v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          name: parqueteer-${{ needs.build.outputs.version }}
+          path: dist
 
       - name: Create GitHub Release
         # softprops/action-gh-release@v3.0.0
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64
         with:
           files: |
-            ${{ steps.artifacts.outputs.TGZ_FILE }}
-            ${{ steps.artifacts.outputs.ZIP_FILE }}
-            ${{ steps.artifacts.outputs.CHECKSUMS }}
+            dist/parqueteer-${{ needs.build.outputs.version }}.tgz
+            dist/parqueteer-${{ needs.build.outputs.version }}.zip
+            dist/checksums.txt
           generate_release_notes: true
           draft: false
-          prerelease: ${{ contains(steps.version.outputs.VERSION, '-alpha') || contains(steps.version.outputs.VERSION, '-beta') || contains(steps.version.outputs.VERSION, '-rc') }}
+          prerelease: ${{ contains(needs.build.outputs.version, '-alpha') || contains(needs.build.outputs.version, '-beta') || contains(needs.build.outputs.version, '-rc') }}
           body: |
             ## Installation
 
@@ -194,8 +211,8 @@ jobs:
 
             #### Linux / macOS
             ```bash
-            tar -xzf parqueteer-${{ steps.version.outputs.VERSION }}.tgz
-            cd parqueteer-${{ steps.version.outputs.VERSION }}
+            tar -xzf parqueteer-${{ needs.build.outputs.version }}.tgz
+            cd parqueteer-${{ needs.build.outputs.version }}
             ./bin/parqueteer --version
             ```
 
@@ -203,7 +220,7 @@ jobs:
             ```powershell
             # Extract the zip file
             # Then run:
-            cd parqueteer-${{ steps.version.outputs.VERSION }}
+            cd parqueteer-${{ needs.build.outputs.version }}
             bin\parqueteer.bat --version
             ```
 
@@ -214,30 +231,35 @@ jobs:
 
             For stronger verification independent of this release page (Sigstore-backed build provenance):
             ```bash
-            gh attestation verify parqueteer-${{ steps.version.outputs.VERSION }}.tgz --owner yusukensanta
+            gh attestation verify parqueteer-${{ needs.build.outputs.version }}.tgz --owner yusukensanta
             ```
 
             ## What's Changed
             <!-- Generated release notes will be appended below -->
 
-      - name: Upload build artifacts to workflow
-        # actions/upload-artifact@v7.0.1
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+  # Third-party tokens (Homebrew tap, portfolio dispatch) live here, with a
+  # read-only GITHUB_TOKEN.
+  publish:
+    needs: [build, release]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Download release artifacts
+        # actions/download-artifact@v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
-          name: parqueteer-${{ steps.version.outputs.VERSION }}
-          path: |
-            target/universal/*.tgz
-            target/universal/*.zip
-            target/universal/checksums.txt
-          retention-days: 30
+          name: parqueteer-${{ needs.build.outputs.version }}
+          path: dist
 
       - name: Update Homebrew Tap
         continue-on-error: true
         env:
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-          VERSION: ${{ steps.version.outputs.VERSION }}
+          VERSION: ${{ needs.build.outputs.version }}
         run: |
-          TGZ_SHA=$(grep "parqueteer-${VERSION}.tgz" target/universal/checksums.txt | cut -d' ' -f1)
+          TGZ_SHA=$(grep "parqueteer-${VERSION}.tgz" dist/checksums.txt | cut -d' ' -f1)
           TGZ_URL="https://github.com/yusukensanta/parqueteer/releases/download/v${VERSION}/parqueteer-${VERSION}.tgz"
 
           git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/yusukensanta/homebrew-parqueteer.git" /tmp/homebrew-tap
@@ -279,7 +301,7 @@ jobs:
         continue-on-error: true
         env:
           PORTFOLIO_DISPATCH_TOKEN: ${{ secrets.PORTFOLIO_DISPATCH_TOKEN }}
-          VERSION: ${{ steps.version.outputs.VERSION }}
+          VERSION: ${{ needs.build.outputs.version }}
         run: |
           curl -fsSL \
             -X POST \
@@ -289,12 +311,12 @@ jobs:
             https://api.github.com/repos/yusukensanta/yusukensanta.github.io/dispatches \
             -d "{\"event_type\":\"parqueteer-release\",\"client_payload\":{\"version\":\"v${VERSION}\"}}"
 
-  # Isolated from build-and-release: this job holds no repo-push or third-party
+  # Isolated from build: this job holds no repo-push or third-party
   # tokens (Homebrew tap, portfolio dispatch), so the OIDC id-token it mints for
   # Sigstore signing can't be combined with those secrets in a single compromised
   # step.
   attest:
-    needs: build-and-release
+    needs: build
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -306,7 +328,7 @@ jobs:
         # actions/download-artifact@v8.0.1
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
-          name: parqueteer-${{ needs.build-and-release.outputs.version }}
+          name: parqueteer-${{ needs.build.outputs.version }}
           path: dist
 
       - name: Generate build provenance attestation
