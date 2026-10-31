@@ -12,7 +12,7 @@ class RowPipelineTest extends AnyFlatSpec with Matchers {
   "RowPipeline.run" should "feed every row of every item to consume, in item order, sequentially" in {
     val consumed = scala.collection.mutable.ArrayBuffer.empty[Int]
     val order    = scala.collection.mutable.ArrayBuffer.empty[Int]
-    val result = RowPipeline.run(List(1, 2, 3), parallelism = 1) { (item, sink) =>
+    val result   = RowPipeline.run(List(1, 2, 3), parallelism = 1) { (item, sink) =>
       order += item
       sink(row(item))
       Right(1L)
@@ -26,7 +26,7 @@ class RowPipelineTest extends AnyFlatSpec with Matchers {
     val inFlight    = new AtomicInteger(0)
     val maxObserved = new AtomicInteger(0)
     val items       = (1 to 12).toList
-    val result = RowPipeline.run(items, parallelism = 3) { (item, sink) =>
+    val result      = RowPipeline.run(items, parallelism = 3) { (item, sink) =>
       val current = inFlight.incrementAndGet()
       maxObserved.updateAndGet(prev => prev.max(current))
       Thread.sleep(10)
@@ -51,7 +51,7 @@ class RowPipelineTest extends AnyFlatSpec with Matchers {
 
   it should "abort and return the error when one item fails, under concurrent fetch" in {
     val consumed = scala.collection.mutable.ArrayBuffer.empty[Int]
-    val result = RowPipeline.run(List(1, 2, 3), parallelism = 3) { (item, sink) =>
+    val result   = RowPipeline.run(List(1, 2, 3), parallelism = 3) { (item, sink) =>
       if item == 2 then Left("boom")
       else { sink(row(item)); Right(1L) }
     }(r => consumed.synchronized(consumed += r("id").asInstanceOf[CellValue.I64].l.toInt))
@@ -59,7 +59,7 @@ class RowPipelineTest extends AnyFlatSpec with Matchers {
   }
 
   it should "fall back to a plain sequential loop for a single item regardless of parallelism" in {
-    var ran = 0
+    var ran    = 0
     val result = RowPipeline.run(List("only"), parallelism = 8) { (_, sink) =>
       ran += 1
       sink(row(1))
@@ -72,7 +72,7 @@ class RowPipelineTest extends AnyFlatSpec with Matchers {
   it should "stay correct when a small queue capacity forces producers to backpressure" in {
     val consumed = scala.collection.mutable.ArrayBuffer.empty[Int]
     val items    = (1 to 20).toList
-    val result = RowPipeline.run(items, parallelism = 4, queueCapacity = 2) { (item, sink) =>
+    val result   = RowPipeline.run(items, parallelism = 4, queueCapacity = 2) { (item, sink) =>
       (1 to 50).foreach(_ => sink(row(item)))
       Right(50L)
     }(r => consumed.synchronized(consumed += r("id").asInstanceOf[CellValue.I64].l.toInt))

@@ -77,8 +77,8 @@ class CommandSupportTest extends CliTestSupport {
   }
 
   "reportError" should "show stack trace for verbose non-quiet" in {
-    val verboseOpts = GlobalOptions(verbose = true, quiet = false)
-    val cause       = new RuntimeException("deep cause")
+    val verboseOpts    = GlobalOptions(verbose = true, quiet = false)
+    val cause          = new RuntimeException("deep cause")
     val (code, stderr) = captureStderr {
       CommandSupport.reportError("Err", verboseOpts)(
         ParqueteerError.IOError(cause)

@@ -212,7 +212,7 @@ class HadoopParquetRepository(
   def readContent(file: ParquetFile, config: ReadConfig): Try[FileContent] =
     withHadoopConfig(file.location) { hadoopConfig =>
       val cacheKey = new HadoopPath(file.location.path).toString
-      val result = Try {
+      val result   = Try {
         val hadoopPath = new HadoopPath(file.location.path)
         val footer     = getFooter(file.location, hadoopPath, hadoopConfig)
         val fileSchema = footer.schema
@@ -222,7 +222,7 @@ class HadoopParquetRepository(
         // filter forces sequential: parquet4s evaluates predicates during
         // deserialization, not at page-selection time, so parallel reads can't
         // short-circuit and the overhead exceeds any concurrency benefit.
-        val useParallel = config.parallelism > 1 && config.filter.isEmpty
+        val useParallel               = config.parallelism > 1 && config.filter.isEmpty
         val (rows, hasMoreAfterLimit) =
           if useParallel then
             (
@@ -245,7 +245,7 @@ class HadoopParquetRepository(
               // Hold a reference to the underlying iterator so we can peek after
               // the take — reader is a ParquetIterable (Iterable), not an Iterator.
               val baseIter = reader.iterator
-              val taken = applyMaxRows(
+              val taken    = applyMaxRows(
                 new IterableOnce[RowParquetRecord] {
                   def iterator: Iterator[RowParquetRecord] = baseIter
                 },
@@ -260,7 +260,7 @@ class HadoopParquetRepository(
               (taken, peek)
             }
           }
-        val hitLimit = config.maxRows.exists(rows.size.toLong >= _)
+        val hitLimit  = config.maxRows.exists(rows.size.toLong >= _)
         val isPartial =
           if config.filter.isDefined then hitLimit && hasMoreAfterLimit
           else hitLimit && rows.size.toLong < totalRows
@@ -282,7 +282,7 @@ class HadoopParquetRepository(
   )(process: Map[String, CellValue] => Unit): Try[Long] =
     withHadoopConfig(file.location) { hadoopConfig =>
       val cacheKey = new HadoopPath(file.location.path).toString
-      val result = Try {
+      val result   = Try {
         val path4s     = Parquet4sPath(file.location.path)
         val hadoopPath = new HadoopPath(file.location.path)
         val fileSchema = getFooter(file.location, hadoopPath, hadoopConfig).schema
@@ -374,7 +374,7 @@ class HadoopParquetRepository(
   ): Try[(ParquetSchema, FileMetadata, List[RowGroupInfo])] =
     withHadoopConfig(file.location) { hadoopConfig =>
       Try {
-        val path = new HadoopPath(file.location.path)
+        val path                                   = new HadoopPath(file.location.path)
         val (fileSize, modTimeMillis, knownStatus) =
           fileSizeAndMTime(file.location, path, hadoopConfig)
         val FooterInfo(msgSchema, blocks, version, createdBy, _) =
@@ -382,7 +382,7 @@ class HadoopParquetRepository(
         val ratio        = calculateCompressionRatio(blocks)
         val parsedSchema = FooterReader.buildParquetSchema(msgSchema, blocks)
         val codecs       = parsedSchema.columns.map(_.compressionType).distinct
-        val codec =
+        val codec        =
           if codecs.isEmpty then None
           else if codecs.size == 1 then Some(codecs.head)
           else Some("MIXED")
@@ -448,7 +448,7 @@ class HadoopParquetRepository(
       // A successful (or partial) write changes the file on disk, so any cached
       // footer for this path is stale regardless of outcome — evict it.
       val cacheKey = new HadoopPath(location.path).toString
-      val result = Try {
+      val result   = Try {
         val parquetSchema = schema match {
           case Some(ps) => ParquetSchemaBuilder.buildMessageType(ps)
           case None     =>
@@ -482,7 +482,7 @@ class HadoopParquetRepository(
       // Same rationale as writeContent: the file on disk changes regardless of
       // outcome, so any cached footer for this path must be evicted.
       val cacheKey = new HadoopPath(location.path).toString
-      val result = Try {
+      val result   = Try {
         val parquetSchema = ParquetSchemaBuilder.buildMessageType(schema)
 
         var count   = 0L
@@ -615,7 +615,7 @@ class HadoopParquetRepository(
   def deleteFile(location: StorageLocation): Try[Unit] =
     withHadoopConfig(location) { hadoopConfig =>
       val cacheKey = new HadoopPath(location.path).toString
-      val result = Try {
+      val result   = Try {
         val path = new HadoopPath(location.path)
         val fs   = path.getFileSystem(hadoopConfig)
         if !fs.delete(path, false) && fs.exists(path) then
@@ -679,7 +679,7 @@ class HadoopParquetRepository(
   ): Try[ParquetMetadataReport] =
     withHadoopConfig(file.location) { hadoopConfig =>
       Try {
-        val path = new HadoopPath(file.location.path)
+        val path                                   = new HadoopPath(file.location.path)
         val (fileSize, modTimeMillis, knownStatus) =
           fileSizeAndMTime(file.location, path, hadoopConfig)
         val footer = getFooter(file.location, path, hadoopConfig, knownStatus)

@@ -9,8 +9,8 @@ class StreamingOutputTest extends CliTestSupport {
   // ── ProgressRowStreamWriter ────────────────────────────────────────────
 
   "ProgressRowStreamWriter" should "emit progress at configured interval" in {
-    val errBuf = new ByteArrayOutputStream()
-    val errPs  = new PrintStream(errBuf)
+    val errBuf   = new ByteArrayOutputStream()
+    val errPs    = new PrintStream(errBuf)
     val delegate = new io.github.yusukensanta.parqueteer.core.formatters.RowStreamWriter {
       override def writeRow(row: Map[String, CellValue]): Unit = ()
     }
@@ -25,8 +25,8 @@ class StreamingOutputTest extends CliTestSupport {
   }
 
   it should "not emit done if count below interval" in {
-    val errBuf = new ByteArrayOutputStream()
-    val errPs  = new PrintStream(errBuf)
+    val errBuf   = new ByteArrayOutputStream()
+    val errPs    = new PrintStream(errBuf)
     val delegate = new io.github.yusukensanta.parqueteer.core.formatters.RowStreamWriter {
       override def writeRow(row: Map[String, CellValue]): Unit = ()
     }
@@ -40,7 +40,7 @@ class StreamingOutputTest extends CliTestSupport {
   // ── runWithDeferredBegin ───────────────────────────────────────────────
 
   "runWithDeferredBegin" should "call begin before first row and end after all rows" in {
-    val calls = scala.collection.mutable.ListBuffer.empty[String]
+    val calls  = scala.collection.mutable.ListBuffer.empty[String]
     val writer = new io.github.yusukensanta.parqueteer.core.formatters.RowStreamWriter {
       override def begin(): Unit                               = calls += "begin"
       override def writeRow(row: Map[String, CellValue]): Unit = calls += "row"
@@ -55,7 +55,7 @@ class StreamingOutputTest extends CliTestSupport {
   }
 
   it should "call begin and end even with no rows on success" in {
-    val calls = scala.collection.mutable.ListBuffer.empty[String]
+    val calls  = scala.collection.mutable.ListBuffer.empty[String]
     val writer = new io.github.yusukensanta.parqueteer.core.formatters.RowStreamWriter {
       override def begin(): Unit                               = calls += "begin"
       override def writeRow(row: Map[String, CellValue]): Unit = calls += "row"
@@ -70,13 +70,13 @@ class StreamingOutputTest extends CliTestSupport {
   }
 
   it should "propagate read error without calling begin or end" in {
-    val calls = scala.collection.mutable.ListBuffer.empty[String]
+    val calls  = scala.collection.mutable.ListBuffer.empty[String]
     val writer = new io.github.yusukensanta.parqueteer.core.formatters.RowStreamWriter {
       override def begin(): Unit                               = calls += "begin"
       override def writeRow(row: Map[String, CellValue]): Unit = calls += "row"
       override def end(): Unit                                 = calls += "end"
     }
-    val err = ParqueteerError.FileNotFound("/x")
+    val err    = ParqueteerError.FileNotFound("/x")
     val result = StreamingOutput.runWithDeferredBegin(
       writer,
       _ => Left(err)
@@ -101,7 +101,7 @@ class StreamingOutputTest extends CliTestSupport {
   // ── runWithDeferredBeginMulti ────────────────────────────────────────────
 
   "runWithDeferredBeginMulti" should "share one begin/end lifecycle across multiple reads" in {
-    val calls = scala.collection.mutable.ListBuffer.empty[String]
+    val calls  = scala.collection.mutable.ListBuffer.empty[String]
     val writer = new io.github.yusukensanta.parqueteer.core.formatters.RowStreamWriter {
       override def begin(): Unit                               = calls += "begin"
       override def writeRow(row: Map[String, CellValue]): Unit = calls += "row"
@@ -118,7 +118,7 @@ class StreamingOutputTest extends CliTestSupport {
   }
 
   it should "stop at the first failing read and never call end without begin" in {
-    val calls = scala.collection.mutable.ListBuffer.empty[String]
+    val calls  = scala.collection.mutable.ListBuffer.empty[String]
     val writer = new io.github.yusukensanta.parqueteer.core.formatters.RowStreamWriter {
       override def begin(): Unit                               = calls += "begin"
       override def writeRow(row: Map[String, CellValue]): Unit = calls += "row"
@@ -139,7 +139,7 @@ class StreamingOutputTest extends CliTestSupport {
   }
 
   it should "call begin and end even when every read succeeds with zero rows" in {
-    val calls = scala.collection.mutable.ListBuffer.empty[String]
+    val calls  = scala.collection.mutable.ListBuffer.empty[String]
     val writer = new io.github.yusukensanta.parqueteer.core.formatters.RowStreamWriter {
       override def begin(): Unit                               = calls += "begin"
       override def writeRow(row: Map[String, CellValue]): Unit = calls += "row"
@@ -154,8 +154,8 @@ class StreamingOutputTest extends CliTestSupport {
 
   it should "keep writer.writeRow calls in read order when parallelism > 1, even if a later read finishes first" in {
     val written = scala.collection.mutable.ArrayBuffer.empty[Int]
-    val writer = new io.github.yusukensanta.parqueteer.core.formatters.RowStreamWriter {
-      override def begin(): Unit = ()
+    val writer  = new io.github.yusukensanta.parqueteer.core.formatters.RowStreamWriter {
+      override def begin(): Unit                               = ()
       override def writeRow(row: Map[String, CellValue]): Unit =
         written += row("id").asInstanceOf[CellValue.I64].l.toInt
       override def end(): Unit = ()

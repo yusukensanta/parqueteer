@@ -157,7 +157,7 @@ class MetadataFormatterTest extends AnyFlatSpec with Matchers {
         )
       )
     )
-    val base = MetadataFixtures.report
+    val base   = MetadataFixtures.report
     val report = base.copy(
       schemaTree = Some(tree),
       columns = base.columns.map(c =>

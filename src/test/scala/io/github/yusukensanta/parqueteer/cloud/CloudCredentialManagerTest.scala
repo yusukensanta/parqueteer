@@ -31,8 +31,8 @@ class CloudCredentialManagerTest extends AnyFlatSpec with Matchers {
   }
 
   "CloudCredentialManager.firstSuccess" should "aggregate all failure messages and preserve the last cause" in {
-    val err1 = new RuntimeException("strategy-1-failed")
-    val err2 = new RuntimeException("strategy-2-failed")
+    val err1   = new RuntimeException("strategy-1-failed")
+    val err2   = new RuntimeException("strategy-2-failed")
     val result = CloudCredentialManager.firstSuccess[Int](
       "No strategies worked:",
       List(() => scala.util.Failure(err1), () => scala.util.Failure(err2))
@@ -53,7 +53,7 @@ class CloudCredentialManagerTest extends AnyFlatSpec with Matchers {
 
   it should "pass profile to S3CredentialManager when provided" in {
     val location = S3Location("bucket", "key")
-    val manager =
+    val manager  =
       CloudCredentialManager.forLocation(location, profile = Some("my-profile"))
 
     manager shouldBe defined
@@ -70,7 +70,7 @@ class CloudCredentialManagerTest extends AnyFlatSpec with Matchers {
 
   it should "wire s3EndpointUrl override into S3CredentialManager" in {
     val location = S3Location("bucket", "key")
-    val manager = CloudCredentialManager.forLocation(
+    val manager  = CloudCredentialManager.forLocation(
       location,
       s3EndpointUrl = Some("http://localhost:9000")
     )
@@ -202,7 +202,7 @@ class CloudCredentialManagerTest extends AnyFlatSpec with Matchers {
 
   it should "use class name when getMessage returns null" in {
     val nullMsgErr = new NullPointerException()
-    val result = CloudCredentialManager.firstSuccess[Int](
+    val result     = CloudCredentialManager.firstSuccess[Int](
       "All failed:",
       List(() => scala.util.Failure(nullMsgErr))
     )

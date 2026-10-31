@@ -78,7 +78,9 @@ class PrettyFormatter(
         sb.append(s"  ${colorize(col.name, Cyan)}\n")
         sb.append(s"    Type: ${colorizeType(col.dataType)}\n")
         sb.append(
-          s"    Optional: ${if col.isOptional then colorize("Yes", Green) else colorize("No", Red)}\n"
+          s"    Optional: ${
+              if col.isOptional then colorize("Yes", Green) else colorize("No", Red)
+            }\n"
         )
         sb.append(
           s"    Compression: ${colorize(col.compressionType, Yellow)}\n"
@@ -130,7 +132,7 @@ class PrettyFormatter(
 
   private def colorizeType(dataType: String): String =
     dataType.toUpperCase match {
-      case t if t.contains("INT") => colorize(dataType, Blue)
+      case t if t.contains("INT")                           => colorize(dataType, Blue)
       case t if t.contains("FLOAT") || t.contains("DOUBLE") =>
         colorize(dataType, Magenta)
       case t if t.contains("STRING") || t.contains("BINARY") =>

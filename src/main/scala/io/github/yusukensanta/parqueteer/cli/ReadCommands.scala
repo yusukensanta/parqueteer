@@ -96,7 +96,7 @@ private[cli] object ReadCommands {
               case ColorMode.Auto   => isStdoutTTY
             }
             val formatter = OutputFormatter(format, useColors)
-            val output = file.content match {
+            val output    = file.content match {
               case Some(content) =>
                 formatter.formatContent(content, file.schema)
               case None => "No content available"

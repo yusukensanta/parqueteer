@@ -89,7 +89,7 @@ private[repositories] class HadoopConfigProvider(
 
   private def cacheKey(location: StorageLocation): String =
     location match {
-      case LocalPath(_) => "local"
+      case LocalPath(_)             => "local"
       case S3Location(bucket, _, r) =>
         s"s3:$bucket:${r.orElse(region).getOrElse("")}"
       case GCSLocation(bucket, _) =>

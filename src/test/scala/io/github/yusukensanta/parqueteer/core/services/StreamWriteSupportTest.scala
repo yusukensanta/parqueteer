@@ -19,7 +19,7 @@ class StreamWriteSupportTest extends CliTestSupport {
 
   it should "drop fields that are not in the target order" in {
     val names = Array("a")
-    val out = support.projectRow(
+    val out   = support.projectRow(
       Map("a" -> CellValue.I64(1L), "extra" -> CellValue.I64(2L)),
       names,
       names.zipWithIndex.toMap

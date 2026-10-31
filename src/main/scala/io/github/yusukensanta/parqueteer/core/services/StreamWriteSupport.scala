@@ -53,7 +53,7 @@ private[services] class StreamWriteSupport(repository: ParquetRepository) {
     ex match {
       case _: org.apache.hadoop.fs.FileAlreadyExistsException => true
       case _: java.nio.file.FileAlreadyExistsException        => true
-      case _ =>
+      case _                                                  =>
         Option(ex.getMessage).exists(m =>
           m.contains("already exists") || m.contains("File already exists")
         )

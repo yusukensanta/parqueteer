@@ -43,14 +43,14 @@ private[repositories] object ParquetRecordDecoder {
     }
 
   def decodeValue(value: Value): CellValue = value match {
-    case NullValue           => CellValue.Null
-    case BooleanValue(b)     => CellValue.Bool(b)
-    case IntValue(i)         => CellValue.I32(i)
-    case LongValue(l)        => CellValue.I64(l)
-    case FloatValue(f)       => CellValue.F32(f)
-    case DoubleValue(d)      => CellValue.F64(d)
-    case BinaryValue(bin)    => CellValue.Str(bin.toStringUsingUTF8)
-    case DateTimeValue(l, _) => CellValue.I64(l)
+    case NullValue                 => CellValue.Null
+    case BooleanValue(b)           => CellValue.Bool(b)
+    case IntValue(i)               => CellValue.I32(i)
+    case LongValue(l)              => CellValue.I64(l)
+    case FloatValue(f)             => CellValue.F32(f)
+    case DoubleValue(d)            => CellValue.F64(d)
+    case BinaryValue(bin)          => CellValue.Str(bin.toStringUsingUTF8)
+    case DateTimeValue(l, _)       => CellValue.I64(l)
     case DecimalValue(bigInt, fmt) =>
       CellValue.Dec(
         scala.math.BigDecimal(new java.math.BigDecimal(bigInt, fmt.scale))
@@ -371,8 +371,8 @@ private[repositories] object ParquetRecordDecoder {
             s"Column '$name' has $repCount repeated values — only the first is returned. " +
               "Repeated primitive fields are not yet fully supported."
           )
-        val fieldType   = schema.getType(i).asPrimitiveType()
-        val logicalType = Option(fieldType.getLogicalTypeAnnotation)
+        val fieldType        = schema.getType(i).asPrimitiveType()
+        val logicalType      = Option(fieldType.getLogicalTypeAnnotation)
         val value: CellValue =
           (fieldType.getPrimitiveTypeName, logicalType) match {
             case (

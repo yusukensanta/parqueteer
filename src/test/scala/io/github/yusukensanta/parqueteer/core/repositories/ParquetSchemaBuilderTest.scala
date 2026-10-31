@@ -251,11 +251,10 @@ class ParquetSchemaBuilderTest extends AnyFlatSpec with Matchers {
   }
 
   it should "throw IllegalArgumentException for unknown data type" in {
-    an[IllegalArgumentException] should be thrownBy {
+    an[IllegalArgumentException] should be thrownBy
       ParquetSchemaBuilder.buildMessageType(
         schema(columnInfo("weird", "WEIRDTYPE"))
       )
-    }
   }
 
   it should "respect REQUIRED repetition when isOptional is false" in {
@@ -298,53 +297,47 @@ class ParquetSchemaBuilderTest extends AnyFlatSpec with Matchers {
   }
 
   it should "throw for DECIMAL(p,s) where precision > 38" in {
-    an[IllegalArgumentException] should be thrownBy {
+    an[IllegalArgumentException] should be thrownBy
       ParquetSchemaBuilder.buildMessageType(
         schema(columnInfo("price", "DECIMAL(39,2)"))
       )
-    }
   }
 
   it should "throw for DECIMAL(p,s) where precision < 1" in {
-    an[IllegalArgumentException] should be thrownBy {
+    an[IllegalArgumentException] should be thrownBy
       ParquetSchemaBuilder.buildMessageType(
         schema(columnInfo("price", "DECIMAL(0,0)"))
       )
-    }
   }
 
   it should "throw for DECIMAL(p,s) where scale > precision" in {
     // scale = precision + 1 is invalid (can't have more decimal places than total digits)
-    an[IllegalArgumentException] should be thrownBy {
+    an[IllegalArgumentException] should be thrownBy
       ParquetSchemaBuilder.buildMessageType(
         schema(columnInfo("price", "DECIMAL(5,6)"))
       )
-    }
   }
 
   it should "accept DECIMAL(p,p) where scale == precision (all digits after decimal point)" in {
     // DECIMAL(5,5) represents values like 0.12345 — scale == precision is valid per Parquet spec
-    noException should be thrownBy {
+    noException should be thrownBy
       ParquetSchemaBuilder.buildMessageType(
         schema(columnInfo("price", "DECIMAL(5,5)"))
       )
-    }
   }
 
   it should "accept DECIMAL(38,10) (maximum valid precision)" in {
-    noException should be thrownBy {
+    noException should be thrownBy
       ParquetSchemaBuilder.buildMessageType(
         schema(columnInfo("price", "DECIMAL(38,10)"))
       )
-    }
   }
 
   // ── inferSchemaFromData ────────────────────────────────────────────────────
 
   "ParquetSchemaBuilder.inferSchemaFromData" should "throw on empty data" in {
-    an[IllegalArgumentException] should be thrownBy {
+    an[IllegalArgumentException] should be thrownBy
       ParquetSchemaBuilder.inferSchemaFromData(List.empty)
-    }
   }
 
   it should "infer INT32 from CellValue.I32 values" in {
@@ -737,9 +730,8 @@ class ParquetSchemaBuilderTest extends AnyFlatSpec with Matchers {
   }
 
   it should "throw on malformed DECIMAL syntax in buildMessageType" in {
-    an[IllegalArgumentException] should be thrownBy {
+    an[IllegalArgumentException] should be thrownBy
       ParquetSchemaBuilder.buildMessageType(schema(columnInfo("x", "DECIMAL")))
-    }
   }
 
   it should "preserve source insertion order (not sort alphabetically)" in {
@@ -762,17 +754,15 @@ class ParquetSchemaBuilderTest extends AnyFlatSpec with Matchers {
       BigDecimal("1" + "0" * 38 + ".99") // 39 integer digits, 2 decimal places
     )
     val data = List(Map[String, CellValue]("price" -> bigVal))
-    an[IllegalArgumentException] should be thrownBy {
+    an[IllegalArgumentException] should be thrownBy
       ParquetSchemaBuilder.inferSchemaFromData(data)
-    }
   }
 
   // ── inferSchemaFromRows ──────────────────────────────────────────────────
 
   "ParquetSchemaBuilder.inferSchemaFromRows" should "throw on an empty iterator" in {
-    an[IllegalArgumentException] should be thrownBy {
+    an[IllegalArgumentException] should be thrownBy
       ParquetSchemaBuilder.inferSchemaFromRows(Iterator.empty)
-    }
   }
 
   it should "produce the same schema as inferSchemaFromData for an equivalent iterator" in {

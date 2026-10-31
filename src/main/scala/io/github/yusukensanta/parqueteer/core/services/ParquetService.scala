@@ -50,7 +50,7 @@ class ParquetService(
       readConfig: ReadConfig = ReadConfig()
   ): Either[ParqueteerError, ParquetFile] =
     for {
-      file <- prepareRead(path, readConfig)
+      file          <- prepareRead(path, readConfig)
       schemaAndMeta <- repository
         .readFileInfo(file)
         .toParqueteerError
@@ -70,7 +70,7 @@ class ParquetService(
       readConfig: ReadConfig
   )(process: Map[String, CellValue] => Unit): Either[ParqueteerError, Long] =
     for {
-      file <- prepareRead(path, readConfig)
+      file  <- prepareRead(path, readConfig)
       count <- repository
         .streamContent(file, readConfig)(
           process
@@ -108,7 +108,7 @@ class ParquetService(
       repository
         .streamContent(ParquetFile(it.next()), perFileConfig)(process)
         .toParqueteerError match {
-        case Left(e) => error = Some(e)
+        case Left(e)  => error = Some(e)
         case Right(n) =>
           budget.consume(n)
           total += n
@@ -137,7 +137,7 @@ class ParquetService(
       for {
         location <- parseLocation(path)
         matches  <- repository.globStatus(location).toParqueteerError
-        paths <-
+        paths    <-
           if matches.isEmpty then Left(ParqueteerError.NoGlobMatch(path))
           else Right(matches.map(_.path).sorted)
       } yield paths
@@ -184,7 +184,7 @@ class ParquetService(
   ): Either[ParqueteerError, ParquetMetadataReport] =
     for {
       location <- parseLocation(path)
-      report <- repository
+      report   <- repository
         .readDetailedMetadata(ParquetFile(location), options)
         .toParqueteerError
     } yield report

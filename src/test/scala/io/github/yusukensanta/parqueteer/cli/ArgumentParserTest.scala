@@ -37,7 +37,7 @@ class ArgumentParserTest extends AnyFlatSpec with Matchers {
   }
 
   it should "parse info command correctly" in {
-    val args = Array("info", "/local/file.parquet")
+    val args   = Array("info", "/local/file.parquet")
     val result =
       OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
 
@@ -51,7 +51,7 @@ class ArgumentParserTest extends AnyFlatSpec with Matchers {
   }
 
   it should "parse info command with --format json" in {
-    val args = Array("info", "/local/file.parquet", "--format", "json")
+    val args   = Array("info", "/local/file.parquet", "--format", "json")
     val result =
       OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
 
@@ -72,7 +72,7 @@ class ArgumentParserTest extends AnyFlatSpec with Matchers {
   }
 
   it should "reject --schema flag on info (removed)" in {
-    val args = Array("info", "/local/file.parquet", "--schema")
+    val args   = Array("info", "/local/file.parquet", "--schema")
     val result =
       OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
     result shouldBe None
@@ -101,7 +101,7 @@ class ArgumentParserTest extends AnyFlatSpec with Matchers {
   }
 
   it should "parse write --dry-run flag" in {
-    val args = Array("write", "data.json", "output.parquet", "--dry-run")
+    val args   = Array("write", "data.json", "output.parquet", "--dry-run")
     val result =
       OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
 
@@ -111,7 +111,7 @@ class ArgumentParserTest extends AnyFlatSpec with Matchers {
   }
 
   it should "parse convert --dry-run flag" in {
-    val args = Array("convert", "input.parquet", "output.json", "--dry-run")
+    val args   = Array("convert", "input.parquet", "output.json", "--dry-run")
     val result =
       OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
 
@@ -121,7 +121,7 @@ class ArgumentParserTest extends AnyFlatSpec with Matchers {
   }
 
   it should "parse convert --limit flag" in {
-    val args = Array("convert", "input.parquet", "output.json", "--limit", "50")
+    val args   = Array("convert", "input.parquet", "output.json", "--limit", "50")
     val result =
       OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
 
@@ -131,7 +131,7 @@ class ArgumentParserTest extends AnyFlatSpec with Matchers {
   }
 
   it should "parse convert -n shorthand for limit" in {
-    val args = Array("convert", "input.parquet", "output.json", "-n", "10")
+    val args   = Array("convert", "input.parquet", "output.json", "-n", "10")
     val result =
       OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
 
@@ -141,7 +141,7 @@ class ArgumentParserTest extends AnyFlatSpec with Matchers {
   }
 
   it should "parse validate --verbose flag" in {
-    val args = Array("validate", "file.parquet", "--verbose")
+    val args   = Array("validate", "file.parquet", "--verbose")
     val result =
       OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
 
@@ -151,7 +151,7 @@ class ArgumentParserTest extends AnyFlatSpec with Matchers {
   }
 
   it should "default validate verbose to false" in {
-    val args = Array("validate", "file.parquet")
+    val args   = Array("validate", "file.parquet")
     val result =
       OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
 
@@ -161,7 +161,7 @@ class ArgumentParserTest extends AnyFlatSpec with Matchers {
   }
 
   it should "parse validate --deep flag" in {
-    val args = Array("validate", "file.parquet", "--deep")
+    val args   = Array("validate", "file.parquet", "--deep")
     val result =
       OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
 
@@ -171,7 +171,7 @@ class ArgumentParserTest extends AnyFlatSpec with Matchers {
   }
 
   it should "default validate deep to false" in {
-    val args = Array("validate", "file.parquet")
+    val args   = Array("validate", "file.parquet")
     val result =
       OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
 
@@ -181,21 +181,21 @@ class ArgumentParserTest extends AnyFlatSpec with Matchers {
   }
 
   it should "parse global options correctly" in {
-    val args = Array("read", "file.parquet", "--verbose")
+    val args   = Array("read", "file.parquet", "--verbose")
     val result =
       OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
 
     result shouldBe defined
     result.get.globalOptions.verbose shouldBe true
 
-    val args2 = Array("read", "file.parquet")
+    val args2   = Array("read", "file.parquet")
     val result2 =
       OParser.parse(ArgumentParser.parser, args2, ArgumentParser.Config())
     result2 shouldBe defined
   }
 
   it should "parse --quiet / -q flag" in {
-    val args = Array("read", "file.parquet", "--quiet")
+    val args   = Array("read", "file.parquet", "--quiet")
     val result =
       OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
 
@@ -204,7 +204,7 @@ class ArgumentParserTest extends AnyFlatSpec with Matchers {
   }
 
   it should "parse -q shorthand for quiet" in {
-    val args = Array("read", "file.parquet", "-q")
+    val args   = Array("read", "file.parquet", "-q")
     val result =
       OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
 
@@ -213,7 +213,7 @@ class ArgumentParserTest extends AnyFlatSpec with Matchers {
   }
 
   it should "parse --color=never" in {
-    val args = Array("read", "file.parquet", "--color", "never")
+    val args   = Array("read", "file.parquet", "--color", "never")
     val result =
       OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
 
@@ -222,7 +222,7 @@ class ArgumentParserTest extends AnyFlatSpec with Matchers {
   }
 
   it should "parse --color=always" in {
-    val args = Array("read", "file.parquet", "--color", "always")
+    val args   = Array("read", "file.parquet", "--color", "always")
     val result =
       OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
 
@@ -231,7 +231,7 @@ class ArgumentParserTest extends AnyFlatSpec with Matchers {
   }
 
   it should "default colorMode to Auto" in {
-    val args = Array("read", "file.parquet")
+    val args   = Array("read", "file.parquet")
     val result =
       OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
 
@@ -240,14 +240,14 @@ class ArgumentParserTest extends AnyFlatSpec with Matchers {
   }
 
   it should "reject --color with invalid value" in {
-    val args = Array("read", "file.parquet", "--color", "rainbow")
+    val args   = Array("read", "file.parquet", "--color", "rainbow")
     val result =
       OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
     result shouldBe None
   }
 
   it should "parse markdown output format" in {
-    val args = Array("read", "file.parquet", "--format", "markdown")
+    val args   = Array("read", "file.parquet", "--format", "markdown")
     val result =
       OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
 
@@ -258,7 +258,7 @@ class ArgumentParserTest extends AnyFlatSpec with Matchers {
   }
 
   it should "parse ndjson output format" in {
-    val args = Array("read", "file.parquet", "--format", "ndjson")
+    val args   = Array("read", "file.parquet", "--format", "ndjson")
     val result =
       OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
 
@@ -269,7 +269,7 @@ class ArgumentParserTest extends AnyFlatSpec with Matchers {
   }
 
   it should "reject unknown output format" in {
-    val args = Array("read", "file.parquet", "--format", "xml")
+    val args   = Array("read", "file.parquet", "--format", "xml")
     val result =
       OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
     result shouldBe None
@@ -312,7 +312,7 @@ class ArgumentParserTest extends AnyFlatSpec with Matchers {
   }
 
   "ArgumentParser config" should "parse config command (default: show)" in {
-    val args = Array("config")
+    val args   = Array("config")
     val result =
       OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
 
@@ -323,7 +323,7 @@ class ArgumentParserTest extends AnyFlatSpec with Matchers {
   }
 
   it should "parse config --validate flag" in {
-    val args = Array("config", "--validate")
+    val args   = Array("config", "--validate")
     val result =
       OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
 
@@ -385,7 +385,7 @@ class ArgumentParserTest extends AnyFlatSpec with Matchers {
   }
 
   it should "fail when output is not specified" in {
-    val args = Array("merge", "a.parquet", "b.parquet")
+    val args   = Array("merge", "a.parquet", "b.parquet")
     val result =
       OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
     result shouldBe None
@@ -409,7 +409,7 @@ class ArgumentParserTest extends AnyFlatSpec with Matchers {
   }
 
   "ArgumentParser schema" should "parse schema command with default format" in {
-    val args = Array("schema", "/tmp/test.parquet")
+    val args   = Array("schema", "/tmp/test.parquet")
     val result =
       OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
 
@@ -423,7 +423,7 @@ class ArgumentParserTest extends AnyFlatSpec with Matchers {
   }
 
   it should "parse schema --format json" in {
-    val args = Array("schema", "/tmp/test.parquet", "--format", "json")
+    val args   = Array("schema", "/tmp/test.parquet", "--format", "json")
     val result =
       OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
 
@@ -434,7 +434,7 @@ class ArgumentParserTest extends AnyFlatSpec with Matchers {
   }
 
   it should "parse schema diff subcommand" in {
-    val args = Array("schema", "diff", "a.parquet", "b.parquet")
+    val args   = Array("schema", "diff", "a.parquet", "b.parquet")
     val result =
       OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
 
@@ -460,7 +460,7 @@ class ArgumentParserTest extends AnyFlatSpec with Matchers {
   }
 
   "ArgumentParser error handling" should "reject unknown --format on convert" in {
-    val args = Array("convert", "in.parquet", "out.json", "--format", "xml")
+    val args   = Array("convert", "in.parquet", "out.json", "--format", "xml")
     val result =
       OParser.parse(ArgumentParser.parser, args, ArgumentParser.Config())
     result shouldBe None
@@ -753,7 +753,7 @@ class ArgumentParserTest extends AnyFlatSpec with Matchers {
       .collect { case w: WriteCommand => w.writer } shouldBe Some(WriterOptions())
   }
 
-  it should "reject an unparseable or non-positive --page-size" in {
+  it should "reject an unparseable or non-positive --page-size" in
     List("abc", "0").foreach { size =>
       OParser.parse(
         ArgumentParser.parser,
@@ -761,7 +761,6 @@ class ArgumentParserTest extends AnyFlatSpec with Matchers {
         ArgumentParser.Config()
       ) shouldBe None
     }
-  }
 
   it should "collect repeated --assert checks in order" in {
     OParser

@@ -68,7 +68,7 @@ object ArgumentParser {
         .valueName("<size>")
         .validate(x =>
           scala.util.Try(parseSize(x)).toEither match {
-            case Left(e) => failure(e.getMessage)
+            case Left(e)                                => failure(e.getMessage)
             case Right(n) if n <= 0 || n > Int.MaxValue =>
               failure(s"--page-size must be between 1B and 2GB, got $x")
             case Right(_) => success

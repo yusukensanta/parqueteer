@@ -51,7 +51,7 @@ private[cli] object MultiFileReport {
           println(s"==> $path <==")
           result match {
             case Right((text, _)) => println(text)
-            case Left(error) =>
+            case Left(error)      =>
               System.err.println(s"Error: ${CredentialRedactor.redact(error.userMessage)}")
           }
         }
@@ -88,7 +88,7 @@ private[cli] object MultiFileReport {
       )
       try {
         implicit val ec: ExecutionContext = ExecutionContext.fromExecutor(pool)
-        val futures = paths.map { p =>
+        val futures                       = paths.map { p =>
           Future(p -> renderOne(p)).recover { case NonFatal(e) =>
             p -> Left(ParqueteerError.IOError(e))
           }

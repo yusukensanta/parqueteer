@@ -39,7 +39,7 @@ class ParquetRepositoryTraitTest extends AnyFlatSpec with Matchers {
           c: WriteConfig
       )(
           feed: (Map[String, CellValue] => Unit) => Unit
-      ) = Try(???)
+      )                                                               = Try(???)
       def validateFile(f: ParquetFile, deep: Boolean)                 = Try(???)
       def readSchemaFields(f: ParquetFile)                            = Try(???)
       def deleteFile(l: StorageLocation)                              = Try(???)
@@ -57,7 +57,7 @@ class ParquetRepositoryTraitTest extends AnyFlatSpec with Matchers {
       def readContent(f: ParquetFile, c: ReadConfig) = Try(???)
       def streamContent(f: ParquetFile, c: ReadConfig)(
           p: Map[String, CellValue] => Unit
-      ) = Try(???)
+      )                                = Try(???)
       def readFileInfo(f: ParquetFile) = Try(???)
       def writeContent(
           l: StorageLocation,
@@ -69,7 +69,7 @@ class ParquetRepositoryTraitTest extends AnyFlatSpec with Matchers {
           l: StorageLocation,
           s: ParquetSchema,
           c: WriteConfig
-      )(feed: (Map[String, CellValue] => Unit) => Unit) = Try(???)
+      )(feed: (Map[String, CellValue] => Unit) => Unit)               = Try(???)
       def validateFile(f: ParquetFile, deep: Boolean)                 = Try(???)
       def readSchemaFields(f: ParquetFile)                            = Try(???)
       def deleteFile(l: StorageLocation)                              = Try(???)

@@ -34,8 +34,8 @@ class MergeIntegrationTest extends AnyFlatSpec with Matchers {
 
   private def writeTempWithSchema(schema: MessageType): String = {
     import org.apache.parquet.hadoop.example.ExampleParquetWriter
-    val f    = tempFile()
-    val conf = new org.apache.hadoop.conf.Configuration()
+    val f      = tempFile()
+    val conf   = new org.apache.hadoop.conf.Configuration()
     val writer = ExampleParquetWriter
       .builder(new org.apache.hadoop.fs.Path(f.getAbsolutePath))
       .withType(schema)
@@ -179,7 +179,7 @@ class MergeIntegrationTest extends AnyFlatSpec with Matchers {
   }
 
   it should "fail with empty input list" taggedAs MergeIntegrationTest in {
-    val out = tempFile().getAbsolutePath
+    val out    = tempFile().getAbsolutePath
     val result =
       service.mergeFiles(List.empty, out, WriteConfig(), SchemaMode.Strict)
     result.isLeft shouldBe true

@@ -37,7 +37,7 @@ class WriteCommandsTest extends CliTestSupport {
 
   // ── executeMerge ───────────────────────────────────────────────────────
 
-  "executeMerge" should "reject unwritable cloud-like but check local paths" in {
+  "executeMerge" should "reject unwritable cloud-like but check local paths" in
     WriteCommands.executeMerge(
       newService(),
       MergeCommand(
@@ -49,7 +49,6 @@ class WriteCommandsTest extends CliTestSupport {
       ),
       quietOpts
     )
-  }
 
   it should "show dry-run summary without writing" in {
     val out = new java.io.ByteArrayOutputStream()

@@ -161,16 +161,16 @@ private[repositories] object FooterReader {
     if annotation == null then primitive.name()
     else
       annotation match {
-        case _: DateLogicalTypeAnnotation => "DATE"
+        case _: DateLogicalTypeAnnotation       => "DATE"
         case ts: TimestampLogicalTypeAnnotation =>
           ts.getUnit match {
             case LogicalTypeAnnotation.TimeUnit.MICROS => "TIMESTAMP_MICROS"
             case LogicalTypeAnnotation.TimeUnit.NANOS  => "TIMESTAMP_NANOS"
             case _                                     => "TIMESTAMP_MILLIS"
           }
-        case _: StringLogicalTypeAnnotation => "STRING"
-        case _: EnumLogicalTypeAnnotation   => "STRING"
-        case _: JsonLogicalTypeAnnotation   => "STRING"
+        case _: StringLogicalTypeAnnotation    => "STRING"
+        case _: EnumLogicalTypeAnnotation      => "STRING"
+        case _: JsonLogicalTypeAnnotation      => "STRING"
         case dec: DecimalLogicalTypeAnnotation =>
           s"DECIMAL(${dec.getPrecision},${dec.getScale})"
         case _ =>

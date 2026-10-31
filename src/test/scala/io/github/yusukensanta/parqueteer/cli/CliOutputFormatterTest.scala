@@ -156,7 +156,7 @@ class CliOutputFormatterTest extends AnyFlatSpec with Matchers {
   }
 
   it should "include all metadata fields when present" in {
-    val ts = Instant.parse("2024-01-01T00:00:00Z")
+    val ts   = Instant.parse("2024-01-01T00:00:00Z")
     val meta = makeMetadata(
       fileSize = 2048L,
       version = "2.6",
@@ -198,7 +198,7 @@ class CliOutputFormatterTest extends AnyFlatSpec with Matchers {
 
   it should "include rowGroupDetails when verbose=true and rowGroups present" in {
     val meta = makeMetadata()
-    val rgs = List(
+    val rgs  = List(
       RowGroupInfo(
         0,
         rowCount = 1000L,
@@ -293,7 +293,7 @@ class CliOutputFormatterTest extends AnyFlatSpec with Matchers {
     val schema = makeSchema(List(col))
     val file   = makeParquetFile(schema = Some(schema))
     val result = CliOutputFormatter.formatSchemaJson(file)
-    val c0 = parse(result).toOption.get.asObject
+    val c0     = parse(result).toOption.get.asObject
       .get("columns")
       .get
       .asArray
@@ -376,7 +376,7 @@ class CliOutputFormatterTest extends AnyFlatSpec with Matchers {
       maxValue = Some("100.0")
     )
     val stats = makeStats(List(col), totalRows = 99L, rowGroupCount = 2L)
-    val json =
+    val json  =
       parse(CliOutputFormatter.formatStatsJson(stats)).toOption.get.asObject.get
 
     json("totalRows").get.asNumber.get.toLong.get shouldBe 99L
@@ -394,7 +394,7 @@ class CliOutputFormatterTest extends AnyFlatSpec with Matchers {
   it should "render null for missing min/max values" in {
     val col   = makeColumnStats("x", minValue = None, maxValue = None)
     val stats = makeStats(List(col))
-    val json =
+    val json  =
       parse(CliOutputFormatter.formatStatsJson(stats)).toOption.get.asObject.get
     val c0 = json("columns").get.asArray.get(0).asObject.get
     c0("minValue").get.isNull shouldBe true
@@ -425,7 +425,7 @@ class CliOutputFormatterTest extends AnyFlatSpec with Matchers {
 
   it should "list added columns with +" in {
     val added = makeColumnInfo("new_col", "INT32", isOptional = true)
-    val diff = SchemaDiff(
+    val diff  = SchemaDiff(
       added = List(added),
       removed = Nil,
       changed = Nil,
@@ -438,7 +438,7 @@ class CliOutputFormatterTest extends AnyFlatSpec with Matchers {
 
   it should "list removed columns with -" in {
     val removed = makeColumnInfo("old_col", "INT64", isOptional = false)
-    val diff = SchemaDiff(
+    val diff    = SchemaDiff(
       added = Nil,
       removed = List(removed),
       changed = Nil,
@@ -508,7 +508,7 @@ class CliOutputFormatterTest extends AnyFlatSpec with Matchers {
 
   it should "list unchanged columns with = when there are also differences" in {
     val removed = makeColumnInfo("old_col", "INT64", isOptional = false)
-    val diff = SchemaDiff(
+    val diff    = SchemaDiff(
       added = Nil,
       removed = List(removed),
       changed = Nil,
@@ -550,7 +550,7 @@ class CliOutputFormatterTest extends AnyFlatSpec with Matchers {
 
   it should "serialize added columns" in {
     val added = makeColumnInfo("new_col", "INT32", isOptional = true)
-    val diff = SchemaDiff(
+    val diff  = SchemaDiff(
       added = List(added),
       removed = Nil,
       changed = Nil,
@@ -570,7 +570,7 @@ class CliOutputFormatterTest extends AnyFlatSpec with Matchers {
 
   it should "serialize removed columns" in {
     val removed = makeColumnInfo("old_col", "BINARY", isOptional = false)
-    val diff = SchemaDiff(
+    val diff    = SchemaDiff(
       added = Nil,
       removed = List(removed),
       changed = Nil,

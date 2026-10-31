@@ -234,8 +234,8 @@ class RowStreamWriterTest extends AnyFlatSpec with Matchers {
       format: OutputFormat,
       rows: List[Map[String, CellValue]]
   ): (String, String) = {
-    val outBuf = new java.io.ByteArrayOutputStream()
-    val outPs  = new PrintStream(outBuf, true, "UTF-8")
+    val outBuf   = new java.io.ByteArrayOutputStream()
+    val outPs    = new PrintStream(outBuf, true, "UTF-8")
     val (_, err) = captureStderr {
       val w = RowStreamWriter(format, outPs)
       w.begin()

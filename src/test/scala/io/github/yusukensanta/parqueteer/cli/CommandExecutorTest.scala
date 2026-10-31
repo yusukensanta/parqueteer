@@ -124,7 +124,7 @@ class CommandExecutorTest extends CliTestSupport {
   "InfoCommand" should "print one report per matched file for a glob path" in {
     val service = new ParquetService(multiMatchRepo)
     val out     = new ByteArrayOutputStream()
-    val code = Console.withOut(new PrintStream(out)) {
+    val code    = Console.withOut(new PrintStream(out)) {
       CommandExecutor.execute(InfoCommand("/data/*.parquet"), service, GlobalOptions())
     }
     code shouldBe 0
@@ -134,7 +134,7 @@ class CommandExecutorTest extends CliTestSupport {
 
   "SchemaCommand" should "print one report per matched file for a glob path" in {
     val service = new ParquetService(multiMatchRepo)
-    val code = CommandExecutor.execute(
+    val code    = CommandExecutor.execute(
       SchemaCommand("/data/*.parquet"),
       service,
       quietOpts
@@ -154,7 +154,7 @@ class CommandExecutorTest extends CliTestSupport {
     }
     val service = new ParquetService(repo)
     val out     = new ByteArrayOutputStream()
-    val code = Console.withOut(new PrintStream(out)) {
+    val code    = Console.withOut(new PrintStream(out)) {
       CommandExecutor.execute(SchemaCommand("/data/only-x*.parquet"), service, GlobalOptions())
     }
     code shouldBe 0
@@ -164,7 +164,7 @@ class CommandExecutorTest extends CliTestSupport {
   "MetadataCommand" should "print one report per matched file for a glob path" in {
     val service = new ParquetService(multiMatchRepo)
     val out     = new ByteArrayOutputStream()
-    val code = Console.withOut(new PrintStream(out)) {
+    val code    = Console.withOut(new PrintStream(out)) {
       CommandExecutor.execute(MetadataCommand("/data/*.parquet"), service, GlobalOptions())
     }
     code shouldBe 0
@@ -174,7 +174,7 @@ class CommandExecutorTest extends CliTestSupport {
 
   "StatsCommand" should "print one report per matched file for a glob path" in {
     val service = new ParquetService(multiMatchRepo)
-    val code = CommandExecutor.execute(
+    val code    = CommandExecutor.execute(
       StatsCommand("/data/*.parquet"),
       service,
       quietOpts
@@ -184,7 +184,7 @@ class CommandExecutorTest extends CliTestSupport {
 
   "CountCommand" should "print one count per matched file for a glob path" in {
     val service = new ParquetService(multiMatchRepo)
-    val code = CommandExecutor.execute(
+    val code    = CommandExecutor.execute(
       CountCommand("/data/*.parquet"),
       service,
       quietOpts
@@ -200,7 +200,7 @@ class CommandExecutorTest extends CliTestSupport {
         Success(List(LocalPath("/data/a.parquet"), LocalPath("/data/b.parquet")))
     }
     val service = new ParquetService(repo)
-    val code = CommandExecutor.execute(
+    val code    = CommandExecutor.execute(
       ValidateCommand("/data/*.parquet"),
       service,
       quietOpts
@@ -211,7 +211,7 @@ class CommandExecutorTest extends CliTestSupport {
   it should "include per-file schema detail for --verbose on a glob matching valid files" in {
     val service = new ParquetService(multiMatchRepo)
     val out     = new ByteArrayOutputStream()
-    val code = Console.withOut(new PrintStream(out)) {
+    val code    = Console.withOut(new PrintStream(out)) {
       CommandExecutor.execute(
         ValidateCommand("/data/*.parquet", verbose = true),
         service,
@@ -251,7 +251,7 @@ class CommandExecutorTest extends CliTestSupport {
     val tmpFile = java.nio.file.Files.createTempFile("pqt-test", ".json")
     try {
       java.nio.file.Files.writeString(tmpFile, """[{"x":1}]""")
-      val out = new ByteArrayOutputStream()
+      val out  = new ByteArrayOutputStream()
       val code = Console.withOut(new PrintStream(out)) {
         CommandExecutor.execute(
           WriteCommand(tmpFile.toString, "s3://b/o.parquet", dryRun = true),
@@ -281,7 +281,7 @@ class CommandExecutorTest extends CliTestSupport {
           Success(List(LocalPath(fileA.toString), LocalPath(fileB.toString)))
       }
       val service = new ParquetService(repo)
-      val code = CommandExecutor.execute(
+      val code    = CommandExecutor.execute(
         WriteCommand("/data/*.ndjson", "s3://b/o.parquet", InputFormat.NDJson),
         service,
         GlobalOptions(quiet = true)
@@ -294,7 +294,7 @@ class CommandExecutorTest extends CliTestSupport {
   }
 
   it should "dispatch ConvertCommand with dryRun = true" in {
-    val out = new ByteArrayOutputStream()
+    val out  = new ByteArrayOutputStream()
     val code = Console.withOut(new PrintStream(out)) {
       CommandExecutor.execute(
         ConvertCommand("input.csv", "output.parquet", dryRun = true),
@@ -325,7 +325,7 @@ class CommandExecutorTest extends CliTestSupport {
     // actually guaranteed (both files genuinely read) without coupling the
     // test to fetch-ahead scheduling.
     val streamedPaths = new java.util.concurrent.ConcurrentLinkedQueue[String]()
-    val repo = new FakeParquetRepository() {
+    val repo          = new FakeParquetRepository() {
       override def globStatus(location: StorageLocation): Try[List[StorageLocation]] =
         Success(List(LocalPath("/data/a.parquet"), LocalPath("/data/b.parquet")))
       override def streamContent(file: ParquetFile, config: ReadConfig)(
@@ -336,7 +336,7 @@ class CommandExecutorTest extends CliTestSupport {
       }
     }
     val service = new ParquetService(repo)
-    val code = CommandExecutor.execute(
+    val code    = CommandExecutor.execute(
       ConvertCommand("/data/*.parquet", "/out.parquet"),
       service,
       GlobalOptions(quiet = true)
@@ -355,7 +355,7 @@ class CommandExecutorTest extends CliTestSupport {
         Success(List(LocalPath("/data/a.parquet"), LocalPath("/data/b.parquet")))
     }
     val service = new ParquetService(repo)
-    val code = CommandExecutor.execute(
+    val code    = CommandExecutor.execute(
       ConvertCommand("/data/*.parquet", tmpOut.toString),
       service,
       GlobalOptions(quiet = true)
@@ -370,7 +370,7 @@ class CommandExecutorTest extends CliTestSupport {
       override def globStatus(location: StorageLocation): Try[List[StorageLocation]] =
         Success(List(LocalPath("/data/a.json"), LocalPath("/data/b.ndjson")))
     }
-    val service = new ParquetService(repo)
+    val service     = new ParquetService(repo)
     val (code, err) = captureStderr {
       CommandExecutor.execute(
         ConvertCommand("/data/*.{json,ndjson}", "/out.parquet"),

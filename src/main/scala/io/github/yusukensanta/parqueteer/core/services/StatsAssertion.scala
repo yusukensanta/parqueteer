@@ -66,7 +66,7 @@ object StatsAssertion {
           subject  <- parseSubject(lhs)
           op       <- Op.values.find(_.symbol == opSym).toRight(s"unknown operator $opSym")
           expected <- parseValue(rhs)
-          _ <- (subject, expected) match {
+          _        <- (subject, expected) match {
             case (Subject.Rows | Subject.RowGroups | Subject.Nulls(_), Value.Text(_)) =>
               Left(s"'$lhs' is a count; compare it with a number")
             case _ => Right(())
@@ -82,7 +82,7 @@ object StatsAssertion {
     lhs match {
       case "rows"       => Right(Subject.Rows)
       case "row_groups" => Right(Subject.RowGroups)
-      case _ =>
+      case _            =>
         lhs.lastIndexOf('.') match {
           case i if i > 0 =>
             val column = lhs.substring(0, i)
@@ -90,7 +90,7 @@ object StatsAssertion {
               case "nulls" => Right(Subject.Nulls(column))
               case "min"   => Right(Subject.Min(column))
               case "max"   => Right(Subject.Max(column))
-              case other =>
+              case other   =>
                 Left(s"unknown statistic '.$other' in '$lhs' (use .nulls, .min or .max)")
             }
           case _ =>
@@ -116,8 +116,8 @@ object StatsAssertion {
     def compare(actual: Value, shown: String) = compareValues(assertion, actual, shown)
 
     assertion.subject match {
-      case Rows      => compare(Value.Num(stats.totalRows), stats.totalRows.toString)
-      case RowGroups => compare(Value.Num(stats.rowGroupCount), stats.rowGroupCount.toString)
+      case Rows        => compare(Value.Num(stats.totalRows), stats.totalRows.toString)
+      case RowGroups   => compare(Value.Num(stats.rowGroupCount), stats.rowGroupCount.toString)
       case Nulls(name) =>
         column(name).fold(noColumn(name)) { c =>
           if c.nullCount < 0 then fail(s"$name has no null-count statistics")
@@ -151,13 +151,13 @@ object StatsAssertion {
     val cmp: Either[String, Int] = (actual, assertion.expected) match {
       case (Value.Num(a), Value.Num(e))   => Right(a.compare(e))
       case (Value.Text(a), Value.Text(e)) => Right(a.compareTo(e))
-      case (Value.Text(a), Value.Num(_)) =>
+      case (Value.Text(a), Value.Num(_))  =>
         Left(s"actual value '$a' is not numeric; quote the expected value to compare as text")
       case (Value.Num(_), Value.Text(_)) => Left("cannot compare a count with text")
     }
     cmp match {
       case Left(why) => Result(assertion, ok = false, why)
-      case Right(c) =>
+      case Right(c)  =>
         Result(assertion, assertion.op.holds(c), s"actual $shown")
     }
   }
