@@ -122,7 +122,7 @@ class ConfigurationManager {
             case Right(json) =>
               json.as[AppConfig] match {
                 case Right(config) => config
-                case Left(error) =>
+                case Left(error)   =>
                   throw new RuntimeException(
                     s"Failed to parse configuration: ${CredentialRedactor.redact(error.getMessage)}",
                     error

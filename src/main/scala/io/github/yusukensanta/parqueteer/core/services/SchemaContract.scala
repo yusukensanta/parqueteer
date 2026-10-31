@@ -16,7 +16,7 @@ object SchemaContract {
 
   def parse(json: String): Either[String, List[FieldSummary]] =
     for {
-      doc <- parser.parse(json).left.map(e => s"not valid JSON: ${e.message}")
+      doc     <- parser.parse(json).left.map(e => s"not valid JSON: ${e.message}")
       columns <- doc.hcursor
         .downField("columns")
         .as[List[HCursor]]

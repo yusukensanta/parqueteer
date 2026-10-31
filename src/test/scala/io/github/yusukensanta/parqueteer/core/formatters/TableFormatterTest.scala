@@ -139,7 +139,7 @@ class TableFormatterTest extends AnyFlatSpec with Matchers {
   }
 
   it should "place Name header before Type before Optional in the header row" in {
-    val result = formatter.formatSchema(sampleSchema)
+    val result     = formatter.formatSchema(sampleSchema)
     val headerLine =
       result.split("\n").find(l => l.contains("Name") && l.contains("Type"))
     headerLine shouldBe defined

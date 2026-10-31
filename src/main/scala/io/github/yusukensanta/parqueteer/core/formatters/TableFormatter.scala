@@ -34,7 +34,7 @@ class TableFormatter extends OutputFormatter {
       // Pre-format all cell values once: calculateColumnWidths and drawRow both
       // need the formatted string, so computing it twice per cell is wasteful.
       val columnIndex = OutputFormatter.indexColumns(columns)
-      val fmtRows = rows.map { row =>
+      val fmtRows     = rows.map { row =>
         val values = OutputFormatter.projectRow(row, columnIndex, columns.length)
         values.iterator.map(v => if v == null then "null" else formatValue(v)).toList
       }
@@ -83,7 +83,7 @@ class TableFormatter extends OutputFormatter {
     sb.append("Columns:\n")
 
     val hasEncodings = schema.columns.exists(_.encodings.nonEmpty)
-    val headers =
+    val headers      =
       if hasEncodings then List("Name", "Type", "Optional", "Encoding")
       else List("Name", "Type", "Optional")
     val columnWidths =

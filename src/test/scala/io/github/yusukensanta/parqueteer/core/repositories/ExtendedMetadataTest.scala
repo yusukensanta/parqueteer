@@ -53,8 +53,8 @@ class ExtendedMetadataTest extends AnyFlatSpec with Matchers {
   }
 
   "MetadataReader.build with a raw footer" should "surface sorting columns, distinct count, exactness and encryption" in {
-    val loc = written()
-    val len = new java.io.File(loc.path).length()
+    val loc    = written()
+    val len    = new java.io.File(loc.path).length()
     val footer =
       FooterReader.readFooterInfo(new LocalInputFile(Paths.get(loc.path)).newStream(), len)
     val raw =

@@ -109,7 +109,7 @@ private[cli] object StreamingOutput {
     val endFailure: Option[Throwable] =
       if started then scala.util.Try(writer.end()).failed.toOption else None
     (pipelineResult, endFailure) match {
-      case (Right(_), Some(ex)) => Left(ParqueteerError.IOError(ex))
+      case (Right(_), Some(ex))  => Left(ParqueteerError.IOError(ex))
       case (Left(err), Some(ex)) =>
         System.err.println(
           s"[parqueteer] warning: error flushing output: ${CredentialRedactor

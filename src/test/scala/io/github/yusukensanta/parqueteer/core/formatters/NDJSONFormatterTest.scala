@@ -60,7 +60,7 @@ class NDJSONFormatterTest extends AnyFlatSpec with Matchers {
     result.split("\n", -1).init.foreach { line =>
       parse(line) match {
         case Right(_) => succeed
-        case Left(e) =>
+        case Left(e)  =>
           fail(s"Non-empty line between newlines is not valid JSON: $line — $e")
       }
     }

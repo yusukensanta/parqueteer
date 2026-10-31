@@ -42,7 +42,7 @@ object ShellCompletions {
       val prevCase =
         if valueCases.isEmpty then Nil
         else (s"""${pad}case "$$prev" in""" :: valueCases) :+ s"${pad}esac"
-      val words = (extra ++ options.map(o => s"--${o.long}")).mkString(" ")
+      val words     = (extra ++ options.map(o => s"--${o.long}")).mkString(" ")
       val wordsLine =
         Option.when(words.nonEmpty)(s"""${pad}COMPREPLY=($$(compgen -W "$words" -- "$$cur"))""")
       val positional = if path.isEmpty then None else compgen(CliSpec.argumentValues(path))
@@ -96,7 +96,7 @@ object ShellCompletions {
     }
 
     def optSpec(path: String, o: OptSpec): String = {
-      val star = if o.repeatable then "*" else ""
+      val star  = if o.repeatable then "*" else ""
       val value = o.valueName.fold("") { v =>
         s":${v.stripPrefix("<").stripSuffix(">")}:${action(CliSpec.optionValues(path, o))}"
       }
@@ -126,7 +126,7 @@ object ShellCompletions {
           s"            ${s.name})\n${arguments(s.options.map(optSpec(s.path, _)) ++ positional(s.path), "              ")} ;;"
         )
         val subChoice = s"'1:subcommand or file:(${subs.map(_.name).mkString(" ")})'"
-        val ownCase =
+        val ownCase   =
           s"            *)\n${arguments((own :+ subChoice) ++ positional(c.path), "              ")} ;;"
         s"""        ${c.name})
            |          case $${words[3]} in
@@ -189,7 +189,7 @@ object ShellCompletions {
     }
 
     def commandLines(c: CmdSpec): List[String] = {
-      val parent = c.path.split(' ').init.lastOption
+      val parent    = c.path.split(' ').init.lastOption
       val condition =
         parent.fold(s"__fish_seen_subcommand_from ${c.name}")(_ =>
           s"__fish_seen_subcommand_from ${c.name}"

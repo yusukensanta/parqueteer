@@ -40,7 +40,7 @@ object StatsComputer {
       withValues: List[Statistics[?]],
       codec: StatCodec[T]
   ): (Option[String], Option[String]) = {
-    given Ordering[T] = codec.ordering
+    given Ordering[T]                               = codec.ordering
     def values(side: Statistics[?] => Any): List[T] =
       withValues.flatMap(s => Option(side(s)).collect(codec.extract))
     (
@@ -68,7 +68,7 @@ object StatsComputer {
           case PrimitiveTypeName.DOUBLE  => StatCodec(float64, _.toString)
           case PrimitiveTypeName.BOOLEAN => StatCodec(boolean, _.toString)
           case PrimitiveTypeName.INT96 => StatCodec(int96Instant, _.toString)(using instantOrdering)
-          case _ => // BINARY, FIXED_LEN_BYTE_ARRAY
+          case _                       => // BINARY, FIXED_LEN_BYTE_ARRAY
             StatCodec(binary, _.toStringUsingUTF8)(using unsignedBinaryOrdering)
         }
     }

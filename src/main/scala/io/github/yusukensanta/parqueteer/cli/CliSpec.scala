@@ -78,8 +78,8 @@ private[cli] object CliSpec {
 
   /** Every command and subcommand, in declaration order. */
   lazy val commands: List[CmdSpec] = {
-    val cmdDefs = defs.filter(isCommand)
-    val byId    = cmdDefs.map(d => Introspect.id(d) -> d).toMap
+    val cmdDefs                                = defs.filter(isCommand)
+    val byId                                   = cmdDefs.map(d => Introspect.id(d) -> d).toMap
     def path(d: scopt.OptionDef[?, ?]): String =
       Introspect.parentId(d).flatMap(byId.get).fold(d.name)(p => s"${path(p)} ${d.name}")
     cmdDefs.map { c =>

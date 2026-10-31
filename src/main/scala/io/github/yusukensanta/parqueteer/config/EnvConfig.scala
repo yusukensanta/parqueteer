@@ -40,11 +40,11 @@ object EnvConfig {
     if env("NO_COLOR").exists(_.nonEmpty) then ColorMode.Never
     else
       env("PARQUETEER_COLOR") match {
-        case None => ColorMode.Auto
+        case None    => ColorMode.Auto
         case Some(s) =>
           ColorMode.fromString(s) match {
             case Some(mode) => mode
-            case None =>
+            case None       =>
               Warnings.emit(
                 s"PARQUETEER_COLOR=$s is not recognized (auto/always/never); ignoring"
               )

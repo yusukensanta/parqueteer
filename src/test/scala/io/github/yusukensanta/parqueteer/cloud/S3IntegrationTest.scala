@@ -146,7 +146,7 @@ class S3IntegrationTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll
     val loc = S3Location(testBucket, "roundtrip/proj.parquet")
     assertSuccess(repo.writeContent(loc, sampleData, None), "write")
 
-    val config = ReadConfig(columns = Some(List("id", "name")))
+    val config  = ReadConfig(columns = Some(List("id", "name")))
     val content =
       assertSuccess(repo.readContent(ParquetFile(loc), config), "read")
     content.rows.head.keys should contain allOf ("id", "name")

@@ -25,7 +25,7 @@ object CliApp {
     // write one line per record; unbuffered+autoflush was one syscall per row. A shutdown
     // hook flushes it on every exit path, including System.exit and uncaught exceptions.
     // stderr stays unbuffered/autoflush: it carries progress/warnings that must not lag.
-    val utf8 = java.nio.charset.StandardCharsets.UTF_8
+    val utf8    = java.nio.charset.StandardCharsets.UTF_8
     val utf8Out = new java.io.PrintStream(
       new java.io.BufferedOutputStream(
         new java.io.FileOutputStream(java.io.FileDescriptor.out),
@@ -143,7 +143,7 @@ object CliApp {
           }
           val opts         = applyAppConfig(config.globalOptions, appConfig)
           val effectiveCmd = applyAppConfigToCommand(cmd, appConfig)
-          val repository = new HadoopParquetRepository(
+          val repository   = new HadoopParquetRepository(
             profile = opts.profile,
             region = opts.region,
             s3EndpointUrl = opts.s3EndpointUrl

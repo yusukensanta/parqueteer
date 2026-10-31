@@ -18,7 +18,7 @@ private[cli] object InspectCommands {
       verbose: Boolean
   ): String = format match {
     case OutputFormat.JSON => CliOutputFormatter.formatInfoJson(file, verbose)
-    case _ =>
+    case _                 =>
       val metaOut = file.metadata match {
         case Some(metadata) => new TableFormatter().formatMetadata(metadata)
         case None           => "No metadata information available"
@@ -108,7 +108,7 @@ private[cli] object InspectCommands {
             if cmd.asserts.isEmpty then 0
             else
               service.getStats(filePath) match {
-                case Left(error) => reportError("Failed to read statistics", globalOptions)(error)
+                case Left(error)  => reportError("Failed to read statistics", globalOptions)(error)
                 case Right(stats) =>
                   val results = cmd.asserts.map(StatsAssertion.evaluate(_, stats))
                   println(formatAssertResults(results))
@@ -187,7 +187,7 @@ private[cli] object InspectCommands {
   ): String =
     format match {
       case OutputFormat.JSON => CliOutputFormatter.formatSchemaJson(file)
-      case _ =>
+      case _                 =>
         file.schema match {
           case Some(schema) if detail => new TableFormatter().formatSchemaDetail(schema)
           case Some(schema)           => new TableFormatter().formatSchema(schema)

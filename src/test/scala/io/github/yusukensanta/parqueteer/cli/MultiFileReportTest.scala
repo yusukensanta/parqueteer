@@ -134,7 +134,7 @@ class MultiFileReportTest extends CliTestSupport {
     val inFlight    = new java.util.concurrent.atomic.AtomicInteger(0)
     val maxObserved = new java.util.concurrent.atomic.AtomicInteger(0)
     val paths       = (1 to 12).map(i => s"/f$i.parquet").toList
-    val code = MultiFileReport.runMultiFileReport(
+    val code        = MultiFileReport.runMultiFileReport(
       paths,
       OutputFormat.Table,
       GlobalOptions(quiet = true, fileParallelism = 3)

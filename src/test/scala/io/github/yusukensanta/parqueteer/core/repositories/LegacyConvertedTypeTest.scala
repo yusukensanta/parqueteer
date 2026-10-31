@@ -38,7 +38,7 @@ class LegacyConvertedTypeTest extends AnyFlatSpec with Matchers {
     val footerLen =
       ByteBuffer.wrap(bytes, bytes.length - 8, 4).order(ByteOrder.LITTLE_ENDIAN).getInt
     val dataEnd = bytes.length - 8 - footerLen
-    val footer = Util.readFileMetaData(
+    val footer  = Util.readFileMetaData(
       new java.io.ByteArrayInputStream(bytes, dataEnd, footerLen)
     )
     (bytes.take(dataEnd), footer)
@@ -73,7 +73,7 @@ class LegacyConvertedTypeTest extends AnyFlatSpec with Matchers {
   "a ConvertedType-only file" should "really have no LogicalType in its footer" in {
     val file = legacyOnlyFile()
     val len  = new java.io.File(file.location.path).length()
-    val raw = FooterReader.readRawFileMetaData(
+    val raw  = FooterReader.readRawFileMetaData(
       new LocalInputFile(Paths.get(file.location.path)).newStream(),
       len
     )

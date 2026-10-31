@@ -36,7 +36,7 @@ private[repositories] object SchemaTypeReader {
           List("precision" -> d.getPrecision.toString, "scale" -> d.getScale.toString)
         )
       case _: MapKeyValueTypeAnnotation => LogicalTypeDetail("MAP_KEY_VALUE")
-      case other =>
+      case other                        =>
         LogicalTypeDetail(
           other.getClass.getSimpleName.stripSuffix("LogicalTypeAnnotation").toUpperCase
         )

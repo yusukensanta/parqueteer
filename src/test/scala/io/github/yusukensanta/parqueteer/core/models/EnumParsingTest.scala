@@ -28,11 +28,10 @@ class EnumParsingTest extends AnyFlatSpec with Matchers {
     CompressionType.fromString("bogus") shouldBe None
   }
 
-  it should "parse every codec's own lowercase name" in {
+  it should "parse every codec's own lowercase name" in
     CompressionType.values.filterNot(_ == CompressionType.Uncompressed).foreach { ct =>
       CompressionType.fromString(ct.toString.toLowerCase) shouldBe Some(ct)
     }
-  }
 
   "SchemaMode.fromString" should "parse strict and union case-insensitively" in {
     SchemaMode.fromString("strict") shouldBe Some(SchemaMode.Strict)

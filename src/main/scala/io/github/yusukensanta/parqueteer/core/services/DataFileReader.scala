@@ -26,7 +26,7 @@ private[services] object DataFileReader {
       case InputFormat.NDJson => withNdjsonRows(path, maxRows)(f)
       case InputFormat.Csv    => withCsvRows(path, maxRows)(f)
       case InputFormat.Ltsv   => withLtsvRows(path, maxRows)(f)
-      case InputFormat.Json =>
+      case InputFormat.Json   =>
         Failure(
           new IllegalArgumentException("JSON array input cannot be streamed row by row")
         )
@@ -124,9 +124,9 @@ private[services] object DataFileReader {
                 .getOrElse(CellValue.Dec(bd.setScale(0)))
             else if !isWhole && tooLargeForF64 then CellValue.Dec(bd)
             else if isWhole && (raw.contains('e') || raw.contains('E')) then {
-              val eIdx     = raw.indexWhere(c => c == 'e' || c == 'E')
-              val mantissa = raw.take(eIdx)
-              val dotIdx   = mantissa.indexOf('.')
+              val eIdx            = raw.indexWhere(c => c == 'e' || c == 'E')
+              val mantissa        = raw.take(eIdx)
+              val dotIdx          = mantissa.indexOf('.')
               val mantissaIsWhole =
                 dotIdx < 0 || mantissa.drop(dotIdx + 1).forall(_ == '0')
               if mantissaIsWhole then

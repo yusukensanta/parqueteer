@@ -53,7 +53,7 @@ class SchemaDiffTest extends AnyFlatSpec with Matchers {
 
     override def readSchemaFields(
         file: ParquetFile
-    ): Try[List[FieldSummary]] = Success(List.empty)
+    ): Try[List[FieldSummary]]                                    = Success(List.empty)
     override def deleteFile(location: StorageLocation): Try[Unit] = Success(())
 
     override def readStats(file: ParquetFile): Try[FileStats] =

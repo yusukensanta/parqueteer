@@ -56,7 +56,7 @@ object CloudCredentialManager {
     while found.isEmpty && it.hasNext do
       it.next()() match {
         case s @ Success(_) => found = Some(s)
-        case Failure(err) =>
+        case Failure(err)   =>
           failures += CredentialRedactor.redact(
             Option(err.getMessage).getOrElse(err.getClass.getName)
           )

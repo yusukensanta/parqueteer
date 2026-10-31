@@ -40,7 +40,7 @@ private[services] class MergeOperations(
         schemas        <- readAllSchemas(inputLocations)
         mergedFields   <- SchemaReconciler.reconcile(schemas, inputPaths, schemaMode)
         outputLocation <- parseLocation(outputPath)
-        count <- streamMerge(
+        count          <- streamMerge(
           inputLocations,
           inputPaths,
           mergedFields,
@@ -101,7 +101,7 @@ private[services] class MergeOperations(
       val explicitSchema                = buildExplicitSchema(mergedFields, compressionCodec = "")
       val fieldNames                    = mergedFields.map(_.name).toArray
       val nameToIndex: Map[String, Int] = fieldNames.zipWithIndex.toMap
-      val writeResult = repository
+      val writeResult                   = repository
         .writeContentStream(outputLocation, explicitSchema, writeConfig) { write =>
           // Up to `fileParallelism` input files are fetched concurrently
           // ahead of `write`, each buffered through a bounded queue — see
@@ -138,7 +138,7 @@ private[services] class MergeOperations(
     for {
       inputLocation  <- parseLocation(inputPath)
       outputLocation <- parseLocation(outputPath)
-      schemaFields <- repository
+      schemaFields   <- repository
         .readSchemaFields(ParquetFile(inputLocation))
         .toParqueteerError
       explicitSchema = buildExplicitSchema(

@@ -14,7 +14,7 @@ class EithersTest extends AnyFlatSpec with Matchers {
   }
 
   it should "stop at the first Left without evaluating later elements" in {
-    var seen = List.empty[Int]
+    var seen   = List.empty[Int]
     val result = Eithers.traverse(List(1, 2, 3)) { i =>
       seen = seen :+ i
       if i == 2 then Left(s"bad $i") else Right(i)

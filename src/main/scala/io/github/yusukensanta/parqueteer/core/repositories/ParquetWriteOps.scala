@@ -92,7 +92,7 @@ private[repositories] object ParquetWriteOps {
       case _ =>
         field.getPrimitiveTypeName match {
           case PrimitiveTypeName.BINARY | PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY => value
-          case PrimitiveTypeName.INT32 =>
+          case PrimitiveTypeName.INT32                                           =>
             value match {
               case I32(_)                 => value
               case I64(l) if l.isValidInt => I32(l.toInt)
@@ -113,7 +113,7 @@ private[repositories] object ParquetWriteOps {
             }
           case PrimitiveTypeName.BOOLEAN =>
             value match {
-              case Bool(_) => value
+              case Bool(_)   => value
               case Str(text) =>
                 text.trim.toLowerCase match {
                   case "true"  => Bool(true)
@@ -152,13 +152,13 @@ private[repositories] object ParquetWriteOps {
                 s"Column '$key' in input row is not in the write schema (inferred from the input, or given with --schema). All rows must use the schema's columns."
               )
           }
-        val fieldType = schema.getType(fieldIndex).asPrimitiveType()
-        val value     = coerceForField(key, rawValue, fieldType)
+        val fieldType     = schema.getType(fieldIndex).asPrimitiveType()
+        val value         = coerceForField(key, rawValue, fieldType)
         val isBinaryField =
           fieldType.getPrimitiveTypeName == PrimitiveTypeName.BINARY
         value match {
-          case CellValue.Str(s) => group.add(fieldIndex, s)
-          case CellValue.Null   => ()
+          case CellValue.Str(s)   => group.add(fieldIndex, s)
+          case CellValue.Null     => ()
           case CellValue.Bytes(b) =>
             group.add(fieldIndex, Binary.fromConstantByteArray(b.toArray))
           case CellValue.Dec(bd) =>
@@ -166,7 +166,7 @@ private[repositories] object ParquetWriteOps {
               case Some(
                     dec: LogicalTypeAnnotation.DecimalLogicalTypeAnnotation
                   ) =>
-                val scale = dec.getScale
+                val scale  = dec.getScale
                 val scaled =
                   bd.setScale(scale, scala.math.BigDecimal.RoundingMode.HALF_UP)
                 val unscaled  = scaled.underlying().unscaledValue()
@@ -315,7 +315,7 @@ private[repositories] object ParquetWriteOps {
           case CellValue.Bool(b) => group.add(fieldIndex, b)
           case CellValue.Date(d) =>
             val fieldName = schema.getType(fieldIndex).getName
-            val asInt =
+            val asInt     =
               try Math.toIntExact(d.toEpochDay)
               catch {
                 case _: ArithmeticException =>
@@ -330,7 +330,7 @@ private[repositories] object ParquetWriteOps {
                 ts.getUnit
             }
             val fieldName = schema.getType(fieldIndex).getName
-            val encoded = timeUnit match {
+            val encoded   = timeUnit match {
               case Some(LogicalTypeAnnotation.TimeUnit.MICROS) =>
                 try
                   Math.addExact(

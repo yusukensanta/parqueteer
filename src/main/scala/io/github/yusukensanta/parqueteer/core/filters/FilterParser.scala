@@ -81,7 +81,7 @@ private class FilterParserImpl(schema: Option[MessageType]) {
                 case 't'  => sb.append('\t'); i += 2
                 case 'n'  => sb.append('\n'); i += 2
                 case 'r'  => sb.append('\r'); i += 2
-                case c =>
+                case c    =>
                   throw new IllegalArgumentException(
                     s"Unknown escape '\\$c' at position $i in filter string — supported: \\\", \\\\, \\t, \\n, \\r"
                   )
@@ -99,9 +99,9 @@ private class FilterParserImpl(schema: Option[MessageType]) {
           buf += Token.Op(">="); i += 2
         case '<' if i + 1 < n && input(i + 1) == '=' =>
           buf += Token.Op("<="); i += 2
-        case '>' => buf += Token.Op(">"); i += 1
-        case '<' => buf += Token.Op("<"); i += 1
-        case '=' => buf += Token.Op("="); i += 1
+        case '>'                         => buf += Token.Op(">"); i += 1
+        case '<'                         => buf += Token.Op("<"); i += 1
+        case '='                         => buf += Token.Op("="); i += 1
         case c if c.isLetter || c == '_' =>
           val start = i
           while i < n && (input(i).isLetterOrDigit || input(i) == '_') do i += 1
@@ -129,7 +129,7 @@ private class FilterParserImpl(schema: Option[MessageType]) {
             buf += Token.Dbl(input.substring(start, i).toDouble)
           } else {
             val raw = input.substring(start, i)
-            val l =
+            val l   =
               try raw.toLong
               catch {
                 case _: NumberFormatException =>
@@ -164,7 +164,7 @@ private class FilterParserImpl(schema: Option[MessageType]) {
     if input.trim.isEmpty then Left("Filter parse error: empty input")
     else
       tokenize(input) match {
-        case Left(err) => Left(s"Filter parse error: $err")
+        case Left(err)   => Left(s"Filter parse error: $err")
         case Right(toks) =>
           tokens = toks; pos = 0
           parseExpression().flatMap { f =>
@@ -223,7 +223,7 @@ private class FilterParserImpl(schema: Option[MessageType]) {
         case Token.Kw("BETWEEN") => parseBetween(col)
         case Token.Kw("IN")      => parseIn(col)
         case Token.Kw("IS")      => parseIsNull(col)
-        case Token.Op(op) =>
+        case Token.Op(op)        =>
           advance()
           parseValue().flatMap(v => buildComparison(col, op, v))
         case other =>
@@ -243,7 +243,7 @@ private class FilterParserImpl(schema: Option[MessageType]) {
           advance()
           peek match {
             case Token.Id(n) => advance(); buf += n
-            case other =>
+            case other       =>
               err = Some(
                 s"Filter parse error: expected identifier after '.', got '$other'"
               )
@@ -268,7 +268,7 @@ private class FilterParserImpl(schema: Option[MessageType]) {
     peek match {
       case Token.Lng(l) => advance(); Right(l)
       case Token.Dbl(d) => advance(); Right(d)
-      case other =>
+      case other        =>
         Left(s"Filter parse error: expected numeric value, got '$other'")
     }
 
@@ -276,7 +276,7 @@ private class FilterParserImpl(schema: Option[MessageType]) {
     advance() // consume BETWEEN
     for {
       low <- parseNumericValue()
-      _ <-
+      _   <-
         if peek == Token.Kw("AND") then Right(advance())
         else Left(s"Filter parse error: expected AND in BETWEEN, got '$peek'")
       high <- parseNumericValue()
@@ -304,7 +304,7 @@ private class FilterParserImpl(schema: Option[MessageType]) {
       }
       err match {
         case Some(e) => Left(e)
-        case None =>
+        case None    =>
           if peek != Token.RParen then
             Left(
               s"Filter parse error: expected ')' after IN list, got '$peek'"
@@ -357,7 +357,7 @@ private class FilterParserImpl(schema: Option[MessageType]) {
     // Equality / inequality work for all value types — strings, numbers, bools.
     def equality(eq: Boolean): Filter = v match {
       case s: String => if eq then c === s else c !== s
-      case l: Long =>
+      case l: Long   =>
         warnIfDecimalColumn(col, if eq then "=" else "!=", l)
         if eq then c === l else c !== l
       case d: Double  => if eq then c === d else c !== d
@@ -375,7 +375,7 @@ private class FilterParserImpl(schema: Option[MessageType]) {
         warnIfDecimalColumn(col, opName, l)
         Right(onLong(l))
       case d: Double => Right(onDouble(d))
-      case _ =>
+      case _         =>
         Left(
           s"Operator '$opName' requires a numeric value, got: ${v.getClass.getSimpleName} '$v'"
         )

@@ -72,7 +72,7 @@ private[cli] object ConfigCommandRenderer {
         .getOrElse("table [default]")
       println(s"  format:   $fmt")
       val color = {
-        val cm = globalOptions.colorMode
+        val cm  = globalOptions.colorMode
         val src =
           if sys.env.get("NO_COLOR").exists(_.nonEmpty) then "[env: NO_COLOR]"
           else if sys.env.contains("PARQUETEER_COLOR") then "[env]"

@@ -39,7 +39,7 @@ private[services] object SchemaReconciler {
       paths: List[String]
   ): Either[ParqueteerError, List[FieldSummary]] =
     schemas.headOption match {
-      case None => Right(Nil)
+      case None        => Right(Nil)
       case Some(first) =>
         val expected = first.toSet
         // .view keeps this lazy so the scan stops at the first mismatching file.
@@ -145,7 +145,7 @@ private[services] object SchemaReconciler {
     val onlyMissingNames             = missingNames -- changedNames
     val onlyExtraNames               = extraNames -- changedNames
     def fmt(f: FieldSummary): String = if f.isOptional then s"${f.dataType}?" else f.dataType
-    val changedDetails = changedNames.toList.sorted.flatMap { name =>
+    val changedDetails               = changedNames.toList.sorted.flatMap { name =>
       for {
         from <- missing.find(_.name == name)
         to   <- extra.find(_.name == name)
@@ -164,8 +164,8 @@ private[services] object SchemaReconciler {
 
   /** Column-level diff of `cols2` against `cols1` (matched by name). */
   def diff(cols1: List[ColumnInfo], cols2: List[ColumnInfo]): SchemaDiff = {
-    val byName1 = cols1.map(c => c.name -> c).toMap
-    val byName2 = cols2.map(c => c.name -> c).toMap
+    val byName1                                          = cols1.map(c => c.name -> c).toMap
+    val byName2                                          = cols2.map(c => c.name -> c).toMap
     def sameShape(a: ColumnInfo, b: ColumnInfo): Boolean =
       a.dataType == b.dataType && a.isOptional == b.isOptional
 

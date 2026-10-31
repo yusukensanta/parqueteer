@@ -45,9 +45,8 @@ class CsvParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChe
   }
 
   it should "reject rows with wrong field count" in {
-    an[IllegalArgumentException] should be thrownBy {
+    an[IllegalArgumentException] should be thrownBy
       CsvParser.parse("a,b\n1,2,3\n")
-    }
   }
 
   // ── RFC 4180 compliance: trailing empty field (#126) ─────────────────────
@@ -61,9 +60,8 @@ class CsvParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChe
 
   it should "not strip a trailing comma that is NOT the (header+1)th field" in {
     // header has 2 cols, row has 4 fields → genuine mismatch, should still throw
-    an[IllegalArgumentException] should be thrownBy {
+    an[IllegalArgumentException] should be thrownBy
       CsvParser.parse("a,b\n1,2,3,\n")
-    }
   }
 
   // ── RFC 4180 compliance: all-empty rows (#126) ───────────────────────────
@@ -230,7 +228,7 @@ class CsvParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChe
   // ── Property-based: CSVFormatter → CsvParser round-trip ─────────────────
   // Rows of safe alpha-only strings survive the encode→parse round-trip intact.
 
-  "CSVFormatter → CsvParser round-trip (property)" should "preserve any safe string value" in {
+  "CSVFormatter → CsvParser round-trip (property)" should "preserve any safe string value" in
     forAll(colName, colName, safeStr, safeStr) { (col1, col2, v1, v2) =>
       whenever(col1 != col2) {
         val rows =
@@ -241,7 +239,6 @@ class CsvParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChe
         parsed(0)(col2) shouldBe CellValue.Str(v2)
       }
     }
-  }
 
   it should "preserve row count for multi-row input" in {
     val rowGen = for {
@@ -260,7 +257,7 @@ class CsvParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChe
   private def linesOf(content: String): Iterator[String] = content.linesIterator
 
   "CsvParser.parseRecordsIncremental" should "match parseRfc4180 for single-line rows" in {
-    val content = "a,b\n1,2\n3,4\n"
+    val content        = "a,b\n1,2\n3,4\n"
     val viaIncremental =
       CsvParser.parseRecordsIncremental(linesOf(content)).map(_.toList).toList
     val viaWhole = CsvParser.parseRfc4180(content).map(_.toList)
@@ -284,16 +281,14 @@ class CsvParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChe
   it should "propagate a real syntax error instead of buffering forever" in {
     // "x"y after the closing quote is malformed (RFC 4180 §2.5), not "more input needed"
     val content = "a,b\n\"x\"y,z\n"
-    an[IllegalArgumentException] should be thrownBy {
+    an[IllegalArgumentException] should be thrownBy
       CsvParser.parseRecordsIncremental(linesOf(content)).toList
-    }
   }
 
   it should "throw for a quote left unterminated at end of input" in {
     val content = "a,b\n1,\"unterminated\n"
-    an[IllegalArgumentException] should be thrownBy {
+    an[IllegalArgumentException] should be thrownBy
       CsvParser.parseRecordsIncremental(linesOf(content)).toList
-    }
   }
 
   it should "return no records for empty input" in {
