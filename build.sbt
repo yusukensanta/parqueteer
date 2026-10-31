@@ -233,7 +233,7 @@ lazy val root = (project in file("."))
     // CVE-2026-55833, CVE-2026-56745/56746/56819, CVE-2026-59898/59899/59900/59921 fixed 4.1.136.Final.
     // Prior override covered only 7 of 19 modules; 12 modules resolved at mixed 4.1.112-4.1.133.
     dependencyOverrides ++= {
-      val nettyVersion = "4.1.137.Final"
+      val nettyVersion = "4.1.139.Final"
       Seq(
         "io.netty" % "netty-common"                       % nettyVersion,
         "io.netty" % "netty-buffer"                       % nettyVersion,
@@ -268,7 +268,7 @@ lazy val root = (project in file("."))
         "com.fasterxml.jackson.core" % "jackson-core"        % "2.22.4",
         "com.fasterxml.jackson.core" % "jackson-databind"    % "2.22.4",
         "com.fasterxml.jackson.core" % "jackson-annotations" % "2.22",
-        "com.google.guava"           % "guava"                % "33.7.2-jre", // CVE-2026-102554 (HIGH) fixed in 33.7.2
+        "com.google.guava" % "guava" % "33.7.2-jre", // CVE-2026-102554 (HIGH) fixed in 33.7.2
         // io.opentelemetry.* pulled transitively via google-cloud-storage/gcs-connector.
         // CVE-2026-118259 (MEDIUM) fixed in 1.67.0; CVE-2026-45292 (MEDIUM) — unbounded memory allocation parsing oversized W3C
         // baggage headers; fixed in 1.62.0. Pinned to 1.67.0 (current release);
