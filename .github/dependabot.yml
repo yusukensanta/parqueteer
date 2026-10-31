@@ -9,3 +9,12 @@ updates:
     labels:
       - "dependencies"
       - "ci/cd"
+
+  - package-ecosystem: "docker"
+    directory: "/.clusterfuzzlite"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    labels:
+      - "dependencies"
+      - "ci/cd"

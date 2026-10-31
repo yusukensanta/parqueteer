@@ -1,4 +1,4 @@
-FROM gcr.io/oss-fuzz-base/base-builder-jvm
+FROM gcr.io/oss-fuzz-base/base-builder-jvm@sha256:bd13a763de1a0fb22099442094e7e0049657a8c47f01e9d7af8bb849e0ad4699
 
 # The base image ships an old OpenJDK, but Scala 3.10 and the dependencies need
 # JDK 21. Install Temurin 21 for the build; build.sh copies it next to the
