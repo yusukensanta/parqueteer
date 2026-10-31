@@ -117,7 +117,7 @@ lazy val root = (project in file("."))
       val awsSdkVersion              = "2.53.3"
       val googleCloudStorageVersion  = "2.71.0"
       val azureStorageVersion        = "12.35.0"
-      val azureIdentityVersion       = "1.16.2"
+      val azureIdentityVersion       = "1.16.3"
       val hadoopVersion              = "3.5.0"
       val gcsConnectorVersion        = "hadoop3-2.2.28"
 
@@ -268,7 +268,7 @@ lazy val root = (project in file("."))
         "com.fasterxml.jackson.core" % "jackson-core"        % "2.22.4",
         "com.fasterxml.jackson.core" % "jackson-databind"    % "2.22.4",
         "com.fasterxml.jackson.core" % "jackson-annotations" % "2.22",
-        "com.google.guava"           % "guava"                % "33.7.2-jre", // CVE-2026-102554 (HIGH) fixed in 33.7.2
+        "com.google.guava" % "guava" % "33.7.2-jre", // CVE-2026-102554 (HIGH) fixed in 33.7.2
         // io.opentelemetry.* pulled transitively via google-cloud-storage/gcs-connector.
         // CVE-2026-118259 (MEDIUM) fixed in 1.67.0; CVE-2026-45292 (MEDIUM) — unbounded memory allocation parsing oversized W3C
         // baggage headers; fixed in 1.62.0. Pinned to 1.67.0 (current release);
