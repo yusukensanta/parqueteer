@@ -117,7 +117,7 @@ lazy val root = (project in file("."))
       val awsSdkVersion              = "2.57.8"
       val googleCloudStorageVersion  = "2.71.0"
       val azureStorageVersion        = "12.35.2"
-      val azureIdentityVersion       = "1.16.3"
+      val azureIdentityVersion       = "1.19.0"
       val hadoopVersion              = "3.5.0"
       val gcsConnectorVersion        = "hadoop3-2.2.34"
 
