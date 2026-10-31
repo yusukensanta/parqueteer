@@ -57,6 +57,9 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-java${{ matrix.java }}-sbt-
 
+      - name: Static analysis (Scalafix)
+        run: sbt "scalafix --check"
+
       - name: Compile
         run: sbt compile
 

@@ -1,5 +1,7 @@
 package io.github.yusukensanta.parqueteer.core.util
 
+import scala.annotation.tailrec
+
 /**
  * Detects Hadoop-style glob metacharacters (*, ?, [, {) in a path string.
  *
@@ -15,13 +17,14 @@ object GlobDetector {
   private val queryValuePrefix = """[\w.\-]+=""".r
 
   def hasGlobChars(path: String): Boolean = {
-    var i = 0
-    while i < path.length do {
-      val c = path.charAt(i)
-      if globChars.contains(c) then return true
-      if c == '?' then return queryValuePrefix.findPrefixOf(path.substring(i + 1)).isEmpty
-      i += 1
-    }
-    false
+    @tailrec def scan(i: Int): Boolean =
+      if i >= path.length then false
+      else {
+        val c = path.charAt(i)
+        if globChars.contains(c) then true
+        else if c == '?' then queryValuePrefix.findPrefixOf(path.substring(i + 1)).isEmpty
+        else scan(i + 1)
+      }
+    scan(0)
   }
 }

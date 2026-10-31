@@ -66,6 +66,7 @@ make fmt           # Auto-fix formatting issues only
    - If no Scala/sbt files modified → Skips all checks ✅ Fast commit!
    - If Scala/sbt files modified → Runs full checks below
 2. Code formatting check (`sbt scalafmtCheckAll`)
+   Static analysis (`sbt "scalafix --check"`, rules in `.scalafix.conf`) runs in CI and in `make lint`
 3. Compilation check (`sbt compile`)
 4. Cleanup of build artifacts (`target/streams`)
 5. Test execution (`sbt test`)
