@@ -184,7 +184,7 @@ lazy val root = (project in file("."))
         "org.apache.hadoop" % "hadoop-client-runtime" % hadoopVersion,
 
         // commons-lang3 required by hadoop-aws 3.5.0 S3AUtils at S3AFileSystem.initialize()
-        "org.apache.commons" % "commons-lang3" % "3.18.0",
+        "org.apache.commons" % "commons-lang3" % "3.21.0",
 
         // Jackson pinned explicitly so the generated POM (used by Trivy) shows the
         // patched version rather than Hadoop's older transitive declaration.
