@@ -11,11 +11,13 @@ on:
 
 permissions:
   contents: read
-  security-events: write
 
 jobs:
   dependency-check:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write # upload SARIF
 
     steps:
       - name: Checkout code
