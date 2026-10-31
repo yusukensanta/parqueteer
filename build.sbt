@@ -256,7 +256,7 @@ lazy val root = (project in file("."))
         "io.netty" % "netty-resolver-dns-native-macos"    % nettyVersion,
         // Transitive CVE patches
         "org.xerial.snappy" % "snappy-java" % "1.1.10.8", // CVE-2023-43642 + CVE-2023-34455; 1.1.10.8 is current clean release
-        "com.nimbusds" % "nimbus-jose-jwt" % "10.9.1", // CVE-2025-53864 — deeply nested JSON DoS (fixed >=10.0.2; 10.9.1 is current)
+        "com.nimbusds" % "nimbus-jose-jwt" % "10.10", // CVE-2025-53864 — deeply nested JSON DoS (fixed >=10.0.2; 10.9.1 is current)
         "net.minidev" % "json-smart" % "2.6.0", // CVE-2024-57699 — nested JSON stack exhaustion DoS (nimbus transitive)
         // GHSA-72hv-8253-57qq (async parser DoS) fixed in 2.18.6;
         // CVE-2026-54512 + CVE-2026-54513 (HIGH) fixed in 2.18.8;
