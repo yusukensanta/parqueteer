@@ -93,9 +93,9 @@ fmt: ## Format code with scalafmt
 	@echo "$(BLUE)Formatting code...$(NC)"
 	sbt scalafmtAll
 
-lint: ## Check code style
+lint: ## Check code style and run static analysis
 	@echo "$(BLUE)Linting code...$(NC)"
-	sbt scalafmtCheckAll
+	sbt scalafmtCheckAll "scalafix --check"
 
 check: lint test ## Run all checks (lint + test)
 	@echo "$(GREEN)✓$(NC) All checks passed!"
