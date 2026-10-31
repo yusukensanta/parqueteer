@@ -332,9 +332,51 @@ jobs:
           path: dist
 
       - name: Generate build provenance attestation
+        id: attest
         # actions/attest-build-provenance@v4.1.1
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8
         with:
           subject-path: |
             dist/*.tgz
             dist/*.zip
+
+      - name: Name the provenance bundle
+        env:
+          BUNDLE: ${{ steps.attest.outputs.bundle-path }}
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          mkdir -p provenance
+          cp "${BUNDLE}" "provenance/parqueteer-${VERSION}.intoto.jsonl"
+          ls -l provenance
+
+      - name: Upload provenance bundle
+        # actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: provenance-${{ needs.build.outputs.version }}
+          path: provenance/*.intoto.jsonl
+          retention-days: 30
+
+  # Attaches the Sigstore provenance bundle to the GitHub Release so it can be
+  # verified from the release page alone (and is recognised as signed). The only
+  # job besides `release` with contents: write; it runs no build or third-party steps.
+  attach-provenance:
+    needs: [build, release, attest]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download provenance bundle
+        # actions/download-artifact@v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          name: provenance-${{ needs.build.outputs.version }}
+          path: provenance
+
+      - name: Attach to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          gh release upload "v${VERSION}" provenance/*.intoto.jsonl --repo "${GITHUB_REPOSITORY}"

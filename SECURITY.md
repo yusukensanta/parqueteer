@@ -18,6 +18,9 @@ Please report vulnerabilities by emailing:
 
 **yusukensanta@gmail.com**
 
+or privately through GitHub:
+[Report a vulnerability](https://github.com/yusukensanta/parqueteer/security/advisories/new).
+
 Include in your report:
 - Description of the vulnerability
 - Steps to reproduce (proof of concept if available)
