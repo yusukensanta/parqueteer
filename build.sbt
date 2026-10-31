@@ -13,7 +13,10 @@ ThisBuild / scalacOptions ++= Seq(
   "-language:implicitConversions",
   "-unchecked",
   "-Werror",
-  "-Wunused:all"
+  "-Wunused:all",
+  // Scala 3.10 coverage instrumentation skips initializers over 3000 tree nodes
+  // and warns; the CLI parser definition is one such value. Not actionable.
+  "-Wconf:msg=Skipping coverage instrumentation:s"
 )
 
 // Target: 80%. Current baseline: ~75% stmt / ~68% branch.
