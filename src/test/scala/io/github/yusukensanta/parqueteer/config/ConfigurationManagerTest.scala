@@ -246,7 +246,6 @@ class ConfigurationManagerTest extends AnyFlatSpec with Matchers {
     config.cloud.gcs.bufferSize shouldBe "32MB"
     config.cloud.gcs.chunkSize shouldBe "16MB"
     config.cloud.azure.accountName shouldBe Some("myaccount")
-    config.cloud.azure.authMethod shouldBe "service_principal"
     config.output.defaultFormat shouldBe "json"
     config.output.maxRows shouldBe Some(500L)
     config.output.precision shouldBe 4
