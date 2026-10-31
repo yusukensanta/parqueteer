@@ -1,6 +1,6 @@
 package io.github.yusukensanta.parqueteer.core.repositories
 
-import io.github.yusukensanta.parqueteer.cloud.CloudCredentialManager
+import io.github.yusukensanta.parqueteer.cloud.{AzureTokenException, CloudCredentialManager}
 import io.github.yusukensanta.parqueteer.core.models.*
 import io.github.yusukensanta.parqueteer.core.models.ParqueteerError.CloudAuthException
 import io.github.yusukensanta.parqueteer.core.util.CredentialRedactor
@@ -51,7 +51,32 @@ private[repositories] class HadoopConfigProvider(
             e
           )
         )
+      case e if isCloudLocation(location) && azureTokenFailureMessage(e).isDefined =>
+        Failure(
+          new CloudAuthException(providerNameFor(location), azureTokenFailureMessage(e).get, e)
+        )
     }
+
+  private val MaxCauseDepth = 10
+
+  // ABFS does not keep the token provider's exception: it flattens it into the message of an
+  // HttpException ("... getAccessToken threw <class> : <message>") under an unrelated type.
+  // Recover the real reason from either the typed cause or that flattened text.
+  private val FlattenedTokenFailure = s"${classOf[AzureTokenException].getName} : "
+
+  private def azureTokenFailureMessage(e: Throwable): Option[String] =
+    Iterator
+      .iterate(e)(_.getCause)
+      .takeWhile(_ != null)
+      .take(MaxCauseDepth)
+      .flatMap {
+        case t: AzureTokenException => Option(t.getMessage)
+        case t                      =>
+          Option(t.getMessage)
+            .map(m => (m, m.indexOf(FlattenedTokenFailure)))
+            .collect { case (m, i) if i >= 0 => m.substring(i + FlattenedTokenFailure.length) }
+      }
+      .nextOption()
 
   private def configFor(location: StorageLocation): Try[Configuration] = {
     val key = cacheKey(location)

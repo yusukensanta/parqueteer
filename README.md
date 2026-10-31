@@ -526,8 +526,21 @@ Optional: set project ID with `GCP_PROJECT_ID` or `GOOGLE_CLOUD_PROJECT`.
 
 **Azure**:
 
-Managed identity (default, no env vars required on Azure-hosted compute):
+Default (no env vars required): tries, in order, environment credentials, workload identity, managed identity (Azure-hosted compute), and your `az login` session. The signed-in identity needs a data role such as `Storage Blob Data Reader` / `Contributor` on the container (the subscription `Owner` role does not grant data access):
 ```bash
+az login
+parqueteer read abfss://container@account.dfs.core.windows.net/data.parquet
+```
+
+Azure CLI session only:
+```bash
+export AZURE_AUTH_METHOD=azure_cli
+parqueteer read abfss://container@account.dfs.core.windows.net/data.parquet
+```
+
+Managed identity only (optionally `AZURE_CLIENT_ID` for a user-assigned identity):
+```bash
+export AZURE_AUTH_METHOD=managed_identity
 parqueteer read abfss://container@account.dfs.core.windows.net/data.parquet
 ```
 

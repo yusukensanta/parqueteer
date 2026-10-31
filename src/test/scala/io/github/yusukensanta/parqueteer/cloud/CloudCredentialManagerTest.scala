@@ -250,19 +250,44 @@ class CloudCredentialManagerTest extends AnyFlatSpec with Matchers {
 
   // ── AzureCredentialManager per-account auth.type (H4) ────────────────────
 
-  "AzureCredentialManager" should "set per-account auth.type=OAuth for managed_identity (default)" in {
-    assume(
-      !sys.env.contains("AZURE_AUTH_METHOD") ||
-        sys.env("AZURE_AUTH_METHOD") == "managed_identity",
-      "Skipped: AZURE_AUTH_METHOD is not managed_identity"
-    )
-    val loc    = AzureLocation("myaccount", "mycontainer", "path/to/file")
-    val result = new AzureCredentialManager().configureHadoop(loc)
-    result.isSuccess shouldBe true
-    val conf = result.get
+  "AzureCredentialManager" should "use the Azure identity chain via a Custom token provider by default" in {
+    val loc = AzureLocation("myaccount", "mycontainer", "path/to/file")
+    val mgr = new AzureCredentialManager {
+      override def env(key: String): Option[String] = None
+    }
+    val conf = mgr.configureHadoop(loc).get
+    conf.get("fs.azure.account.auth.type.myaccount.dfs.core.windows.net") shouldBe "Custom"
     conf.get(
-      "fs.azure.account.auth.type.myaccount.dfs.core.windows.net"
-    ) shouldBe "OAuth"
+      "fs.azure.account.oauth.provider.type.myaccount.dfs.core.windows.net"
+    ) shouldBe classOf[AzureIdentityTokenProvider].getName
+    conf.get(AzureIdentityTokenProvider.CredentialKey) shouldBe "default"
+  }
+
+  it should "use the Azure CLI credential when AZURE_AUTH_METHOD=azure_cli" in {
+    val loc = AzureLocation("myaccount", "mycontainer", "path/to/file")
+    val mgr = new AzureCredentialManager {
+      override def env(key: String): Option[String] = key match {
+        case "AZURE_AUTH_METHOD" => Some("azure_cli")
+        case _                   => None
+      }
+    }
+    val conf = mgr.configureHadoop(loc).get
+    conf.get("fs.azure.account.auth.type.myaccount.dfs.core.windows.net") shouldBe "Custom"
+    conf.get(
+      "fs.azure.account.oauth.provider.type.myaccount.dfs.core.windows.net"
+    ) shouldBe classOf[AzureIdentityTokenProvider].getName
+    conf.get(AzureIdentityTokenProvider.CredentialKey) shouldBe "azure_cli"
+  }
+
+  it should "use the credential chain when AZURE_AUTH_METHOD=default" in {
+    val loc = AzureLocation("myaccount", "mycontainer", "path/to/file")
+    val mgr = new AzureCredentialManager {
+      override def env(key: String): Option[String] = key match {
+        case "AZURE_AUTH_METHOD" => Some("default")
+        case _                   => None
+      }
+    }
+    mgr.configureHadoop(loc).get.get(AzureIdentityTokenProvider.CredentialKey) shouldBe "default"
   }
 
   it should "set per-account auth.type=SharedKey for shared_key (not inherit global OAuth)" in {
@@ -287,7 +312,7 @@ class CloudCredentialManagerTest extends AnyFlatSpec with Matchers {
     val loc = AzureLocation("acct", "ctr", "blob")
     val mgr = new AzureCredentialManager {
       override def env(key: String): Option[String] = key match {
-        case "AZURE_AUTH_METHOD" => None
+        case "AZURE_AUTH_METHOD" => Some("managed_identity")
         case "AZURE_TENANT_ID"   => Some("tenant-123")
         case "AZURE_CLIENT_ID"   => Some("client-abc")
         case _                   => None
@@ -305,7 +330,7 @@ class CloudCredentialManagerTest extends AnyFlatSpec with Matchers {
     val loc = AzureLocation("acct", "ctr", "blob")
     val mgr = new AzureCredentialManager {
       override def env(key: String): Option[String] = key match {
-        case "AZURE_AUTH_METHOD" => None
+        case "AZURE_AUTH_METHOD" => Some("managed_identity")
         case _                   => None
       }
     }
