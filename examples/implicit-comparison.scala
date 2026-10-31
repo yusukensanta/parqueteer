@@ -1,7 +1,7 @@
 // Side-by-side comparison: WITH vs WITHOUT implicit
 // Run with: scala-cli implicit-comparison.scala
 
-//> using scala "3.7.3"
+//> using scala "3.7.4"
 //> using dep "io.circe::circe-core:0.14.10"
 
 import io.circe.*
