@@ -119,7 +119,7 @@ lazy val root = (project in file("."))
       val azureStorageVersion        = "12.35.0"
       val azureIdentityVersion       = "1.16.3"
       val hadoopVersion              = "3.5.0"
-      val gcsConnectorVersion        = "hadoop3-2.2.34"
+      val gcsConnectorVersion        = "4.0.9"
 
       Seq(
         "com.github.mjakubowski84" %% "parquet4s-core" % parquet4sVersion,
