@@ -1,0 +1,29 @@
+# .github/workflows/scala-steward.yml
+name: Scala Steward
+
+on:
+  schedule:
+    - cron: '0 4 * * 1'  # Every Monday at 04:00 UTC
+  workflow_dispatch:      # Allow manual trigger
+
+permissions:
+  contents: read
+
+jobs:
+  scala-steward:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup Java
+        # actions/setup-java@v5.2.0
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Run Scala Steward
+        # scala-steward-org/scala-steward-action@v2.97.0
+        uses: scala-steward-org/scala-steward-action@3e5cae868160200afda12b57c150e56cede989ab
+        with:
+          # A PAT (or GitHub App token) is required: PRs opened with the default
+          # GITHUB_TOKEN do not trigger the CI workflows.
+          github-token: ${{ secrets.STEWARD_TOKEN }}
