@@ -19,21 +19,25 @@ private def rejectingBadInput(body: => Unit): Unit =
   catch { case _: IllegalArgumentException => () }
 
 object FilterParserFuzzer {
+
   def fuzzerTestOneInput(data: Array[Byte]): Unit =
     FilterParser.parse(text(data)): Unit
 }
 
 object CsvParserFuzzer {
+
   def fuzzerTestOneInput(data: Array[Byte]): Unit =
     rejectingBadInput(CsvParser.parse(text(data)): Unit)
 }
 
 object LtsvParserFuzzer {
+
   def fuzzerTestOneInput(data: Array[Byte]): Unit =
     rejectingBadInput(LTSVParser.parse(text(data)): Unit)
 }
 
 object SizeParserFuzzer {
+
   def fuzzerTestOneInput(data: Array[Byte]): Unit =
     rejectingBadInput(SizeParser.parse(text(data)): Unit)
 }
