@@ -24,6 +24,11 @@ jobs:
         # scala-steward-org/scala-steward-action@v2.97.0
         uses: scala-steward-org/scala-steward-action@3e5cae868160200afda12b57c150e56cede989ab
         with:
-          # A PAT (or GitHub App token) is required: PRs opened with the default
-          # GITHUB_TOKEN do not trigger the CI workflows.
-          github-token: ${{ secrets.STEWARD_TOKEN }}
+          # Authenticate as a GitHub App instead of a personal token: PRs opened
+          # with the default GITHUB_TOKEN do not trigger the CI workflows, and an
+          # App installation token is short-lived and not tied to a person.
+          github-app-id: ${{ secrets.STEWARD_APP_ID }}
+          github-app-installation-id: ${{ secrets.STEWARD_APP_INSTALLATION_ID }}
+          github-app-key: ${{ secrets.STEWARD_APP_PRIVATE_KEY }}
+          # Update only this repository, not every repo the App is installed on.
+          github-app-auth-only: true
