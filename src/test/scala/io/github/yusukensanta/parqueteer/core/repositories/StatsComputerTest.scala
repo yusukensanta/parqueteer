@@ -1,5 +1,6 @@
 package io.github.yusukensanta.parqueteer.core.repositories
 
+import scala.annotation.nowarn
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.apache.parquet.column.statistics.*
@@ -7,6 +8,7 @@ import org.apache.parquet.io.api.Binary
 import org.apache.parquet.schema.{LogicalTypeAnnotation, PrimitiveType, Types}
 import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
 
+@nowarn("cat=deprecation") // BinaryStatistics.setMinMax is the only way to build fixtures
 class StatsComputerTest extends AnyFlatSpec with Matchers {
 
   private def intType(logical: LogicalTypeAnnotation): PrimitiveType =

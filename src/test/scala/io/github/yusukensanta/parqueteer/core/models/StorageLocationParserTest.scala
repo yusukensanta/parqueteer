@@ -91,13 +91,13 @@ class StorageLocationParserTest extends AnyFlatSpec with Matchers {
   "StorageLocationParser.parse" should "reject s3:/bucket/key with a helpful suggestion" in {
     val result = StorageLocationParser.parse("s3:/bucket/key")
     result.isLeft shouldBe true
-    result.left.get should include("s3://bucket/key")
+    result.swap.getOrElse(fail("expected Left")) should include("s3://bucket/key")
   }
 
   it should "reject gs:/bucket/path with a helpful suggestion" in {
     val result = StorageLocationParser.parse("gs:/bucket/path")
     result.isLeft shouldBe true
-    result.left.get should include("gs://bucket/path")
+    result.swap.getOrElse(fail("expected Left")) should include("gs://bucket/path")
   }
 
   it should "still parse s3://bucket/key correctly after the new guard" in {

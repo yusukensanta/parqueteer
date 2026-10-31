@@ -3,6 +3,7 @@ package io.github.yusukensanta.parqueteer.core.repositories
 import io.github.yusukensanta.parqueteer.core.models.{GroupInfo, LogicalTypeDetail, SchemaNode}
 import org.apache.parquet.schema.{GroupType, LogicalTypeAnnotation, MessageType, Type}
 import org.apache.parquet.schema.LogicalTypeAnnotation.*
+import scala.annotation.nowarn
 import scala.jdk.CollectionConverters.*
 
 /**
@@ -44,7 +45,10 @@ private[repositories] object SchemaTypeReader {
   private def logicalOf(t: Type): Option[LogicalTypeDetail] =
     Option(t.getLogicalTypeAnnotation).map(describeLogicalType)
 
-  private def convertedOf(t: Type): Option[String] =
+  // OriginalType is deprecated upstream, but the legacy converted type is still
+  // reported deliberately (files written before LogicalType carry only this).
+  @nowarn("cat=deprecation")
+  private[repositories] def convertedOf(t: Type): Option[String] =
     Option(t.getLogicalTypeAnnotation).flatMap(a => Option(a.toOriginalType)).map(_.name)
 
   private def groupInfo(t: Type): GroupInfo =
