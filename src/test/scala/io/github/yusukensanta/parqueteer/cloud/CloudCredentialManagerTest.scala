@@ -180,6 +180,44 @@ class CloudCredentialManagerTest extends AnyFlatSpec with Matchers {
       "com.google.cloud.hadoop.fs.gcs.GoogleHadoopFileSystem"
   }
 
+  private def credentialFile(json: String): String = {
+    val f = java.nio.file.Files.createTempFile("gcs-cred", ".json")
+    java.nio.file.Files.writeString(f, json)
+    f.toFile.deleteOnExit()
+    f.toString
+  }
+
+  it should "select SERVICE_ACCOUNT_JSON_KEYFILE auth when a service account key is resolved" in {
+    val path = credentialFile("""{ "type" : "service_account", "project_id": "p" }""")
+    val conf = new org.apache.hadoop.conf.Configuration(false)
+    new GCSCredentialManager().applyAuth(conf, scala.util.Success(path))
+    conf.get("fs.gs.auth.type") shouldBe "SERVICE_ACCOUNT_JSON_KEYFILE"
+    conf.get("fs.gs.auth.service.account.json.keyfile") shouldBe path
+    conf.get("google.cloud.auth.service.account.enable") shouldBe null
+  }
+
+  it should "use APPLICATION_DEFAULT for a non service-account credential file" in {
+    val path = credentialFile("""{"type": "authorized_user", "client_id": "x"}""")
+    val conf = new org.apache.hadoop.conf.Configuration(false)
+    new GCSCredentialManager().applyAuth(conf, scala.util.Success(path))
+    conf.get("fs.gs.auth.type") shouldBe "APPLICATION_DEFAULT"
+    conf.get("fs.gs.auth.service.account.json.keyfile") shouldBe null
+  }
+
+  it should "use APPLICATION_DEFAULT when the resolved file is unreadable" in {
+    val conf = new org.apache.hadoop.conf.Configuration(false)
+    new GCSCredentialManager().applyAuth(conf, scala.util.Success("/nonexistent/key.json"))
+    conf.get("fs.gs.auth.type") shouldBe "APPLICATION_DEFAULT"
+  }
+
+  it should "select APPLICATION_DEFAULT auth when no key file is found" in {
+    val conf = new org.apache.hadoop.conf.Configuration(false)
+    new GCSCredentialManager()
+      .applyAuth(conf, scala.util.Failure(new RuntimeException("none found")))
+    conf.get("fs.gs.auth.type") shouldBe "APPLICATION_DEFAULT"
+    conf.get("fs.gs.auth.service.account.json.keyfile") shouldBe null
+  }
+
   it should "return Failure for non-GCS location" in {
     val conf =
       new GCSCredentialManager().configureHadoop(S3Location("bucket", "key"))
