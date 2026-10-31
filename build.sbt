@@ -184,7 +184,7 @@ lazy val root = (project in file("."))
         "org.apache.hadoop" % "hadoop-client-runtime" % hadoopVersion,
 
         // commons-lang3 required by hadoop-aws 3.5.0 S3AUtils at S3AFileSystem.initialize()
-        "org.apache.commons" % "commons-lang3" % "3.18.0",
+        "org.apache.commons" % "commons-lang3" % "3.21.0",
 
         // Jackson pinned explicitly so the generated POM (used by Trivy) shows the
         // patched version rather than Hadoop's older transitive declaration.
@@ -268,7 +268,7 @@ lazy val root = (project in file("."))
         "com.fasterxml.jackson.core" % "jackson-core"        % "2.22.4",
         "com.fasterxml.jackson.core" % "jackson-databind"    % "2.22.4",
         "com.fasterxml.jackson.core" % "jackson-annotations" % "2.22",
-        "com.google.guava"           % "guava"                % "33.7.2-jre", // CVE-2026-102554 (HIGH) fixed in 33.7.2
+        "com.google.guava" % "guava" % "33.7.2-jre", // CVE-2026-102554 (HIGH) fixed in 33.7.2
         // io.opentelemetry.* pulled transitively via google-cloud-storage/gcs-connector.
         // CVE-2026-118259 (MEDIUM) fixed in 1.67.0; CVE-2026-45292 (MEDIUM) — unbounded memory allocation parsing oversized W3C
         // baggage headers; fixed in 1.62.0. Pinned to 1.67.0 (current release);
