@@ -1,0 +1,85 @@
+name: Azure E2E
+
+# Runs the Azure integration tests against a real storage account, signed in
+# through GitHub OIDC (no stored secrets). Azurite cannot be used: it does not
+# serve the `dfs` endpoint that the ABFS driver needs.
+#
+# Not run on pull requests: forks have no OIDC access, and every run touches a
+# real account. The Entra federated credential is bound to refs/heads/main.
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '17 3 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  azure-e2e:
+    name: Azure E2E (${{ matrix.auth }})
+    # Repository variables, not secrets: none of these values is sensitive.
+    # Without them (forks, or before the Azure side is set up) the job is skipped.
+    if: ${{ vars.AZURE_CLIENT_ID != '' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # OIDC token exchanged for an Entra access token by azure/login
+
+    strategy:
+      fail-fast: false
+      matrix:
+        # `azure_cli` uses only the az session; `default` is the DefaultAzureCredential chain.
+        auth: [azure_cli, default]
+
+    steps:
+      - name: Checkout code
+        # actions/checkout@v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Setup Java 21
+        # actions/setup-java@v5.2.0
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+          cache: 'sbt'
+
+      - name: Setup sbt via Coursier
+        run: |
+          curl -fL https://github.com/coursier/coursier/releases/download/v2.1.24/cs-x86_64-pc-linux.gz | gzip -d > cs
+          echo '1517a0b6c4b9608dc45da8f34bc8290707ed50104ee92662f57808d2c012be54  cs' | sha256sum -c
+          chmod +x cs
+          ./cs setup --yes --jvm 21
+          echo "$HOME/.local/share/coursier/bin" >> $GITHUB_PATH
+
+      - name: Cache sbt dependencies
+        # actions/cache@v5
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: |
+            ~/.sbt
+            ~/.cache/coursier
+          key: ${{ runner.os }}-java21-sbt-azure-${{ hashFiles('**/build.sbt', 'project/**') }}
+          restore-keys: |
+            ${{ runner.os }}-java21-sbt-
+
+      - name: Sign in to Azure
+        # Azure/login@v3.1.0
+        uses: Azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Run Azure integration tests
+        env:
+          AZURE_AUTH_METHOD: ${{ matrix.auth }}
+          AZURE_E2E_ACCOUNT: ${{ vars.AZURE_E2E_ACCOUNT }}
+          AZURE_E2E_CONTAINER: ${{ vars.AZURE_E2E_CONTAINER }}
+        run: sbt "testOnly io.github.yusukensanta.parqueteer.cloud.AzureIntegrationTest"

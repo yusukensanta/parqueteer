@@ -282,6 +282,22 @@ Our CI pipeline automatically:
 
 Make sure `make check` passes before submitting PR!
 
+### Azure E2E (maintainers)
+
+`.github/workflows/azure-e2e.yml` runs `AzureIntegrationTest` against a real ADLS Gen2 account on pushes to `main`, weekly, and on demand. It is not run on pull requests. Azurite cannot be used because it does not serve the `dfs` endpoint that ABFS needs.
+
+The job signs in with GitHub OIDC (no secrets) and is skipped until the repository variables `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, `AZURE_E2E_ACCOUNT` and `AZURE_E2E_CONTAINER` are set. On the Azure side:
+
+1. Create an app registration with a federated credential: issuer `https://token.actions.githubusercontent.com`, audience `api://AzureADTokenExchange`, subject `repo:<owner>/<repo>:ref:refs/heads/main`.
+2. Create its service principal and assign it `Storage Blob Data Contributor` on the test container only.
+
+To run the tests locally, sign in with `az login` as an identity that has that role:
+
+```bash
+AZURE_E2E_ACCOUNT=<account> AZURE_E2E_CONTAINER=<container> AZURE_AUTH_METHOD=azure_cli \
+  sbt "testOnly *AzureIntegrationTest"
+```
+
 ## Getting Help
 
 - 📖 **Documentation**: Check the [`docs/`](docs/) directory for detailed guides
