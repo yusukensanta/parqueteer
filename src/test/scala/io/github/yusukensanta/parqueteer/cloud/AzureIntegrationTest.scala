@@ -42,9 +42,16 @@ class AzureIntegrationTest extends AnyFlatSpec with Matchers {
   private def freshLocation(label: String): AzureLocation =
     AzureLocation(account.get, container.get, s"ci/$label-${UUID.randomUUID()}.parquet")
 
+  // CloudAuthException keeps the per-credential reason apart from its message.
+  private def describe(e: Throwable): String = e match {
+    case auth: ParqueteerError.CloudAuthException =>
+      s"${auth.getMessage}\n${auth.detail.getOrElse("(no detail)")}"
+    case other => Option(other.getMessage).getOrElse("")
+  }
+
   private def assertSuccess[A](result: Try[A], label: String): A =
     result.fold(
-      e => fail(s"$label failed: ${e.getClass.getName}: ${e.getMessage}", e),
+      e => fail(s"$label failed: ${e.getClass.getName}: ${describe(e)}", e),
       identity
     )
 
