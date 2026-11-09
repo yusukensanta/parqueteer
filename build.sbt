@@ -216,7 +216,7 @@ lazy val root = (project in file("."))
         // api/sdk skew.
         "io.opentelemetry" % "opentelemetry-api"                             % "1.68.0",
         "io.opentelemetry" % "opentelemetry-common"                          % "1.68.0",
-        "io.opentelemetry" % "opentelemetry-context"                         % "1.67.0",
+        "io.opentelemetry" % "opentelemetry-context"                         % "1.68.0",
         "io.opentelemetry" % "opentelemetry-sdk"                             % "1.67.0",
         "io.opentelemetry" % "opentelemetry-sdk-common"                      % "1.67.0",
         "io.opentelemetry" % "opentelemetry-sdk-extension-autoconfigure-spi" % "1.67.0",
@@ -279,7 +279,7 @@ lazy val root = (project in file("."))
         // must move together to avoid binary-incompatible api/sdk skew.
         "io.opentelemetry" % "opentelemetry-api"                             % "1.68.0",
         "io.opentelemetry" % "opentelemetry-common"                          % "1.68.0",
-        "io.opentelemetry" % "opentelemetry-context"                         % "1.67.0",
+        "io.opentelemetry" % "opentelemetry-context"                         % "1.68.0",
         "io.opentelemetry" % "opentelemetry-sdk"                             % "1.67.0",
         "io.opentelemetry" % "opentelemetry-sdk-common"                      % "1.67.0",
         "io.opentelemetry" % "opentelemetry-sdk-extension-autoconfigure-spi" % "1.67.0",
