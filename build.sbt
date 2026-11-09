@@ -198,7 +198,7 @@ lazy val root = (project in file("."))
         // pinned to the latest release line (2.22.4); jackson-annotations 2.x ships as 2.22.
         // keep all three jackson-core artifacts aligned to prevent version skew.
         "com.fasterxml.jackson.core" % "jackson-core"        % "2.23.0",
-        "com.fasterxml.jackson.core" % "jackson-databind"    % "2.22.4",
+        "com.fasterxml.jackson.core" % "jackson-databind"    % "2.23.0",
         "com.fasterxml.jackson.core" % "jackson-annotations" % "2.23",
 
         // Guava: gcs-connector excludes it above, but other transitive paths still pull it in.
@@ -269,7 +269,7 @@ lazy val root = (project in file("."))
         // pinned to the latest release line (2.22.4); jackson-annotations 2.x ships as 2.22.
         // pin all three Jackson artifacts together to prevent version skew.
         "com.fasterxml.jackson.core" % "jackson-core"        % "2.23.0",
-        "com.fasterxml.jackson.core" % "jackson-databind"    % "2.22.4",
+        "com.fasterxml.jackson.core" % "jackson-databind"    % "2.23.0",
         "com.fasterxml.jackson.core" % "jackson-annotations" % "2.23",
         "com.google.guava" % "guava" % "33.7.2-jre", // CVE-2026-102554 (HIGH) fixed in 33.7.2
         // io.opentelemetry.* pulled transitively via google-cloud-storage/gcs-connector.
