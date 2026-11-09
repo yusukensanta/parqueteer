@@ -197,9 +197,9 @@ lazy val root = (project in file("."))
         // CVE-2026-19032 + CVE-2026-83557 (MEDIUM) fixed in 2.18.11 / 2.22.3;
         // pinned to the latest release line (2.22.4); jackson-annotations 2.x ships as 2.22.
         // keep all three jackson-core artifacts aligned to prevent version skew.
-        "com.fasterxml.jackson.core" % "jackson-core"        % "2.22.4",
-        "com.fasterxml.jackson.core" % "jackson-databind"    % "2.22.4",
-        "com.fasterxml.jackson.core" % "jackson-annotations" % "2.22",
+        "com.fasterxml.jackson.core" % "jackson-core"        % "2.23.0",
+        "com.fasterxml.jackson.core" % "jackson-databind"    % "2.23.0",
+        "com.fasterxml.jackson.core" % "jackson-annotations" % "2.23",
 
         // Guava: gcs-connector excludes it above, but other transitive paths still pull it in.
         // CVE-2026-102554 (HIGH) fixed in 33.7.2; pinned to the current release.
@@ -268,9 +268,9 @@ lazy val root = (project in file("."))
         // CVE-2026-19032 + CVE-2026-83557 (MEDIUM) fixed in 2.18.11 / 2.22.3;
         // pinned to the latest release line (2.22.4); jackson-annotations 2.x ships as 2.22.
         // pin all three Jackson artifacts together to prevent version skew.
-        "com.fasterxml.jackson.core" % "jackson-core"        % "2.22.4",
-        "com.fasterxml.jackson.core" % "jackson-databind"    % "2.22.4",
-        "com.fasterxml.jackson.core" % "jackson-annotations" % "2.22",
+        "com.fasterxml.jackson.core" % "jackson-core"        % "2.23.0",
+        "com.fasterxml.jackson.core" % "jackson-databind"    % "2.23.0",
+        "com.fasterxml.jackson.core" % "jackson-annotations" % "2.23",
         "com.google.guava" % "guava" % "33.7.2-jre", // CVE-2026-102554 (HIGH) fixed in 33.7.2
         // io.opentelemetry.* pulled transitively via google-cloud-storage/gcs-connector.
         // CVE-2026-118259 (MEDIUM) fixed in 1.67.0; CVE-2026-45292 (MEDIUM) — unbounded memory allocation parsing oversized W3C
