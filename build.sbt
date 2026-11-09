@@ -222,7 +222,7 @@ lazy val root = (project in file("."))
         "io.opentelemetry" % "opentelemetry-sdk-extension-autoconfigure-spi" % "1.68.0",
         "io.opentelemetry" % "opentelemetry-sdk-logs"                        % "1.68.0",
         "io.opentelemetry" % "opentelemetry-sdk-metrics"                     % "1.68.0",
-        "io.opentelemetry" % "opentelemetry-sdk-trace"                       % "1.67.0",
+        "io.opentelemetry" % "opentelemetry-sdk-trace"                       % "1.68.0",
 
         // Testing
         "org.scalatest"     %% "scalatest"       % scalatestVersion           % Test,
@@ -285,7 +285,7 @@ lazy val root = (project in file("."))
         "io.opentelemetry" % "opentelemetry-sdk-extension-autoconfigure-spi" % "1.68.0",
         "io.opentelemetry" % "opentelemetry-sdk-logs"                        % "1.68.0",
         "io.opentelemetry" % "opentelemetry-sdk-metrics"                     % "1.68.0",
-        "io.opentelemetry" % "opentelemetry-sdk-trace"                       % "1.67.0"
+        "io.opentelemetry" % "opentelemetry-sdk-trace"                       % "1.68.0"
       )
     },
     assembly / assemblyMergeStrategy := {
