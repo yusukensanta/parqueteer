@@ -220,7 +220,7 @@ lazy val root = (project in file("."))
         "io.opentelemetry" % "opentelemetry-sdk"                             % "1.68.0",
         "io.opentelemetry" % "opentelemetry-sdk-common"                      % "1.68.0",
         "io.opentelemetry" % "opentelemetry-sdk-extension-autoconfigure-spi" % "1.68.0",
-        "io.opentelemetry" % "opentelemetry-sdk-logs"                        % "1.67.0",
+        "io.opentelemetry" % "opentelemetry-sdk-logs"                        % "1.68.0",
         "io.opentelemetry" % "opentelemetry-sdk-metrics"                     % "1.67.0",
         "io.opentelemetry" % "opentelemetry-sdk-trace"                       % "1.67.0",
 
@@ -283,7 +283,7 @@ lazy val root = (project in file("."))
         "io.opentelemetry" % "opentelemetry-sdk"                             % "1.68.0",
         "io.opentelemetry" % "opentelemetry-sdk-common"                      % "1.68.0",
         "io.opentelemetry" % "opentelemetry-sdk-extension-autoconfigure-spi" % "1.68.0",
-        "io.opentelemetry" % "opentelemetry-sdk-logs"                        % "1.67.0",
+        "io.opentelemetry" % "opentelemetry-sdk-logs"                        % "1.68.0",
         "io.opentelemetry" % "opentelemetry-sdk-metrics"                     % "1.67.0",
         "io.opentelemetry" % "opentelemetry-sdk-trace"                       % "1.67.0"
       )
