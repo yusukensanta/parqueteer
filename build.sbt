@@ -199,7 +199,7 @@ lazy val root = (project in file("."))
         // keep all three jackson-core artifacts aligned to prevent version skew.
         "com.fasterxml.jackson.core" % "jackson-core"        % "2.22.4",
         "com.fasterxml.jackson.core" % "jackson-databind"    % "2.22.4",
-        "com.fasterxml.jackson.core" % "jackson-annotations" % "2.22",
+        "com.fasterxml.jackson.core" % "jackson-annotations" % "2.23",
 
         // Guava: gcs-connector excludes it above, but other transitive paths still pull it in.
         // CVE-2026-102554 (HIGH) fixed in 33.7.2; pinned to the current release.
@@ -270,7 +270,7 @@ lazy val root = (project in file("."))
         // pin all three Jackson artifacts together to prevent version skew.
         "com.fasterxml.jackson.core" % "jackson-core"        % "2.22.4",
         "com.fasterxml.jackson.core" % "jackson-databind"    % "2.22.4",
-        "com.fasterxml.jackson.core" % "jackson-annotations" % "2.22",
+        "com.fasterxml.jackson.core" % "jackson-annotations" % "2.23",
         "com.google.guava" % "guava" % "33.7.2-jre", // CVE-2026-102554 (HIGH) fixed in 33.7.2
         // io.opentelemetry.* pulled transitively via google-cloud-storage/gcs-connector.
         // CVE-2026-118259 (MEDIUM) fixed in 1.67.0; CVE-2026-45292 (MEDIUM) — unbounded memory allocation parsing oversized W3C
