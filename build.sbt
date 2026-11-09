@@ -214,7 +214,7 @@ lazy val root = (project in file("."))
         // CVE-2026-118259 (MEDIUM) fixed in 1.67.0; pinned to 1.67.0 (current release). All modules share opentelemetry-java's
         // lockstep release train and must move together to avoid binary-incompatible
         // api/sdk skew.
-        "io.opentelemetry" % "opentelemetry-api"                             % "1.67.0",
+        "io.opentelemetry" % "opentelemetry-api"                             % "1.68.0",
         "io.opentelemetry" % "opentelemetry-common"                          % "1.67.0",
         "io.opentelemetry" % "opentelemetry-context"                         % "1.67.0",
         "io.opentelemetry" % "opentelemetry-sdk"                             % "1.67.0",
@@ -277,7 +277,7 @@ lazy val root = (project in file("."))
         // baggage headers; fixed in 1.62.0. Pinned to 1.67.0 (current release);
         // all modules below share opentelemetry-java's lockstep release train, so they
         // must move together to avoid binary-incompatible api/sdk skew.
-        "io.opentelemetry" % "opentelemetry-api"                             % "1.67.0",
+        "io.opentelemetry" % "opentelemetry-api"                             % "1.68.0",
         "io.opentelemetry" % "opentelemetry-common"                          % "1.67.0",
         "io.opentelemetry" % "opentelemetry-context"                         % "1.67.0",
         "io.opentelemetry" % "opentelemetry-sdk"                             % "1.67.0",
