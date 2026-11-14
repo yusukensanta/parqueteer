@@ -11,23 +11,21 @@ import io.github.yusukensanta.parqueteer.core.util.CredentialRedactor
 import org.apache.hadoop.conf.Configuration
 import scala.util.{Failure, Success, Try}
 
-trait CloudCredentialManager {
+trait CloudCredentialManager:
   def configureHadoop(location: StorageLocation): Try[Configuration]
-}
 
-object CloudCredentialManager {
+object CloudCredentialManager:
 
   def forLocation(
       location: StorageLocation,
       profile: Option[String] = None,
       s3EndpointUrl: Option[String] = None
   ): Option[CloudCredentialManager] =
-    location match {
+    location match
       case _: S3Location    => Some(new S3CredentialManager(profile, s3EndpointUrl))
       case _: GCSLocation   => Some(new GCSCredentialManager)
       case _: AzureLocation => Some(new AzureCredentialManager)
       case _: LocalPath     => None
-    }
 
   /**
    * Try each credential strategy in order; return the first success, or a
@@ -48,20 +46,19 @@ object CloudCredentialManager {
   private[cloud] def firstSuccess[A](
       header: String,
       strategies: List[() => Try[A]]
-  ): Try[A] = {
+  ): Try[A] =
     val failures              = scala.collection.mutable.ListBuffer.empty[String]
     var lastCause: Throwable  = null
     var found: Option[Try[A]] = None
     val it                    = strategies.iterator
     while found.isEmpty && it.hasNext do
-      it.next()() match {
+      it.next()() match
         case s @ Success(_) => found = Some(s)
         case Failure(err)   =>
           failures += CredentialRedactor.redact(
             Option(err.getMessage).getOrElse(err.getClass.getName)
           )
           lastCause = err
-      }
     found.getOrElse(
       Failure(
         new RuntimeException(
@@ -70,5 +67,4 @@ object CloudCredentialManager {
         )
       )
     )
-  }
-}
+end CloudCredentialManager

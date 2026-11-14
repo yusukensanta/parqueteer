@@ -3,7 +3,7 @@ package io.github.yusukensanta.parqueteer.core.util
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-class RowLimiterTest extends AnyFlatSpec with Matchers {
+class RowLimiterTest extends AnyFlatSpec with Matchers:
 
   "limitList" should "return all rows when maxRows is None" in {
     val rows = List(1, 2, 3, 4, 5)
@@ -54,4 +54,4 @@ class RowLimiterTest extends AnyFlatSpec with Matchers {
     val iter = RowLimiter.limitIterator(List(1, 2, 3), Some(0))
     iter.toList shouldBe List.empty
   }
-}
+end RowLimiterTest

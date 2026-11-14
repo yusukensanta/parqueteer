@@ -16,17 +16,15 @@ import java.util.Date
  */
 class AzureTokenException(message: String, cause: Throwable) extends IOException(message, cause)
 
-object AzureTokenException {
+object AzureTokenException:
 
   /** Splits the one-line hint from the per-credential detail that follows it. */
   val DetailSeparator: String = "\n[details]\n"
 
   def split(message: String): (String, Option[String]) =
-    message.indexOf(DetailSeparator) match {
+    message.indexOf(DetailSeparator) match
       case -1 => (message, None)
       case i  => (message.substring(0, i), Some(message.substring(i + DetailSeparator.length)))
-    }
-}
 
 /**
  * Bridges azure-identity credentials to the ABFS driver.
@@ -37,7 +35,7 @@ object AzureTokenException {
  *     developer tools such as `az login`)
  *   - `azure_cli`: only the signed-in Azure CLI session
  */
-class AzureIdentityTokenProvider extends CustomTokenProviderAdaptee {
+class AzureIdentityTokenProvider extends CustomTokenProviderAdaptee:
   import AzureIdentityTokenProvider.*
 
   private var credential: Option[TokenCredential] = None
@@ -47,25 +45,24 @@ class AzureIdentityTokenProvider extends CustomTokenProviderAdaptee {
   @volatile private var expiry: Date = new Date(0)
 
   override def initialize(conf: Configuration, accountName: String): Unit =
-    credential = Some(conf.get(CredentialKey, KindDefault) match {
+    credential = Some(conf.get(CredentialKey, KindDefault) match
       case KindDefault  => new DefaultAzureCredentialBuilder().build()
       case KindAzureCli => new AzureCliCredentialBuilder().build()
       case other        =>
-        throw new IOException(s"Unknown Azure credential kind: $other")
-    })
+        throw new IOException(s"Unknown Azure credential kind: $other"))
 
   private[cloud] def useCredential(cred: TokenCredential): Unit =
     credential = Some(cred)
 
-  override def getAccessToken(): String = {
+  override def getAccessToken(): String =
     val cred = credential.getOrElse(
       throw new IOException("Azure token provider is not initialized")
     )
-    try {
+    try
       val token = cred.getTokenSync(new TokenRequestContext().addScopes(StorageScope))
       expiry = Date.from(token.getExpiresAt.toInstant)
       token.getToken
-    } catch {
+    catch
       case e: RuntimeException =>
         val detail = CredentialRedactor
           .redact(Option(e.getMessage).getOrElse(e.getClass.getSimpleName))
@@ -74,16 +71,14 @@ class AzureIdentityTokenProvider extends CustomTokenProviderAdaptee {
             s"service_principal, shared_key or sas_token.${AzureTokenException.DetailSeparator}$detail",
           e
         )
-    }
-  }
 
   override def getExpiryTime(): Date = expiry
-}
 
-object AzureIdentityTokenProvider {
+end AzureIdentityTokenProvider
+
+object AzureIdentityTokenProvider:
   val CredentialKey: String = "parqueteer.azure.credential"
   val KindDefault: String   = "default"
   val KindAzureCli: String  = "azure_cli"
 
   private val StorageScope = "https://storage.azure.com/.default"
-}

@@ -29,9 +29,8 @@ case class WriteConfig(
     enableDictionary: Boolean = true
 )
 
-object WriteConfig {
+object WriteConfig:
   val DefaultRowGroupSize: Long = 128L * 1024 * 1024
-}
 
 enum CompressionType:
   case Uncompressed, Snappy, Gzip, Lzo, Brotli, Lz4, Zstd

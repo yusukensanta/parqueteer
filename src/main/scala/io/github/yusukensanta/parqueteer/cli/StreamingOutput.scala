@@ -7,7 +7,7 @@ import io.github.yusukensanta.parqueteer.core.util.{CredentialRedactor, FileExte
 import CommandSupport.*
 
 /** Drives RowStreamWriters: deferred begin/end lifecycle and safe local text output files. */
-private[cli] object StreamingOutput {
+private[cli] object StreamingOutput:
 
   // Refuses a cloud URI output, refuses to silently truncate a pre-existing
   // output file, then creates it and hands `doRead` a RowStreamWriter over
@@ -55,7 +55,7 @@ private[cli] object StreamingOutput {
             .flatMap { case (outFile, ps) =>
               val writer = RowStreamWriter(outFormat, ps)
               var failed = true
-              try {
+              try
                 val result     = doRead(writer)
                 val writeError = ps.checkError()
                 failed = result.isLeft || writeError
@@ -68,11 +68,11 @@ private[cli] object StreamingOutput {
                     )
                   )
                 else result
-              } finally {
+              finally
                 ps.close()
                 if failed then scala.util.Try(java.nio.file.Files.deleteIfExists(outFile))
-              }
             }
+        end if
       }
 
   private[cli] def runWithDeferredBegin(
@@ -97,19 +97,21 @@ private[cli] object StreamingOutput {
       writer: RowStreamWriter,
       reads: List[(Map[String, CellValue] => Unit) => Either[ParqueteerError, Long]],
       parallelism: Int = 1
-  ): Either[ParqueteerError, Long] = {
+  ): Either[ParqueteerError, Long] =
     var started = false
     // Each `read` thunk is itself the pipeline "item" — up to `parallelism`
     // of them run concurrently ahead of the writer (see RowPipeline), but
     // writer.begin()/writeRow still only ever run on this thread, in order.
     val pipelineResult = RowPipeline.run(reads, parallelism)((read, sink) => read(sink)) { row =>
-      if !started then { writer.begin(); started = true }
+      if !started then
+        writer.begin(); started = true
       writer.writeRow(row)
     }
-    if !started && pipelineResult.isRight then { writer.begin(); started = true }
+    if !started && pipelineResult.isRight then
+      writer.begin(); started = true
     val endFailure: Option[Throwable] =
       if started then scala.util.Try(writer.end()).failed.toOption else None
-    (pipelineResult, endFailure) match {
+    (pipelineResult, endFailure) match
       case (Right(_), Some(ex))  => Left(ParqueteerError.IOError(ex))
       case (Left(err), Some(ex)) =>
         System.err.println(
@@ -119,27 +121,23 @@ private[cli] object StreamingOutput {
         Left(err)
       case (Left(err), None)    => Left(err)
       case (Right(total), None) => Right(total)
-    }
-  }
-}
+
+end StreamingOutput
 
 private[cli] class ProgressRowStreamWriter(
     delegate: RowStreamWriter,
     err: java.io.PrintStream,
     intervalRows: Long = 10000
-) extends RowStreamWriter {
+) extends RowStreamWriter:
   private var count: Long = 0L
 
   override def begin(): Unit = delegate.begin()
 
-  override def writeRow(row: Map[String, CellValue]): Unit = {
+  override def writeRow(row: Map[String, CellValue]): Unit =
     delegate.writeRow(row)
     count += 1
     if count % intervalRows == 0 then err.print(s"\r[parqueteer] streamed $count rows...")
-  }
 
-  override def end(): Unit = {
+  override def end(): Unit =
     if count >= intervalRows then err.println(s"\r[parqueteer] streamed $count rows — done")
     delegate.end()
-  }
-}

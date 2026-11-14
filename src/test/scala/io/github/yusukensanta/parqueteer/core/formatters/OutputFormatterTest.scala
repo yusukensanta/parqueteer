@@ -4,7 +4,7 @@ import io.github.yusukensanta.parqueteer.core.models.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-class OutputFormatterTest extends AnyFlatSpec with Matchers {
+class OutputFormatterTest extends AnyFlatSpec with Matchers:
 
   private val simpleContent = FileContent(
     rows = List(Map("id" -> CellValue.I64(1L), "val" -> CellValue.Str("x"))),
@@ -93,4 +93,4 @@ class OutputFormatterTest extends AnyFlatSpec with Matchers {
     result should include("a")
     result should include("b")
   }
-}
+end OutputFormatterTest

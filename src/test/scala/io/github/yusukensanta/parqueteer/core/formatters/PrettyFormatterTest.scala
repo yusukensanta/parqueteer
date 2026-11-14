@@ -5,7 +5,7 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import java.time.Instant
 
-class PrettyFormatterTest extends AnyFlatSpec with Matchers {
+class PrettyFormatterTest extends AnyFlatSpec with Matchers:
 
   private val content = FileContent(
     rows = List(
@@ -188,4 +188,4 @@ class PrettyFormatterTest extends AnyFlatSpec with Matchers {
     val blueCode = "[34m"
     result should include(blueCode)
   }
-}
+end PrettyFormatterTest

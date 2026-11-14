@@ -5,15 +5,14 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import java.io.{ByteArrayOutputStream, PrintStream}
 
-class RowStreamWriterTest extends AnyFlatSpec with Matchers {
+class RowStreamWriterTest extends AnyFlatSpec with Matchers:
 
-  private def capture(f: PrintStream => Unit): String = {
+  private def capture(f: PrintStream => Unit): String =
     val baos = new ByteArrayOutputStream()
     val ps   = new PrintStream(baos, true, "UTF-8")
     f(ps)
     ps.flush()
     baos.toString("UTF-8")
-  }
 
   private def run(
       format: OutputFormat,
@@ -220,20 +219,19 @@ class RowStreamWriterTest extends AnyFlatSpec with Matchers {
   // during sampling; the unseen-key warning only fires for rows arriving after
   // the flush (>= 50 rows have already been buffered and written).
 
-  private def captureStderr[A](block: => A): (A, String) = {
+  private def captureStderr[A](block: => A): (A, String) =
     val baos = new java.io.ByteArrayOutputStream()
     val ps   = new PrintStream(baos)
     val old  = System.err
     System.setErr(ps)
-    try {
+    try
       val result = block; ps.flush(); (result, baos.toString("UTF-8"))
-    } finally System.setErr(old)
-  }
+    finally System.setErr(old)
 
   private def runWithStderr(
       format: OutputFormat,
       rows: List[Map[String, CellValue]]
-  ): (String, String) = {
+  ): (String, String) =
     val outBuf   = new java.io.ByteArrayOutputStream()
     val outPs    = new PrintStream(outBuf, true, "UTF-8")
     val (_, err) = captureStderr {
@@ -244,13 +242,11 @@ class RowStreamWriterTest extends AnyFlatSpec with Matchers {
       outPs.flush()
     }
     (outBuf.toString("UTF-8"), err)
-  }
 
-  private def rowsWithLateColumn(n: Int): List[Map[String, CellValue]] = {
+  private def rowsWithLateColumn(n: Int): List[Map[String, CellValue]] =
     val baseRows = (1 to n).map(i => Map("a" -> CellValue.I64(i.toLong))).toList
     val lateRow  = Map("a" -> CellValue.I64(99L), "b" -> CellValue.Str("new"))
     baseRows :+ lateRow
-  }
 
   "RowStreamWriter CSV" should "emit WARN when a new column appears after the 50-row sample window" in {
     val (_, stderr) = runWithStderr(OutputFormat.CSV, rowsWithLateColumn(50))
@@ -444,4 +440,4 @@ class RowStreamWriterTest extends AnyFlatSpec with Matchers {
     val dataLine = out.split("\r?\n").last
     dataLine shouldBe "'-"
   }
-}
+end RowStreamWriterTest

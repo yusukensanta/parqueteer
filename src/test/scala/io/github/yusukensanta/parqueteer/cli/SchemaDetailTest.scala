@@ -8,7 +8,7 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import scopt.OParser
 
-class SchemaDetailTest extends AnyFlatSpec with Matchers {
+class SchemaDetailTest extends AnyFlatSpec with Matchers:
 
   private val schema            = LogicalTypeFixtures.schema
   private def col(name: String) = schema.columns.find(_.name == name).get
@@ -155,4 +155,4 @@ class SchemaDetailTest extends AnyFlatSpec with Matchers {
     tags.get[Int]("maxRepetitionLevel") shouldBe Right(1)
     tags.downField("fieldId").focus shouldBe Some(Json.Null)
   }
-}
+end SchemaDetailTest

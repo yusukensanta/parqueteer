@@ -5,7 +5,7 @@ import io.github.yusukensanta.parqueteer.core.parsers.{CsvParser, LTSVParser, Ty
 import io.github.yusukensanta.parqueteer.core.util.RowLimiter
 import scala.util.{Failure, Try, Using}
 
-private[services] object DataFileReader {
+private[services] object DataFileReader:
 
   def readJsonFile(path: String): Try[List[Map[String, CellValue]]] = Try {
     parseJsonContent(
@@ -23,7 +23,7 @@ private[services] object DataFileReader {
   def withRows[A](format: InputFormat, path: String, maxRows: Option[Long])(
       f: Iterator[Map[String, CellValue]] => A
   ): Try[A] =
-    format match {
+    format match
       case InputFormat.NDJson => withNdjsonRows(path, maxRows)(f)
       case InputFormat.Csv    => withCsvRows(path, maxRows)(f)
       case InputFormat.Ltsv   => withLtsvRows(path, maxRows)(f)
@@ -31,7 +31,6 @@ private[services] object DataFileReader {
         Failure(
           new IllegalArgumentException("JSON array input cannot be streamed row by row")
         )
-    }
 
   def readNdjsonFile(
       path: String,
@@ -92,12 +91,11 @@ private[services] object DataFileReader {
       Using.resource(
         scala.io.Source.fromInputStream(stdin)(using scala.io.Codec.UTF8)
       )(_.mkString)
-    inputFormat match {
+    inputFormat match
       case InputFormat.Json   => parseJsonContent(content)
       case InputFormat.NDJson => parseNdjsonContent(content)
       case InputFormat.Csv    => parseCsvContent(content)
       case InputFormat.Ltsv   => parseLtsvContent(content)
-    }
   }
 
   def parseLtsvContent(
@@ -111,7 +109,7 @@ private[services] object DataFileReader {
     if j.isString then
       TypeInferrer
         .inferJsonString(j.asString.get)
-    else if j.isNumber then {
+    else if j.isNumber then
       val n   = j.asNumber.get
       val raw = j.noSpaces
       if raw.contains('.') then
@@ -124,7 +122,7 @@ private[services] object DataFileReader {
                 .map(CellValue.I64.apply)
                 .getOrElse(CellValue.Dec(bd.setScale(0)))
             else if !isWhole && tooLargeForF64 then CellValue.Dec(bd)
-            else if isWhole && (raw.contains('e') || raw.contains('E')) then {
+            else if isWhole && (raw.contains('e') || raw.contains('E')) then
               val eIdx            = raw.indexWhere(c => c == 'e' || c == 'E')
               val mantissa        = raw.take(eIdx)
               val dotIdx          = mantissa.indexOf('.')
@@ -135,7 +133,7 @@ private[services] object DataFileReader {
                   .map(CellValue.I64.apply)
                   .getOrElse(CellValue.F64(n.toDouble))
               else CellValue.F64(n.toDouble)
-            } else CellValue.F64(n.toDouble)
+            else CellValue.F64(n.toDouble)
           }
           .getOrElse(CellValue.F64(n.toDouble))
       else
@@ -143,21 +141,21 @@ private[services] object DataFileReader {
           .map(CellValue.I64.apply)
           .orElse(n.toBigDecimal.map(CellValue.Dec.apply))
           .getOrElse(CellValue.F64(n.toDouble))
-    } else if j.isBoolean then CellValue.Bool(j.asBoolean.get)
+    else if j.isBoolean then CellValue.Bool(j.asBoolean.get)
     else if j.isNull then CellValue.Null
     else CellValue.Str(j.toString)
 
   def parseJsonContent(
       content: String
-  ): List[Map[String, CellValue]] = {
+  ): List[Map[String, CellValue]] =
     import io.circe.parser.*
-    parse(content) match {
+    parse(content) match
       case Left(error) =>
         throw new IllegalArgumentException(
           s"Failed to parse JSON: ${error.getMessage}"
         )
       case Right(json) =>
-        json.asArray match {
+        json.asArray match
           case Some(array) =>
             array.toList.map { elem =>
               jsonObjectToRow(
@@ -169,9 +167,6 @@ private[services] object DataFileReader {
             throw new IllegalArgumentException(
               "JSON input must be an array of objects"
             )
-        }
-    }
-  }
 
   def parseNdjsonContent(
       content: String
@@ -180,13 +175,13 @@ private[services] object DataFileReader {
 
   private def parseNdjsonLinesIterator(
       lines: Iterator[String]
-  ): Iterator[Map[String, CellValue]] = {
+  ): Iterator[Map[String, CellValue]] =
     import io.circe.parser.*
     lines
       .map(_.trim)
       .filter(_.nonEmpty)
       .map { line =>
-        parse(line) match {
+        parse(line) match
           case Left(error) =>
             throw new IllegalArgumentException(
               s"Failed to parse NDJSON line: ${error.getMessage}"
@@ -196,9 +191,7 @@ private[services] object DataFileReader {
               json,
               s"Each NDJSON line must be a JSON object, got: ${truncate(json.noSpaces)}"
             )
-        }
       }
-  }
 
   private def jsonObjectToRow(
       json: io.circe.Json,
@@ -221,5 +214,4 @@ private[services] object DataFileReader {
   private def truncate(s: String): String =
     if s.length <= ErrorPreviewMaxLen then s
     else s.take(ErrorPreviewMaxLen) + "…"
-
-}
+end DataFileReader

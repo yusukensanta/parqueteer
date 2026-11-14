@@ -4,24 +4,23 @@ import io.github.yusukensanta.parqueteer.config.{ConfigurationManager, EnvConfig
 import io.github.yusukensanta.parqueteer.core.models.GlobalOptions
 import io.github.yusukensanta.parqueteer.core.util.CredentialRedactor
 
-private[cli] object ConfigCommandRenderer {
+private[cli] object ConfigCommandRenderer:
 
   def render(
       cmd: ConfigCommand,
       globalOptions: GlobalOptions
-  ): Int = {
+  ): Int =
     val configManager = new ConfigurationManager()
     val configPath    = globalOptions.configPath
     if cmd.validate then renderValidation(configManager, configPath, globalOptions)
     else renderStatus(configManager, configPath, globalOptions)
-  }
 
   private def renderValidation(
       configManager: ConfigurationManager,
       configPath: Option[String],
       globalOptions: GlobalOptions
   ): Int =
-    configManager.validate(configPath) match {
+    configManager.validate(configPath) match
       case scala.util.Success(Nil) =>
         if !globalOptions.quiet then println(s"✓ Configuration is valid")
         0
@@ -33,14 +32,13 @@ private[cli] object ConfigCommandRenderer {
           s"Config error: ${CredentialRedactor.redact(ex.getMessage)}"
         )
         1
-    }
 
   private def renderStatus(
       configManager: ConfigurationManager,
       configPath: Option[String],
       globalOptions: GlobalOptions
-  ): Int = {
-    if !globalOptions.quiet then {
+  ): Int =
+    if !globalOptions.quiet then
       val resolvedPath = configManager.resolvedConfigPath(configPath)
       val fileExists   = java.nio.file.Files.exists(java.nio.file.Paths.get(resolvedPath))
       println(
@@ -53,17 +51,14 @@ private[cli] object ConfigCommandRenderer {
       println()
 
       val envVars = EnvConfig.allSet
-      if envVars.isEmpty then {
-        println("Environment variables: (none set)")
-      } else {
+      if envVars.isEmpty then println("Environment variables: (none set)")
+      else
         println("Environment variables:")
         EnvConfig.SupportedVars.foreach { key =>
-          envVars.get(key) match {
+          envVars.get(key) match
             case Some(v) => println(s"  $key=${CredentialRedactor.redact(v)}")
             case None    => ()
-          }
         }
-      }
       println()
 
       println("Resolved settings:")
@@ -71,14 +66,13 @@ private[cli] object ConfigCommandRenderer {
         .map(_.toString.toLowerCase + " [env]")
         .getOrElse("table [default]")
       println(s"  format:   $fmt")
-      val color = {
+      val color =
         val cm  = globalOptions.colorMode
         val src =
           if sys.env.get("NO_COLOR").exists(_.nonEmpty) then "[env: NO_COLOR]"
           else if sys.env.contains("PARQUETEER_COLOR") then "[env]"
           else "[default]"
         s"${cm.toString.toLowerCase} $src"
-      }
       println(s"  color:    $color")
       val verboseFlag =
         if globalOptions.verbose then "true [cli/env]" else "false [default]"
@@ -89,7 +83,7 @@ private[cli] object ConfigCommandRenderer {
       EnvConfig.parsedMaxRows.foreach { n =>
         println(s"  limit: $n [env: PARQUETEER_MAX_ROWS]")
       }
-    }
+    end if
     0
-  }
-}
+  end renderStatus
+end ConfigCommandRenderer

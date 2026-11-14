@@ -4,7 +4,7 @@ import io.github.yusukensanta.parqueteer.core.models.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-class CloudCredentialManagerTest extends AnyFlatSpec with Matchers {
+class CloudCredentialManagerTest extends AnyFlatSpec with Matchers:
 
   "CloudCredentialManager" should "return S3CredentialManager for S3Location" in {
     val location = S3Location("bucket", "key")
@@ -180,12 +180,11 @@ class CloudCredentialManagerTest extends AnyFlatSpec with Matchers {
       "com.google.cloud.hadoop.fs.gcs.GoogleHadoopFileSystem"
   }
 
-  private def credentialFile(json: String): String = {
+  private def credentialFile(json: String): String =
     val f = java.nio.file.Files.createTempFile("gcs-cred", ".json")
     java.nio.file.Files.writeString(f, json)
     f.toFile.deleteOnExit()
     f.toString
-  }
 
   it should "select SERVICE_ACCOUNT_JSON_KEYFILE auth when a service account key is resolved" in {
     val path = credentialFile("""{ "type" : "service_account", "project_id": "p" }""")
@@ -252,9 +251,8 @@ class CloudCredentialManagerTest extends AnyFlatSpec with Matchers {
 
   "AzureCredentialManager" should "use the Azure identity chain via a Custom token provider by default" in {
     val loc = AzureLocation("myaccount", "mycontainer", "path/to/file")
-    val mgr = new AzureCredentialManager {
+    val mgr = new AzureCredentialManager:
       override def env(key: String): Option[String] = None
-    }
     val conf = mgr.configureHadoop(loc).get
     conf.get("fs.azure.account.auth.type.myaccount.dfs.core.windows.net") shouldBe "Custom"
     conf.get(
@@ -265,12 +263,10 @@ class CloudCredentialManagerTest extends AnyFlatSpec with Matchers {
 
   it should "use the Azure CLI credential when AZURE_AUTH_METHOD=azure_cli" in {
     val loc = AzureLocation("myaccount", "mycontainer", "path/to/file")
-    val mgr = new AzureCredentialManager {
-      override def env(key: String): Option[String] = key match {
+    val mgr = new AzureCredentialManager:
+      override def env(key: String): Option[String] = key match
         case "AZURE_AUTH_METHOD" => Some("azure_cli")
         case _                   => None
-      }
-    }
     val conf = mgr.configureHadoop(loc).get
     conf.get("fs.azure.account.auth.type.myaccount.dfs.core.windows.net") shouldBe "Custom"
     conf.get(
@@ -281,12 +277,10 @@ class CloudCredentialManagerTest extends AnyFlatSpec with Matchers {
 
   it should "use the credential chain when AZURE_AUTH_METHOD=default" in {
     val loc = AzureLocation("myaccount", "mycontainer", "path/to/file")
-    val mgr = new AzureCredentialManager {
-      override def env(key: String): Option[String] = key match {
+    val mgr = new AzureCredentialManager:
+      override def env(key: String): Option[String] = key match
         case "AZURE_AUTH_METHOD" => Some("default")
         case _                   => None
-      }
-    }
     mgr.configureHadoop(loc).get.get(AzureIdentityTokenProvider.CredentialKey) shouldBe "default"
   }
 
@@ -310,14 +304,12 @@ class CloudCredentialManagerTest extends AnyFlatSpec with Matchers {
 
   "AzureCredentialManager" should "cover managed_identity with optional AZURE_TENANT_ID and AZURE_CLIENT_ID" in {
     val loc = AzureLocation("acct", "ctr", "blob")
-    val mgr = new AzureCredentialManager {
-      override def env(key: String): Option[String] = key match {
+    val mgr = new AzureCredentialManager:
+      override def env(key: String): Option[String] = key match
         case "AZURE_AUTH_METHOD" => Some("managed_identity")
         case "AZURE_TENANT_ID"   => Some("tenant-123")
         case "AZURE_CLIENT_ID"   => Some("client-abc")
         case _                   => None
-      }
-    }
     val result = mgr.configureHadoop(loc)
     result.isSuccess shouldBe true
     val conf = result.get
@@ -328,12 +320,10 @@ class CloudCredentialManagerTest extends AnyFlatSpec with Matchers {
 
   it should "cover managed_identity without optional env vars" in {
     val loc = AzureLocation("acct", "ctr", "blob")
-    val mgr = new AzureCredentialManager {
-      override def env(key: String): Option[String] = key match {
+    val mgr = new AzureCredentialManager:
+      override def env(key: String): Option[String] = key match
         case "AZURE_AUTH_METHOD" => Some("managed_identity")
         case _                   => None
-      }
-    }
     val result = mgr.configureHadoop(loc)
     result.isSuccess shouldBe true
     result.get.get("fs.azure.account.auth.type.acct.dfs.core.windows.net") shouldBe "OAuth"
@@ -341,15 +331,13 @@ class CloudCredentialManagerTest extends AnyFlatSpec with Matchers {
 
   it should "cover service_principal when all required env vars are set" in {
     val loc = AzureLocation("acct", "ctr", "blob")
-    val mgr = new AzureCredentialManager {
-      override def env(key: String): Option[String] = key match {
+    val mgr = new AzureCredentialManager:
+      override def env(key: String): Option[String] = key match
         case "AZURE_AUTH_METHOD"   => Some("service_principal")
         case "AZURE_CLIENT_ID"     => Some("cid")
         case "AZURE_CLIENT_SECRET" => Some("csec")
         case "AZURE_TENANT_ID"     => Some("tid")
         case _                     => None
-      }
-    }
     val result = mgr.configureHadoop(loc)
     result.isSuccess shouldBe true
     val conf = result.get
@@ -363,12 +351,10 @@ class CloudCredentialManagerTest extends AnyFlatSpec with Matchers {
 
   it should "return Failure for service_principal when AZURE_CLIENT_ID is missing" in {
     val loc = AzureLocation("acct", "ctr", "blob")
-    val mgr = new AzureCredentialManager {
-      override def env(key: String): Option[String] = key match {
+    val mgr = new AzureCredentialManager:
+      override def env(key: String): Option[String] = key match
         case "AZURE_AUTH_METHOD" => Some("service_principal")
         case _                   => None
-      }
-    }
     val result = mgr.configureHadoop(loc)
     result.isFailure shouldBe true
     result.failed.get.getMessage should include("AZURE_CLIENT_ID")
@@ -376,13 +362,11 @@ class CloudCredentialManagerTest extends AnyFlatSpec with Matchers {
 
   it should "cover shared_key when AZURE_STORAGE_KEY is set" in {
     val loc = AzureLocation("acct", "ctr", "blob")
-    val mgr = new AzureCredentialManager {
-      override def env(key: String): Option[String] = key match {
+    val mgr = new AzureCredentialManager:
+      override def env(key: String): Option[String] = key match
         case "AZURE_AUTH_METHOD" => Some("shared_key")
         case "AZURE_STORAGE_KEY" => Some("the-key")
         case _                   => None
-      }
-    }
     val result = mgr.configureHadoop(loc)
     result.isSuccess shouldBe true
     val conf = result.get
@@ -392,24 +376,20 @@ class CloudCredentialManagerTest extends AnyFlatSpec with Matchers {
 
   it should "return Failure for shared_key when AZURE_STORAGE_KEY is missing" in {
     val loc = AzureLocation("acct", "ctr", "blob")
-    val mgr = new AzureCredentialManager {
-      override def env(key: String): Option[String] = key match {
+    val mgr = new AzureCredentialManager:
+      override def env(key: String): Option[String] = key match
         case "AZURE_AUTH_METHOD" => Some("shared_key")
         case _                   => None
-      }
-    }
     mgr.configureHadoop(loc).isFailure shouldBe true
   }
 
   it should "cover sas_token when AZURE_STORAGE_SAS_TOKEN is set" in {
     val loc = AzureLocation("acct", "ctr", "blob")
-    val mgr = new AzureCredentialManager {
-      override def env(key: String): Option[String] = key match {
+    val mgr = new AzureCredentialManager:
+      override def env(key: String): Option[String] = key match
         case "AZURE_AUTH_METHOD"       => Some("sas_token")
         case "AZURE_STORAGE_SAS_TOKEN" => Some("sv=2023&...")
         case _                         => None
-      }
-    }
     val result = mgr.configureHadoop(loc)
     result.isSuccess shouldBe true
     val conf = result.get
@@ -419,12 +399,10 @@ class CloudCredentialManagerTest extends AnyFlatSpec with Matchers {
 
   it should "return Failure for unknown AZURE_AUTH_METHOD" in {
     val loc = AzureLocation("acct", "ctr", "blob")
-    val mgr = new AzureCredentialManager {
-      override def env(key: String): Option[String] = key match {
+    val mgr = new AzureCredentialManager:
+      override def env(key: String): Option[String] = key match
         case "AZURE_AUTH_METHOD" => Some("kerberos")
         case _                   => None
-      }
-    }
     val result = mgr.configureHadoop(loc)
     result.isFailure shouldBe true
     result.failed.get.getMessage should include("Unknown Azure auth method")
@@ -446,55 +424,47 @@ class CloudCredentialManagerTest extends AnyFlatSpec with Matchers {
   }
 
   it should "set region when S3Location has a region" in {
-    val mgr = new S3CredentialManager {
-      override def env(key: String): Option[String] = key match {
+    val mgr = new S3CredentialManager:
+      override def env(key: String): Option[String] = key match
         case "AWS_ACCESS_KEY_ID"     => Some("KEY")
         case "AWS_SECRET_ACCESS_KEY" => Some("SEC")
         case _                       => None
-      }
-    }
     val result = mgr.configureHadoop(S3Location("bucket", "key", region = Some("ap-northeast-1")))
     result.isSuccess shouldBe true
     result.get.get("fs.s3a.endpoint.region") shouldBe "ap-northeast-1"
   }
 
   it should "add https:// prefix and emit warning when AWS_ENDPOINT_URL has no scheme" in {
-    val mgr = new S3CredentialManager {
-      override def env(key: String): Option[String] = key match {
+    val mgr = new S3CredentialManager:
+      override def env(key: String): Option[String] = key match
         case "AWS_ACCESS_KEY_ID"     => Some("KEY")
         case "AWS_SECRET_ACCESS_KEY" => Some("SEC")
         case "AWS_ENDPOINT_URL"      => Some("localhost:9000")
         case _                       => None
-      }
-    }
     val result = mgr.configureHadoop(S3Location("bucket", "key"))
     result.isSuccess shouldBe true
     result.get.get("fs.s3a.endpoint") shouldBe "https://localhost:9000"
   }
 
   it should "set ssl.enabled=false when AWS_ENDPOINT_URL is http://" in {
-    val mgr = new S3CredentialManager {
-      override def env(key: String): Option[String] = key match {
+    val mgr = new S3CredentialManager:
+      override def env(key: String): Option[String] = key match
         case "AWS_ACCESS_KEY_ID"     => Some("KEY")
         case "AWS_SECRET_ACCESS_KEY" => Some("SEC")
         case "AWS_ENDPOINT_URL"      => Some("http://localhost:9000")
         case _                       => None
-      }
-    }
     val result = mgr.configureHadoop(S3Location("bucket", "key"))
     result.isSuccess shouldBe true
     result.get.get("fs.s3a.connection.ssl.enabled") shouldBe "false"
   }
 
   it should "NOT set ssl.enabled when AWS_ENDPOINT_URL is https://" in {
-    val mgr = new S3CredentialManager {
-      override def env(key: String): Option[String] = key match {
+    val mgr = new S3CredentialManager:
+      override def env(key: String): Option[String] = key match
         case "AWS_ACCESS_KEY_ID"     => Some("KEY")
         case "AWS_SECRET_ACCESS_KEY" => Some("SEC")
         case "AWS_ENDPOINT_URL"      => Some("https://minio.example.com")
         case _                       => None
-      }
-    }
     val result = mgr.configureHadoop(S3Location("bucket", "key"))
     result.isSuccess shouldBe true
     result.get.get("fs.s3a.connection.ssl.enabled") should not be "false"
@@ -534,4 +504,4 @@ class CloudCredentialManagerTest extends AnyFlatSpec with Matchers {
       "fs.azure.sas.mycontainer.myaccount.dfs.core.windows.net"
     ) shouldBe null
   }
-}
+end CloudCredentialManagerTest

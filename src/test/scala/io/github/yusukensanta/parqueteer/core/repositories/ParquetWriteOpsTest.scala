@@ -7,7 +7,7 @@ import org.apache.parquet.example.data.simple.SimpleGroupFactory
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-class ParquetWriteOpsTest extends AnyFlatSpec with Matchers {
+class ParquetWriteOpsTest extends AnyFlatSpec with Matchers:
 
   // ── convertCompressionType ───────────────────────────────────────────────
 
@@ -787,4 +787,4 @@ class ParquetWriteOpsTest extends AnyFlatSpec with Matchers {
     }
     ex.getMessage should include("Column 'id' is required")
   }
-}
+end ParquetWriteOpsTest

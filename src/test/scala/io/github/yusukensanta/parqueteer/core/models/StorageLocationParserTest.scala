@@ -3,7 +3,7 @@ package io.github.yusukensanta.parqueteer.core.models
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-class StorageLocationParserTest extends AnyFlatSpec with Matchers {
+class StorageLocationParserTest extends AnyFlatSpec with Matchers:
 
   "StorageLocationParser" should "parse S3 URLs correctly" in {
     val result =
@@ -192,4 +192,4 @@ class StorageLocationParserTest extends AnyFlatSpec with Matchers {
   it should "treat local and unknown-scheme paths as non-cloud" in
     List("/tmp/out.csv", "out.csv", "./s3://not-a-scheme", "ftp://host/file", "S3://upper")
       .foreach(StorageLocationParser.hasCloudScheme(_) shouldBe false)
-}
+end StorageLocationParserTest

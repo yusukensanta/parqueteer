@@ -12,7 +12,7 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import scopt.OParser
 
-class ArgumentParserTest extends AnyFlatSpec with Matchers {
+class ArgumentParserTest extends AnyFlatSpec with Matchers:
 
   "ArgumentParser" should "parse read command correctly" in {
     val args = Array(
@@ -781,4 +781,4 @@ class ArgumentParserTest extends AnyFlatSpec with Matchers {
       ArgumentParser.Config()
     ) shouldBe None
   }
-}
+end ArgumentParserTest

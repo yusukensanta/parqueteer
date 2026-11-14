@@ -10,11 +10,11 @@ import scala.jdk.CollectionConverters.*
  * Translates parquet-java schema types (annotations, groups, the whole tree)
  * into the report models. Pure: works on an in-memory [[MessageType]].
  */
-private[repositories] object SchemaTypeReader {
+private[repositories] object SchemaTypeReader:
 
   /** Full logical type annotation with every parameter the footer carries. */
   def describeLogicalType(annotation: LogicalTypeAnnotation): LogicalTypeDetail =
-    annotation match {
+    annotation match
       case ts: TimestampLogicalTypeAnnotation =>
         LogicalTypeDetail(
           "TIMESTAMP",
@@ -40,7 +40,6 @@ private[repositories] object SchemaTypeReader {
         LogicalTypeDetail(
           other.getClass.getSimpleName.stripSuffix("LogicalTypeAnnotation").toUpperCase
         )
-    }
 
   private def logicalOf(t: Type): Option[LogicalTypeDetail] =
     Option(t.getLogicalTypeAnnotation).map(describeLogicalType)
@@ -70,9 +69,9 @@ private[repositories] object SchemaTypeReader {
       ._2
       .reverse
 
-  def tree(root: MessageType): SchemaNode = {
+  def tree(root: MessageType): SchemaNode =
     def node(t: Type): SchemaNode =
-      if t.isPrimitive then {
+      if t.isPrimitive then
         val p = t.asPrimitiveType
         SchemaNode(
           name = t.getName,
@@ -84,7 +83,7 @@ private[repositories] object SchemaTypeReader {
           fieldId = Option(t.getId).map(_.intValue),
           children = Nil
         )
-      } else
+      else
         SchemaNode(
           name = t.getName,
           repetition = Some(t.getRepetition.name),
@@ -105,5 +104,5 @@ private[repositories] object SchemaTypeReader {
       fieldId = None,
       children = root.getFields.asScala.toList.map(node)
     )
-  }
-}
+  end tree
+end SchemaTypeReader

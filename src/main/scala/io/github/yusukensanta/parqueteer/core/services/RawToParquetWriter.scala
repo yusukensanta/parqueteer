@@ -14,7 +14,7 @@ import scala.util.Try
 private[services] class RawToParquetWriter(
     repository: ParquetRepository,
     streamWrite: StreamWriteSupport
-) {
+):
   import streamWrite.{abortOnReadError, buildExplicitSchema, handleStreamWriteResult, projectRow}
 
   def writeFile(
@@ -23,12 +23,12 @@ private[services] class RawToParquetWriter(
       writeConfig: WriteConfig = WriteConfig(),
       schema: Option[ParquetSchema] = None
   ): Either[ParqueteerError, Unit] =
-    for {
+    for
       location <- parseLocation(path)
       _        <- repository
         .writeContent(location, data, schema, writeConfig)
         .toParqueteerError
-    } yield ()
+    yield ()
 
   def readDataFile(
       path: String,
@@ -42,7 +42,7 @@ private[services] class RawToParquetWriter(
         .map(RowLimiter.limitList(_, maxRows))
         .toParqueteerError
     else
-      inputFormat match {
+      inputFormat match
         case InputFormat.Json =>
           DataFileReader
             .readJsonFile(path)
@@ -54,7 +54,6 @@ private[services] class RawToParquetWriter(
           DataFileReader.readCsvFile(path, maxRows).toParqueteerError
         case InputFormat.Ltsv =>
           DataFileReader.readLtsvFile(path, maxRows).toParqueteerError
-      }
 
   /**
    * Writes a (non-parquet) data file to parquet with bounded memory for NDJSON,
@@ -87,7 +86,7 @@ private[services] class RawToParquetWriter(
       fields: Option[List[FieldSummary]],
       writeConfig: WriteConfig
   ): Either[ParqueteerError, Option[ParquetSchema]] =
-    fields match {
+    fields match
       case None     => Right(None)
       case Some(fs) =>
         val schema = buildExplicitSchema(fs, writeConfig.compressionType.codecName)
@@ -97,7 +96,6 @@ private[services] class RawToParquetWriter(
           .left
           .map(e => ParqueteerError.ParseError("schema contract", e.getMessage))
           .map(_ => Some(schema))
-    }
 
   /**
    * Two-pass bounded-memory write for a single ndjson/ltsv/csv input: infer a
@@ -112,10 +110,10 @@ private[services] class RawToParquetWriter(
       writeConfig: WriteConfig,
       maxRows: Option[Long],
       explicitSchema: Option[ParquetSchema]
-  ): Either[ParqueteerError, Long] = {
+  ): Either[ParqueteerError, Long] =
     def withRows[A](f: Iterator[Map[String, CellValue]] => A): Try[A] =
       DataFileReader.withRows(inputFormat, inputPath, maxRows)(f)
-    for {
+    for
       outputLocation <- parseLocation(outputPath)
       // With --schema the inference pass is skipped: one read of the input.
       schema <- explicitSchema
@@ -127,8 +125,7 @@ private[services] class RawToParquetWriter(
         )
       }.flatten
       count <- handleStreamWriteResult(outputLocation, writeResult)
-    } yield count
-  }
+    yield count
 
   private def bufferedWriteDataFile(
       inputPath: String,
@@ -138,10 +135,10 @@ private[services] class RawToParquetWriter(
       maxRows: Option[Long],
       explicitSchema: Option[ParquetSchema]
   ): Either[ParqueteerError, Long] =
-    for {
+    for
       data <- readDataFile(inputPath, inputFormat, maxRows = maxRows)
       _    <- writeFile(outputPath, data, writeConfig, explicitSchema)
-    } yield data.size.toLong
+    yield data.size.toLong
 
   /**
    * Writes multiple raw (non-parquet) input files into ONE parquet output,
@@ -183,14 +180,14 @@ private[services] class RawToParquetWriter(
       schemaMode: SchemaMode,
       onProgress: (Int, Int, String) => Unit,
       explicitSchema: Option[ParquetSchema]
-  ): Either[ParqueteerError, Long] = {
+  ): Either[ParqueteerError, Long] =
     def inferOne(rows: List[Map[String, CellValue]]): Either[ParqueteerError, List[FieldSummary]] =
       repository
         .inferSchemaFromRows(rows.iterator)
         .toParqueteerError
         .map(_.columns.map(c => FieldSummary(c.name, c.dataType, c.isOptional)))
 
-    for {
+    for
       rowsPerFile <- Eithers.traverse(paths.zipWithIndex) { (path, idx) =>
         onProgress(idx + 1, paths.size, path)
         readDataFile(path, InputFormat.Json)
@@ -207,8 +204,9 @@ private[services] class RawToParquetWriter(
       allRows = rowsPerFile.toList.flatten
       rowCount <- writeFile(outputPath, allRows, writeConfig, explicitSchema)
         .map(_ => allRows.size.toLong)
-    } yield rowCount
-  }
+    yield rowCount
+
+  end bufferedMultiRawToParquet
 
   private def streamMultiRawToParquet(
       paths: List[String],
@@ -219,7 +217,7 @@ private[services] class RawToParquetWriter(
       onProgress: (Int, Int, String) => Unit,
       fileParallelism: Int,
       explicitSchema: Option[ParquetSchema]
-  ): Either[ParqueteerError, Long] = {
+  ): Either[ParqueteerError, Long] =
     def withRows[A](path: String)(f: Iterator[Map[String, CellValue]] => Try[A]): Try[A] =
       DataFileReader.withRows(inputFormat, path, None)(f).flatten
 
@@ -228,7 +226,7 @@ private[services] class RawToParquetWriter(
         _.columns.map(c => FieldSummary(c.name, c.dataType, c.isOptional))
       )
 
-    for {
+    for
       outputLocation <- parseLocation(outputPath)
       // With --schema there is no inference pass: rows are written as-is and
       // checked against the declared schema (unknown column / missing
@@ -266,6 +264,7 @@ private[services] class RawToParquetWriter(
           abortOnReadError(pipelineResult.toTry)
       }
       count <- handleStreamWriteResult(outputLocation, writeResult)
-    } yield count
-  }
-}
+    yield count
+    end for
+  end streamMultiRawToParquet
+end RawToParquetWriter

@@ -8,7 +8,7 @@ import scala.util.{Failure, Success, Try}
 import java.io.ByteArrayInputStream
 import java.time.Instant
 
-class ParquetServiceTest extends AnyFlatSpec with Matchers {
+class ParquetServiceTest extends AnyFlatSpec with Matchers:
 
   // ── Test Double ──────────────────────────────────────────────────────────
   private class FakeParquetRepository(
@@ -24,7 +24,7 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
       ),
       deleteResult: Try[Unit] = Success(()),
       inferSchemaResult: Try[ParquetSchema] = Success(defaultSchema)
-  ) extends ParquetRepository {
+  ) extends ParquetRepository:
 
     override def readContent(
         file: ParquetFile,
@@ -34,10 +34,10 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     override def readFileInfo(
         file: ParquetFile
     ): Try[(ParquetSchema, FileMetadata, List[RowGroupInfo])] =
-      for {
+      for
         s <- schemaResult
         m <- metadataResult
-      } yield (s, m, Nil)
+      yield (s, m, Nil)
 
     override def validateFile(
         file: ParquetFile,
@@ -80,8 +80,10 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
 
     override def inferSchemaFromRows(
         rows: Iterator[Map[String, CellValue]]
-    ): Try[ParquetSchema] = { val _ = rows; inferSchemaResult }
-  }
+    ): Try[ParquetSchema] =
+      val _ = rows; inferSchemaResult
+
+  end FakeParquetRepository
 
   // ── Shared fixtures ──────────────────────────────────────────────────────
   private val defaultContent = FileContent(
@@ -179,15 +181,13 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
 
   it should "pass deep=true through to repository" in {
     var capturedDeep = false
-    val repo         = new FakeParquetRepository() {
+    val repo         = new FakeParquetRepository():
       override def validateFile(
           file: ParquetFile,
           deep: Boolean = false
-      ): scala.util.Try[List[String]] = {
+      ): scala.util.Try[List[String]] =
         capturedDeep = deep
         scala.util.Success(List.empty)
-      }
-    }
     new ParquetService(repo).validateFile("/tmp/test.parquet", deep = true)
     capturedDeep shouldBe true
   }
@@ -348,9 +348,9 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
 
   it should "close the InputStream after reading from stdin" in {
     var closed = false
-    val stdin  = new ByteArrayInputStream("""[{"id":1}]""".getBytes("UTF-8")) {
-      override def close(): Unit = { closed = true; super.close() }
-    }
+    val stdin  = new ByteArrayInputStream("""[{"id":1}]""".getBytes("UTF-8")):
+      override def close(): Unit =
+        closed = true; super.close()
     val service = new ParquetService(new FakeParquetRepository())
     service.readDataFile("-", InputFormat.Json, stdin)
     closed shouldBe true
@@ -815,18 +815,16 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
   // ── mergeFiles fail-fast on stream error ─────────────────────────────────
   "ParquetService.mergeFiles" should "stop iterating files immediately on first stream error" in {
     var filesAttempted = 0
-    val repo           = new FakeParquetRepository {
+    val repo           = new FakeParquetRepository:
       override def streamContent(file: ParquetFile, config: ReadConfig)(
           process: Map[String, CellValue] => Unit
-      ): scala.util.Try[Long] = {
+      ): scala.util.Try[Long] =
         filesAttempted += 1
         if filesAttempted == 1 then
           scala.util.Failure(
             new RuntimeException("simulated read error on file 1")
           )
         else scala.util.Success(0L)
-      }
-    }
     val svc    = new ParquetService(repo)
     val result = svc.mergeFiles(
       List("a.parquet", "b.parquet", "c.parquet"),
@@ -846,18 +844,16 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
       "b.parquet" -> (0L, CellValue.I64(2L)),
       "c.parquet" -> (10L, CellValue.I64(3L))
     )
-    val repo = new FakeParquetRepository() {
+    val repo = new FakeParquetRepository():
       override def streamContent(file: ParquetFile, config: ReadConfig)(
           process: Map[String, CellValue] => Unit
-      ): Try[Long] = {
+      ): Try[Long] =
         val (delayMs, id) = rowsByPath(file.location.path.split("/").last)
         if delayMs > 0 then Thread.sleep(delayMs)
         process(Map("id" -> id))
         Success(1L)
-      }
-    }
     val captured      = scala.collection.mutable.ArrayBuffer.empty[Map[String, CellValue]]
-    val capturingRepo = new FakeParquetRepository() {
+    val capturingRepo = new FakeParquetRepository():
       val inner: ParquetRepository = repo
       override def streamContent(file: ParquetFile, config: ReadConfig)(
           process: Map[String, CellValue] => Unit
@@ -866,11 +862,9 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
           location: StorageLocation,
           schema: ParquetSchema,
           config: WriteConfig
-      )(feed: (Map[String, CellValue] => Unit) => Unit): Try[Long] = {
+      )(feed: (Map[String, CellValue] => Unit) => Unit): Try[Long] =
         feed(row => captured.synchronized(captured += row))
         Success(captured.size.toLong)
-      }
-    }
     val service = new ParquetService(capturingRepo)
     val result  = service.mergeFiles(
       List("a.parquet", "b.parquet", "c.parquet"),
@@ -888,14 +882,14 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
   }
 
   it should "fail the merge if any file errors, even when files are fetched concurrently" in {
-    val repo = new FakeParquetRepository() {
+    val repo = new FakeParquetRepository():
       override def streamContent(file: ParquetFile, config: ReadConfig)(
           process: Map[String, CellValue] => Unit
       ): Try[Long] =
         if file.location.path.endsWith("b.parquet") then
           Failure(new RuntimeException("simulated read error on file b"))
-        else { process(Map("id" -> CellValue.I64(1L))); Success(1L) }
-    }
+        else
+          process(Map("id" -> CellValue.I64(1L))); Success(1L)
     val service = new ParquetService(repo)
     val result  = service.mergeFiles(
       List("a.parquet", "b.parquet", "c.parquet"),
@@ -914,10 +908,10 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     var callIndex = 0
     val repo      = new FakeParquetRepository(
       schemaFieldsResult = Success(Nil) // unused; overridden below
-    ) {
+    ):
       override def readSchemaFields(
           file: ParquetFile
-      ): scala.util.Try[List[FieldSummary]] = {
+      ): scala.util.Try[List[FieldSummary]] =
         val result =
           if callIndex == 0 then Success(List(FieldSummary("a", "INT64", isOptional = false)))
           else
@@ -929,12 +923,10 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
             )
         callIndex += 1
         result
-      }
-    }
     var capturedSchema: Option[ParquetSchema] = None
     val capturingRepo                         = new FakeParquetRepository(
       schemaFieldsResult = Success(Nil)
-    ) {
+    ):
       val inner: ParquetRepository = repo
       override def readSchemaFields(
           file: ParquetFile
@@ -945,11 +937,9 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
           config: WriteConfig
       )(
           feed: (Map[String, CellValue] => Unit) => Unit
-      ): scala.util.Try[Long] = {
+      ): scala.util.Try[Long] =
         capturedSchema = Some(schema)
         Success(0L)
-      }
-    }
     val service = new ParquetService(capturingRepo)
     val result  = service.mergeFiles(
       List("/a.parquet", "/b.parquet"),
@@ -968,18 +958,16 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     var capturedSchema: Option[ParquetSchema] = None
     val repo                                  = new FakeParquetRepository(
       schemaFieldsResult = Success(List(FieldSummary("dob", "DATE", isOptional = true)))
-    ) {
+    ):
       override def writeContentStream(
           location: StorageLocation,
           schema: ParquetSchema,
           config: WriteConfig
       )(
           feed: (Map[String, CellValue] => Unit) => Unit
-      ): scala.util.Try[Long] = {
+      ): scala.util.Try[Long] =
         capturedSchema = Some(schema)
         super.writeContentStream(location, schema, config)(feed)
-      }
-    }
     val service = new ParquetService(repo)
     val result  = service.mergeFiles(
       List("/tmp/a.parquet", "/tmp/b.parquet"),
@@ -998,18 +986,16 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     var capturedSchema: Option[ParquetSchema] = None
     val repo                                  = new FakeParquetRepository(
       schemaFieldsResult = Success(List(FieldSummary("name", "STRING", isOptional = true)))
-    ) {
+    ):
       override def writeContentStream(
           location: StorageLocation,
           schema: ParquetSchema,
           config: WriteConfig
       )(
           feed: (Map[String, CellValue] => Unit) => Unit
-      ): scala.util.Try[Long] = {
+      ): scala.util.Try[Long] =
         capturedSchema = Some(schema)
         super.writeContentStream(location, schema, config)(feed)
-      }
-    }
     val service = new ParquetService(repo)
     val result  = service.mergeFiles(
       List("/tmp/a.parquet", "/tmp/b.parquet"),
@@ -1052,18 +1038,16 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     var capturedConfig: Option[WriteConfig] = None
     val repo                                = new FakeParquetRepository(
       schemaFieldsResult = Success(List(FieldSummary("id", "INT64", isOptional = false)))
-    ) {
+    ):
       override def writeContentStream(
           location: StorageLocation,
           schema: ParquetSchema,
           config: WriteConfig
       )(
           feed: (Map[String, CellValue] => Unit) => Unit
-      ): scala.util.Try[Long] = {
+      ): scala.util.Try[Long] =
         capturedConfig = Some(config)
         super.writeContentStream(location, schema, config)(feed)
-      }
-    }
     val service = new ParquetService(repo)
     val result  = service.mergeFiles(
       List("/tmp/a.parquet", "/tmp/b.parquet"),
@@ -1085,12 +1069,10 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     val repo = new FakeParquetRepository(
       writeResult = Failure(alreadyExists),
       deleteResult = Failure(new RuntimeException("should not be called"))
-    ) {
-      override def deleteFile(location: StorageLocation): Try[Unit] = {
+    ):
+      override def deleteFile(location: StorageLocation): Try[Unit] =
         deleteWasCalled = true
         Failure(new RuntimeException("should not be called"))
-      }
-    }
     val service = new ParquetService(repo)
     val result  = service.mergeFiles(
       List("/tmp/a.parquet", "/tmp/b.parquet"),
@@ -1110,12 +1092,10 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
       new java.nio.file.FileAlreadyExistsException("/out.parquet")
     val repo = new FakeParquetRepository(
       writeResult = Failure(alreadyExists)
-    ) {
-      override def deleteFile(location: StorageLocation): Try[Unit] = {
+    ):
+      override def deleteFile(location: StorageLocation): Try[Unit] =
         deleteWasCalled = true
         Success(())
-      }
-    }
     val service = new ParquetService(repo)
     val result  = service.mergeFiles(
       List("/tmp/a.parquet", "/tmp/b.parquet"),
@@ -1134,12 +1114,10 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
       new org.apache.hadoop.fs.FileAlreadyExistsException("/out.parquet")
     val repo = new FakeParquetRepository(
       writeResult = Failure(alreadyExists)
-    ) {
-      override def deleteFile(location: StorageLocation): Try[Unit] = {
+    ):
+      override def deleteFile(location: StorageLocation): Try[Unit] =
         deleteWasCalled = true
         Success(())
-      }
-    }
     val service = new ParquetService(repo)
     val result  = service.convertParquetFile(
       "/tmp/in.parquet",
@@ -1156,7 +1134,7 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
   it should "return an error for union merge when a file has duplicate column names" in {
     val repo = new FakeParquetRepository(
       schemaFieldsResult = Success(Nil)
-    ) {
+    ):
       override def readSchemaFields(
           file: ParquetFile
       ): scala.util.Try[List[FieldSummary]] =
@@ -1166,7 +1144,6 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
             FieldSummary("id", "INT64", isOptional = false) // duplicate
           )
         )
-    }
     val service = new ParquetService(repo)
     val result  = service.mergeFiles(
       List("/a.parquet", "/b.parquet"),
@@ -1191,20 +1168,18 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
   }
 
   it should "expand a glob path via the repository and sort the results" in {
-    val repo = new FakeParquetRepository() {
+    val repo = new FakeParquetRepository():
       override def globStatus(location: StorageLocation): Try[List[StorageLocation]] =
         Success(List(LocalPath("/data/b.parquet"), LocalPath("/data/a.parquet")))
-    }
     val service = new ParquetService(repo)
     service.resolveGlob("/data/*.parquet") shouldBe
       Right(List("/data/a.parquet", "/data/b.parquet"))
   }
 
   it should "return NoGlobMatch when the glob matches nothing" in {
-    val repo = new FakeParquetRepository() {
+    val repo = new FakeParquetRepository():
       override def globStatus(location: StorageLocation): Try[List[StorageLocation]] =
         Success(List.empty)
-    }
     val service = new ParquetService(repo)
     service.resolveGlob("/data/*.parquet") shouldBe
       Left(ParqueteerError.NoGlobMatch("/data/*.parquet"))
@@ -1225,7 +1200,7 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     var capturedSchema: Option[ParquetSchema] = None
     val capturingRepo                         = new FakeParquetRepository(
       schemaFieldsResult = Success(Nil)
-    ) {
+    ):
       override def readSchemaFields(
           file: ParquetFile
       ): scala.util.Try[List[FieldSummary]] = repo.readSchemaFields(file)
@@ -1235,11 +1210,9 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
           config: WriteConfig
       )(
           feed: (Map[String, CellValue] => Unit) => Unit
-      ): scala.util.Try[Long] = {
+      ): scala.util.Try[Long] =
         capturedSchema = Some(schema)
         Success(0L)
-      }
-    }
     val service = new ParquetService(capturingRepo)
     service.mergeFiles(
       List("/a.parquet", "/b.parquet"),
@@ -1268,15 +1241,13 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
 
   it should "report a Union-mode type conflict without mislabeling the format as 'merge'" in {
     var call = 0
-    val repo = new FakeParquetRepository() {
-      override def readSchemaFields(file: ParquetFile): Try[List[FieldSummary]] = {
+    val repo = new FakeParquetRepository():
+      override def readSchemaFields(file: ParquetFile): Try[List[FieldSummary]] =
         call += 1
         Success(
           if call == 1 then List(FieldSummary("id", "INT64", isOptional = false))
           else List(FieldSummary("id", "STRING", isOptional = false))
         )
-      }
-    }
     val service = new ParquetService(repo)
     val result  =
       service.checkSchemaCompatibility(List("/a.parquet", "/b.parquet"), SchemaMode.Union)
@@ -1321,15 +1292,13 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
 
   it should "fail fast under Strict mode when matched files' schemas differ" in {
     var call = 0
-    val repo = new FakeParquetRepository() {
-      override def readSchemaFields(file: ParquetFile): Try[List[FieldSummary]] = {
+    val repo = new FakeParquetRepository():
+      override def readSchemaFields(file: ParquetFile): Try[List[FieldSummary]] =
         call += 1
         Success(
           if call == 1 then List(FieldSummary("id", "INT64", isOptional = false))
           else List(FieldSummary("id", "STRING", isOptional = false))
         )
-      }
-    }
     val service = new ParquetService(repo)
     val result  =
       service.streamReadMulti(List("/a.parquet", "/b.parquet"), ReadConfig(), SchemaMode.Strict)(
@@ -1341,12 +1310,11 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
   // ── writeMultiRawToParquet ──────────────────────────────────────────────
 
   "writeMultiRawToParquet" should "concatenate rows from multiple JSON inputs into one parquet write" in {
-    def tempJsonFile(json: String): String = {
+    def tempJsonFile(json: String): String =
       val f = java.nio.file.Files.createTempFile("parqueteer_write_multi_", ".json")
       java.nio.file.Files.writeString(f, json)
       f.toFile.deleteOnExit()
       f.toString
-    }
     val fileA   = tempJsonFile("""[{"id": 1}]""")
     val fileB   = tempJsonFile("""[{"id": 2}]""")
     val repo    = new FakeParquetRepository()
@@ -1363,19 +1331,18 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
   }
 
   it should "fail fast under Strict mode when JSON inputs' inferred schemas differ" in {
-    def tempJsonFile(json: String): String = {
+    def tempJsonFile(json: String): String =
       val f = java.nio.file.Files.createTempFile("parqueteer_write_multi_mismatch_", ".json")
       java.nio.file.Files.writeString(f, json)
       f.toFile.deleteOnExit()
       f.toString
-    }
     val fileA = tempJsonFile("""[{"id": 1}]""")
     val fileB = tempJsonFile("""[{"id": 2}]""")
     var call  = 0
-    val repo  = new FakeParquetRepository() {
+    val repo  = new FakeParquetRepository():
       override def inferSchemaFromRows(
           rows: Iterator[Map[String, CellValue]]
-      ): Try[ParquetSchema] = {
+      ): Try[ParquetSchema] =
         call += 1
         Success(
           if call == 1 then defaultSchema
@@ -1384,8 +1351,6 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
               List(ColumnInfo("id", "STRING", isOptional = false, 1, 0, "SNAPPY"))
             )
         )
-      }
-    }
     val service = new ParquetService(repo)
     val result  = service.writeMultiRawToParquet(
       List(fileA, fileB),
@@ -1396,4 +1361,4 @@ class ParquetServiceTest extends AnyFlatSpec with Matchers {
     )
     result.isLeft shouldBe true
   }
-}
+end ParquetServiceTest

@@ -20,7 +20,7 @@ object AzureIntegrationTest extends Tag("AzureIntegrationTest")
  *
  * All tests are skipped when the account or container is absent.
  */
-class AzureIntegrationTest extends AnyFlatSpec with Matchers {
+class AzureIntegrationTest extends AnyFlatSpec with Matchers:
 
   private val account   = sys.env.get("AZURE_E2E_ACCOUNT").filter(_.nonEmpty)
   private val container = sys.env.get("AZURE_E2E_CONTAINER").filter(_.nonEmpty)
@@ -43,11 +43,10 @@ class AzureIntegrationTest extends AnyFlatSpec with Matchers {
     AzureLocation(account.get, container.get, s"ci/$label-${UUID.randomUUID()}.parquet")
 
   // CloudAuthException keeps the per-credential reason apart from its message.
-  private def describe(e: Throwable): String = e match {
+  private def describe(e: Throwable): String = e match
     case auth: ParqueteerError.CloudAuthException =>
       s"${auth.getMessage}\n${auth.detail.getOrElse("(no detail)")}"
     case other => Option(other.getMessage).getOrElse("")
-  }
 
   private def assertSuccess[A](result: Try[A], label: String): A =
     result.fold(
@@ -55,13 +54,12 @@ class AzureIntegrationTest extends AnyFlatSpec with Matchers {
       identity
     )
 
-  private def withWrittenFile[A](label: String)(body: AzureLocation => A): A = {
+  private def withWrittenFile[A](label: String)(body: AzureLocation => A): A =
     val loc = freshLocation(label)
-    try {
+    try
       assertSuccess(repo.writeContent(loc, sampleData, None), "write")
       body(loc)
-    } finally Try(repo.deleteFile(loc))
-  }
+    finally Try(repo.deleteFile(loc))
 
   "ParquetRepository" should "write a parquet file to Azure and read it back" taggedAs AzureIntegrationTest in {
     assumeAzureAvailable()
@@ -95,4 +93,4 @@ class AzureIntegrationTest extends AnyFlatSpec with Matchers {
     assertSuccess(repo.deleteFile(loc), "delete")
     repo.readContent(ParquetFile(loc), ReadConfig()).isFailure shouldBe true
   }
-}
+end AzureIntegrationTest

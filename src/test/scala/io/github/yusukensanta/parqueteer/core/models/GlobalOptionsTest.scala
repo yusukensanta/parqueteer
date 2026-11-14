@@ -3,7 +3,7 @@ package io.github.yusukensanta.parqueteer.core.models
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-class GlobalOptionsTest extends AnyFlatSpec with Matchers {
+class GlobalOptionsTest extends AnyFlatSpec with Matchers:
 
   "ColorMode.fromString" should "parse 'always'" in {
     ColorMode.fromString("always") shouldBe Some(ColorMode.Always)
@@ -55,4 +55,4 @@ class GlobalOptionsTest extends AnyFlatSpec with Matchers {
     opts.region shouldBe Some("us-east-1")
     opts.colorMode shouldBe ColorMode.Never
   }
-}
+end GlobalOptionsTest

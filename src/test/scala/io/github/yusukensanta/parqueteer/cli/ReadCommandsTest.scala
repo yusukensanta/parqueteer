@@ -3,7 +3,7 @@ package io.github.yusukensanta.parqueteer.cli
 import io.github.yusukensanta.parqueteer.core.models.*
 import org.scalatest.flatspec.AnyFlatSpec
 
-class ReadCommandsTest extends CliTestSupport {
+class ReadCommandsTest extends CliTestSupport:
 
   // ── executeRead branch coverage ────────────────────────────────────────
 
@@ -78,4 +78,4 @@ class ReadCommandsTest extends CliTestSupport {
       quietOpts
     ) shouldBe 0
   }
-}
+end ReadCommandsTest

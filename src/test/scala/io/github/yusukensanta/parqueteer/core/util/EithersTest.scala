@@ -3,7 +3,7 @@ package io.github.yusukensanta.parqueteer.core.util
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-class EithersTest extends AnyFlatSpec with Matchers {
+class EithersTest extends AnyFlatSpec with Matchers:
 
   "Eithers.traverse" should "collect results in order when all succeed" in {
     Eithers.traverse(List(1, 2, 3))(i => Right(i * 2)) shouldBe Right(Vector(2, 4, 6))
@@ -22,4 +22,3 @@ class EithersTest extends AnyFlatSpec with Matchers {
     result shouldBe Left("bad 2")
     seen shouldBe List(1, 2)
   }
-}

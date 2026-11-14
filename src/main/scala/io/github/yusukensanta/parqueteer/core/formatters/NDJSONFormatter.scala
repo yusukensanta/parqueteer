@@ -3,7 +3,7 @@ package io.github.yusukensanta.parqueteer.core.formatters
 import io.github.yusukensanta.parqueteer.core.models.{FileContent, FileMetadata, ParquetSchema}
 import io.circe.Json
 
-class NDJSONFormatter extends OutputFormatter {
+class NDJSONFormatter extends OutputFormatter:
 
   override def formatContent(
       content: FileContent,
@@ -27,10 +27,7 @@ class NDJSONFormatter extends OutputFormatter {
         .noSpaces + "\n"
     }.mkString
 
-  override def formatMetadata(metadata: FileMetadata): String = {
+  override def formatMetadata(metadata: FileMetadata): String =
     import io.circe.syntax.*
     import io.github.yusukensanta.parqueteer.core.formatters.JSONFormatter.given
     metadata.asJson.noSpaces
-  }
-
-}

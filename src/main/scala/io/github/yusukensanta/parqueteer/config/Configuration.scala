@@ -63,7 +63,7 @@ case class LoggingConfig(
     enableStructured: Boolean = false
 )
 
-object AppConfig {
+object AppConfig:
   private val snakeToCamelRe = "_([a-z\\d])".r
 
   private def normalizeKeys(cursor: ACursor): ACursor =
@@ -95,20 +95,20 @@ object AppConfig {
   given Encoder[LoggingConfig] = deriveEncoder[LoggingConfig]
   given Decoder[AppConfig]     = deriveDecoder[AppConfig].prepare(normalizeKeys)
   given Encoder[AppConfig]     = deriveEncoder[AppConfig]
-}
 
-class ConfigurationManager {
+end AppConfig
+
+class ConfigurationManager:
 
   private val defaultConfigPath =
     Paths.get(System.getProperty("user.home"), ".parqueteer", "config.yaml")
 
-  def loadConfig(configPath: Option[String] = None): Try[AppConfig] = {
+  def loadConfig(configPath: Option[String] = None): Try[AppConfig] =
     val configFile = Paths.get(resolvedConfigPath(configPath))
     if !Files.exists(configFile) then Success(AppConfig())
     else parseConfigFile(configFile)
-  }
 
-  private def parseConfigFile(configFile: Path): Try[AppConfig] = {
+  private def parseConfigFile(configFile: Path): Try[AppConfig] =
     import io.circe.yaml.v12.parser
 
     Try(
@@ -117,42 +117,37 @@ class ConfigurationManager {
       if yamlContent.trim.isEmpty then Success(AppConfig())
       else
         Try {
-          parser.parse(yamlContent) match {
+          parser.parse(yamlContent) match
             case Right(json) =>
-              json.as[AppConfig] match {
+              json.as[AppConfig] match
                 case Right(config) => config
                 case Left(error)   =>
                   throw new RuntimeException(
                     s"Failed to parse configuration: ${CredentialRedactor.redact(error.getMessage)}",
                     error
                   )
-              }
             case Left(error) =>
               throw new RuntimeException(
                 s"Invalid YAML syntax: ${CredentialRedactor.redact(error.getMessage)}",
                 error
               )
-          }
         }
     }
-  }
 
-  def validate(configPath: Option[String] = None): Try[List[String]] = {
+  def validate(configPath: Option[String] = None): Try[List[String]] =
     val configFile = Paths.get(resolvedConfigPath(configPath))
-    if !Files.exists(configFile) then {
+    if !Files.exists(configFile) then
       Success(
         List(
           s"Config file not found: $configFile (using defaults)"
         )
       )
-    } else {
+    else
       parseConfigFile(configFile).map(deadFieldWarnings).recover { case ex =>
         List(CredentialRedactor.redact(Option(ex.getMessage).getOrElse("parse error")))
       }
-    }
-  }
 
-  private def deadFieldWarnings(cfg: AppConfig): List[String] = {
+  private def deadFieldWarnings(cfg: AppConfig): List[String] =
     val warnings = List.newBuilder[String]
     val s3       = cfg.cloud.s3
     if !s3.useSsl then
@@ -169,10 +164,9 @@ class ConfigurationManager {
     if perf.writeBufferSize != "64MB" then
       warnings += s"performance.write_buffer_size: '${perf.writeBufferSize}' is not yet implemented"
     warnings.result()
-  }
 
   def resolvedConfigPath(configPath: Option[String]): String =
     configPath
       .orElse(EnvConfig.configPath)
       .getOrElse(defaultConfigPath.toString)
-}
+end ConfigurationManager

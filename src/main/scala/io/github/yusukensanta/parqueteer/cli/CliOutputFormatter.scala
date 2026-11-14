@@ -11,7 +11,7 @@ import io.circe.Json
 import io.circe.syntax.*
 import io.github.yusukensanta.parqueteer.core.formatters.JSONFormatter.given
 
-private[cli] object CliOutputFormatter {
+private[cli] object CliOutputFormatter:
 
   def formatInfoJson(file: ParquetFile, verbose: Boolean = false): String =
     file.metadata.fold(Json.obj().spaces2) { m =>
@@ -51,7 +51,7 @@ private[cli] object CliOutputFormatter {
       else base.spaces2
     }
 
-  def formatRowGroupsTable(rowGroups: List[RowGroupInfo]): String = {
+  def formatRowGroupsTable(rowGroups: List[RowGroupInfo]): String =
     val header =
       f"${"#"}%5s ${"Rows"}%12s ${"Compressed"}%14s ${"Uncompressed"}%14s"
     val sep  = "-" * header.length
@@ -59,7 +59,6 @@ private[cli] object CliOutputFormatter {
       f"${rg.index}%5d ${rg.rowCount}%12d ${formatBytesForDisplay(rg.compressedBytes)}%14s ${formatBytesForDisplay(rg.uncompressedBytes)}%14s"
     }
     (header :: sep :: rows).mkString("\n")
-  }
 
   // Additive to the compact `dataType`: physical type, structured logical type
   // annotation and legacy converted type. `dataType` is left untouched because
@@ -96,7 +95,7 @@ private[cli] object CliOutputFormatter {
         .spaces2
     }
 
-  def formatStatsTable(stats: FileStats): String = {
+  def formatStatsTable(stats: FileStats): String =
     val sb = new StringBuilder
     sb.append(
       s"Stats: ${stats.totalRows} rows, ${stats.rowGroupCount} row groups\n\n"
@@ -117,7 +116,6 @@ private[cli] object CliOutputFormatter {
       )
     }
     sb.toString.stripTrailing()
-  }
 
   def formatStatsJson(stats: FileStats): String =
     Json
@@ -148,13 +146,12 @@ private[cli] object CliOutputFormatter {
       file1: String,
       file2: String,
       diff: SchemaDiff
-  ): String = {
+  ): String =
     val sb = new StringBuilder
     sb.append(s"Schema diff: $file1 → $file2\n")
 
-    if diff.identical then {
-      sb.append("Schemas are identical.")
-    } else {
+    if diff.identical then sb.append("Schemas are identical.")
+    else
       diff.removed.foreach { c =>
         val opt = if c.isOptional then "optional" else "required"
         sb.append(s"- ${c.name} (${c.dataType}, $opt)\n")
@@ -174,12 +171,12 @@ private[cli] object CliOutputFormatter {
         else sb.append(s"~ ${c.name}: $fromOpt → $toOpt\n")
       }
       if diff.unchanged.nonEmpty then sb.append(s"= ${diff.unchanged.mkString(", ")}")
-    }
 
     sb.toString.stripTrailing()
-  }
 
-  def formatSchemaDiffJson(diff: SchemaDiff): String = {
+  end formatSchemaDiffTable
+
+  def formatSchemaDiffJson(diff: SchemaDiff): String =
     def colJson(c: ColumnInfo) =
       Json.obj(
         "name"     -> Json.fromString(c.name),
@@ -204,11 +201,10 @@ private[cli] object CliOutputFormatter {
         "unchanged" -> Json.fromValues(diff.unchanged.map(Json.fromString))
       )
       .spaces2
-  }
 
   def formatCountJson(count: Long): String =
     Json.obj("count" -> Json.fromLong(count)).spaces2
 
   def formatBytesForDisplay(bytes: Long): String =
     io.github.yusukensanta.parqueteer.core.util.ByteFormatter.format(bytes)
-}
+end CliOutputFormatter

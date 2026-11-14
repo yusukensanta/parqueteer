@@ -9,23 +9,21 @@ import java.io.{ByteArrayOutputStream, PrintStream}
 import java.nio.file.{Files, Path}
 
 /** End-to-end `write --schema` / `convert --schema` against the real writer. */
-class WriteSchemaContractTest extends AnyFlatSpec with Matchers {
+class WriteSchemaContractTest extends AnyFlatSpec with Matchers:
 
   private val service = new ParquetService(new HadoopParquetRepository())
   private val quiet   = GlobalOptions(quiet = true)
 
-  private def tempDir(): Path = {
+  private def tempDir(): Path =
     val d = Files.createTempDirectory("parqueteer_write_schema_")
     d.toFile.deleteOnExit()
     d
-  }
 
-  private def file(dir: Path, name: String, content: String): String = {
+  private def file(dir: Path, name: String, content: String): String =
     val p = dir.resolve(name)
     Files.writeString(p, content)
     p.toFile.deleteOnExit()
     p.toString
-  }
 
   private def silently[A](block: => A): A =
     Console.withErr(new PrintStream(new ByteArrayOutputStream()))(block)
@@ -235,4 +233,4 @@ class WriteSchemaContractTest extends AnyFlatSpec with Matchers {
       )
     ) shouldBe 9
   }
-}
+end WriteSchemaContractTest

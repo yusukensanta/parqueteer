@@ -5,7 +5,7 @@ import org.scalatest.matchers.should.Matchers
 import scala.util.Success
 import java.nio.file.{Files, Path}
 
-class ConfigurationManagerTest extends AnyFlatSpec with Matchers {
+class ConfigurationManagerTest extends AnyFlatSpec with Matchers:
 
   private def newTempDir(): Path =
     Files.createTempDirectory("parqueteer-config-test-")
@@ -303,4 +303,4 @@ class ConfigurationManagerTest extends AnyFlatSpec with Matchers {
     val explicit = "/explicit/config.yaml"
     manager.resolvedConfigPath(Some(explicit)) shouldBe explicit
   }
-}
+end ConfigurationManagerTest

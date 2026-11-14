@@ -9,7 +9,7 @@ import org.apache.parquet.schema.Type.Repetition
 import scala.jdk.CollectionConverters.*
 import org.apache.parquet.example.data.Group
 
-private[repositories] object ParquetWriteOps {
+private[repositories] object ParquetWriteOps:
   private val logger = org.slf4j.LoggerFactory.getLogger(getClass)
 
   private val decimalCoercionWarnedCols =
@@ -55,7 +55,7 @@ private[repositories] object ParquetWriteOps {
       key: String,
       value: CellValue,
       field: PrimitiveType
-  ): CellValue = {
+  ): CellValue =
     import CellValue.*
     def mismatch: Nothing =
       throw new IllegalArgumentException(
@@ -65,9 +65,9 @@ private[repositories] object ParquetWriteOps {
     def parsed[A](text: String)(f: String => A): A =
       scala.util.Try(f(text.trim)).getOrElse(mismatch)
 
-    Option(field.getLogicalTypeAnnotation) match {
+    Option(field.getLogicalTypeAnnotation) match
       case Some(_: LogicalTypeAnnotation.DecimalLogicalTypeAnnotation) =>
-        value match {
+        value match
           case Dec(_)                              => value
           case I32(i)                              => Dec(BigDecimal(i))
           case I64(l)                              => Dec(BigDecimal(l))
@@ -75,63 +75,55 @@ private[repositories] object ParquetWriteOps {
           case F32(f) if !f.isNaN && !f.isInfinite => Dec(BigDecimal(f.toString))
           case Str(text)                           => Dec(parsed(text)(BigDecimal(_)))
           case _                                   => mismatch
-        }
       case Some(_: LogicalTypeAnnotation.DateLogicalTypeAnnotation) =>
-        value match {
+        value match
           case Date(_)   => value
           case Str(text) => Date(parsed(text)(java.time.LocalDate.parse))
           case _         => mismatch
-        }
       case Some(_: LogicalTypeAnnotation.TimestampLogicalTypeAnnotation) =>
-        value match {
+        value match
           case Ts(_)     => value
           case Date(d)   => Ts(d.atStartOfDay(java.time.ZoneOffset.UTC).toInstant)
           case Str(text) => Ts(parsed(text)(java.time.Instant.parse))
           case _         => mismatch
-        }
       case _ =>
-        field.getPrimitiveTypeName match {
+        field.getPrimitiveTypeName match
           case PrimitiveTypeName.BINARY | PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY => value
           case PrimitiveTypeName.INT32                                           =>
-            value match {
+            value match
               case I32(_)                 => value
               case I64(l) if l.isValidInt => I32(l.toInt)
               case Str(text)              => I32(parsed(text)(_.toInt))
               case _                      => mismatch
-            }
           case PrimitiveTypeName.INT64 =>
-            value match {
+            value match
               case I32(_) | I64(_) | Ts(_) => value
               case Str(text)               => I64(parsed(text)(_.toLong))
               case _                       => mismatch
-            }
           case PrimitiveTypeName.DOUBLE | PrimitiveTypeName.FLOAT =>
-            value match {
+            value match
               case I32(_) | I64(_) | F64(_) | F32(_) | Dec(_) => value
               case Str(text)                                  => F64(parsed(text)(_.toDouble))
               case _                                          => mismatch
-            }
           case PrimitiveTypeName.BOOLEAN =>
-            value match {
+            value match
               case Bool(_)   => value
               case Str(text) =>
-                text.trim.toLowerCase match {
+                text.trim.toLowerCase match
                   case "true"  => Bool(true)
                   case "false" => Bool(false)
                   case _       => mismatch
-                }
               case _ => mismatch
-            }
           case _ => value
-        }
-    }
-  }
+    end match
+
+  end coerceForField
 
   def writeRowToGroup(
       group: Group,
       row: Map[String, CellValue],
       schema: MessageType
-  ): Unit = {
+  ): Unit =
     // A REQUIRED column with no value would otherwise surface as an opaque
     // writer error; name the column instead.
     schema.getFields.asScala.foreach { f =>
@@ -143,26 +135,25 @@ private[repositories] object ParquetWriteOps {
         )
     }
     row.foreach { case (key, rawValue) =>
-      if rawValue != CellValue.Null then {
+      if rawValue != CellValue.Null then
         val fieldIndex =
           try schema.getFieldIndex(key)
-          catch {
+          catch
             case _: org.apache.parquet.io.InvalidRecordException =>
               throw new ParqueteerError.RowSchemaMismatchException(
                 s"Column '$key' in input row is not in the write schema (inferred from the input, or given with --schema). All rows must use the schema's columns."
               )
-          }
         val fieldType     = schema.getType(fieldIndex).asPrimitiveType()
         val value         = coerceForField(key, rawValue, fieldType)
         val isBinaryField =
           fieldType.getPrimitiveTypeName == PrimitiveTypeName.BINARY
-        value match {
+        value match
           case CellValue.Str(s)   => group.add(fieldIndex, s)
           case CellValue.Null     => ()
           case CellValue.Bytes(b) =>
             group.add(fieldIndex, Binary.fromConstantByteArray(b.toArray))
           case CellValue.Dec(bd) =>
-            Option(fieldType.getLogicalTypeAnnotation) match {
+            Option(fieldType.getLogicalTypeAnnotation) match
               case Some(
                     dec: LogicalTypeAnnotation.DecimalLogicalTypeAnnotation
                   ) =>
@@ -184,25 +175,23 @@ private[repositories] object ParquetWriteOps {
                       s"declared precision $precision — value may have been rounded out of range. " +
                       s"Use a wider DECIMAL(p,s) type."
                   )
-                fieldType.getPrimitiveTypeName match {
+                fieldType.getPrimitiveTypeName match
                   case PrimitiveTypeName.INT32 =>
                     try group.add(fieldIndex, unscaled.intValueExact())
-                    catch {
+                    catch
                       case _: ArithmeticException =>
                         throw new IllegalArgumentException(
                           s"Column '$key': DECIMAL value $bd (unscaled $unscaled at scale $scale) " +
                             "overflows INT32 range. Use DECIMAL(p,s) with p≤9, or widen the schema type."
                         )
-                    }
                   case PrimitiveTypeName.INT64 =>
                     try group.add(fieldIndex, unscaled.longValueExact())
-                    catch {
+                    catch
                       case _: ArithmeticException =>
                         throw new IllegalArgumentException(
                           s"Column '$key': DECIMAL value $bd (unscaled $unscaled at scale $scale) " +
                             "overflows INT64 range. Use DECIMAL(p,s) with p≤18, or widen the schema type."
                         )
-                    }
                   case PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY =>
                     // BigInteger.toByteArray() produces the minimal
                     // big-endian two's-complement representation, which is
@@ -221,7 +210,7 @@ private[repositories] object ParquetWriteOps {
                       )
                     val padded =
                       if raw.length == declaredLength then raw
-                      else {
+                      else
                         val signByte: Byte =
                           if unscaled.signum < 0 then 0xff.toByte else 0x00.toByte
                         val out = Array.fill[Byte](declaredLength)(signByte)
@@ -233,14 +222,13 @@ private[repositories] object ParquetWriteOps {
                           raw.length
                         )
                         out
-                      }
                     group.add(fieldIndex, Binary.fromConstantByteArray(padded))
                   case _ =>
                     group.add(
                       fieldIndex,
                       Binary.fromConstantByteArray(unscaled.toByteArray)
                     )
-                }
+                end match
               case _ =>
                 if decimalCoercionWarnedCols.add(key) then
                   logger.warn(
@@ -248,7 +236,6 @@ private[repositories] object ParquetWriteOps {
                       "for values with more than 15 significant digits."
                   )
                 group.add(fieldIndex, bd.toDouble)
-            }
           case _ if isBinaryField =>
             if binaryMismatchWarnedCols.add(key) then
               logger.warn(
@@ -256,7 +243,7 @@ private[repositories] object ParquetWriteOps {
               )
             group.add(fieldIndex, value.display)
           case CellValue.I32(i) =>
-            fieldType.getPrimitiveTypeName match {
+            fieldType.getPrimitiveTypeName match
               case PrimitiveTypeName.DOUBLE => group.add(fieldIndex, i.toDouble)
               case PrimitiveTypeName.FLOAT  =>
                 // Int values outside (-2^24, 2^24) cannot be represented exactly as Float (23-bit mantissa).
@@ -270,9 +257,8 @@ private[repositories] object ParquetWriteOps {
                 group.add(fieldIndex, i.toFloat)
               case PrimitiveTypeName.INT64 => group.add(fieldIndex, i.toLong)
               case _                       => group.add(fieldIndex, i)
-            }
           case CellValue.I64(l) =>
-            fieldType.getPrimitiveTypeName match {
+            fieldType.getPrimitiveTypeName match
               case PrimitiveTypeName.DOUBLE =>
                 // Long values outside (-2^53, 2^53) cannot be represented exactly as Double.
                 if (l > 9007199254740992L || l < -9007199254740992L) &&
@@ -295,9 +281,8 @@ private[repositories] object ParquetWriteOps {
                   )
                 group.add(fieldIndex, l.toFloat)
               case _ => group.add(fieldIndex, l)
-            }
           case CellValue.F64(d) =>
-            if fieldType.getPrimitiveTypeName == PrimitiveTypeName.FLOAT then {
+            if fieldType.getPrimitiveTypeName == PrimitiveTypeName.FLOAT then
               // Double values outside ±Float.MaxValue overflow to ±Infinity; NaN stays NaN.
               if (d.isNaN || d > Float.MaxValue.toDouble || d < -Float.MaxValue.toDouble) &&
                 doubleToFloatWarnedCols.add(key)
@@ -307,7 +292,7 @@ private[repositories] object ParquetWriteOps {
                     "coercing to FLOAT produces NaN or ±Infinity. Consider using DOUBLE schema for this column."
                 )
               group.add(fieldIndex, d.toFloat)
-            } else group.add(fieldIndex, d)
+            else group.add(fieldIndex, d)
           case CellValue.F32(f) =>
             if fieldType.getPrimitiveTypeName == PrimitiveTypeName.DOUBLE then
               group.add(fieldIndex, f.toDouble)
@@ -317,12 +302,11 @@ private[repositories] object ParquetWriteOps {
             val fieldName = schema.getType(fieldIndex).getName
             val asInt     =
               try Math.toIntExact(d.toEpochDay)
-              catch {
+              catch
                 case _: ArithmeticException =>
                   throw new IllegalArgumentException(
                     s"Date value '$d' for column '$fieldName' overflows INT32 epoch-day range (~year 5,881,580 max)"
                   )
-              }
             group.add(fieldIndex, asInt)
           case CellValue.Ts(i) =>
             val timeUnit = Option(fieldType.getLogicalTypeAnnotation).collect {
@@ -330,43 +314,40 @@ private[repositories] object ParquetWriteOps {
                 ts.getUnit
             }
             val fieldName = schema.getType(fieldIndex).getName
-            val encoded   = timeUnit match {
+            val encoded   = timeUnit match
               case Some(LogicalTypeAnnotation.TimeUnit.MICROS) =>
                 try
                   Math.addExact(
                     Math.multiplyExact(i.getEpochSecond, 1_000_000L),
                     i.getNano / 1000L
                   )
-                catch {
+                catch
                   case _: ArithmeticException =>
                     throw new IllegalArgumentException(
                       s"Timestamp value '$i' for column '$fieldName' overflows INT64 microsecond range"
                     )
-                }
               case Some(LogicalTypeAnnotation.TimeUnit.NANOS) =>
                 try
                   Math.addExact(
                     Math.multiplyExact(i.getEpochSecond, 1_000_000_000L),
                     i.getNano.toLong
                   )
-                catch {
+                catch
                   case _: ArithmeticException =>
                     throw new IllegalArgumentException(
                       s"Timestamp value '$i' for column '$fieldName' overflows INT64 nanosecond range"
                     )
-                }
               case _ => i.toEpochMilli
-            }
             group.add(fieldIndex, encoded)
-        }
-      }
+        end match
     }
-  }
+
+  end writeRowToGroup
 
   def convertCompressionType(
       compressionType: CompressionType
   ): CompressionCodecName =
-    compressionType match {
+    compressionType match
       case CompressionType.Uncompressed => CompressionCodecName.UNCOMPRESSED
       case CompressionType.Snappy       => CompressionCodecName.SNAPPY
       case CompressionType.Gzip         => CompressionCodecName.GZIP
@@ -374,5 +355,4 @@ private[repositories] object ParquetWriteOps {
       case CompressionType.Brotli       => CompressionCodecName.BROTLI
       case CompressionType.Lz4          => CompressionCodecName.LZ4
       case CompressionType.Zstd         => CompressionCodecName.ZSTD
-    }
-}
+end ParquetWriteOps

@@ -4,7 +4,7 @@ import io.github.yusukensanta.parqueteer.core.models.ParquetSchema
 import org.apache.parquet.schema.MessageTypeParser
 
 /** A schema covering the logical types whose parameters `dataType` loses. */
-object LogicalTypeFixtures {
+object LogicalTypeFixtures:
 
   val message = MessageTypeParser.parseMessageType(
     """message m {
@@ -35,4 +35,4 @@ object LogicalTypeFixtures {
   )
 
   val schema: ParquetSchema = FooterReader.buildParquetSchema(message, Nil)
-}
+end LogicalTypeFixtures

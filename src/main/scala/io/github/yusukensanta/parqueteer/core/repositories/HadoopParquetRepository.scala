@@ -26,17 +26,16 @@ import java.util.concurrent.atomic.AtomicBoolean
 import scala.util.{Failure, Success, Try, Using}
 import scala.jdk.CollectionConverters.*
 
-object HadoopParquetRepository {
+object HadoopParquetRepository:
 
   private val shutdownHookRegistered =
     new AtomicBoolean(false)
-}
 
 class HadoopParquetRepository(
     profile: Option[String] = None,
     region: Option[String] = None,
     s3EndpointUrl: Option[String] = None
-) extends ParquetRepository {
+) extends ParquetRepository:
 
   private val FooterCacheMaxSize = 1024
 
@@ -59,7 +58,7 @@ class HadoopParquetRepository(
     Runtime.getRuntime.addShutdownHook(
       new Thread(() =>
         try FileSystem.closeAll()
-        catch { case _: Throwable => () }
+        catch case _: Throwable => ()
       )
     )
 
@@ -76,7 +75,7 @@ class HadoopParquetRepository(
       path: HadoopPath,
       conf: Configuration,
       knownStatus: Option[FileStatus]
-  ): (SeekableInputStream, Long) = location match {
+  ): (SeekableInputStream, Long) = location match
     case LocalPath(p) =>
       val localFile = new LocalInputFile(Paths.get(p))
       (localFile.newStream(), localFile.getLength)
@@ -85,7 +84,6 @@ class HadoopParquetRepository(
       val status = knownStatus.getOrElse(fs.getFileStatus(path))
       val stream = HadoopStreams.wrap(fs.openFile(path).withFileStatus(status).build().get())
       (stream, status.getLen)
-  }
 
   // Same LocalPath-vs-cloud branch as openFooterStream, but returning a plain
   // InputFile for callers (validateFile) that use parquet-mr's own generic
@@ -95,10 +93,9 @@ class HadoopParquetRepository(
       location: StorageLocation,
       path: HadoopPath,
       conf: Configuration
-  ): InputFile = location match {
+  ): InputFile = location match
     case LocalPath(p) => new LocalInputFile(Paths.get(p))
     case _            => HadoopInputFile.fromPath(path, conf)
-  }
 
   // Cache-aware footer fetch: 0 cloud ops on hit, at most 1 stat + 1 stream on
   // miss (0 stats when the caller already knows the FileStatus).
@@ -107,7 +104,7 @@ class HadoopParquetRepository(
       path: HadoopPath,
       conf: Configuration,
       knownStatus: Option[FileStatus] = None
-  ): FooterInfo = {
+  ): FooterInfo =
     val key = path.toString
     footerCache.get(key).getOrElse {
       val (stream, fileLen) = openFooterStream(location, path, conf, knownStatus)
@@ -115,7 +112,6 @@ class HadoopParquetRepository(
       footerCache.put(key, footer)
       footer
     }
-  }
 
   // ── Public API ────────────────────────────────────────────────────────────
 
@@ -146,7 +142,7 @@ class HadoopParquetRepository(
               ),
               false
             )
-          else {
+          else
             val path4s    = Parquet4sPath(file.location.path)
             val decodeRow = ParquetRecordDecoder.rowDecoderFor(fileSchema)
             Using.resource(
@@ -156,9 +152,9 @@ class HadoopParquetRepository(
               // the take — reader is a ParquetIterable (Iterable), not an Iterator.
               val baseIter = reader.iterator
               val taken    = applyMaxRows(
-                new IterableOnce[RowParquetRecord] {
+                new IterableOnce[RowParquetRecord]:
                   def iterator: Iterator[RowParquetRecord] = baseIter
-                },
+                ,
                 config.maxRows
               ).map(decodeRow).toList
               // Peek one more row to determine if more matching rows exist beyond the limit.
@@ -169,7 +165,6 @@ class HadoopParquetRepository(
                   Try(baseIter.hasNext).getOrElse(false)
               (taken, peek)
             }
-          }
         val hitLimit  = config.maxRows.exists(rows.size.toLong >= _)
         val isPartial =
           if config.filter.isDefined then hitLimit && hasMoreAfterLimit
@@ -218,7 +213,7 @@ class HadoopParquetRepository(
       hadoopConfig: Configuration,
       config: ReadConfig,
       fileSchema: MessageType
-  ): com.github.mjakubowski84.parquet4s.ParquetIterable[RowParquetRecord] = {
+  ): com.github.mjakubowski84.parquet4s.ParquetIterable[RowParquetRecord] =
     val filter = config.filter
       .map { expr =>
         import io.github.yusukensanta.parqueteer.core.filters.FilterParser
@@ -234,7 +229,7 @@ class HadoopParquetRepository(
           )
       }
       .getOrElse(Filter.noopFilter)
-    config.columns match {
+    config.columns match
       case Some(cols) if cols.nonEmpty =>
         val schema = ParquetSchemaBuilder.projectSchema(fileSchema, cols)
         ParquetReader
@@ -248,8 +243,8 @@ class HadoopParquetRepository(
           .options(ParquetReader.Options(hadoopConf = hadoopConfig))
           .filter(filter)
           .read(path4s)
-    }
-  }
+
+  end openParquetReader
 
   // Size + mtime for FileMetadata. Takes no Configuration/FileSystem — for
   // local paths this is the only extra Hadoop touch readFileInfo needed
@@ -258,11 +253,10 @@ class HadoopParquetRepository(
   // and "info" CLI commands skip Hadoop entirely for local files. Mirrors
   // Hadoop's own FileNotFoundException-on-missing-path contract so error
   // handling (ParqueteerError's FileNotFoundException case) is unaffected.
-  private[repositories] def localFileSizeAndMTime(path: String): (Long, Long) = {
+  private[repositories] def localFileSizeAndMTime(path: String): (Long, Long) =
     val f = new java.io.File(path)
     if !f.exists() then throw new FileNotFoundException(path)
     (f.length(), f.lastModified())
-  }
 
   // Size + mtime (+ the FileStatus, when one had to be fetched, so getFooter
   // can reuse it instead of issuing a second HEAD on cloud storage).
@@ -270,14 +264,13 @@ class HadoopParquetRepository(
       location: StorageLocation,
       path: HadoopPath,
       hadoopConfig: Configuration
-  ): (Long, Long, Option[FileStatus]) = location match {
+  ): (Long, Long, Option[FileStatus]) = location match
     case LocalPath(p) =>
       val (size, mtime) = localFileSizeAndMTime(p)
       (size, mtime, None)
     case _ =>
       val status = path.getFileSystem(hadoopConfig).getFileStatus(path)
       (status.getLen, status.getModificationTime, Some(status))
-  }
 
   def readFileInfo(
       file: ParquetFile
@@ -326,13 +319,12 @@ class HadoopParquetRepository(
       location: StorageLocation,
       hadoopConfig: Configuration,
       config: WriteConfig
-  ): HParquetWriter[Group] = {
-    location match {
+  ): HParquetWriter[Group] =
+    location match
       case LocalPath(p) =>
         val parent = Paths.get(p).getParent
         if parent != null then Files.createDirectories(parent)
       case _ =>
-    }
 
     ExampleParquetWriter
       .builder(new HadoopPath(location.path))
@@ -346,7 +338,6 @@ class HadoopParquetRepository(
       .withDictionaryEncoding(config.enableDictionary)
       .withValidation(true)
       .build()
-  }
 
   def writeContent(
       location: StorageLocation,
@@ -359,14 +350,13 @@ class HadoopParquetRepository(
       // footer for this path is stale regardless of outcome — evict it.
       val cacheKey = new HadoopPath(location.path).toString
       val result   = Try {
-        val parquetSchema = schema match {
+        val parquetSchema = schema match
           case Some(ps) => ParquetSchemaBuilder.buildMessageType(ps)
           case None     =>
             // data is already fully in memory (List); infer from all rows to
             // avoid RowSchemaMismatchException when rows beyond the sample
             // introduce new columns or wider types.
             ParquetSchemaBuilder.inferSchemaFromData(data)
-        }
 
         Using.resource(
           buildWriter(parquetSchema, location, hadoopConfig, config)
@@ -439,14 +429,14 @@ class HadoopParquetRepository(
 
         Try(
           ParquetFileReader.open(openInputFile(file.location, path, hadoopConfig))
-        ) match {
+        ) match
           case Failure(ex: FileNotFoundException) =>
             throw ex
           case Failure(ex) =>
             issues += s"File cannot be opened as Parquet: ${CredentialRedactor.redact(ex.getMessage)}"
           case Success(reader) =>
             Using.resource(reader) { r =>
-              Try(r.getFooter) match {
+              Try(r.getFooter) match
                 case Failure(ex) =>
                   issues += s"Cannot read file footer: ${CredentialRedactor.redact(ex.getMessage)}"
                 case Success(footer) =>
@@ -461,9 +451,9 @@ class HadoopParquetRepository(
                   blocks.zipWithIndex.foreach { case (block, index) =>
                     if block.getRowCount <= 0 then
                       issues += s"Row group $index has invalid row count: ${block.getRowCount}"
-                    if !readerBroken then {
-                      if indicesToCheck.contains(index) then {
-                        Try(r.readNextRowGroup()) match {
+                    if !readerBroken then
+                      if indicesToCheck.contains(index) then
+                        Try(r.readNextRowGroup()) match
                           case Failure(ex) =>
                             issues += s"Row group $index data is corrupt or truncated: ${CredentialRedactor
                                 .redact(ex.getMessage)}"
@@ -472,21 +462,16 @@ class HadoopParquetRepository(
                             issues += s"Row group $index returned no data (file may be truncated)"
                             readerBroken = true
                           case _ =>
-                        }
-                      } else {
-                        Try(r.skipNextRowGroup()) match {
+                      else
+                        Try(r.skipNextRowGroup()) match
                           case Failure(ex) =>
                             issues += s"Row group $index could not be skipped: ${CredentialRedactor
                                 .redact(ex.getMessage)}"
                             readerBroken = true
                           case _ =>
-                        }
-                      }
-                    }
                   }
-              }
             }
-        }
+        end match
 
         issues.toList
       }
@@ -508,13 +493,13 @@ class HadoopParquetRepository(
         val schema = getFooter(file.location, path, hadoopConfig).schema
         schema.getFields.asScala.toList.map { field =>
           val typeName =
-            if field.isPrimitive then {
+            if field.isPrimitive then
               val pf = field.asPrimitiveType()
               FooterReader.logicalTypeName(
                 pf.getPrimitiveTypeName,
                 pf.getLogicalTypeAnnotation
               )
-            } else groupTypeCanonical(field.asGroupType())
+            else groupTypeCanonical(field.asGroupType())
           val optional =
             field.getRepetition == Repetition.OPTIONAL
           FieldSummary(field.getName, typeName, optional)
@@ -566,10 +551,9 @@ class HadoopParquetRepository(
             .map(_.getStatistics)
             .filter(_ != null)
 
-          val nullCount = {
+          val nullCount =
             val counts = chunkStats.filter(_.isNumNullsSet).map(_.getNumNulls)
             if counts.nonEmpty then counts.sum else -1L
-          }
 
           val withValues =
             chunkStats.filter(s => !s.isEmpty && s.hasNonNullValue)
@@ -653,10 +637,9 @@ class HadoopParquetRepository(
   // isn't a scheme StorageLocationParser recognizes, so for local matches we
   // hand it the bare filesystem path instead of the "file:" URI string.
   // Cloud schemes (s3a/gs/abfss) already round-trip through toString as-is.
-  private def matchedPathString(status: FileStatus): String = {
+  private def matchedPathString(status: FileStatus): String =
     val uri = status.getPath.toUri
     if uri.getScheme == "file" then uri.getPath else status.getPath.toString
-  }
 
   private def withHadoopConfig[A](location: StorageLocation)(f: Configuration => Try[A]): Try[A] =
     configProvider.withConfig(location)(f)
@@ -665,7 +648,7 @@ class HadoopParquetRepository(
       rowGroups: List[BlockMetaData]
   ): Option[Double] =
     if rowGroups.isEmpty then None
-    else {
+    else
       val (totalUncompressed, totalCompressed) = rowGroups.foldLeft((0L, 0L)) {
         case ((uncompressed, compressed), rowGroup) =>
           (
@@ -676,11 +659,10 @@ class HadoopParquetRepository(
       Option.when(totalCompressed > 0)(
         totalUncompressed.toDouble / totalCompressed.toDouble
       )
-    }
 
   private def groupTypeCanonical(
       gt: GroupType
-  ): String = {
+  ): String =
     val fields = gt.getFields.asScala
       .map { f =>
         val t =
@@ -692,5 +674,4 @@ class HadoopParquetRepository(
       .sorted
       .mkString(",")
     NestedType.struct(fields)
-  }
-}
+end HadoopParquetRepository

@@ -104,9 +104,8 @@ case class MetadataCommand(
     index: Boolean = false,
     pages: Boolean = false,
     columns: Option[List[String]] = None
-) extends Command {
+) extends Command:
   def options: MetadataOptions = MetadataOptions(extended, index, pages, columns)
-}
 
 case class CountCommand(
     filePath: String,

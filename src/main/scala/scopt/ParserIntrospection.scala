@@ -11,21 +11,19 @@ package scopt
  * Lives in package scopt only to reach those members; CliSpecTest pins the
  * structure it yields, so a scopt upgrade that changes it fails the build.
  */
-object ParserIntrospection {
+object ParserIntrospection:
 
   enum Kind:
     case Option, Command, Argument, Other
 
-  def kind(d: OptionDef[?, ?]): Kind = d.kind match {
+  def kind(d: OptionDef[?, ?]): Kind = d.kind match
     case OptionDefKind.Opt | OptionDefKind.OptHelp | OptionDefKind.OptVersion => Kind.Option
     case OptionDefKind.Cmd                                                    => Kind.Command
     case OptionDefKind.Arg                                                    => Kind.Argument
     case _                                                                    => Kind.Other
-  }
 
   def id(d: OptionDef[?, ?]): Int = d.id
 
   def parentId(d: OptionDef[?, ?]): scala.Option[Int] = d.getParentId
 
   def takesValue(d: OptionDef[?, ?]): Boolean = d.read.arity > 0
-}

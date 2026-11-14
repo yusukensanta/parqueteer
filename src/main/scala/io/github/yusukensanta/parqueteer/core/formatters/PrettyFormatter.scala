@@ -9,7 +9,7 @@ import io.github.yusukensanta.parqueteer.core.models.{
 
 class PrettyFormatter(
     useColors: Boolean = !sys.env.get("NO_COLOR").exists(_.nonEmpty)
-) extends OutputFormatter {
+) extends OutputFormatter:
 
   private val Reset   = "\u001b[0m"
   private val Bold    = "\u001b[1m"
@@ -29,7 +29,7 @@ class PrettyFormatter(
   ): String =
     if !useColors then tableFormatter.formatContent(content, schema)
     else if content.rows.isEmpty then colorize("No data to display", Yellow)
-    else {
+    else
       val rows         = content.rows
       val columns      = extractColumns(rows, schema)
       val columnWidths = tableFormatter.calculateColumnWidths(columns, rows)
@@ -49,11 +49,10 @@ class PrettyFormatter(
       sb.append("\n")
       sb.append(colorize(tableFormatter.drawSummary(content), Green))
       sb.toString
-    }
 
   override def formatSchema(schema: ParquetSchema): String =
     if !useColors then tableFormatter.formatSchema(schema)
-    else {
+    else
       val sb = new StringBuilder()
 
       sb.append(colorize("Schema Information", Bold + Cyan))
@@ -89,11 +88,10 @@ class PrettyFormatter(
       }
 
       sb.toString
-    }
 
   override def formatMetadata(metadata: FileMetadata): String =
     if !useColors then tableFormatter.formatMetadata(metadata)
-    else {
+    else
       val sb = new StringBuilder()
 
       sb.append(colorize("File Metadata", Bold + Cyan))
@@ -124,14 +122,13 @@ class PrettyFormatter(
       }
 
       sb.toString
-    }
 
   private def colorize(text: String, color: String): String =
     if useColors then s"$color$text$Reset"
     else text
 
   private def colorizeType(dataType: String): String =
-    dataType.toUpperCase match {
+    dataType.toUpperCase match
       case t if t.contains("INT")                           => colorize(dataType, Blue)
       case t if t.contains("FLOAT") || t.contains("DOUBLE") =>
         colorize(dataType, Magenta)
@@ -139,22 +136,20 @@ class PrettyFormatter(
         colorize(dataType, Green)
       case t if t.contains("BOOL") => colorize(dataType, Yellow)
       case _                       => colorize(dataType, Cyan)
-    }
 
   private def colorizeFormatted(formatted: String, cv: CellValue): String =
-    cv match {
+    cv match
       case CellValue.Null                      => colorize(formatted, Dim)
       case CellValue.I32(_) | CellValue.I64(_) => colorize(formatted, Blue)
       case CellValue.F64(_) | CellValue.F32(_) => colorize(formatted, Magenta)
       case CellValue.Bool(true)                => colorize(formatted, Green)
       case CellValue.Bool(false)               => colorize(formatted, Red)
       case _                                   => colorize(formatted, Reset)
-    }
 
   private def drawColoredHeaderRow(
       columns: List[String],
       widths: List[Int]
-  ): String = {
+  ): String =
     val paddedValues = columns.zip(widths).map { case (col, width) =>
       val truncated = tableFormatter.truncate(col, width)
       colorize(truncated, Bold + Cyan) + " " * (width - tableFormatter
@@ -164,13 +159,12 @@ class PrettyFormatter(
       "│",
       Dim
     )
-  }
 
   private def drawColoredDataRow(
       row: Map[String, CellValue],
       columns: List[String],
       widths: List[Int]
-  ): String = {
+  ): String =
     val paddedValues =
       columns.zip(widths).map { case (col, width) =>
         val cv        = row.getOrElse(col, CellValue.Null)
@@ -184,6 +178,4 @@ class PrettyFormatter(
       "│",
       Dim
     )
-  }
-
-}
+end PrettyFormatter

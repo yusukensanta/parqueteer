@@ -13,26 +13,24 @@ import org.apache.parquet.schema.Type.Repetition
 
 object MergeIntegrationTest extends Tag("IntegrationTest")
 
-class MergeIntegrationTest extends AnyFlatSpec with Matchers {
+class MergeIntegrationTest extends AnyFlatSpec with Matchers:
 
   private val repo    = new HadoopParquetRepository()
   private val service = new ParquetService(repo)
 
-  private def tempFile(): java.io.File = {
+  private def tempFile(): java.io.File =
     val f = Files.createTempFile("parqueteer_merge_", ".parquet").toFile
     f.delete()
     f.deleteOnExit()
     f
-  }
 
-  private def writeTemp(data: List[Map[String, CellValue]]): String = {
+  private def writeTemp(data: List[Map[String, CellValue]]): String =
     val f = tempFile()
     repo
       .writeContent(LocalPath(f.getAbsolutePath), data, None)
       .fold(e => throw e, _ => f.getAbsolutePath)
-  }
 
-  private def writeTempWithSchema(schema: MessageType): String = {
+  private def writeTempWithSchema(schema: MessageType): String =
     import org.apache.parquet.hadoop.example.ExampleParquetWriter
     val f      = tempFile()
     val conf   = new org.apache.hadoop.conf.Configuration()
@@ -43,7 +41,6 @@ class MergeIntegrationTest extends AnyFlatSpec with Matchers {
       .build()
     writer.close()
     f.getAbsolutePath
-  }
 
   private val data1 = List(
     Map("id" -> CellValue.I64(1L), "name" -> CellValue.Str("Alice")),
@@ -413,4 +410,4 @@ class MergeIntegrationTest extends AnyFlatSpec with Matchers {
     calls(1)._1 shouldBe 2
     calls(0)._2 shouldBe 2
   }
-}
+end MergeIntegrationTest

@@ -4,7 +4,7 @@ import io.github.yusukensanta.parqueteer.core.models.{AzureLocation, StorageLoca
 import org.apache.hadoop.conf.Configuration
 import scala.util.{Failure, Try}
 
-class AzureCredentialManager extends CloudCredentialManager {
+class AzureCredentialManager extends CloudCredentialManager:
 
   protected[cloud] def env(key: String): Option[String] = sys.env.get(key)
 
@@ -19,7 +19,7 @@ class AzureCredentialManager extends CloudCredentialManager {
   override def configureHadoop(
       location: StorageLocation
   ): Try[Configuration] =
-    location match {
+    location match
       case azureLocation: AzureLocation =>
         Try {
           val conf = new Configuration()
@@ -35,7 +35,7 @@ class AzureCredentialManager extends CloudCredentialManager {
           val authMethod =
             env("AZURE_AUTH_METHOD").getOrElse(AzureIdentityTokenProvider.KindDefault)
 
-          authMethod match {
+          authMethod match
             case kind @ (AzureIdentityTokenProvider.KindDefault |
                 AzureIdentityTokenProvider.KindAzureCli) =>
               configureIdentity(conf, azureLocation, kind)
@@ -49,7 +49,6 @@ class AzureCredentialManager extends CloudCredentialManager {
               configureSasToken(conf, azureLocation)
             case unknown =>
               throw new RuntimeException(s"Unknown Azure auth method: $unknown")
-          }
 
           // Performance and reliability settings
           conf.set("fs.azure.io.retry.max.retries", "3")
@@ -61,7 +60,6 @@ class AzureCredentialManager extends CloudCredentialManager {
         }
       case _ =>
         Failure(new IllegalArgumentException("Expected AzureLocation"))
-    }
 
   // Tokens come from azure-identity (including the `az login` session) through
   // AzureIdentityTokenProvider, which ABFS loads for auth.type=Custom.
@@ -69,7 +67,7 @@ class AzureCredentialManager extends CloudCredentialManager {
       conf: Configuration,
       location: AzureLocation,
       kind: String
-  ): Unit = {
+  ): Unit =
     conf.set(
       s"fs.azure.account.auth.type.${location.account}.dfs.core.windows.net",
       "Custom"
@@ -79,12 +77,11 @@ class AzureCredentialManager extends CloudCredentialManager {
       classOf[AzureIdentityTokenProvider].getName
     )
     conf.set(AzureIdentityTokenProvider.CredentialKey, kind)
-  }
 
   private def configureManagedIdentity(
       conf: Configuration,
       location: AzureLocation
-  ): Unit = {
+  ): Unit =
     conf.set(
       s"fs.azure.account.auth.type.${location.account}.dfs.core.windows.net",
       "OAuth"
@@ -109,12 +106,11 @@ class AzureCredentialManager extends CloudCredentialManager {
         clientId
       )
     }
-  }
 
   private def configureServicePrincipal(
       conf: Configuration,
       location: AzureLocation
-  ): Unit = {
+  ): Unit =
     val clientId     = requiredEnv("AZURE_CLIENT_ID")
     val clientSecret = requiredEnv("AZURE_CLIENT_SECRET")
     val tenantId     = requiredEnv("AZURE_TENANT_ID")
@@ -139,12 +135,11 @@ class AzureCredentialManager extends CloudCredentialManager {
       s"fs.azure.account.oauth2.client.endpoint.${location.account}.dfs.core.windows.net",
       s"https://login.microsoftonline.com/$tenantId/oauth2/token"
     )
-  }
 
   private def configureSharedKey(
       conf: Configuration,
       location: AzureLocation
-  ): Unit = {
+  ): Unit =
     val accountKey = requiredEnv("AZURE_STORAGE_KEY")
 
     // Explicit per-account auth type overrides the global OAuth default set above.
@@ -156,12 +151,11 @@ class AzureCredentialManager extends CloudCredentialManager {
       s"fs.azure.account.key.${location.account}.dfs.core.windows.net",
       accountKey
     )
-  }
 
   private def configureSasToken(
       conf: Configuration,
       location: AzureLocation
-  ): Unit = {
+  ): Unit =
     val sasToken = requiredEnv("AZURE_STORAGE_SAS_TOKEN")
 
     // Explicit per-account auth type overrides the global OAuth default set above.
@@ -175,5 +169,4 @@ class AzureCredentialManager extends CloudCredentialManager {
       s"fs.azure.sas.fixed.token.${location.container}.${location.account}.dfs.core.windows.net",
       sasToken
     )
-  }
-}
+end AzureCredentialManager

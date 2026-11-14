@@ -4,7 +4,7 @@ import io.github.yusukensanta.parqueteer.core.models.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-class SchemaReconcilerTest extends AnyFlatSpec with Matchers {
+class SchemaReconcilerTest extends AnyFlatSpec with Matchers:
 
   private def f(name: String, t: String, optional: Boolean = false) =
     FieldSummary(name, t, optional)
@@ -119,4 +119,4 @@ class SchemaReconcilerTest extends AnyFlatSpec with Matchers {
     val result   = SchemaReconciler.describeMismatch(expected, actual)
     result should include("INT32?")
   }
-}
+end SchemaReconcilerTest

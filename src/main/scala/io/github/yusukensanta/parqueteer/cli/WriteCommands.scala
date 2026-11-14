@@ -8,7 +8,7 @@ import DryRunReport.{detail, field}
 import StreamingOutput.*
 
 /** Handlers for the commands that produce a file: write, convert, merge. */
-private[cli] object WriteCommands {
+private[cli] object WriteCommands:
 
   // The one place CLI writer flags become a WriteConfig, so write, convert
   // and merge can't drift on defaults.
@@ -16,7 +16,7 @@ private[cli] object WriteCommands {
       compression: CompressionType,
       rowGroupSize: Option[Long],
       writer: WriterOptions
-  ): WriteConfig = {
+  ): WriteConfig =
     val defaults = WriteConfig()
     WriteConfig(
       compressionType = compression,
@@ -24,7 +24,6 @@ private[cli] object WriteCommands {
       pageSize = writer.pageSize.getOrElse(defaults.pageSize),
       enableDictionary = writer.dictionary
     )
-  }
 
   // CLI spelling of a codec in dry-run output (e.g. "snappy", "uncompressed").
   private def codec(compression: CompressionType): String = compression.toString.toLowerCase
@@ -35,18 +34,16 @@ private[cli] object WriteCommands {
       service: ParquetService,
       schemaFile: Option[String]
   ): Either[ParqueteerError, Option[List[FieldSummary]]] =
-    schemaFile match {
+    schemaFile match
       case None       => Right(None)
       case Some(path) => service.readSchemaContract(path).map(Some(_))
-    }
 
   private def schemaSource(schemaFile: Option[String], fields: Option[List[FieldSummary]]) =
     field(
       "Schema",
-      (schemaFile, fields) match {
+      (schemaFile, fields) match
         case (Some(path), Some(fs)) => s"$path (${fs.size} columns)"
         case _                      => "inferred from input"
-      }
     )
 
   // --schema describes a parquet *output* built from text rows; a parquet
@@ -59,25 +56,24 @@ private[cli] object WriteCommands {
 
   // Shared by performConvert/executeConvertMulti: parquet → text conversions
   // only ever target one of these three formats.
-  private[cli] def textOutputFormatFor(ext: String): OutputFormat = ext match {
+  private[cli] def textOutputFormatFor(ext: String): OutputFormat = ext match
     case "json"   => OutputFormat.JSON
     case "ndjson" => OutputFormat.NDJSON
     case _        => OutputFormat.CSV
-  }
 
   private[cli] def executeWrite(
       service: ParquetService,
       cmd: WriteCommand,
       globalOptions: GlobalOptions
-  ): Int = {
+  ): Int =
     import cmd.{inputPath, outputPath, inputFormat, compression, rowGroupSize, dryRun, schemaFile}
     val writeConfig = writeConfigFor(compression, rowGroupSize, cmd.writer)
-    checkOutputWritable(outputPath).flatMap(_ => loadWriteSchema(service, schemaFile)) match {
+    checkOutputWritable(outputPath).flatMap(_ => loadWriteSchema(service, schemaFile)) match
       case Left(err) =>
         reportError("Failed to write file", globalOptions)(err)
       case Right(fields) =>
-        if dryRun then {
-          service.readDataFile(inputPath, inputFormat, maxRows = Some(1L)) match {
+        if dryRun then
+          service.readDataFile(inputPath, inputFormat, maxRows = Some(1L)) match
             case Left(error) =>
               reportError("Failed to read input file", globalOptions)(error)
             case Right(rows) =>
@@ -93,37 +89,35 @@ private[cli] object WriteCommands {
                   field("Compression", codec(compression))
                 )
               ).print()
-          }
-        } else {
+        else
           service.streamWriteDataFile(
             inputPath,
             inputFormat,
             outputPath,
             writeConfig,
             explicitFields = fields
-          ) match {
+          ) match
             case Right(_) =>
               if !globalOptions.quiet then println(s"Successfully wrote data to $outputPath")
               0
             case Left(error) =>
               reportError("Failed to write file", globalOptions)(error)
-          }
-        }
-    }
-  }
+    end match
+
+  end executeWrite
 
   private[cli] def executeWriteMulti(
       service: ParquetService,
       inputPaths: List[String],
       cmd: WriteCommand,
       globalOptions: GlobalOptions
-  ): Int = {
+  ): Int =
     import cmd.{outputPath, inputFormat, compression, rowGroupSize, schemaMode, dryRun, schemaFile}
     val writeConfig = writeConfigFor(compression, rowGroupSize, cmd.writer)
-    checkOutputWritable(outputPath).flatMap(_ => loadWriteSchema(service, schemaFile)) match {
+    checkOutputWritable(outputPath).flatMap(_ => loadWriteSchema(service, schemaFile)) match
       case Left(err)     => reportError("Failed to write file", globalOptions)(err)
       case Right(fields) =>
-        if dryRun then {
+        if dryRun then
           DryRunReport(
             s"write $outputPath",
             field("Inputs", s"${inputPaths.size} files matched") ::
@@ -134,7 +128,7 @@ private[cli] object WriteCommands {
                 field("Compression", codec(compression))
               )
           ).print()
-        } else {
+        else
           val onProgress: (Int, Int, String) => Unit = (i, n, path) =>
             if !globalOptions.quiet then System.err.println(s"[$i/$n] Writing: $path")
           service.writeMultiRawToParquet(
@@ -145,22 +139,21 @@ private[cli] object WriteCommands {
             schemaMode,
             onProgress,
             explicitFields = fields
-          ) match {
+          ) match
             case Right(count) =>
               if !globalOptions.quiet then
                 println(s"Successfully wrote ${inputPaths.size} files ($count rows) → $outputPath")
               0
             case Left(error) => reportError("Failed to write file", globalOptions)(error)
-          }
-        }
-    }
-  }
+    end match
+
+  end executeWriteMulti
 
   private[cli] def executeConvert(
       service: ParquetService,
       cmd: ConvertCommand,
       globalOptions: GlobalOptions
-  ): Int = {
+  ): Int =
     import cmd.{inputPath, outputPath, compression, maxRows, dryRun, schemaFile}
     val conversionConfig = ConversionConfig(
       writeConfig = writeConfigFor(compression, None, cmd.writer),
@@ -171,7 +164,7 @@ private[cli] object WriteCommands {
         Left(schemaNotApplicable(inputPath))
       else loadWriteSchema(service, schemaFile)
 
-    fieldsOrError match {
+    fieldsOrError match
       case Left(error)   => reportError("Failed to convert file", globalOptions)(error)
       case Right(fields) =>
         if dryRun then
@@ -185,16 +178,15 @@ private[cli] object WriteCommands {
             fields
           )
         else
-          performConvert(service, inputPath, outputPath, conversionConfig, fields) match {
+          performConvert(service, inputPath, outputPath, conversionConfig, fields) match
             case Right(_) =>
               if !globalOptions.quiet then
                 println(s"Successfully converted $inputPath to $outputPath")
               0
             case Left(error) =>
               reportError("Failed to convert file", globalOptions)(error)
-          }
-    }
-  }
+
+  end executeConvert
 
   private[cli] def runConvertDryRun(
       service: ParquetService,
@@ -204,10 +196,10 @@ private[cli] object WriteCommands {
       globalOptions: GlobalOptions,
       schemaFile: Option[String] = None,
       fields: Option[List[FieldSummary]] = None
-  ): Int = {
+  ): Int =
     val inputExt = FileExtension.of(inputPath)
     if inputExt == "parquet" then
-      service.getFileInfo(inputPath) match {
+      service.getFileInfo(inputPath) match
         case Left(error) =>
           reportError("Failed to read input", globalOptions)(error)
         case Right(file) =>
@@ -224,7 +216,6 @@ private[cli] object WriteCommands {
             s"convert $inputPath → $outputPath",
             field("Input", inputPath) :: sizeLine ::: schemaLines
           ).print()
-      }
     else
       DryRunReport(
         s"convert $inputPath → $outputPath",
@@ -234,7 +225,8 @@ private[cli] object WriteCommands {
           field("Compression", s"${codec(compression)} (output)")
         )
       ).print()
-  }
+
+  end runConvertDryRun
 
   private[cli] def performConvert(
       service: ParquetService,
@@ -242,10 +234,10 @@ private[cli] object WriteCommands {
       outputPath: String,
       conversionConfig: ConversionConfig,
       explicitFields: Option[List[FieldSummary]] = None
-  ): Either[ParqueteerError, Unit] = {
+  ): Either[ParqueteerError, Unit] =
     val inputExt  = FileExtension.of(inputPath)
     val outputExt = FileExtension.of(outputPath)
-    (inputExt, outputExt) match {
+    (inputExt, outputExt) match
       case ("parquet", _) if explicitFields.isDefined =>
         Left(schemaNotApplicable(inputPath))
       case ("parquet", ext @ ("json" | "ndjson" | "csv")) =>
@@ -279,8 +271,9 @@ private[cli] object WriteCommands {
             s"Unsupported conversion: $inputExt → $outputExt. Supported: parquet→parquet, parquet→json, parquet→ndjson, parquet→csv, json→parquet, ndjson→parquet, csv→parquet, ltsv→parquet"
           )
         )
-    }
-  }
+    end match
+
+  end performConvert
 
   private[cli] def convertParquetStreamed(
       service: ParquetService,
@@ -301,12 +294,12 @@ private[cli] object WriteCommands {
       inputPaths: List[String],
       cmd: ConvertCommand,
       globalOptions: GlobalOptions
-  ): Int = {
+  ): Int =
     import cmd.{outputPath, compression, maxRows, schemaMode, dryRun, schemaFile}
     val inputExt      = FileExtension.of(inputPaths.head)
     val outputExt     = FileExtension.of(outputPath)
     val mismatchedExt = inputPaths.find(p => FileExtension.of(p) != inputExt)
-    val fieldsOrError = mismatchedExt match {
+    val fieldsOrError = mismatchedExt match
       case Some(badPath) =>
         Left(
           ParqueteerError.InvalidFormat(
@@ -318,11 +311,10 @@ private[cli] object WriteCommands {
       case None if schemaFile.isDefined && inputExt == "parquet" =>
         Left(schemaNotApplicable(inputPaths.head))
       case None => loadWriteSchema(service, schemaFile)
-    }
-    fieldsOrError match {
+    fieldsOrError match
       case Left(error)   => reportError("Failed to convert file", globalOptions)(error)
       case Right(fields) =>
-        if dryRun then {
+        if dryRun then
           DryRunReport(
             s"convert ${inputPaths.size} files → $outputPath",
             List(
@@ -332,9 +324,9 @@ private[cli] object WriteCommands {
               field("Compression", s"${codec(compression)} (output)")
             )
           ).print()
-        } else {
+        else
           val writeConfig                           = writeConfigFor(compression, None, cmd.writer)
-          val result: Either[ParqueteerError, Long] = (inputExt, outputExt) match {
+          val result: Either[ParqueteerError, Long] = (inputExt, outputExt) match
             case ("parquet", "parquet") =>
               val onProgress: (Int, Int, String) => Unit = (i, n, path) =>
                 if !globalOptions.quiet then System.err.println(s"[$i/$n] Converting: $path")
@@ -374,8 +366,7 @@ private[cli] object WriteCommands {
                   s"Unsupported conversion: $inputExt → $outputExt for multiple matched files."
                 )
               )
-          }
-          result match {
+          result match
             case Right(count) =>
               if !globalOptions.quiet then
                 println(
@@ -383,10 +374,9 @@ private[cli] object WriteCommands {
                 )
               0
             case Left(error) => reportError("Failed to convert file", globalOptions)(error)
-          }
-        }
-    }
-  }
+    end match
+
+  end executeConvertMulti
 
   private[cli] def convertParquetMultiStreamed(
       service: ParquetService,
@@ -424,10 +414,10 @@ private[cli] object WriteCommands {
       service: ParquetService,
       cmd: MergeCommand,
       globalOptions: GlobalOptions
-  ): Int = {
+  ): Int =
     import cmd.{inputPaths, outputPath, compression, schemaMode, dryRun}
     val writeConfig = writeConfigFor(compression, None, cmd.writer)
-    checkOutputWritable(outputPath) match {
+    checkOutputWritable(outputPath) match
       case Left(err) =>
         reportError("Failed to merge", globalOptions)(err)
       case Right(_) =>
@@ -439,7 +429,7 @@ private[cli] object WriteCommands {
             compression,
             schemaMode
           )
-        else {
+        else
           val onProgress: (Int, Int, String) => Unit = (i, n, path) =>
             if !globalOptions.quiet then System.err.println(s"[$i/$n] Merging: $path")
 
@@ -450,17 +440,16 @@ private[cli] object WriteCommands {
             schemaMode,
             onProgress,
             globalOptions.fileParallelism
-          ) match {
+          ) match
             case Right(count) =>
               if !globalOptions.quiet then
                 println(s"Merged ${inputPaths.size} files ($count rows) → $outputPath")
               0
             case Left(error) =>
               reportError("Failed to merge", globalOptions)(error)
-          }
-        }
-    }
-  }
+    end match
+
+  end executeMerge
 
   private[cli] def executeMergeDryRun(
       service: ParquetService,
@@ -468,20 +457,18 @@ private[cli] object WriteCommands {
       outputPath: String,
       compression: CompressionType,
       schemaMode: SchemaMode
-  ): Int = {
+  ): Int =
     val perFile = inputPaths.zipWithIndex.map { (path, i) =>
-      val summary = service.getFileInfo(path) match {
+      val summary = service.getFileInfo(path) match
         case Right(file) =>
           val rows = file.schema.map(_.totalRowCount).getOrElse(0L)
           val cols = file.schema.map(_.columns.size).getOrElse(0)
           s"($rows rows, $cols columns)"
         case Left(error) => s"— error: ${error.userMessage}"
-      }
       detail(s"[${i + 1}/${inputPaths.size}] $path $summary")
     }
     DryRunReport(
       s"merge ${inputPaths.size} files → $outputPath",
       field("Schema mode", schemaMode) :: field("Compression", codec(compression)) :: perFile
     ).print()
-  }
-}
+end WriteCommands

@@ -5,7 +5,7 @@ import io.github.yusukensanta.parqueteer.core.models.GlobalOptions
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-class CliAppTest extends AnyFlatSpec with Matchers {
+class CliAppTest extends AnyFlatSpec with Matchers:
 
   "shouldShowVersion" should "detect --version flag" in {
     CliApp.shouldShowVersion(Array("--version")) shouldBe true
@@ -157,4 +157,4 @@ class CliAppTest extends AnyFlatSpec with Matchers {
     val appCfg = AppConfig(output = OutputConfig(maxRows = Some(100)))
     CliApp.applyAppConfigToCommand(cmd, appCfg) shouldBe cmd
   }
-}
+end CliAppTest

@@ -10,13 +10,13 @@ import io.circe.{Encoder, Json}
 import io.circe.syntax.*
 import io.circe.generic.semiauto.*
 
-class JSONFormatter extends OutputFormatter {
+class JSONFormatter extends OutputFormatter:
   import JSONFormatter.given
 
   override def formatContent(
       content: FileContent,
       schema: Option[ParquetSchema]
-  ): String = {
+  ): String =
     val json = Json.obj(
       "rows"          -> Json.arr(content.rows.map(encodeRow)*),
       "totalRows"     -> Json.fromLong(content.totalRows),
@@ -25,9 +25,8 @@ class JSONFormatter extends OutputFormatter {
     )
 
     json.noSpaces
-  }
 
-  override def formatSchema(schema: ParquetSchema): String = {
+  override def formatSchema(schema: ParquetSchema): String =
     val json = Json.obj(
       "columns"       -> schema.columns.asJson,
       "rowGroupCount" -> Json.fromLong(schema.rowGroupCount),
@@ -35,7 +34,6 @@ class JSONFormatter extends OutputFormatter {
     )
 
     json.noSpaces
-  }
 
   override def formatMetadata(metadata: FileMetadata): String =
     metadata.asJson.noSpaces
@@ -44,9 +42,10 @@ class JSONFormatter extends OutputFormatter {
     Json.fromFields(
       row.view.mapValues(JsonEncoder.encode)
     )
-}
 
-object JSONFormatter {
+end JSONFormatter
+
+object JSONFormatter:
 
   import io.github.yusukensanta.parqueteer.core.models.{
     ColumnInfo,
@@ -68,12 +67,11 @@ object JSONFormatter {
 
   // {"type": "TIMESTAMP", "unit": "MICROS", "isAdjustedToUTC": true}
   given Encoder[LogicalTypeDetail] = Encoder.instance { lt =>
-    def paramJson(v: String): Json = v match {
+    def paramJson(v: String): Json = v match
       case "true"                   => Json.True
       case "false"                  => Json.False
       case n if n.matches("-?\\d+") => Json.fromLong(n.toLong)
       case other                    => Json.fromString(other)
-    }
     Json.fromFields(
       ("type" -> Json.fromString(lt.name)) :: lt.params.map { case (k, v) => k -> paramJson(v) }
     )
@@ -107,4 +105,4 @@ object JSONFormatter {
 
   given Encoder[FileMetadata] =
     deriveEncoder[FileMetadata]
-}
+end JSONFormatter

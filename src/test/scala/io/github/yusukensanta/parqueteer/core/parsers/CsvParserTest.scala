@@ -7,15 +7,15 @@ import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 import org.scalacheck.Gen
 
-class CsvParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks {
+class CsvParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks:
 
   // Generator: alpha-only strings that TypeInferrer won't re-infer as another type
-  private val safeStr: Gen[String] = for {
+  private val safeStr: Gen[String] = for
     head <- Gen.alphaChar
     tail <- Gen.listOf(Gen.alphaChar).map(_.mkString)
     s = head.toString + tail
     if !s.equalsIgnoreCase("true") && !s.equalsIgnoreCase("false")
-  } yield s
+  yield s
 
   // Generator: column names safe for CSV headers (no commas, quotes, or newlines)
   private val colName: Gen[String] = Gen.identifier.filter(s =>
@@ -167,13 +167,12 @@ class CsvParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChe
 
   private def roundTrip(
       rows: List[Map[String, CellValue]]
-  ): List[Map[String, CellValue]] = {
+  ): List[Map[String, CellValue]] =
     val csv = new CSVFormatter().formatContent(
       FileContent(rows, rows.length.toLong, isPartial = false),
       None
     )
     CsvParser.parse(csv)
-  }
 
   "CSVFormatter → CsvParser round-trip" should "preserve string values with embedded double-quotes" in {
     val rows =
@@ -241,10 +240,10 @@ class CsvParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChe
     }
 
   it should "preserve row count for multi-row input" in {
-    val rowGen = for {
+    val rowGen = for
       c  <- colName
       vs <- Gen.nonEmptyListOf(safeStr)
-    } yield vs.map(v => Map(c -> CellValue.Str(v)))
+    yield vs.map(v => Map(c -> CellValue.Str(v)))
     forAll(rowGen) { rows =>
       roundTrip(rows) should have size rows.size
     }
@@ -294,4 +293,4 @@ class CsvParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChe
   it should "return no records for empty input" in {
     CsvParser.parseRecordsIncremental(Iterator.empty).toList shouldBe empty
   }
-}
+end CsvParserTest

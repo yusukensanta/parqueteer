@@ -7,7 +7,7 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import java.nio.file.{Files, Paths}
 
-class ExtendedMetadataTest extends AnyFlatSpec with Matchers {
+class ExtendedMetadataTest extends AnyFlatSpec with Matchers:
 
   private val repo = new HadoopParquetRepository()
 
@@ -16,14 +16,13 @@ class ExtendedMetadataTest extends AnyFlatSpec with Matchers {
     Map("id" -> CellValue.I64(2L), "name" -> CellValue.Null)
   )
 
-  private def written(): LocalPath = {
+  private def written(): LocalPath =
     val f = Files.createTempFile("parqueteer_ext_", ".parquet").toFile
     f.delete()
     f.deleteOnExit()
     val loc = LocalPath(f.getAbsolutePath)
     repo.writeContent(loc, rows, None).get
     loc
-  }
 
   "readDetailedMetadata" should "omit every extended section by default" in {
     val report = repo.readDetailedMetadata(ParquetFile(written())).get
@@ -79,4 +78,4 @@ class ExtendedMetadataTest extends AnyFlatSpec with Matchers {
     chunk.isMinExact shouldBe Some(true)
     chunk.isMaxExact shouldBe Some(false)
   }
-}
+end ExtendedMetadataTest

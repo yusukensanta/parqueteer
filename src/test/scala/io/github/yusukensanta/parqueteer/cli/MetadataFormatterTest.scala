@@ -5,7 +5,7 @@ import io.github.yusukensanta.parqueteer.core.models.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-class MetadataFormatterTest extends AnyFlatSpec with Matchers {
+class MetadataFormatterTest extends AnyFlatSpec with Matchers:
 
   private val report = MetadataFixtures.report
 
@@ -195,7 +195,7 @@ class MetadataFormatterTest extends AnyFlatSpec with Matchers {
     isEncrypted = false
   )
 
-  private val extendedReport = {
+  private val extendedReport =
     val base = MetadataFixtures.report
     base.copy(
       extended = Some(ExtendedFileDetail(List("TYPE_DEFINED_ORDER"), Some("AES_GCM_V1"), true)),
@@ -213,7 +213,6 @@ class MetadataFormatterTest extends AnyFlatSpec with Matchers {
         )
       )
     )
-  }
 
   "formatTable with extended detail" should "add file, row group and chunk sections" in {
     val out = MetadataFormatter.formatTable(extendedReport)
@@ -243,7 +242,7 @@ class MetadataFormatterTest extends AnyFlatSpec with Matchers {
       Right(List(1L, 4L))
   }
 
-  private val pagedReport = {
+  private val pagedReport =
     val base = MetadataFixtures.report
     base.copy(rowGroups =
       base.rowGroups.map(rg =>
@@ -312,7 +311,8 @@ class MetadataFormatterTest extends AnyFlatSpec with Matchers {
         )
       )
     )
-  }
+
+  end pagedReport
 
   "formatTable with page detail" should "print an index table and a page header table per column" in {
     val out = MetadataFormatter.formatTable(pagedReport)
@@ -347,4 +347,4 @@ class MetadataFormatterTest extends AnyFlatSpec with Matchers {
       .focus shouldBe
       Some(io.circe.Json.Null)
   }
-}
+end MetadataFormatterTest

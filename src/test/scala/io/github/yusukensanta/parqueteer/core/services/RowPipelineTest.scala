@@ -5,7 +5,7 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import java.util.concurrent.atomic.AtomicInteger
 
-class RowPipelineTest extends AnyFlatSpec with Matchers {
+class RowPipelineTest extends AnyFlatSpec with Matchers:
 
   private def row(id: Int): Map[String, CellValue] = Map("id" -> CellValue.I64(id.toLong))
 
@@ -53,7 +53,8 @@ class RowPipelineTest extends AnyFlatSpec with Matchers {
     val consumed = scala.collection.mutable.ArrayBuffer.empty[Int]
     val result   = RowPipeline.run(List(1, 2, 3), parallelism = 3) { (item, sink) =>
       if item == 2 then Left("boom")
-      else { sink(row(item)); Right(1L) }
+      else
+        sink(row(item)); Right(1L)
     }(r => consumed.synchronized(consumed += r("id").asInstanceOf[CellValue.I64].l.toInt))
     result shouldBe Left("boom")
   }
@@ -80,4 +81,4 @@ class RowPipelineTest extends AnyFlatSpec with Matchers {
     // 50 copies of each item's id, items strictly in order, nothing lost or reordered.
     consumed.toList shouldBe items.flatMap(i => List.fill(50)(i))
   }
-}
+end RowPipelineTest

@@ -11,7 +11,7 @@ import scala.util.{Failure, Try}
  * multi-raw→parquet): abort-on-read-error signalling, partial-output cleanup,
  * explicit schema construction and row projection.
  */
-private[services] class StreamWriteSupport(repository: ParquetRepository) {
+private[services] class StreamWriteSupport(repository: ParquetRepository):
   private val logger = org.slf4j.LoggerFactory.getLogger(getClass)
 
   /**
@@ -23,7 +23,7 @@ private[services] class StreamWriteSupport(repository: ParquetRepository) {
       extends RuntimeException(error.userMessage, null, true, false)
 
   def abortOnReadError(result: Try[?]): Unit =
-    result match {
+    result match
       case Failure(err) =>
         throw new StreamAbortException(
           scala.util
@@ -32,17 +32,15 @@ private[services] class StreamWriteSupport(repository: ParquetRepository) {
             .fold(identity, _ => ParqueteerError.IOError(err))
         )
       case _ =>
-    }
 
   private def deletePartialOutput(outputLocation: StorageLocation): Unit =
-    repository.deleteFile(outputLocation) match {
+    repository.deleteFile(outputLocation) match
       case Failure(delErr) =>
         logger.warn(
           s"Failed to delete partial output at ${outputLocation.path}: ${CredentialRedactor
               .redact(delErr.getMessage)}. Partial file may remain."
         )
       case _ =>
-    }
 
   // True when the writer never created the output file (pre-existence check),
   // so we must NOT delete a file this operation didn't write. The message
@@ -50,20 +48,19 @@ private[services] class StreamWriteSupport(repository: ParquetRepository) {
   // (e.g. some Hadoop FileSystem implementations) rather than one of the
   // typed FileAlreadyExistsExceptions; keep it in sync with those messages.
   private def isOutputAlreadyExistsError(ex: Throwable): Boolean =
-    ex match {
+    ex match
       case _: org.apache.hadoop.fs.FileAlreadyExistsException => true
       case _: java.nio.file.FileAlreadyExistsException        => true
       case _                                                  =>
         Option(ex.getMessage).exists(m =>
           m.contains("already exists") || m.contains("File already exists")
         )
-    }
 
   def handleStreamWriteResult(
       outputLocation: StorageLocation,
       writeResult: Try[Long]
   ): Either[ParqueteerError, Long] =
-    writeResult match {
+    writeResult match
       case Failure(ex: StreamAbortException) =>
         deletePartialOutput(outputLocation)
         Left(ex.error)
@@ -73,7 +70,6 @@ private[services] class StreamWriteSupport(repository: ParquetRepository) {
         deletePartialOutput(outputLocation)
         Failure(ex).toParqueteerError
       case other => other.toParqueteerError
-    }
 
   /**
    * Builds an explicit ParquetSchema from merged/read field summaries — shared
@@ -112,12 +108,12 @@ private[services] class StreamWriteSupport(repository: ParquetRepository) {
       row: Map[String, CellValue],
       fieldNames: Array[String],
       nameToIndex: Map[String, Int]
-  ): Map[String, CellValue] = {
+  ): Map[String, CellValue] =
     val values: Array[CellValue] = Array.fill(fieldNames.length)(CellValue.Null)
     row.foreach { case (k, v) => nameToIndex.get(k).foreach(idx => values(idx) = v) }
     val builder = scala.collection.immutable.ListMap.newBuilder[String, CellValue]
     var j       = 0
-    while j < fieldNames.length do { builder += fieldNames(j) -> values(j); j += 1 }
+    while j < fieldNames.length do
+      builder += fieldNames(j) -> values(j); j += 1
     builder.result()
-  }
-}
+end StreamWriteSupport

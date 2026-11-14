@@ -84,9 +84,8 @@ case class ColumnChunkDetail(
     extended: Option[ExtendedChunkDetail] = None,
     pageIndex: Option[PageIndexDetail] = None,
     pages: Option[List[PageHeaderDetail]] = None
-) {
+):
   def hasDictionary: Boolean = dictionaryPageOffset.isDefined
-}
 
 // ── Extended detail (`metadata --extended`) ────────────────────────────────
 
@@ -141,9 +140,8 @@ case class MetadataOptions(
     index: Boolean = false,
     pages: Boolean = false,
     columns: Option[List[String]] = None
-) {
+):
   def needsFileReader: Boolean = index || pages
-}
 
 /**
  * A chunk's column index and offset index, joined per page. Either index may be

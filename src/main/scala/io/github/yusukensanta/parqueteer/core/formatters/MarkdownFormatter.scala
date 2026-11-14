@@ -7,14 +7,14 @@ import io.github.yusukensanta.parqueteer.core.models.{
   ParquetSchema
 }
 
-class MarkdownFormatter extends OutputFormatter {
+class MarkdownFormatter extends OutputFormatter:
 
   override def formatContent(
       content: FileContent,
       schema: Option[ParquetSchema]
   ): String =
     if content.rows.isEmpty then "No data to display"
-    else {
+    else
       val columns     = extractColumns(content.rows, schema)
       val sb          = new StringBuilder()
       val columnIndex = OutputFormatter.indexColumns(columns)
@@ -39,9 +39,8 @@ class MarkdownFormatter extends OutputFormatter {
       else sb.append(s"\n_${content.rows.size} rows_\n")
 
       sb.toString
-    }
 
-  override def formatSchema(schema: ParquetSchema): String = {
+  override def formatSchema(schema: ParquetSchema): String =
     val sb = new StringBuilder()
     sb.append("## Schema\n\n")
     sb.append(s"- **Columns:** ${schema.columns.size}\n")
@@ -55,9 +54,8 @@ class MarkdownFormatter extends OutputFormatter {
         } | ${escapeCell(col.compressionType)} |\n")
     }
     sb.toString
-  }
 
-  override def formatMetadata(metadata: FileMetadata): String = {
+  override def formatMetadata(metadata: FileMetadata): String =
     val sb = new StringBuilder()
     sb.append("## Metadata\n\n")
     sb.append(s"- **File Size:** ${metadata.fileSize} bytes\n")
@@ -67,7 +65,6 @@ class MarkdownFormatter extends OutputFormatter {
     metadata.createdBy.foreach(c => sb.append(s"- **Created By:** ${escapeCell(c)}\n"))
     metadata.compressionRatio.foreach(r => sb.append(f"- **Compression Ratio:** $r%.2f\n"))
     sb.toString
-  }
 
   private def escapeCell(s: String): String =
     CellValue
@@ -77,4 +74,4 @@ class MarkdownFormatter extends OutputFormatter {
       .replace("\r\n", " ")
       .replace("\n", " ")
       .replace("\r", " ")
-}
+end MarkdownFormatter

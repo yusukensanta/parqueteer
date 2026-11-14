@@ -3,7 +3,7 @@ package io.github.yusukensanta.parqueteer.core.parsers
 import io.github.yusukensanta.parqueteer.core.models.CellValue
 import io.github.yusukensanta.parqueteer.core.util.Warnings
 
-object LTSVParser {
+object LTSVParser:
 
   // Valid LTSV label chars: 0x21–0x7E excluding ':' and '='
   private def isValidLabelChar(c: Char): Boolean =
@@ -47,4 +47,4 @@ object LTSVParser {
         }
         scala.collection.immutable.ListMap.from(lhm)
       }
-}
+end LTSVParser

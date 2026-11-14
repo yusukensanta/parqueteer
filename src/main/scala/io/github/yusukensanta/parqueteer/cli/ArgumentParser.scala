@@ -14,7 +14,7 @@ import io.github.yusukensanta.parqueteer.core.services.StatsAssertion
 import io.github.yusukensanta.parqueteer.core.util.SizeParser
 import CliSpec.Choices
 
-object ArgumentParser {
+object ArgumentParser:
 
   case class Config(
       command: Option[Command] = None,
@@ -23,7 +23,7 @@ object ArgumentParser {
 
   private val builder = OParser.builder[Config]
 
-  val parser: OParser[Unit, Config] = {
+  val parser: OParser[Unit, Config] =
     import builder.*
 
     // Shared option definitions: each enum-valued flag is parsed by a single
@@ -67,12 +67,11 @@ object ArgumentParser {
       opt[String]("page-size")
         .valueName("<size>")
         .validate(x =>
-          scala.util.Try(parseSize(x)).toEither match {
+          scala.util.Try(parseSize(x)).toEither match
             case Left(e)                                => failure(e.getMessage)
             case Right(n) if n <= 0 || n > Int.MaxValue =>
               failure(s"--page-size must be between 1B and 2GB, got $x")
             case Right(_) => success
-          }
         )
         .action((x, c) =>
           updateCmd[C](c, cmd => set(cmd, get(cmd).copy(pageSize = Some(parseSize(x).toInt))))
@@ -540,7 +539,8 @@ object ArgumentParser {
             .text("Validate the configuration file instead of displaying it")
         )
     )
-  }
+
+  end parser
 
   // "a, b, or c" for error messages.
   private def orList(choices: List[String]): String =
@@ -551,10 +551,9 @@ object ArgumentParser {
       config: Config,
       update: C => C
   ): Config =
-    config.command match {
+    config.command match
       case Some(cmd: C) => config.copy(command = Some(update(cmd)))
       case _            => config
-    }
 
   private def isTableOrJson(f: OutputFormat): Boolean =
     f == OutputFormat.Table || f == OutputFormat.JSON
@@ -568,4 +567,4 @@ object ArgumentParser {
 
   private def parseSize(sizeStr: String): Long =
     SizeParser.parse(sizeStr)
-}
+end ArgumentParser

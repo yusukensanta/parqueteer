@@ -3,7 +3,7 @@ package io.github.yusukensanta.parqueteer.core.util
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-class RowBudgetTest extends AnyFlatSpec with Matchers {
+class RowBudgetTest extends AnyFlatSpec with Matchers:
 
   "RowBudget" should "never be exhausted without a limit" in {
     val budget = RowBudget(None)
@@ -28,4 +28,3 @@ class RowBudgetTest extends AnyFlatSpec with Matchers {
     budget.nextLimit shouldBe Some(0L)
     budget.isExhausted shouldBe true
   }
-}

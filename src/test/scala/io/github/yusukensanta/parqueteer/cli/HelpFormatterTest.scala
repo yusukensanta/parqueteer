@@ -3,7 +3,7 @@ package io.github.yusukensanta.parqueteer.cli
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-class HelpFormatterTest extends AnyFlatSpec with Matchers {
+class HelpFormatterTest extends AnyFlatSpec with Matchers:
 
   "HelpFormatter.subcommandHelp" should "return Some for read" in {
     val h = HelpFormatter.subcommandHelp("read")
@@ -141,16 +141,15 @@ class HelpFormatterTest extends AnyFlatSpec with Matchers {
     }
 
   it should "document every option of every command, with its short flag and value" in {
-    for {
+    for
       c <- CliSpec.commands
       o <- c.options
-    } {
+    do
       val flags =
         o.short.fold("    ")(s => s"-$s, ") + s"--${o.long}" + o.valueName.fold("")(" " + _)
       withClue(s"${c.path} --${o.long}: ")(
         HelpFormatter.subcommandHelp(c.path).get should include(flags)
       )
-    }
   }
 
   it should "document every global option in the top-level help" in
@@ -161,4 +160,4 @@ class HelpFormatterTest extends AnyFlatSpec with Matchers {
     validate.linesIterator.filter(_.startsWith("  ")).foreach(_.length should be <= 100)
     validate should include("'rows > 0'")
   }
-}
+end HelpFormatterTest

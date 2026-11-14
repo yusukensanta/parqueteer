@@ -4,7 +4,7 @@ import io.github.yusukensanta.parqueteer.core.models.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-class LocationParsingTest extends AnyFlatSpec with Matchers {
+class LocationParsingTest extends AnyFlatSpec with Matchers:
 
   "LocationParsing.parseLocation" should "parse a local path" in {
     LocationParsing.parseLocation("/tmp/a.parquet") shouldBe Right(LocalPath("/tmp/a.parquet"))
@@ -25,4 +25,3 @@ class LocationParsingTest extends AnyFlatSpec with Matchers {
   it should "short-circuit on the first malformed path" in {
     LocationParsing.parseLocations(List("/a", "s3://", "/c")).isLeft shouldBe true
   }
-}

@@ -7,7 +7,7 @@ import io.github.yusukensanta.parqueteer.core.models.{
   ParquetSchema
 }
 
-class LTSVFormatter extends OutputFormatter {
+class LTSVFormatter extends OutputFormatter:
 
   override def formatContent(
       content: FileContent,
@@ -42,4 +42,4 @@ class LTSVFormatter extends OutputFormatter {
 
   private def sanitizeValue(value: String): String =
     value.replace("\t", " ").replace("\r", "").replace("\n", " ")
-}
+end LTSVFormatter

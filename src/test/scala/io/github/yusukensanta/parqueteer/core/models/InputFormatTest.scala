@@ -3,7 +3,7 @@ package io.github.yusukensanta.parqueteer.core.models
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-class InputFormatTest extends AnyFlatSpec with Matchers {
+class InputFormatTest extends AnyFlatSpec with Matchers:
 
   "InputFormat.fromString" should "parse json" in {
     InputFormat.fromString("json") shouldBe Some(InputFormat.Json)
@@ -49,13 +49,13 @@ class InputFormatTest extends AnyFlatSpec with Matchers {
   }
 
   "InputFormat.FromName" should "extract a format from a file extension" in {
-    ("csv" match {
+    ("csv" match
       case InputFormat.FromName(f) => Some(f)
       case _                       => None
-    }) shouldBe Some(InputFormat.Csv)
-    ("parquet" match {
+    ) shouldBe Some(InputFormat.Csv)
+    ("parquet" match
       case InputFormat.FromName(f) => Some(f)
       case _                       => None
-    }) shouldBe None
+    ) shouldBe None
   }
-}
+end InputFormatTest

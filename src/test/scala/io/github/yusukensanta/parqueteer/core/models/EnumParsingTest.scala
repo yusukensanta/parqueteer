@@ -3,7 +3,7 @@ package io.github.yusukensanta.parqueteer.core.models
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-class EnumParsingTest extends AnyFlatSpec with Matchers {
+class EnumParsingTest extends AnyFlatSpec with Matchers:
 
   "OutputFormat.fromString" should "parse every CLI name case-insensitively" in {
     val names =
@@ -38,4 +38,4 @@ class EnumParsingTest extends AnyFlatSpec with Matchers {
     SchemaMode.fromString("UNION") shouldBe Some(SchemaMode.Union)
     SchemaMode.fromString("loose") shouldBe None
   }
-}
+end EnumParsingTest

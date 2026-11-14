@@ -14,7 +14,7 @@ import scala.util.{Success, Try}
  * default file content/schema/metadata/stats, GlobalOptions presets and a
  * stderr capture helper.
  */
-trait CliTestSupport extends AnyFlatSpec with Matchers {
+trait CliTestSupport extends AnyFlatSpec with Matchers:
 
   protected class FakeParquetRepository(
       contentResult: Try[FileContent] = Success(defaultContent),
@@ -27,7 +27,7 @@ trait CliTestSupport extends AnyFlatSpec with Matchers {
       schemaFieldsResult: Try[List[FieldSummary]] = Success(List.empty),
       deleteResult: Try[Unit] = Success(()),
       inferSchemaResult: Try[ParquetSchema] = Success(defaultSchema)
-  ) extends ParquetRepository {
+  ) extends ParquetRepository:
 
     override def readContent(file: ParquetFile, config: ReadConfig): Try[FileContent] =
       contentResult
@@ -35,10 +35,10 @@ trait CliTestSupport extends AnyFlatSpec with Matchers {
     override def readFileInfo(
         file: ParquetFile
     ): Try[(ParquetSchema, FileMetadata, List[RowGroupInfo])] =
-      for {
+      for
         s <- schemaResult
         m <- metadataResult
-      } yield (s, m, Nil)
+      yield (s, m, Nil)
     override def validateFile(file: ParquetFile, deep: Boolean): Try[List[String]] = validateResult
 
     override def writeContent(
@@ -75,8 +75,10 @@ trait CliTestSupport extends AnyFlatSpec with Matchers {
 
     override def inferSchemaFromRows(
         rows: Iterator[Map[String, CellValue]]
-    ): Try[ParquetSchema] = { val _ = rows; inferSchemaResult }
-  }
+    ): Try[ParquetSchema] =
+      val _ = rows; inferSchemaResult
+
+  end FakeParquetRepository
 
   protected val defaultContent = FileContent(
     rows = List(Map("id" -> CellValue.I64(1L), "name" -> CellValue.Str("Alice"))),
@@ -111,15 +113,14 @@ trait CliTestSupport extends AnyFlatSpec with Matchers {
   protected def newService(repo: FakeParquetRepository = new FakeParquetRepository()) =
     new ParquetService(repo)
 
-  protected def captureStderr[A](block: => A): (A, String) = {
+  protected def captureStderr[A](block: => A): (A, String) =
     val baos = new ByteArrayOutputStream()
     val ps   = new PrintStream(baos)
     val old  = System.err
     System.setErr(ps)
-    try {
+    try
       val result = block
       ps.flush()
       (result, baos.toString("UTF-8"))
-    } finally System.setErr(old)
-  }
-}
+    finally System.setErr(old)
+end CliTestSupport

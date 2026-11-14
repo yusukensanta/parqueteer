@@ -11,7 +11,7 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import java.time.Instant
 
-class MarkdownFormatterTest extends AnyFlatSpec with Matchers {
+class MarkdownFormatterTest extends AnyFlatSpec with Matchers:
 
   private val formatter = new MarkdownFormatter()
 
@@ -171,4 +171,4 @@ class MarkdownFormatterTest extends AnyFlatSpec with Matchers {
     lines(2) shouldBe "| 1 |  |"
     lines(3) shouldBe "| 2 | x |"
   }
-}
+end MarkdownFormatterTest

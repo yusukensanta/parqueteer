@@ -4,7 +4,7 @@ import io.github.yusukensanta.parqueteer.core.models.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-class LTSVFormatterTest extends AnyFlatSpec with Matchers {
+class LTSVFormatterTest extends AnyFlatSpec with Matchers:
 
   private val fmt = new LTSVFormatter()
 
@@ -189,4 +189,4 @@ class LTSVFormatterTest extends AnyFlatSpec with Matchers {
     result should include("created_by:")
     result should include("compression_ratio:")
   }
-}
+end LTSVFormatterTest

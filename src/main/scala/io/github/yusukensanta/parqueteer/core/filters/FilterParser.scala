@@ -12,7 +12,7 @@ import scala.util.Try
 type FilterValue          = Long | Double | String | Boolean
 private type NumericValue = Long | Double
 
-object FilterParser {
+object FilterParser:
 
   private[filters] val logger =
     org.slf4j.LoggerFactory.getLogger(getClass)
@@ -24,22 +24,19 @@ object FilterParser {
   def parse(
       filterExpr: String
   ): Either[ParqueteerError.FilterParseError, Filter] =
-    new FilterParserImpl(None).parse(filterExpr) match {
+    new FilterParserImpl(None).parse(filterExpr) match
       case Right(f)  => Right(f)
       case Left(msg) => Left(ParqueteerError.FilterParseError(filterExpr, msg))
-    }
 
   def parseWithSchema(
       filterExpr: String,
       schema: MessageType
   ): Either[ParqueteerError.FilterParseError, Filter] =
-    new FilterParserImpl(Some(schema)).parse(filterExpr) match {
+    new FilterParserImpl(Some(schema)).parse(filterExpr) match
       case Right(f)  => Right(f)
       case Left(msg) => Left(ParqueteerError.FilterParseError(filterExpr, msg))
-    }
-}
 
-private class FilterParserImpl(schema: Option[MessageType]) {
+private class FilterParserImpl(schema: Option[MessageType]):
 
   // ── Tokens ────────────────────────────────────────────────────────────────
 
@@ -63,8 +60,8 @@ private class FilterParserImpl(schema: Option[MessageType]) {
     def skipWS(): Unit = while i < n && input(i).isWhitespace do i += 1
 
     skipWS()
-    while i < n do {
-      input(i) match {
+    while i < n do
+      input(i) match
         case '(' => buf += Token.LParen; i += 1
         case ')' => buf += Token.RParen; i += 1
         case ',' => buf += Token.Comma; i += 1
@@ -74,8 +71,8 @@ private class FilterParserImpl(schema: Option[MessageType]) {
           i += 1
           val sb = new StringBuilder
           while i < n && input(i) != '"' do
-            if input(i) == '\\' && i + 1 < n then {
-              input(i + 1) match {
+            if input(i) == '\\' && i + 1 < n then
+              input(i + 1) match
                 case '"'  => sb.append('"'); i += 2
                 case '\\' => sb.append('\\'); i += 2
                 case 't'  => sb.append('\t'); i += 2
@@ -85,8 +82,8 @@ private class FilterParserImpl(schema: Option[MessageType]) {
                   throw new IllegalArgumentException(
                     s"Unknown escape '\\$c' at position $i in filter string — supported: \\\", \\\\, \\t, \\n, \\r"
                   )
-              }
-            } else { sb.append(input(i)); i += 1 }
+            else
+              sb.append(input(i)); i += 1
           if i >= n then
             throw new IllegalArgumentException(
               s"Unterminated string literal starting at position $start in filter expression"
@@ -118,34 +115,31 @@ private class FilterParserImpl(schema: Option[MessageType]) {
           val start = i
           if c == '-' then i += 1
           while i < n && input(i).isDigit do i += 1
-          if i < n && input(i) == '.' && i + 1 < n && input(i + 1).isDigit then {
+          if i < n && input(i) == '.' && i + 1 < n && input(i + 1).isDigit then
             i += 1
             while i < n && input(i).isDigit do i += 1
-            if i < n && (input(i) == 'e' || input(i) == 'E') then {
+            if i < n && (input(i) == 'e' || input(i) == 'E') then
               i += 1
               if i < n && (input(i) == '+' || input(i) == '-') then i += 1
               while i < n && input(i).isDigit do i += 1
-            }
             buf += Token.Dbl(input.substring(start, i).toDouble)
-          } else {
+          else
             val raw = input.substring(start, i)
             val l   =
               try raw.toLong
-              catch {
+              catch
                 case _: NumberFormatException =>
                   throw new IllegalArgumentException(
                     s"numeric literal '$raw' is out of Long range; add a decimal point to use Double (e.g. ${raw}.0)"
                   )
-              }
             buf += Token.Lng(l)
-          }
         case c =>
           throw new IllegalArgumentException(
             s"unexpected character '${c}' at position $i — use AND/OR (not &/|), or check for smart quotes"
           )
-      }
+      end match
       skipWS()
-    }
+    end while
     buf += Token.Eof
     buf.toVector
   }.toEither.left.map(_.getMessage)
@@ -155,15 +149,17 @@ private class FilterParserImpl(schema: Option[MessageType]) {
   private var tokens: Vector[Token] = Vector.empty
   private var pos: Int              = 0
 
-  private def peek: Token      = if pos < tokens.length then tokens(pos) else Token.Eof
-  private def advance(): Token = { val t = peek; pos += 1; t }
+  private def peek: Token = if pos < tokens.length then tokens(pos) else Token.Eof
+
+  private def advance(): Token =
+    val t = peek; pos += 1; t
 
   // ── Entry point ───────────────────────────────────────────────────────────
 
   def parse(input: String): Either[String, Filter] =
     if input.trim.isEmpty then Left("Filter parse error: empty input")
     else
-      tokenize(input) match {
+      tokenize(input) match
         case Left(err)   => Left(s"Filter parse error: $err")
         case Right(toks) =>
           tokens = toks; pos = 0
@@ -171,55 +167,51 @@ private class FilterParserImpl(schema: Option[MessageType]) {
             if peek == Token.Eof then Right(f)
             else Left(s"Filter parse error: unexpected token after expression")
           }
-      }
 
   // ── Grammar ───────────────────────────────────────────────────────────────
 
   private def parseExpression(): Either[String, Filter] = parseOr()
 
-  private def parseOr(): Either[String, Filter] = {
+  private def parseOr(): Either[String, Filter] =
     var result = parseAnd()
-    while peek == Token.Kw("OR") && result.isRight do {
+    while peek == Token.Kw("OR") && result.isRight do
       advance()
-      result = for {
+      result = for
         l <- result
         r <- parseAnd()
-      } yield l || r
-    }
+      yield l || r
     result
-  }
 
-  private def parseAnd(): Either[String, Filter] = {
+  private def parseAnd(): Either[String, Filter] =
     var result = parseNot()
-    while peek == Token.Kw("AND") && result.isRight do {
+    while peek == Token.Kw("AND") && result.isRight do
       advance()
-      result = for {
+      result = for
         l <- result
         r <- parseNot()
-      } yield l && r
-    }
+      yield l && r
     result
-  }
 
   private def parseNot(): Either[String, Filter] =
-    if peek == Token.Kw("NOT") then { advance(); parsePrimary().map(!_) }
+    if peek == Token.Kw("NOT") then
+      advance(); parsePrimary().map(!_)
     else parsePrimary()
 
   private def parsePrimary(): Either[String, Filter] =
-    peek match {
+    peek match
       case Token.LParen =>
         advance()
         parseExpression().flatMap { f =>
-          if peek == Token.RParen then { advance(); Right(f) }
+          if peek == Token.RParen then
+            advance(); Right(f)
           else Left("Filter parse error: missing closing ')'")
         }
       case Token.Id(_) => parseAtom()
       case other       => Left(s"Filter parse error: unexpected token '$other'")
-    }
 
   private def parseAtom(): Either[String, Filter] =
     parseColumnName().flatMap { col =>
-      peek match {
+      peek match
         case Token.Kw("BETWEEN") => parseBetween(col)
         case Token.Kw("IN")      => parseIn(col)
         case Token.Kw("IS")      => parseIsNull(col)
@@ -230,103 +222,92 @@ private class FilterParserImpl(schema: Option[MessageType]) {
           Left(
             s"Filter parse error: expected operator after column '$col', got '$other'"
           )
-      }
     }
 
   private def parseColumnName(): Either[String, String] =
-    peek match {
+    peek match
       case Token.Id(name) =>
         advance()
         val buf                 = scala.collection.mutable.ListBuffer(name)
         var err: Option[String] = None
-        while peek == Token.Dot && err.isEmpty do {
+        while peek == Token.Dot && err.isEmpty do
           advance()
-          peek match {
+          peek match
             case Token.Id(n) => advance(); buf += n
             case other       =>
               err = Some(
                 s"Filter parse error: expected identifier after '.', got '$other'"
               )
-          }
-        }
         err.toLeft(buf.mkString("."))
       case other =>
         Left(s"Filter parse error: expected column name, got '$other'")
-    }
 
   private def parseValue(): Either[String, FilterValue] =
-    peek match {
+    peek match
       case Token.Str(s)      => advance(); Right(s)
       case Token.Kw("TRUE")  => advance(); Right(true)
       case Token.Kw("FALSE") => advance(); Right(false)
       case Token.Lng(l)      => advance(); Right(l)
       case Token.Dbl(d)      => advance(); Right(d)
       case other             => Left(s"Filter parse error: expected value, got '$other'")
-    }
 
   private def parseNumericValue(): Either[String, NumericValue] =
-    peek match {
+    peek match
       case Token.Lng(l) => advance(); Right(l)
       case Token.Dbl(d) => advance(); Right(d)
       case other        =>
         Left(s"Filter parse error: expected numeric value, got '$other'")
-    }
 
-  private def parseBetween(col: String): Either[String, Filter] = {
+  private def parseBetween(col: String): Either[String, Filter] =
     advance() // consume BETWEEN
-    for {
+    for
       low <- parseNumericValue()
       _   <-
         if peek == Token.Kw("AND") then Right(advance())
         else Left(s"Filter parse error: expected AND in BETWEEN, got '$peek'")
       high <- parseNumericValue()
       f    <- buildBetween(col, low, high)
-    } yield f
-  }
+    yield f
 
-  private def parseIn(col: String): Either[String, Filter] = {
+  private def parseIn(col: String): Either[String, Filter] =
     advance() // consume IN
     if peek != Token.LParen then Left(s"Filter parse error: expected '(' after IN, got '$peek'")
-    else {
+    else
       advance()
       val vals                = scala.collection.mutable.ListBuffer.empty[FilterValue]
       var err: Option[String] = None
-      parseValue() match {
+      parseValue() match
         case Left(e)  => err = Some(e)
         case Right(v) => vals += v
-      }
-      while err.isEmpty && peek == Token.Comma do {
+      while err.isEmpty && peek == Token.Comma do
         advance()
-        parseValue() match {
+        parseValue() match
           case Left(e)  => err = Some(e)
           case Right(v) => vals += v
-        }
-      }
-      err match {
+      err match
         case Some(e) => Left(e)
         case None    =>
           if peek != Token.RParen then
             Left(
               s"Filter parse error: expected ')' after IN list, got '$peek'"
             )
-          else { advance(); buildIn(col, vals.toList) }
-      }
-    }
-  }
+          else
+            advance(); buildIn(col, vals.toList)
 
-  private def parseIsNull(col: String): Either[String, Filter] = {
+  private def parseIsNull(col: String): Either[String, Filter] =
     advance() // consume IS
     val hasNot = peek == Token.Kw("NOT")
-    val isNull = if hasNot then { advance(); false }
+    val isNull = if hasNot then
+      advance(); false
     else true
-    if peek == Token.Kw("NULL") then {
+    if peek == Token.Kw("NULL") then
       advance()
       // When schema is available, validate column existence and type at parse
       // time to fail fast rather than defaulting to BINARY and throwing at read
       // time with a cryptic Parquet internal type-mismatch error.
-      schema match {
+      schema match
         case Some(s) =>
-          resolveField(s, col) match {
+          resolveField(s, col) match
             case None =>
               Left(
                 s"Filter parse error: column '$col' not found in schema for IS NULL predicate"
@@ -336,14 +317,10 @@ private class FilterParserImpl(schema: Option[MessageType]) {
                 s"Filter parse error: IS NULL on nested column '$col' is not supported"
               )
             case _ => Right(buildIsNullFilter(col, isNull))
-          }
         case None => Right(buildIsNullFilter(col, isNull))
-      }
-    } else {
+    else
       val after = if hasNot then "IS NOT" else "IS"
       Left(s"Filter parse error: expected NULL after $after, got '$peek'")
-    }
-  }
 
   // ── Filter construction ───────────────────────────────────────────────────
 
@@ -351,18 +328,17 @@ private class FilterParserImpl(schema: Option[MessageType]) {
       col: String,
       op: String,
       v: FilterValue
-  ): Either[String, Filter] = {
+  ): Either[String, Filter] =
     val c = Col(col)
 
     // Equality / inequality work for all value types — strings, numbers, bools.
-    def equality(eq: Boolean): Filter = v match {
+    def equality(eq: Boolean): Filter = v match
       case s: String => if eq then c === s else c !== s
       case l: Long   =>
         warnIfDecimalColumn(col, if eq then "=" else "!=", l)
         if eq then c === l else c !== l
       case d: Double  => if eq then c === d else c !== d
       case b: Boolean => if eq then c === b else c !== b
-    }
 
     // Ordered comparisons only make sense for numeric values; everything else
     // produces a typed error message that names the operator and value type.
@@ -370,7 +346,7 @@ private class FilterParserImpl(schema: Option[MessageType]) {
         opName: String,
         onLong: Long => Filter,
         onDouble: Double => Filter
-    ): Either[String, Filter] = v match {
+    ): Either[String, Filter] = v match
       case l: Long =>
         warnIfDecimalColumn(col, opName, l)
         Right(onLong(l))
@@ -379,9 +355,8 @@ private class FilterParserImpl(schema: Option[MessageType]) {
         Left(
           s"Operator '$opName' requires a numeric value, got: ${v.getClass.getSimpleName} '$v'"
         )
-    }
 
-    op match {
+    op match
       case "="  => Right(equality(eq = true))
       case "!=" => Right(equality(eq = false))
       case ">"  => numericOnly(">", c > _, c > _)
@@ -389,16 +364,16 @@ private class FilterParserImpl(schema: Option[MessageType]) {
       case "<"  => numericOnly("<", c < _, c < _)
       case "<=" => numericOnly("<=", c <= _, c <= _)
       case _    => Left(s"Unknown operator: $op")
-    }
-  }
+
+  end buildComparison
 
   private def buildBetween(
       col: String,
       low: NumericValue,
       high: NumericValue
-  ): Either[String, Filter] = {
+  ): Either[String, Filter] =
     val c = Col(col)
-    (low, high) match {
+    (low, high) match
       case (l: Long, h: Long) if l > h =>
         Left(
           s"Filter parse error: BETWEEN range is empty ($l > $h). Write 'col BETWEEN $h AND $l' for the [$h, $l] range."
@@ -431,13 +406,14 @@ private class FilterParserImpl(schema: Option[MessageType]) {
             s"Filter parse error: integer bound $h cannot be represented exactly as a Double — use consistent literal types (e.g. $l AND ${h.toDouble})"
           )
         else Right((c >= l) && (c <= h.toDouble))
-    }
-  }
+    end match
+
+  end buildBetween
 
   private def buildIn(
       col: String,
       values: List[FilterValue]
-  ): Either[String, Filter] = {
+  ): Either[String, Filter] =
     val c        = Col(col)
     val strings  = values.collect { case s: String => s }
     val longs    = values.collect { case l: Long => l }
@@ -445,35 +421,35 @@ private class FilterParserImpl(schema: Option[MessageType]) {
     val booleans = values.collect { case b: Boolean => b }
 
     if strings.length == values.length then Right(c.in(strings))
-    else if longs.length == values.length then {
+    else if longs.length == values.length then
       warnIfDecimalColumnForIn(col)
       Right(c.in(longs))
-    } else if doubles.length == values.length then Right(c.in(doubles))
+    else if doubles.length == values.length then Right(c.in(doubles))
     else if booleans.length == values.length then
       Right(booleans.distinct.map(b => c === b).reduce(_ || _))
-    else if longs.length + doubles.length == values.length then {
+    else if longs.length + doubles.length == values.length then
       val imprecise = longs.filter(l => BigDecimal(l) != BigDecimal(l.toDouble))
       if imprecise.nonEmpty then
         Left(
           s"Filter parse error: IN list value(s) ${imprecise.mkString(", ")} cannot be represented exactly as Double — use consistent literal types"
         )
-      else {
+      else
         val asDoubles = values.collect {
           case l: Long   => l.toDouble
           case d: Double => d
         }
         Right(c.in(asDoubles))
-      }
-    } else
+    else
       Left(
         "IN list must contain values of the same type (all strings, all numbers, or all booleans)"
       )
-  }
+
+  end buildIn
 
   private def buildIsNullFilter(col: String, isNull: Boolean): Filter =
-    new Filter {
+    new Filter:
 
-      def toPredicate(vcc: ValueCodecConfiguration): FilterPredicate = {
+      def toPredicate(vcc: ValueCodecConfiguration): FilterPredicate =
         // Build a typed null-comparison predicate. The column factory and the
         // boxed null literal must match the physical Parquet type, so we
         // resolve the type from the schema (defaulting to BINARY) and dispatch.
@@ -487,7 +463,7 @@ private class FilterParserImpl(schema: Option[MessageType]) {
 
         schema
           .flatMap(s => resolveColumnType(s, col))
-          .getOrElse(PrimitiveTypeName.BINARY) match {
+          .getOrElse(PrimitiveTypeName.BINARY) match
           case PrimitiveTypeName.INT32 =>
             nullEq(
               FilterApi.intColumn(col),
@@ -512,22 +488,20 @@ private class FilterParserImpl(schema: Option[MessageType]) {
             )
           case _ =>
             nullEq(FilterApi.binaryColumn(col), null.asInstanceOf[Binary])
-        }
-      }
-    }
+      end toPredicate
 
   // Shared traversal: walk dotted column path through the schema, returning the leaf Type.
   // Returns None if any path segment is missing or if a non-terminal segment is a primitive.
   private def resolveField(
       messageType: MessageType,
       column: String
-  ): Option[org.apache.parquet.schema.Type] = {
+  ): Option[org.apache.parquet.schema.Type] =
     val parts                                           = column.split("\\.")
     var current: Option[org.apache.parquet.schema.Type] = None
     var idx                                             = 0
     var ok                                              = true
-    while idx < parts.length && ok do {
-      val group: org.apache.parquet.schema.GroupType = current match {
+    while idx < parts.length && ok do
+      val group: org.apache.parquet.schema.GroupType = current match
         case Some(f) if !f.isPrimitive => f.asGroupType()
         case Some(_)                   =>
           // A non-terminal segment resolved to a primitive — path is invalid.
@@ -535,15 +509,11 @@ private class FilterParserImpl(schema: Option[MessageType]) {
           ok = false
           null
         case None => messageType.asGroupType()
-      }
-      if ok then {
+      if ok then
         current = group.getFields.asScala.find(_.getName == parts(idx))
         ok = current.isDefined
-      }
       idx += 1
-    }
     current
-  }
 
   private def resolveColumnType(
       messageType: MessageType,
@@ -591,4 +561,4 @@ private class FilterParserImpl(schema: Option[MessageType]) {
             s"representations. Use quoted string literals for decimal values."
         )
     }
-}
+end FilterParserImpl

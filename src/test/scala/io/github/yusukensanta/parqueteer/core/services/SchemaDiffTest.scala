@@ -6,20 +6,19 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import scala.util.{Success, Try}
 
-class SchemaDiffTest extends AnyFlatSpec with Matchers {
+class SchemaDiffTest extends AnyFlatSpec with Matchers:
 
   private class TwoSchemaRepository(
       schema1: ParquetSchema,
       schema2: ParquetSchema,
       metadata: FileMetadata
-  ) extends ParquetRepository {
+  ) extends ParquetRepository:
 
     override def readFileInfo(
         file: ParquetFile
-    ): Try[(ParquetSchema, FileMetadata, List[RowGroupInfo])] = {
+    ): Try[(ParquetSchema, FileMetadata, List[RowGroupInfo])] =
       val schema = if file.location.path.contains("file1") then schema1 else schema2
       Success((schema, metadata, Nil))
-    }
 
     override def readContent(
         file: ParquetFile,
@@ -61,8 +60,9 @@ class SchemaDiffTest extends AnyFlatSpec with Matchers {
 
     override def inferSchemaFromRows(
         rows: Iterator[Map[String, CellValue]]
-    ): Try[ParquetSchema] = { val _ = rows; Success(schema1) }
-  }
+    ): Try[ParquetSchema] =
+      val _ = rows; Success(schema1)
+  end TwoSchemaRepository
 
   // ── Tests ─────────────────────────────────────────────────────────────────
 
@@ -159,4 +159,4 @@ class SchemaDiffTest extends AnyFlatSpec with Matchers {
     result.isLeft shouldBe true
     result.left.toOption.get shouldBe a[ParqueteerError.InvalidLocation]
   }
-}
+end SchemaDiffTest

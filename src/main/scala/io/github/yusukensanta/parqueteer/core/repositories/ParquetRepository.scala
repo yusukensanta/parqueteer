@@ -7,7 +7,7 @@ import scala.util.{Failure, Success, Try}
  * Public interface for Parquet file I/O. Implementations may choose to use
  * Hadoop, in-memory fakes for testing, etc.
  */
-trait ParquetRepository {
+trait ParquetRepository:
   def readContent(file: ParquetFile, config: ReadConfig): Try[FileContent]
 
   def streamContent(
@@ -64,10 +64,9 @@ trait ParquetRepository {
   def readDetailedMetadata(
       file: ParquetFile,
       options: MetadataOptions = MetadataOptions()
-  ): Try[ParquetMetadataReport] = {
+  ): Try[ParquetMetadataReport] =
     val _ = (file, options)
     Failure(new UnsupportedOperationException("readDetailedMetadata is not implemented"))
-  }
 
   /**
    * Expand a glob pattern (containing *, ?, [, {) into the concrete files it
@@ -81,9 +80,10 @@ trait ParquetRepository {
 
   def cacheStats(): ParquetRepository.CacheStats =
     ParquetRepository.CacheStats(0, 0, 0, 0)
-}
 
-object ParquetRepository {
+end ParquetRepository
+
+object ParquetRepository:
 
   final case class CacheStats(
       footerHits: Long,
@@ -91,4 +91,3 @@ object ParquetRepository {
       configHits: Long,
       configMisses: Long
   )
-}

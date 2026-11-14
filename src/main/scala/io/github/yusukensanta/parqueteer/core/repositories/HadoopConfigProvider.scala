@@ -22,7 +22,7 @@ private[repositories] class HadoopConfigProvider(
     profile: Option[String],
     region: Option[String],
     s3EndpointUrl: Option[String]
-) {
+):
 
   private val CacheMaxSize = 64
 
@@ -77,18 +77,17 @@ private[repositories] class HadoopConfigProvider(
       }
       .nextOption()
 
-  private def configFor(location: StorageLocation): Try[Configuration] = {
+  private def configFor(location: StorageLocation): Try[Configuration] =
     val key = cacheKey(location)
-    cache.get(key) match {
+    cache.get(key) match
       case Some(cfg) =>
         Success(new Configuration(cfg))
       case None =>
-        val effectiveLocation = (location, region) match {
+        val effectiveLocation = (location, region) match
           case (s3: S3Location, Some(r)) => s3.copy(region = Some(r))
           case _                         => location
-        }
         val result = CloudCredentialManager
-          .forLocation(effectiveLocation, profile, s3EndpointUrl) match {
+          .forLocation(effectiveLocation, profile, s3EndpointUrl) match
           case Some(credManager) =>
             credManager.configureHadoop(effectiveLocation).recoverWith {
               case e if !e.isInstanceOf[CloudAuthException] =>
@@ -102,17 +101,14 @@ private[repositories] class HadoopConfigProvider(
                 )
             }
           case None => Success(new Configuration())
-        }
         // INVARIANT: cached Configuration must never be mutated after this put.
         // Callers always get a shallow copy (new Configuration(cfg)); mutating the
         // cached original while another thread copies it is not thread-safe.
         result.foreach(cfg => cache.put(key, cfg))
         result.map(new Configuration(_))
-    }
-  }
 
   private def cacheKey(location: StorageLocation): String =
-    location match {
+    location match
       case LocalPath(_)             => "local"
       case S3Location(bucket, _, r) =>
         s"s3:$bucket:${r.orElse(region).getOrElse("")}"
@@ -120,17 +116,14 @@ private[repositories] class HadoopConfigProvider(
         s"gcs:$bucket"
       case AzureLocation(account, cont, _) =>
         s"azure:${profile.getOrElse("")}:$account/$cont"
-    }
 
-  private def providerNameFor(location: StorageLocation): String = location match {
+  private def providerNameFor(location: StorageLocation): String = location match
     case _: S3Location    => "S3"
     case _: GCSLocation   => "GCS"
     case _: AzureLocation => "Azure"
     case _                => "cloud storage"
-  }
 
-  private def isCloudLocation(location: StorageLocation): Boolean = location match {
+  private def isCloudLocation(location: StorageLocation): Boolean = location match
     case _: S3Location | _: GCSLocation | _: AzureLocation => true
     case _                                                 => false
-  }
-}
+end HadoopConfigProvider

@@ -3,7 +3,7 @@ package io.github.yusukensanta.parqueteer.core.models
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-class CellValueTest extends AnyFlatSpec with Matchers {
+class CellValueTest extends AnyFlatSpec with Matchers:
 
   private val ESC = 0x1b.toChar.toString // ANSI escape character
   private val DEL = 0x7f.toChar.toString // DEL (0x7F)
@@ -64,4 +64,4 @@ class CellValueTest extends AnyFlatSpec with Matchers {
     val b = scala.collection.immutable.ArraySeq.unsafeWrapArray(Array[Byte](1, 2, 4))
     CellValue.Bytes(a) should not be CellValue.Bytes(b)
   }
-}
+end CellValueTest

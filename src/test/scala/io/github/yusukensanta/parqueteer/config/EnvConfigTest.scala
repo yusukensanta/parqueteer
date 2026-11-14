@@ -5,7 +5,7 @@ import io.github.yusukensanta.parqueteer.core.models.OutputFormat
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-class EnvConfigTest extends AnyFlatSpec with Matchers {
+class EnvConfigTest extends AnyFlatSpec with Matchers:
 
   private def env(pairs: (String, String)*): EnvConfig.EnvLookup =
     pairs.toMap.get
@@ -155,4 +155,4 @@ class EnvConfigTest extends AnyFlatSpec with Matchers {
     opts.verbose shouldBe a[Boolean]
     opts.colorMode should (be(ColorMode.Auto) or be(ColorMode.Never) or be(ColorMode.Always))
   }
-}
+end EnvConfigTest

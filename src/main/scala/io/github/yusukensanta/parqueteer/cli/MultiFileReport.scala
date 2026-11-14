@@ -9,7 +9,7 @@ import scala.util.control.NonFatal
 import java.util.concurrent.Executors
 
 /** Renders one report per matched file for the multi-file metadata commands. */
-private[cli] object MultiFileReport {
+private[cli] object MultiFileReport:
 
   /**
    * Runs `renderOne` once per matched path. Table mode prints each file's
@@ -22,11 +22,11 @@ private[cli] object MultiFileReport {
       paths: List[String],
       format: OutputFormat,
       globalOptions: GlobalOptions
-  )(renderOne: String => Either[ParqueteerError, (String, Boolean)]): Int = {
+  )(renderOne: String => Either[ParqueteerError, (String, Boolean)]): Int =
     val results = fetchBounded(paths, globalOptions.fileParallelism)(renderOne)
 
-    if !globalOptions.quiet then {
-      if format == OutputFormat.JSON then {
+    if !globalOptions.quiet then
+      if format == OutputFormat.JSON then
         val elements = results.map {
           case (path, Right((json, _))) =>
             val parsed =
@@ -45,24 +45,22 @@ private[cli] object MultiFileReport {
             )
         }
         println(Json.arr(elements*).spaces2)
-      } else {
+      else
         results.zipWithIndex.foreach { case ((path, result), i) =>
           if i > 0 then println()
           println(s"==> $path <==")
-          result match {
+          result match
             case Right((text, _)) => println(text)
             case Left(error)      =>
               System.err.println(s"Error: ${CredentialRedactor.redact(error.userMessage)}")
-          }
         }
-      }
-    }
     val allOk = results.forall {
       case (_, Right((_, ok))) => ok
       case (_, Left(_))        => false
     }
     if allOk then 0 else 1
-  }
+
+  end runMultiFileReport
 
   /**
    * Fetches each path's render result with at most `parallelism` files
@@ -81,12 +79,12 @@ private[cli] object MultiFileReport {
       renderOne: String => Either[ParqueteerError, (String, Boolean)]
   ): List[(String, Either[ParqueteerError, (String, Boolean)])] =
     if paths.size <= 1 || parallelism <= 1 then paths.map(p => p -> renderOne(p))
-    else {
+    else
       val pool = Executors.newFixedThreadPool(
         parallelism.min(paths.size),
         new DaemonThreadFactory("parqueteer-file-fetch")
       )
-      try {
+      try
         given ExecutionContext = ExecutionContext.fromExecutor(pool)
         val futures            = paths.map { p =>
           Future(p -> renderOne(p)).recover { case NonFatal(e) =>
@@ -94,6 +92,5 @@ private[cli] object MultiFileReport {
           }
         }
         Await.result(Future.sequence(futures), Duration.Inf)
-      } finally pool.shutdown()
-    }
-}
+      finally pool.shutdown()
+end MultiFileReport

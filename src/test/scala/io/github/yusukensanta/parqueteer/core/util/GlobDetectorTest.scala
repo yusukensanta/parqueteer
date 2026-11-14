@@ -3,7 +3,7 @@ package io.github.yusukensanta.parqueteer.core.util
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-class GlobDetectorTest extends AnyFlatSpec with Matchers {
+class GlobDetectorTest extends AnyFlatSpec with Matchers:
 
   "GlobDetector.hasGlobChars" should "return false for a plain local path" in {
     GlobDetector.hasGlobChars("/data/file.parquet") shouldBe false
@@ -46,4 +46,4 @@ class GlobDetectorTest extends AnyFlatSpec with Matchers {
   it should "still return true when a real wildcard precedes a query string" in {
     GlobDetector.hasGlobChars("s3://bucket/2026-*.parquet?versionId=abc123") shouldBe true
   }
-}
+end GlobDetectorTest

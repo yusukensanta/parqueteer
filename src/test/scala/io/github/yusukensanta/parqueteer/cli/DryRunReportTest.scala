@@ -4,7 +4,7 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import DryRunReport.{detail, field}
 
-class DryRunReportTest extends AnyFlatSpec with Matchers {
+class DryRunReportTest extends AnyFlatSpec with Matchers:
 
   "DryRunReport.render" should "align field values on the longest label" in {
     DryRunReport(
@@ -44,4 +44,4 @@ class DryRunReportTest extends AnyFlatSpec with Matchers {
       Nil
     ).render shouldBe "Dry run: would merge 0 files → o.parquet"
   }
-}
+end DryRunReportTest

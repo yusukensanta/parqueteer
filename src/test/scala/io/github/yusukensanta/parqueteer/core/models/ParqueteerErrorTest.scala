@@ -5,7 +5,7 @@ import org.scalatest.matchers.should.Matchers
 import scala.util.Try
 import io.github.yusukensanta.parqueteer.core.models.ParqueteerError.toParqueteerError
 
-class ParqueteerErrorTest extends AnyFlatSpec with Matchers {
+class ParqueteerErrorTest extends AnyFlatSpec with Matchers:
 
   // ── toParqueteerError case ordering ────────────────────────────────────────
   // RowSchemaMismatchException extends IllegalArgumentException.
@@ -123,4 +123,4 @@ class ParqueteerErrorTest extends AnyFlatSpec with Matchers {
     err.userMessage should startWith("Invalid location \"ftp://host/f\"")
     err.userMessage should not include "supported formats"
   }
-}
+end ParqueteerErrorTest

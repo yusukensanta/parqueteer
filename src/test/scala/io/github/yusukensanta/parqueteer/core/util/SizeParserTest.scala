@@ -5,7 +5,7 @@ import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 import org.scalacheck.Gen
 
-class SizeParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks {
+class SizeParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks:
 
   "SizeParser.parse" should "parse bytes" in {
     SizeParser.parse("512B") shouldBe 512L
@@ -116,4 +116,4 @@ class SizeParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyCh
     SizeParser.parse("0B") shouldBe 0L
     SizeParser.parse("0KB") shouldBe 0L
   }
-}
+end SizeParserTest

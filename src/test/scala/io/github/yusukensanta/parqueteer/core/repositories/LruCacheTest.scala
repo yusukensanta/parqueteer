@@ -3,7 +3,7 @@ package io.github.yusukensanta.parqueteer.core.repositories
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-class LruCacheTest extends AnyFlatSpec with Matchers {
+class LruCacheTest extends AnyFlatSpec with Matchers:
 
   "LruCache" should "count hits and misses" in {
     val cache = new LruCache[String, Int](2)
@@ -30,4 +30,3 @@ class LruCacheTest extends AnyFlatSpec with Matchers {
     cache.remove("a")
     cache.get("a") shouldBe None
   }
-}

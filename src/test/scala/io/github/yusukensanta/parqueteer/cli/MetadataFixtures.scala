@@ -3,7 +3,7 @@ package io.github.yusukensanta.parqueteer.cli
 import io.github.yusukensanta.parqueteer.core.models.*
 import java.time.Instant
 
-object MetadataFixtures {
+object MetadataFixtures:
 
   val report: ParquetMetadataReport = ParquetMetadataReport(
     file = FileDetail(
@@ -65,4 +65,4 @@ object MetadataFixtures {
       )
     )
   )
-}
+end MetadataFixtures

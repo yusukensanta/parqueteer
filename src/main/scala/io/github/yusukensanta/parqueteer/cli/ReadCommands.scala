@@ -8,23 +8,21 @@ import StreamingOutput.*
 import Terminal.*
 
 /** Handlers for `read` (single file and multi-file/glob). */
-private[cli] object ReadCommands {
+private[cli] object ReadCommands:
 
   // Shared by executeRead/executeReadMulti's streaming branches.
   private[cli] def buildRowStreamWriter(
       format: OutputFormat,
       globalOptions: GlobalOptions
-  ): RowStreamWriter = {
+  ): RowStreamWriter =
     val baseWriter =
       if globalOptions.quiet then
-        new RowStreamWriter {
+        new RowStreamWriter:
           override def writeRow(row: Map[String, CellValue]): Unit = ()
-        }
       else RowStreamWriter(format, System.out)
     if globalOptions.verbose && !globalOptions.quiet then
       new ProgressRowStreamWriter(baseWriter, System.err)
     else baseWriter
-  }
 
   // Shared by executeRead/executeReadMulti: a broken pipe/full disk surfaces
   // as a stdout write error rather than a Left from the read itself, so it
@@ -32,9 +30,9 @@ private[cli] object ReadCommands {
   private[cli] def exitCodeForStreamResult(
       result: Either[ParqueteerError, Long],
       globalOptions: GlobalOptions
-  ): Int = {
+  ): Int =
     val stdoutError = System.out.checkError()
-    result match {
+    result match
       case _ if stdoutError =>
         System.err.println(
           "[parqueteer] error: output stream write error (disk full or broken pipe)"
@@ -42,23 +40,21 @@ private[cli] object ReadCommands {
         1
       case Right(_)    => 0
       case Left(error) => reportError("Error", globalOptions)(error)
-    }
-  }
 
   private[cli] def executeRead(
       service: ParquetService,
       cmd: ReadCommand,
       globalOptions: GlobalOptions
-  ): Int = {
+  ): Int =
     import cmd.{filePath, maxRows, columns, filter, format, parallelism, streaming}
     val effectiveParallelism =
-      if filter.isDefined && parallelism > 1 then {
+      if filter.isDefined && parallelism > 1 then
         if !globalOptions.quiet then
           System.err.println(
             "[parqueteer] warning: --filter disables parallel mode; falling back to sequential read."
           )
         1
-      } else parallelism
+      else parallelism
 
     val readConfig = ReadConfig(
       maxRows = maxRows,
@@ -81,28 +77,25 @@ private[cli] object ReadCommands {
         "[parqueteer] warning: --format pretty is not supported in streaming mode; falling back to ndjson."
       )
 
-    if effectiveStreaming then {
+    if effectiveStreaming then
       val writer = buildRowStreamWriter(format, globalOptions)
       val result =
         runWithDeferredBegin(writer, service.streamRead(filePath, readConfig))
       exitCodeForStreamResult(result, globalOptions)
-    } else {
-      service.readFile(filePath, readConfig) match {
+    else
+      service.readFile(filePath, readConfig) match
         case Right(file) =>
-          if !globalOptions.quiet then {
-            val useColors = globalOptions.colorMode match {
+          if !globalOptions.quiet then
+            val useColors = globalOptions.colorMode match
               case ColorMode.Never  => false
               case ColorMode.Always => true
               case ColorMode.Auto   => isStdoutTTY
-            }
             val formatter = OutputFormatter(format, useColors)
-            val output    = file.content match {
+            val output    = file.content match
               case Some(content) =>
                 formatter.formatContent(content, file.schema)
               case None => "No content available"
-            }
             println(output)
-          }
           0
         case Left(error) =>
           val filterHint =
@@ -115,16 +108,16 @@ private[cli] object ReadCommands {
               )
             else None
           reportError("Error", globalOptions, filterHint)(error)
-      }
-    }
-  }
+    end if
+
+  end executeRead
 
   private[cli] def executeReadMulti(
       service: ParquetService,
       paths: List[String],
       cmd: ReadCommand,
       globalOptions: GlobalOptions
-  ): Int = {
+  ): Int =
     import cmd.{maxRows, columns, filter, format, schemaMode}
     val readConfig = ReadConfig(
       maxRows = maxRows,
@@ -140,5 +133,4 @@ private[cli] object ReadCommands {
     val result =
       runWithDeferredBegin(writer, service.streamReadMulti(paths, readConfig, schemaMode))
     exitCodeForStreamResult(result, globalOptions)
-  }
-}
+end ReadCommands

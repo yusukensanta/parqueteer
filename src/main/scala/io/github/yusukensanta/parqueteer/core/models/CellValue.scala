@@ -52,3 +52,4 @@ object CellValue:
     (c < ' ' && c != '\t' && c != '\n' && c != '\r') ||
       c == '\u007F' ||
       (c >= '\u0080' && c <= '\u009F')
+end CellValue

@@ -1,6 +1,6 @@
 package io.github.yusukensanta.parqueteer.core.util
 
-private[parqueteer] object CredentialRedactor {
+private[parqueteer] object CredentialRedactor:
 
   private val patterns: Seq[scala.util.matching.Regex] = Seq(
     "(?i)(Authorization\\s*[:=]\\s*)\\S[^&\\n\\r]*".r,
@@ -68,13 +68,13 @@ private[parqueteer] object CredentialRedactor {
 
   private val MaxCauseChain = 20
 
-  def redactThrowable(t: Throwable): String = {
+  def redactThrowable(t: Throwable): String =
     val sb                 = new StringBuilder
     val seen               = new java.util.IdentityHashMap[Throwable, Boolean]()
     var current: Throwable = t
     var depth              = 0
     while current != null && !seen.containsKey(current) && depth < MaxCauseChain
-    do {
+    do
       seen.put(current, java.lang.Boolean.TRUE)
       val msg =
         Option(current.getMessage).getOrElse(current.getClass.getSimpleName)
@@ -83,8 +83,6 @@ private[parqueteer] object CredentialRedactor {
       depth += 1
       if current != null && !seen.containsKey(current) && depth < MaxCauseChain
       then sb.append("\nCaused by: ")
-    }
     if current != null && depth >= MaxCauseChain then sb.append("\n[cause chain truncated]")
     sb.toString
-  }
-}
+end CredentialRedactor

@@ -27,7 +27,7 @@ final private[repositories] case class FooterInfo(
     metadata: ParquetMetadata
 )
 
-private[repositories] object FooterReader {
+private[repositories] object FooterReader:
 
   private val parquetMagic      = Array[Byte]('P', 'A', 'R', '1')
   private val metadataConverter = new ParquetMetadataConverter()
@@ -68,7 +68,7 @@ private[repositories] object FooterReader {
     }
 
   /** Reads and parses the footer from an open stream (which is closed afterwards). */
-  def readFooterInfo(stream: SeekableInputStream, fileLen: Long): FooterInfo = {
+  def readFooterInfo(stream: SeekableInputStream, fileLen: Long): FooterInfo =
     val footerBytes          = readFooterBytes(stream, fileLen)
     val (version, createdBy) = parseRawMeta(footerBytes)
     val meta                 = parseFooter(footerBytes)
@@ -79,7 +79,6 @@ private[repositories] object FooterReader {
       createdBy,
       meta
     )
-  }
 
   /**
    * The raw thrift footer, for fields parquet-java's metadata objects drop
@@ -100,7 +99,7 @@ private[repositories] object FooterReader {
       ParquetMetadataConverter.NO_FILTER
     )
 
-  def parseRawMeta(footerBytes: Array[Byte]): (String, String) = {
+  def parseRawMeta(footerBytes: Array[Byte]): (String, String) =
     val raw = org.apache.parquet.format.Util.readFileMetaData(
       new ByteArrayInputStream(footerBytes)
     )
@@ -108,12 +107,11 @@ private[repositories] object FooterReader {
       if raw.version == 2 then "2.0" else "1.0",
       Option(raw.created_by).getOrElse("")
     )
-  }
 
   def buildParquetSchema(
       msgSchema: MessageType,
       blocks: List[BlockMetaData]
-  ): ParquetSchema = {
+  ): ParquetSchema =
     val chunkMap = blocks.headOption
       .map(
         _.getColumns.asScala
@@ -150,7 +148,8 @@ private[repositories] object FooterReader {
       rowGroupCount = blocks.size.toLong,
       totalRowCount = blocks.map(_.getRowCount).sum
     )
-  }
+
+  end buildParquetSchema
 
   def logicalTypeName(
       primitive: PrimitiveTypeName,
@@ -158,24 +157,21 @@ private[repositories] object FooterReader {
   ): String =
     if annotation == null then primitive.name()
     else
-      annotation match {
+      annotation match
         case _: DateLogicalTypeAnnotation       => "DATE"
         case ts: TimestampLogicalTypeAnnotation =>
-          ts.getUnit match {
+          ts.getUnit match
             case LogicalTypeAnnotation.TimeUnit.MICROS => "TIMESTAMP_MICROS"
             case LogicalTypeAnnotation.TimeUnit.NANOS  => "TIMESTAMP_NANOS"
             case _                                     => "TIMESTAMP_MILLIS"
-          }
         case _: StringLogicalTypeAnnotation    => "STRING"
         case _: EnumLogicalTypeAnnotation      => "STRING"
         case _: JsonLogicalTypeAnnotation      => "STRING"
         case dec: DecimalLogicalTypeAnnotation =>
           s"DECIMAL(${dec.getPrecision},${dec.getScale})"
         case _ =>
-          primitive match {
+          primitive match
             case PrimitiveTypeName.INT96                => "TIMESTAMP(INT96)"
             case PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY => "BINARY"
             case _                                      => primitive.name()
-          }
-      }
-}
+end FooterReader

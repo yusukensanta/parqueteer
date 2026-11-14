@@ -7,7 +7,7 @@ import io.github.yusukensanta.parqueteer.core.models.{
   ParquetSchema
 }
 
-class TableFormatter extends OutputFormatter {
+class TableFormatter extends OutputFormatter:
   private val MaxColumnWidth = 50
   private val MinColumnWidth = 5
   private val MaxTableRows   = 10_000
@@ -17,18 +17,16 @@ class TableFormatter extends OutputFormatter {
       schema: Option[ParquetSchema]
   ): String =
     if content.rows.isEmpty then "No data to display"
-    else {
+    else
       val (rows, effectiveContent) =
-        if content.rows.size > MaxTableRows then {
+        if content.rows.size > MaxTableRows then
           io.github.yusukensanta.parqueteer.core.util.Warnings.emit(
             s"${content.rows.size} rows exceeds table limit ($MaxTableRows). " +
               s"Showing first $MaxTableRows rows. Use --limit N to cap output, or --format json for large datasets."
           )
           val truncated = content.rows.take(MaxTableRows)
           (truncated, content.copy(rows = truncated, isPartial = true))
-        } else {
-          (content.rows, content)
-        }
+        else (content.rows, content)
       val columns = extractColumns(rows, schema)
 
       // Pre-format all cell values once: calculateColumnWidths and drawRow both
@@ -38,7 +36,7 @@ class TableFormatter extends OutputFormatter {
         val values = OutputFormatter.projectRow(row, columnIndex, columns.length)
         values.iterator.map(v => if v == null then "null" else formatValue(v)).toList
       }
-      val columnWidths = {
+      val columnWidths =
         val ws = columns.map(c => displayWidth(c)).toArray
         fmtRows.foreach(vs =>
           vs.zipWithIndex.foreach { case (s, i) =>
@@ -47,7 +45,6 @@ class TableFormatter extends OutputFormatter {
           }
         )
         ws.map(w => math.max(MinColumnWidth, math.min(MaxColumnWidth, w))).toList
-      }
       val sb = new StringBuilder()
 
       sb.append(drawTopBorder(columnWidths))
@@ -69,9 +66,8 @@ class TableFormatter extends OutputFormatter {
 
       sb.append(drawSummary(effectiveContent))
       sb.toString
-    }
 
-  override def formatSchema(schema: ParquetSchema): String = {
+  override def formatSchema(schema: ParquetSchema): String =
     val sb = new StringBuilder()
 
     sb.append("Schema Information\n")
@@ -119,13 +115,14 @@ class TableFormatter extends OutputFormatter {
     sb.append(drawBottomBorder(columnWidths))
 
     sb.toString
-  }
+
+  end formatSchema
 
   /**
    * Like [[formatSchema]] but shows the physical type and the full logical type
    * annotation with its parameters (`schema --detail`).
    */
-  def formatSchemaDetail(schema: ParquetSchema): String = {
+  def formatSchemaDetail(schema: ParquetSchema): String =
     val sb = new StringBuilder()
     sb.append("Schema Information (detail)\n")
     sb.append("===========================\n\n")
@@ -152,10 +149,9 @@ class TableFormatter extends OutputFormatter {
             if col.isOptional then "Yes" else "No",
             s"${col.maxDefinitionLevel}/${col.maxRepetitionLevel}",
             col.fieldId.fold("-")(_.toString),
-            col.groups.flatMap(_.annotation).mkString(", ") match {
+            col.groups.flatMap(_.annotation).mkString(", ") match
               case "" => "-"
               case s  => s
-            }
           ),
           widths
         )
@@ -163,9 +159,10 @@ class TableFormatter extends OutputFormatter {
     }
     sb.append(drawBottomBorder(widths))
     sb.toString
-  }
 
-  override def formatMetadata(metadata: FileMetadata): String = {
+  end formatSchemaDetail
+
+  override def formatMetadata(metadata: FileMetadata): String =
     val sb = new StringBuilder()
 
     sb.append("File Metadata\n")
@@ -201,12 +198,13 @@ class TableFormatter extends OutputFormatter {
     }
 
     sb.toString
-  }
+
+  end formatMetadata
 
   private[formatters] def calculateColumnWidths(
       columns: List[String],
       rows: List[Map[String, CellValue]]
-  ): List[Int] = {
+  ): List[Int] =
     val widths      = columns.map(c => displayWidth(c)).toArray
     val columnIndex = columns.iterator.zipWithIndex.toMap
     rows.foreach { row =>
@@ -220,33 +218,28 @@ class TableFormatter extends OutputFormatter {
     widths
       .map(w => math.max(MinColumnWidth, math.min(MaxColumnWidth, w)))
       .toList
-  }
 
-  private[formatters] def drawTopBorder(widths: List[Int]): String = {
+  private[formatters] def drawTopBorder(widths: List[Int]): String =
     val segments = widths.map("─" * (_))
     "┌" + segments.mkString("┬") + "┐"
-  }
 
-  private[formatters] def drawBottomBorder(widths: List[Int]): String = {
+  private[formatters] def drawBottomBorder(widths: List[Int]): String =
     val segments = widths.map("─" * (_))
     "└" + segments.mkString("┴") + "┘"
-  }
 
-  private[formatters] def drawSeparator(widths: List[Int]): String = {
+  private[formatters] def drawSeparator(widths: List[Int]): String =
     val segments = widths.map("─" * (_))
     "├" + segments.mkString("┼") + "┤"
-  }
 
   private[formatters] def drawRow(
       values: List[String],
       widths: List[Int]
-  ): String = {
+  ): String =
     val paddedValues = values.zip(widths).map { case (value, width) =>
       val truncated = truncate(value, width)
       padRight(truncated, width)
     }
     "│" + paddedValues.mkString("│") + "│"
-  }
 
   private[formatters] def formatValue(value: CellValue): String =
     value.safeDisplay
@@ -255,37 +248,33 @@ class TableFormatter extends OutputFormatter {
     if maxWidth <= 0 then ""
     else if displayWidth(str) <= maxWidth then str
     else if maxWidth <= 3 then ".".repeat(maxWidth)
-    else {
+    else
       val sb   = new java.lang.StringBuilder
       var w    = 0
       var i    = 0
       var done = false
-      while !done && i < str.length do {
+      while !done && i < str.length do
         val cp  = str.codePointAt(i)
         val cpw = if isWideCodePoint(cp) then 2 else 1
-        if w + cpw + 3 > maxWidth then { sb.append("..."); done = true }
-        else {
+        if w + cpw + 3 > maxWidth then
+          sb.append("..."); done = true
+        else
           sb.appendCodePoint(cp)
           w += cpw
           i += Character.charCount(cp)
-        }
-      }
       sb.toString
-    }
 
   private def padRight(str: String, width: Int): String =
     str + " " * (width - displayWidth(str))
 
-  private[formatters] def displayWidth(s: String): Int = {
+  private[formatters] def displayWidth(s: String): Int =
     var w = 0
     var i = 0
-    while i < s.length do {
+    while i < s.length do
       val cp = s.codePointAt(i)
       w += (if isWideCodePoint(cp) then 2 else 1)
       i += Character.charCount(cp)
-    }
     w
-  }
 
   private def isWideCodePoint(cp: Int): Boolean =
     // Unicode East Asian Width W (Wide) and F (Fullwidth) — renders as 2 terminal columns.
@@ -306,17 +295,13 @@ class TableFormatter extends OutputFormatter {
       (cp >= 0x20000 && cp <= 0x2fffd) || // CJK Extensions B–F (supplementary planes)
       (cp >= 0x30000 && cp <= 0x3fffd)    // CJK Extensions G+ (supplementary planes)
 
-  private[formatters] def drawSummary(content: FileContent): String = {
+  private[formatters] def drawSummary(content: FileContent): String =
     val displayed = content.rows.size
     val total     = content.totalRows
 
-    if content.isPartial then {
-      s"$total rows total (showing first $displayed)"
-    } else {
-      s"$displayed rows (showing all)"
-    }
-  }
+    if content.isPartial then s"$total rows total (showing first $displayed)"
+    else s"$displayed rows (showing all)"
 
   private[formatters] def formatBytes(bytes: Long): String =
     io.github.yusukensanta.parqueteer.core.util.ByteFormatter.format(bytes)
-}
+end TableFormatter
