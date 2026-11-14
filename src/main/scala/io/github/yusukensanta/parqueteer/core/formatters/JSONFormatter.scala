@@ -42,7 +42,7 @@ class JSONFormatter extends OutputFormatter {
 
   private def encodeRow(row: Map[String, CellValue]): Json =
     Json.fromFields(
-      row.view.mapValues(io.github.yusukensanta.parqueteer.core.util.JsonEncoder.encode)
+      row.view.mapValues(JsonEncoder.encode)
     )
 }
 

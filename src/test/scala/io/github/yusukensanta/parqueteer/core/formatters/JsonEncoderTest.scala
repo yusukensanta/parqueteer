@@ -1,4 +1,4 @@
-package io.github.yusukensanta.parqueteer.core.util
+package io.github.yusukensanta.parqueteer.core.formatters
 
 import io.github.yusukensanta.parqueteer.core.models.CellValue
 import io.circe.Json

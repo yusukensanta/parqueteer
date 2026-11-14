@@ -1,4 +1,4 @@
-package io.github.yusukensanta.parqueteer.cloud
+package io.github.yusukensanta.parqueteer.core.cloud
 
 import io.github.yusukensanta.parqueteer.core.models.{GCSLocation, StorageLocation}
 import io.github.yusukensanta.parqueteer.core.util.CredentialRedactor

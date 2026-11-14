@@ -2,7 +2,8 @@ package io.github.yusukensanta.parqueteer.cli
 
 import io.github.yusukensanta.parqueteer.core.models.*
 import io.github.yusukensanta.parqueteer.core.formatters.RowStreamWriter
-import io.github.yusukensanta.parqueteer.core.util.{CredentialRedactor, FileExtension, RowPipeline}
+import io.github.yusukensanta.parqueteer.core.services.RowPipeline
+import io.github.yusukensanta.parqueteer.core.util.{CredentialRedactor, FileExtension}
 import CommandSupport.*
 
 /** Drives RowStreamWriters: deferred begin/end lifecycle and safe local text output files. */

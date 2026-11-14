@@ -87,8 +87,8 @@ private[cli] object MultiFileReport {
         new DaemonThreadFactory("parqueteer-file-fetch")
       )
       try {
-        implicit val ec: ExecutionContext = ExecutionContext.fromExecutor(pool)
-        val futures                       = paths.map { p =>
+        given ExecutionContext = ExecutionContext.fromExecutor(pool)
+        val futures            = paths.map { p =>
           Future(p -> renderOne(p)).recover { case NonFatal(e) =>
             p -> Left(ParqueteerError.IOError(e))
           }

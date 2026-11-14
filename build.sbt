@@ -54,7 +54,6 @@ lazy val root = (project in file("."))
         val name = jar.data.getName.toLowerCase
         // Exclude test jars, documentation, source jars
         name.contains("scalatest") ||
-        name.contains("scalamock") ||
         name.contains("scalacheck") ||
         name.contains("-sources") ||
         name.contains("-javadoc")
@@ -115,7 +114,6 @@ lazy val root = (project in file("."))
       val scoptVersion               = "4.2.0"
       val slf4jVersion               = "2.0.20"
       val scalatestVersion           = "3.2.20"
-      val scalamockVersion           = "7.6.2"
       val scalatestScalacheckVersion = "3.2.20.0"
       val awsSdkVersion              = "2.57.8"
       val googleCloudStorageVersion  = "2.76.0"
@@ -226,11 +224,10 @@ lazy val root = (project in file("."))
 
         // Testing
         "org.scalatest"     %% "scalatest"       % scalatestVersion           % Test,
-        "org.scalamock"     %% "scalamock"       % scalamockVersion           % Test,
         "org.scalatestplus" %% "scalacheck-1-19" % scalatestScalacheckVersion % Test
       )
     },
-    // Force Netty to 4.1.137.Final across all modules (pinned; free of all known CVEs).
+    // Force Netty to 4.2.19.Final across all modules (pinned; free of all known CVEs).
     // CVE-2024-47535 fixed 4.1.115.Final; CVE-2025-55163 fixed 4.1.124.Final; CVE-2025-67735 fixed 4.1.129.Final;
     // CVE-2026-33870+33871 fixed 4.1.132.Final; CVE-2026-48043+47691 fixed 4.1.135.Final;
     // CVE-2026-55833, CVE-2026-56745/56746/56819, CVE-2026-59898/59899/59900/59921 fixed 4.1.136.Final.

@@ -82,4 +82,4 @@ jobs:
           AZURE_AUTH_METHOD: ${{ matrix.auth }}
           AZURE_E2E_ACCOUNT: ${{ vars.AZURE_E2E_ACCOUNT }}
           AZURE_E2E_CONTAINER: ${{ vars.AZURE_E2E_CONTAINER }}
-        run: sbt "testOnly io.github.yusukensanta.parqueteer.cloud.AzureIntegrationTest"
+        run: sbt "testOnly io.github.yusukensanta.parqueteer.core.cloud.AzureIntegrationTest"

@@ -1,6 +1,6 @@
 package io.github.yusukensanta.parqueteer.core.repositories
 
-import io.github.yusukensanta.parqueteer.cloud.AzureTokenException
+import io.github.yusukensanta.parqueteer.core.cloud.AzureTokenException
 import io.github.yusukensanta.parqueteer.core.models.*
 import io.github.yusukensanta.parqueteer.core.models.ParqueteerError.CloudAuthException
 import org.apache.hadoop.conf.Configuration
@@ -68,7 +68,7 @@ class HadoopConfigProviderTest extends AnyFlatSpec with Matchers {
   it should "recover the token failure ABFS flattened into an HttpException message" in {
     val flattened = new java.io.IOException(
       "HTTP Error -1CustomTokenProvider getAccessToken threw " +
-        "io.github.yusukensanta.parqueteer.cloud.AzureTokenException : " +
+        "io.github.yusukensanta.parqueteer.core.cloud.AzureTokenException : " +
         s"Could not get an Azure access token. Run `az login`.${AzureTokenException.DetailSeparator}Env: unavailable\nCLI: run az login"
     )
     val wrapped = new java.io.IOException(

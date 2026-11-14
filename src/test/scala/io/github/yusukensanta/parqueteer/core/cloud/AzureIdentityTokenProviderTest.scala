@@ -1,4 +1,4 @@
-package io.github.yusukensanta.parqueteer.cloud
+package io.github.yusukensanta.parqueteer.core.cloud
 
 import com.azure.core.credential.{AccessToken, TokenCredential, TokenRequestContext}
 import com.azure.identity.CredentialUnavailableException
