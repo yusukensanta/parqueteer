@@ -1,7 +1,8 @@
 package io.github.yusukensanta.parqueteer.fuzz
 
 import io.github.yusukensanta.parqueteer.core.filters.FilterParser
-import io.github.yusukensanta.parqueteer.core.util.{CsvParser, LTSVParser, SizeParser}
+import io.github.yusukensanta.parqueteer.core.parsers.{CsvParser, LTSVParser}
+import io.github.yusukensanta.parqueteer.core.util.SizeParser
 import java.nio.charset.StandardCharsets
 
 /**

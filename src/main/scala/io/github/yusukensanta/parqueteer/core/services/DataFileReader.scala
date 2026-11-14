@@ -1,7 +1,8 @@
 package io.github.yusukensanta.parqueteer.core.services
 
 import io.github.yusukensanta.parqueteer.core.models.{CellValue, InputFormat}
-import io.github.yusukensanta.parqueteer.core.util.{CsvParser, LTSVParser, RowLimiter, TypeInferrer}
+import io.github.yusukensanta.parqueteer.core.parsers.{CsvParser, LTSVParser, TypeInferrer}
+import io.github.yusukensanta.parqueteer.core.util.RowLimiter
 import scala.util.{Failure, Try, Using}
 
 private[services] object DataFileReader {

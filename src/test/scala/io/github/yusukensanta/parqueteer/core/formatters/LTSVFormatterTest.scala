@@ -71,7 +71,7 @@ class LTSVFormatterTest extends AnyFlatSpec with Matchers {
   }
 
   it should "round-trip with LTSVParser for simple string values" in {
-    import io.github.yusukensanta.parqueteer.core.util.LTSVParser
+    import io.github.yusukensanta.parqueteer.core.parsers.LTSVParser
     val rows = List(
       Map(
         "host"   -> CellValue.Str("example.com"),

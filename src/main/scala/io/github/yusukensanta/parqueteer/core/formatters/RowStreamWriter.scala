@@ -58,10 +58,8 @@ object RowStreamWriter {
       case OutputFormat.LTSV     => new LTSVRowStreamWriter(out)
     }
 
-  private def rowToJson(row: Map[String, CellValue]): String = {
-    import io.github.yusukensanta.parqueteer.core.util.JsonEncoder
+  private def rowToJson(row: Map[String, CellValue]): String =
     Json.obj(row.view.mapValues(JsonEncoder.encode).toSeq*).noSpaces
-  }
 
   private class NDJSONRowStreamWriter(out: PrintStream) extends RowStreamWriter {
 

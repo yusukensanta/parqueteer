@@ -11,7 +11,7 @@ class NDJSONFormatter extends OutputFormatter {
   ): String =
     content.rows.map { row =>
       val fields =
-        row.view.mapValues(io.github.yusukensanta.parqueteer.core.util.JsonEncoder.encode)
+        row.view.mapValues(JsonEncoder.encode)
       Json.obj(fields.toSeq*).noSpaces + "\n"
     }.mkString
 

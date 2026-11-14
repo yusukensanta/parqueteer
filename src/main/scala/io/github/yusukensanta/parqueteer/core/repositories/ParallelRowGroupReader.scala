@@ -48,8 +48,8 @@ private[repositories] object ParallelRowGroupReader {
       new DaemonThreadFactory("parqueteer-parallel-read")
     )
     try {
-      implicit val ec: ExecutionContext = ExecutionContext.fromExecutor(pool)
-      val requestedNames                =
+      given ExecutionContext = ExecutionContext.fromExecutor(pool)
+      val requestedNames     =
         requestedSchema.getColumns.asScala.map(_.getPath.mkString(".")).toSet
       val nullRowsAllotted = new AtomicLong(
         config.maxRows.getOrElse(Long.MaxValue)

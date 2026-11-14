@@ -4,7 +4,7 @@ import io.github.yusukensanta.parqueteer.core.models.*
 import io.github.yusukensanta.parqueteer.core.models.ParqueteerError.toParqueteerError
 import io.github.yusukensanta.parqueteer.core.repositories.ParquetRepository
 import io.github.yusukensanta.parqueteer.core.services.LocationParsing.parseLocation
-import io.github.yusukensanta.parqueteer.core.util.{Eithers, RowLimiter, RowPipeline}
+import io.github.yusukensanta.parqueteer.core.util.{Eithers, RowLimiter}
 import scala.util.Try
 
 /**

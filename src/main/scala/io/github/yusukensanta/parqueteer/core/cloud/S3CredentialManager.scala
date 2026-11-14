@@ -1,4 +1,4 @@
-package io.github.yusukensanta.parqueteer.cloud
+package io.github.yusukensanta.parqueteer.core.cloud
 
 import io.github.yusukensanta.parqueteer.core.models.{S3Location, StorageLocation}
 import org.apache.hadoop.conf.Configuration

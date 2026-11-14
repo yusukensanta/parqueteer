@@ -193,26 +193,22 @@ parqueteer/
 │   │   ├── CliOutputFormatter.scala   # Presentation layer (table/json/csv/ltsv)
 │   │   ├── ConfigCommandRenderer.scala # `parqueteer config` output rendering
 │   │   ├── HelpFormatter.scala        # --help text generation
-│   │   ├── ShellCompletions.scala     # bash/zsh/fish completion scripts
-│   │   └── CredentialRedactor.scala   # Scrubs secrets from CLI error output
+│   │   └── ShellCompletions.scala     # bash/zsh/fish completion scripts
 │   ├── config/
 │   │   ├── Configuration.scala       # Config case classes with Circe given instances
 │   │   └── EnvConfig.scala           # Environment variable resolution
-│   ├── cloud/
-│   │   ├── CloudCredentialManager.scala # Shared credential-resolution contract
-│   │   ├── S3CredentialManager.scala
-│   │   ├── AzureCredentialManager.scala
-│   │   └── GCSCredentialManager.scala
-│   └── core/
+│   └── core/                         # Never imports cli or config
 │       ├── models/                   # Domain model (CellValue, ParquetFile, ParqueteerError, …)
 │       ├── services/
 │       │   ├── ParquetService.scala     # Business logic, Either-based API (facade)
 │       │   ├── MergeOperations.scala    # merge / parquet→parquet convert
 │       │   ├── RawToParquetWriter.scala # JSON/NDJSON/CSV/LTSV → parquet (buffered or streaming)
 │       │   ├── StreamWriteSupport.scala # Shared stream-write helpers (cleanup, schema, row projection)
+│       │   ├── RowPipeline.scala        # Ordered multi-file row fetch with bounded read-ahead
 │       │   └── LocationParsing.scala    # Path string → StorageLocation
 │       ├── repositories/
-│       │   ├── ParquetRepository.scala        # Parquet I/O orchestration
+│       │   ├── ParquetRepository.scala        # Parquet I/O interface (trait)
+│       │   ├── HadoopParquetRepository.scala  # Hadoop-backed implementation
 │       │   ├── HadoopConfigProvider.scala      # Per-location Hadoop config + cloud auth, cached
 │       │   ├── ParquetRecordDecoder.scala      # Row → Map decoding
 │       │   ├── ParquetSchemaBuilder.scala      # Schema construction
@@ -223,10 +219,17 @@ parqueteer/
 │       │   ├── PageInspector.scala             # `metadata --index/--pages`: column/offset index and page headers
 │       │   ├── ParallelRowGroupReader.scala    # `--parallel` row group reads
 │       │   └── StatsComputer.scala             # `stats` command column statistics
+│       ├── cloud/
+│       │   ├── CloudCredentialManager.scala # Shared credential-resolution contract
+│       │   ├── S3CredentialManager.scala
+│       │   ├── AzureCredentialManager.scala
+│       │   └── GCSCredentialManager.scala
 │       ├── filters/
 │       │   └── FilterParser.scala    # SQL-like `--filter` expression parsing
-│       ├── formatters/               # Output formatters (table/json/csv/markdown/ndjson/ltsv/pretty)
-│       └── util/                     # Shared utilities (SizeParser, FileExtension, …)
+│       ├── parsers/                  # Input text → rows (CsvParser, LTSVParser, TypeInferrer)
+│       ├── formatters/               # Rows → output text (table/json/csv/markdown/ndjson/ltsv/pretty)
+│       └── util/                     # Domain-free helpers (SizeParser, FileExtension, CredentialRedactor, …);
+│                                     # imports no other parqueteer package
 ├── src/test/scala/         # Mirror structure of main
 ├── project/                # sbt build configuration
 ├── scripts/                # Utility scripts

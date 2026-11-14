@@ -1,6 +1,7 @@
-package io.github.yusukensanta.parqueteer.core.util
+package io.github.yusukensanta.parqueteer.core.services
 
 import io.github.yusukensanta.parqueteer.core.models.CellValue
+import io.github.yusukensanta.parqueteer.core.util.DaemonThreadFactory
 import java.util.concurrent.{ArrayBlockingQueue, Executors}
 
 /**

@@ -1,6 +1,6 @@
 package io.github.yusukensanta.parqueteer.core.repositories
 
-import io.github.yusukensanta.parqueteer.cloud.{AzureTokenException, CloudCredentialManager}
+import io.github.yusukensanta.parqueteer.core.cloud.{AzureTokenException, CloudCredentialManager}
 import io.github.yusukensanta.parqueteer.core.models.*
 import io.github.yusukensanta.parqueteer.core.models.ParqueteerError.CloudAuthException
 import io.github.yusukensanta.parqueteer.core.util.CredentialRedactor

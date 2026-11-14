@@ -99,10 +99,18 @@ jobs:
 
       - name: Check architecture boundaries
         run: |
-          VIOLATIONS=$(grep -rn 'cli\.' src/main/scala/io/github/yusukensanta/parqueteer/core/ src/main/scala/io/github/yusukensanta/parqueteer/cloud/ 2>/dev/null || true)
+          SRC=src/main/scala/io/github/yusukensanta/parqueteer
+          VIOLATIONS=$(grep -rn 'cli\.' "$SRC/core/" 2>/dev/null || true)
           if [ -n "$VIOLATIONS" ]; then
-            echo "::error::Architecture violation: core/cloud layers must not reference cli package"
+            echo "::error::Architecture violation: core must not reference cli package"
             echo "$VIOLATIONS"
+            exit 1
+          fi
+          # core.util is the leaf package: it must not import any other parqueteer package.
+          UTIL_VIOLATIONS=$(grep -rnE '^[[:space:]]*import io\.github\.yusukensanta\.parqueteer\.' "$SRC/core/util/" | grep -v 'parqueteer\.core\.util\.' || true)
+          if [ -n "$UTIL_VIOLATIONS" ]; then
+            echo "::error::Architecture violation: core.util must not import other parqueteer packages"
+            echo "$UTIL_VIOLATIONS"
             exit 1
           fi
 
@@ -177,4 +185,4 @@ jobs:
           AWS_ACCESS_KEY_ID: testkey
           AWS_SECRET_ACCESS_KEY: testsecret
           AWS_REGION: us-east-1
-        run: sbt "testOnly io.github.yusukensanta.parqueteer.cloud.S3IntegrationTest io.github.yusukensanta.parqueteer.cloud.CloudCredentialManagerTest"
+        run: sbt "testOnly io.github.yusukensanta.parqueteer.core.cloud.S3IntegrationTest io.github.yusukensanta.parqueteer.core.cloud.CloudCredentialManagerTest"

@@ -7,7 +7,7 @@ import io.github.yusukensanta.parqueteer.core.services.LocationParsing.{
   parseLocation,
   parseLocations
 }
-import io.github.yusukensanta.parqueteer.core.util.{Eithers, RowPipeline}
+import io.github.yusukensanta.parqueteer.core.util.Eithers
 
 /**
  * Multi-file parquet operations that stream rows into one output: merging
