@@ -8,10 +8,10 @@ import io.github.yusukensanta.parqueteer.core.util.CredentialRedactor
 import scopt.OParser
 import org.slf4j.LoggerFactory
 
-object CliApp {
+object CliApp:
   private val logger = LoggerFactory.getLogger(getClass)
 
-  def main(args: Array[String]): Unit = {
+  def main(args: Array[String]): Unit =
     // Route JUL (used by GCS Hadoop connector) through SLF4J so
     // simplelogger.properties filters apply (com.google.cloud=error).
     org.slf4j.bridge.SLF4JBridgeHandler.removeHandlersForRootLogger()
@@ -43,19 +43,18 @@ object CliApp {
         mainImpl(args)
       }
     }
-  }
 
-  private def mainImpl(args: Array[String]): Unit = {
-    if shouldShowVersion(args) then {
+  end main
+
+  private def mainImpl(args: Array[String]): Unit =
+    if shouldShowVersion(args) then
       showVersion()
       System.exit(0)
-    }
 
     // Show custom top-level help only when no subcommand is present
-    if shouldShowTopLevelHelp(args) then {
+    if shouldShowTopLevelHelp(args) then
       println(HelpFormatter.topLevelHelp())
       System.exit(0)
-    }
 
     // Show subcommand-specific help when subcommand + --help is present
     detectSubcommandHelp(args).foreach { cmd =>
@@ -66,7 +65,7 @@ object CliApp {
     val initialConfig = ArgumentParser.Config(
       globalOptions = EnvConfig.buildInitialGlobalOptions
     )
-    OParser.parse(ArgumentParser.parser, args, initialConfig) match {
+    OParser.parse(ArgumentParser.parser, args, initialConfig) match
       case Some(config) =>
         val exitCode = run(config)
         System.exit(exitCode)
@@ -74,20 +73,17 @@ object CliApp {
         val exitCode =
           if args.contains("--help") || args.contains("-h") then 0 else 2
         System.exit(exitCode)
-    }
-  }
 
   private[cli] def shouldShowVersion(args: Array[String]): Boolean =
     args.contains("--version") || args.contains("-V")
 
-  private def showVersion(): Unit = {
+  private def showVersion(): Unit =
     import io.github.yusukensanta.parqueteer.BuildInfo
     val javaVersion  = System.getProperty("java.version")
     val javaVendor   = System.getProperty("java.vendor", "")
     val vendorSuffix = if javaVendor.nonEmpty then s" ($javaVendor)" else ""
     println(s"parqueteer ${BuildInfo.version}")
     println(s"Scala ${BuildInfo.scalaVersion} · Java $javaVersion$vendorSuffix")
-  }
 
   private[cli] val knownCommands = Set(
     "read",
@@ -108,30 +104,28 @@ object CliApp {
   private def commandMatches(cmd: String, args: Array[String]): Boolean =
     cmd.split(' ').forall(args.contains)
 
-  private[cli] def shouldShowTopLevelHelp(args: Array[String]): Boolean = {
+  private[cli] def shouldShowTopLevelHelp(args: Array[String]): Boolean =
     val hasHelp    = args.contains("--help") || args.contains("-h")
     val hasCommand = knownCommands.exists(commandMatches(_, args))
     hasHelp && !hasCommand
-  }
 
-  private[cli] def detectSubcommandHelp(args: Array[String]): Option[String] = {
+  private[cli] def detectSubcommandHelp(args: Array[String]): Option[String] =
     val hasHelp = args.contains("--help") || args.contains("-h")
     if !hasHelp then None
     else
       knownCommands
         .filter(commandMatches(_, args))
         .maxByOption(_.length)
-  }
 
   private def run(config: ArgumentParser.Config): Int =
-    config.command match {
+    config.command match
       case None =>
         println(HelpFormatter.topLevelHelp())
         1
       case Some(cmd) =>
-        try {
+        try
           val appConfig = new ConfigurationManager()
-            .loadConfig(config.globalOptions.configPath) match {
+            .loadConfig(config.globalOptions.configPath) match
             case scala.util.Success(c) => c
             case scala.util.Failure(e) =>
               if !config.globalOptions.quiet then
@@ -140,7 +134,6 @@ object CliApp {
                       .redact(Option(e.getMessage).getOrElse("unknown error"))}; using defaults"
                 )
               AppConfig()
-          }
           val opts         = applyAppConfig(config.globalOptions, appConfig)
           val effectiveCmd = applyAppConfigToCommand(cmd, appConfig)
           val repository   = new HadoopParquetRepository(
@@ -150,7 +143,7 @@ object CliApp {
           )
           val service = new ParquetService(repository)
           CommandExecutor.execute(effectiveCmd, service, opts)
-        } catch {
+        catch
           case e: Exception =>
             logger.error(
               s"Unexpected error: ${CredentialRedactor
@@ -162,33 +155,27 @@ object CliApp {
             if config.globalOptions.verbose then
               System.err.println(CredentialRedactor.redactThrowable(e))
             ParqueteerError.IOError(e).exitCode
-        }
-    }
 
   private[cli] def applyAppConfig(
       opts: GlobalOptions,
       appConfig: AppConfig
-  ): GlobalOptions = {
+  ): GlobalOptions =
     val s3 = appConfig.cloud.s3
     opts.copy(
       profile = opts.profile.orElse(s3.profile),
       region = opts.region.orElse(s3.defaultRegion),
       s3EndpointUrl = opts.s3EndpointUrl.orElse(s3.endpointUrl)
     )
-  }
 
   private[cli] def applyAppConfigToCommand(
       cmd: Command,
       appConfig: AppConfig
-  ): Command = {
+  ): Command =
     val outCfg = appConfig.output
-    cmd match {
+    cmd match
       case r: ReadCommand =>
         r.copy(maxRows = r.maxRows.orElse(outCfg.maxRows))
       case c: ConvertCommand =>
         c.copy(maxRows = c.maxRows.orElse(outCfg.maxRows))
       case other => other
-    }
-  }
-
-}
+end CliApp

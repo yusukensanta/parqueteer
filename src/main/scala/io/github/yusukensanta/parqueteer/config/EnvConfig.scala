@@ -4,7 +4,7 @@ import io.github.yusukensanta.parqueteer.core.models.{ColorMode, GlobalOptions}
 import io.github.yusukensanta.parqueteer.core.models.OutputFormat
 import io.github.yusukensanta.parqueteer.core.util.Warnings
 
-object EnvConfig {
+object EnvConfig:
 
   type EnvLookup = String => Option[String]
 
@@ -39,18 +39,16 @@ object EnvConfig {
   private[config] def parsedColorMode(env: EnvLookup): ColorMode =
     if env("NO_COLOR").exists(_.nonEmpty) then ColorMode.Never
     else
-      env("PARQUETEER_COLOR") match {
+      env("PARQUETEER_COLOR") match
         case None    => ColorMode.Auto
         case Some(s) =>
-          ColorMode.fromString(s) match {
+          ColorMode.fromString(s) match
             case Some(mode) => mode
             case None       =>
               Warnings.emit(
                 s"PARQUETEER_COLOR=$s is not recognized (auto/always/never); ignoring"
               )
               ColorMode.Auto
-          }
-      }
 
   def verbose: Boolean = verbose(defaultEnv)
 
@@ -79,4 +77,4 @@ object EnvConfig {
       verbose = verbose,
       colorMode = parsedColorMode
     )
-}
+end EnvConfig

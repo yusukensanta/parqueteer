@@ -1,6 +1,6 @@
 package io.github.yusukensanta.parqueteer.core.util
 
-object RowLimiter {
+object RowLimiter:
 
   def limitList[A](rows: List[A], maxRows: Option[Long]): List[A] =
     maxRows.fold(rows) { limit =>
@@ -18,9 +18,8 @@ object RowLimiter {
     maxRows.fold(source.iterator) { n =>
       val base  = source.iterator
       var taken = 0L
-      new Iterator[A] {
+      new Iterator[A]:
         def hasNext: Boolean = taken < n && base.hasNext
-        def next(): A        = { val v = base.next(); taken += 1; v }
-      }
+        def next(): A        =
+          val v = base.next(); taken += 1; v
     }
-}

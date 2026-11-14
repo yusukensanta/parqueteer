@@ -6,10 +6,10 @@ package io.github.yusukensanta.parqueteer.cli
  * or free-form detail (e.g. one line per matched file). Field values are
  * aligned on the longest label so every report lines up the same way.
  */
-final private[cli] case class DryRunReport(action: String, lines: List[DryRunReport.Line]) {
+final private[cli] case class DryRunReport(action: String, lines: List[DryRunReport.Line]):
   import DryRunReport.Line
 
-  def render: String = {
+  def render: String =
     val labelWidth =
       lines.collect { case Line.Field(label, _) => label.length }.maxOption.getOrElse(0)
     val body = lines.map {
@@ -17,16 +17,13 @@ final private[cli] case class DryRunReport(action: String, lines: List[DryRunRep
       case Line.Detail(text)        => s"  $text"
     }
     (s"Dry run: would $action" :: body).mkString("\n")
-  }
 
   /** Prints the report to stdout; a dry run always exits 0. */
-  def print(): Int = {
+  def print(): Int =
     println(render)
     0
-  }
-}
 
-private[cli] object DryRunReport {
+private[cli] object DryRunReport:
 
   enum Line:
     case Field(label: String, value: String)
@@ -34,4 +31,3 @@ private[cli] object DryRunReport {
 
   def field(label: String, value: Any): Line = Line.Field(label, value.toString)
   def detail(text: String): Line             = Line.Detail(text)
-}

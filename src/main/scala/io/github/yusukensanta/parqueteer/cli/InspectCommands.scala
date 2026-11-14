@@ -7,7 +7,7 @@ import CommandSupport.*
 import MultiFileReport.*
 
 /** Handlers for the metadata commands: info, validate, schema, schema diff, stats, count. */
-private[cli] object InspectCommands {
+private[cli] object InspectCommands:
 
   // Shared by executeInfo/executeInfoMulti so the two rendering paths can't
   // silently drift apart (JSON vs table branch, metadata/schema/row-group
@@ -16,13 +16,12 @@ private[cli] object InspectCommands {
       file: ParquetFile,
       format: OutputFormat,
       verbose: Boolean
-  ): String = format match {
+  ): String = format match
     case OutputFormat.JSON => CliOutputFormatter.formatInfoJson(file, verbose)
     case _                 =>
-      val metaOut = file.metadata match {
+      val metaOut = file.metadata match
         case Some(metadata) => new TableFormatter().formatMetadata(metadata)
         case None           => "No metadata information available"
-      }
       val schemaOut = file.schema.fold("") { s =>
         s"\nRows:        ${s.totalRowCount}\n" +
           s"Row Groups:  ${s.rowGroupCount}\n" +
@@ -33,41 +32,37 @@ private[cli] object InspectCommands {
           "\n\n" + CliOutputFormatter.formatRowGroupsTable(file.rowGroups)
         else ""
       metaOut + schemaOut + verboseOut
-  }
 
   private[cli] def executeInfo(
       service: ParquetService,
       cmd: InfoCommand,
       globalOptions: GlobalOptions
-  ): Int = {
+  ): Int =
     import cmd.{filePath, format, verbose}
-    service.getFileInfo(filePath) match {
+    service.getFileInfo(filePath) match
       case Right(file) =>
         if !globalOptions.quiet then println(formatInfoText(file, format, verbose))
         0
       case Left(error) =>
         reportError("Failed to get file info", globalOptions)(error)
-    }
-  }
 
   private[cli] def executeInfoMulti(
       service: ParquetService,
       paths: List[String],
       cmd: InfoCommand,
       globalOptions: GlobalOptions
-  ): Int = {
+  ): Int =
     import cmd.{format, verbose}
     runMultiFileReport(paths, format, globalOptions) { path =>
       service.getFileInfo(path).map(file => (formatInfoText(file, format, verbose), true))
     }
-  }
 
   // Shared by executeValidate/executeValidateMulti's --verbose schema
   // summary. Returns "" when there's no schema to show (missing file info,
   // or the file legitimately has none) so callers can decide how to attach
   // it (println vs string concatenation) without duplicating the lookup.
   private[cli] def formatValidateVerboseSchema(service: ParquetService, path: String): String =
-    service.getFileInfo(path) match {
+    service.getFileInfo(path) match
       case Right(file) =>
         file.schema.fold("") { s =>
           s"  Columns:    ${s.columns.size}\n" +
@@ -75,70 +70,66 @@ private[cli] object InspectCommands {
             s"  Total rows: ${s.totalRowCount}"
         }
       case Left(_) => ""
-    }
 
   private[cli] def executeValidate(
       service: ParquetService,
       cmd: ValidateCommand,
       globalOptions: GlobalOptions
-  ): Int = {
+  ): Int =
     import cmd.{filePath, verbose, deep}
-    service.validateFile(filePath, deep) match {
+    service.validateFile(filePath, deep) match
       case Right(result) =>
-        if result.isValid then {
+        if result.isValid then
           if !globalOptions.quiet then println(s"✓ File $filePath is valid")
-          if verbose then {
+          if verbose then
             val summary = formatValidateVerboseSchema(service, filePath)
             if summary.nonEmpty then println(summary)
-          }
           // Run every requested check so one report shows all failures;
           // the exit code reports the most specific one (contract before
           // assertions, matching the order they are printed).
           val contractCode = cmd.expectSchema.fold(0)(contract =>
-            service.checkSchemaContract(filePath, contract) match {
+            service.checkSchemaContract(filePath, contract) match
               case Left(error) =>
                 reportError("Failed to check schema contract", globalOptions)(error)
               case Right(diff) =>
                 println(formatContractResult(filePath, contract, diff))
                 if diff.identical then 0
                 else ParqueteerError.SchemaMismatch(filePath, s"does not match $contract").exitCode
-            }
           )
           val assertCode =
             if cmd.asserts.isEmpty then 0
             else
-              service.getStats(filePath) match {
+              service.getStats(filePath) match
                 case Left(error)  => reportError("Failed to read statistics", globalOptions)(error)
                 case Right(stats) =>
                   val results = cmd.asserts.map(StatsAssertion.evaluate(_, stats))
                   println(formatAssertResults(results))
                   if results.forall(_.ok) then 0 else 1
-              }
           if contractCode != 0 then contractCode else assertCode
-        } else {
+        else
           println(s"✗ File $filePath has issues:")
           result.issues.foreach(issue => println(s"  - $issue"))
           1
-        }
       case Left(error) =>
         reportError("Failed to validate file", globalOptions)(error)
-    }
-  }
+    end match
+
+  end executeValidate
 
   private[cli] def executeValidateMulti(
       service: ParquetService,
       paths: List[String],
       cmd: ValidateCommand,
       globalOptions: GlobalOptions
-  ): Int = {
+  ): Int =
     import cmd.{verbose, deep}
     runMultiFileReport(paths, OutputFormat.Table, globalOptions) { path =>
       service.validateFile(path, deep).flatMap { result =>
-        if result.isValid then {
+        if result.isValid then
           val summary    = if verbose then formatValidateVerboseSchema(service, path) else ""
           val verboseOut = if summary.nonEmpty then "\n" + summary else ""
           val validText  = s"✓ File $path is valid" + verboseOut
-          for {
+          for
             contract <- cmd.expectSchema.fold(Right(None))(contract =>
               service
                 .checkSchemaContract(path, contract)
@@ -151,11 +142,10 @@ private[cli] object InspectCommands {
                   val results = cmd.asserts.map(StatsAssertion.evaluate(_, stats))
                   Some((formatAssertResults(results), results.forall(_.ok)))
                 }
-          } yield {
+          yield
             val checks = List(contract, asserted).flatten
             ((validText :: checks.map(_._1)).mkString("\n"), checks.forall(_._2))
-          }
-        } else
+        else
           Right(
             (
               (s"✗ File $path has issues:" :: result.issues.map(i => s"  - $i")).mkString("\n"),
@@ -164,7 +154,8 @@ private[cli] object InspectCommands {
           )
       }
     }
-  }
+
+  end executeValidateMulti
 
   // One ✓/✗ line per assertion, with the value the footer actually holds.
   private[cli] def formatAssertResults(results: List[StatsAssertion.Result]): String =
@@ -185,34 +176,31 @@ private[cli] object InspectCommands {
       format: OutputFormat,
       detail: Boolean = false
   ): String =
-    format match {
+    format match
       case OutputFormat.JSON => CliOutputFormatter.formatSchemaJson(file)
       case _                 =>
-        file.schema match {
+        file.schema match
           case Some(schema) if detail => new TableFormatter().formatSchemaDetail(schema)
           case Some(schema)           => new TableFormatter().formatSchema(schema)
           case None                   => "No schema information available"
-        }
-    }
 
   private[cli] def executeSchemaInfo(
       service: ParquetService,
       cmd: SchemaCommand,
       globalOptions: GlobalOptions
   ): Int =
-    if cmd.filePath.isEmpty then {
+    if cmd.filePath.isEmpty then
       System.err.println(
         "[parqueteer] error: schema requires a file path, or use 'schema diff FILE1 FILE2'"
       )
       2
-    } else
-      service.getFileInfo(cmd.filePath) match {
+    else
+      service.getFileInfo(cmd.filePath) match
         case Left(error) =>
           reportError("Failed to read schema", globalOptions)(error)
         case Right(file) =>
           if !globalOptions.quiet then println(formatSchemaText(file, cmd.format, cmd.detail))
           0
-      }
 
   private[cli] def executeSchemaInfoMulti(
       service: ParquetService,
@@ -230,12 +218,12 @@ private[cli] object InspectCommands {
       cmd: SchemaDiffCommand,
       globalOptions: GlobalOptions
   ): Int =
-    service.diffSchemas(cmd.file1, cmd.file2) match {
+    service.diffSchemas(cmd.file1, cmd.file2) match
       case Left(error) =>
         reportError("Failed to diff schemas", globalOptions)(error)
       case Right(diff) =>
         if !globalOptions.quiet then
-          cmd.format match {
+          cmd.format match
             case OutputFormat.JSON =>
               println(CliOutputFormatter.formatSchemaDiffJson(diff))
             case _ =>
@@ -246,106 +234,92 @@ private[cli] object InspectCommands {
                   diff
                 )
               )
-          }
         if diff.identical then 0 else 1
-    }
 
   private[cli] def formatStatsText(stats: FileStats, format: OutputFormat): String =
-    format match {
+    format match
       case OutputFormat.JSON => CliOutputFormatter.formatStatsJson(stats)
       case _                 => CliOutputFormatter.formatStatsTable(stats)
-    }
 
   private[cli] def executeStats(
       service: ParquetService,
       cmd: StatsCommand,
       globalOptions: GlobalOptions
-  ): Int = {
+  ): Int =
     import cmd.{filePath, format}
-    service.getStats(filePath) match {
+    service.getStats(filePath) match
       case Right(stats) =>
         if !globalOptions.quiet then println(formatStatsText(stats, format))
         0
       case Left(error) =>
         reportError("Failed to get stats", globalOptions)(error)
-    }
-  }
 
   private[cli] def executeStatsMulti(
       service: ParquetService,
       paths: List[String],
       cmd: StatsCommand,
       globalOptions: GlobalOptions
-  ): Int = {
+  ): Int =
     import cmd.format
     runMultiFileReport(paths, format, globalOptions) { path =>
       service.getStats(path).map(stats => (formatStatsText(stats, format), true))
     }
-  }
 
   private[cli] def formatMetadataText(report: ParquetMetadataReport, format: OutputFormat): String =
-    format match {
+    format match
       case OutputFormat.JSON => MetadataFormatter.formatJson(report)
       case _                 => MetadataFormatter.formatTable(report)
-    }
 
   private[cli] def executeMetadata(
       service: ParquetService,
       cmd: MetadataCommand,
       globalOptions: GlobalOptions
-  ): Int = {
+  ): Int =
     import cmd.{filePath, format, options}
-    service.getDetailedMetadata(filePath, options) match {
+    service.getDetailedMetadata(filePath, options) match
       case Right(report) =>
         if !globalOptions.quiet then println(formatMetadataText(report, format))
         0
       case Left(error) =>
         reportError("Failed to read metadata", globalOptions)(error)
-    }
-  }
 
   private[cli] def executeMetadataMulti(
       service: ParquetService,
       paths: List[String],
       cmd: MetadataCommand,
       globalOptions: GlobalOptions
-  ): Int = {
+  ): Int =
     import cmd.{format, options}
     runMultiFileReport(paths, format, globalOptions) { path =>
       service.getDetailedMetadata(path, options).map(r => (formatMetadataText(r, format), true))
     }
-  }
 
   private[cli] def formatCountText(count: Long, format: OutputFormat): String =
-    format match {
+    format match
       case OutputFormat.JSON => CliOutputFormatter.formatCountJson(count)
       case _                 => count.toString
-    }
 
   private[cli] def executeCount(
       service: ParquetService,
       cmd: CountCommand,
       globalOptions: GlobalOptions
-  ): Int = {
+  ): Int =
     import cmd.{filePath, format}
-    service.getFileInfo(filePath) match {
+    service.getFileInfo(filePath) match
       case Right(file) =>
-        if !globalOptions.quiet then {
+        if !globalOptions.quiet then
           val count = file.schema.fold(0L)(_.totalRowCount)
           println(formatCountText(count, format))
-        }
         0
       case Left(error) =>
         reportError("Failed to count rows", globalOptions)(error)
-    }
-  }
 
   private[cli] def executeCountMulti(
       service: ParquetService,
       paths: List[String],
       cmd: CountCommand,
       globalOptions: GlobalOptions
-  ): Int = {
+  ): Int =
     import cmd.format
     runMultiFileReport(paths, format, globalOptions) { path =>
       service.getFileInfo(path).map { file =>
@@ -353,5 +327,4 @@ private[cli] object InspectCommands {
         (formatCountText(count, format), true)
       }
     }
-  }
-}
+end InspectCommands

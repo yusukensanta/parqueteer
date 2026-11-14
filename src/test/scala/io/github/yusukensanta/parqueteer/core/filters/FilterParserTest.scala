@@ -8,7 +8,7 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import scala.jdk.CollectionConverters.*
 
-class FilterParserTest extends AnyFlatSpec with Matchers {
+class FilterParserTest extends AnyFlatSpec with Matchers:
 
   private def schema(fields: (String, PrimitiveTypeName)*): MessageType =
     new MessageType(
@@ -413,24 +413,21 @@ class FilterParserTest extends AnyFlatSpec with Matchers {
 
   // ── BETWEEN reverse-bounds validation ─────────────────────────────────────
   "FilterParser BETWEEN" should "return Left when low > high (integer)" in {
-    FilterParser.parse("age BETWEEN 100 AND 10") match {
+    FilterParser.parse("age BETWEEN 100 AND 10") match
       case Left(err) => err.message should include("BETWEEN range is empty")
       case Right(_)  => fail("Expected Left for reversed BETWEEN bounds")
-    }
   }
 
   it should "return Left when low > high (double)" in {
-    FilterParser.parse("score BETWEEN 9.9 AND 1.0") match {
+    FilterParser.parse("score BETWEEN 9.9 AND 1.0") match
       case Left(err) => err.message should include("BETWEEN range is empty")
       case Right(_)  => fail("Expected Left for reversed BETWEEN bounds")
-    }
   }
 
   it should "return Left when low > high (mixed long/double)" in {
-    FilterParser.parse("price BETWEEN 100 AND 9.5") match {
+    FilterParser.parse("price BETWEEN 100 AND 9.5") match
       case Left(err) => err.message should include("BETWEEN range is empty")
       case Right(_)  => fail("Expected Left for reversed BETWEEN bounds")
-    }
   }
 
   // ── IN boolean values ──────────────────────────────────────────────────────
@@ -479,21 +476,19 @@ class FilterParserTest extends AnyFlatSpec with Matchers {
 
   it should "return Left when BETWEEN Long lower bound loses precision as Double" in {
     // 9007199254740993 < 1e17 so range is not reversed; but 9007199254740993.toDouble loses precision
-    FilterParser.parse("id BETWEEN 9007199254740993 AND 1.0e17") match {
+    FilterParser.parse("id BETWEEN 9007199254740993 AND 1.0e17") match
       case Left(err) =>
         err.message should include("cannot be represented exactly as a Double")
       case Right(_) =>
         fail("Expected Left for imprecise BETWEEN Long lower bound")
-    }
   }
 
   it should "return Left when BETWEEN Long upper bound loses precision as Double" in {
-    FilterParser.parse("id BETWEEN 1.5 AND 9007199254740993") match {
+    FilterParser.parse("id BETWEEN 1.5 AND 9007199254740993") match
       case Left(err) =>
         err.message should include("cannot be represented exactly as a Double")
       case Right(_) =>
         fail("Expected Left for imprecise BETWEEN Long upper bound")
-    }
   }
 
   it should "parse BETWEEN mixed Long/Double when Long is exactly representable as Double" in {
@@ -503,11 +498,10 @@ class FilterParserTest extends AnyFlatSpec with Matchers {
   // ── IN list Long/Double precision guard ────────────────────────────────────
 
   it should "return Left for mixed IN list where Long cannot be represented exactly as Double" in {
-    FilterParser.parse("id IN (9007199254740993, 1.5)") match {
+    FilterParser.parse("id IN (9007199254740993, 1.5)") match
       case Left(err) =>
         err.message should include("cannot be represented exactly as Double")
       case Right(_) => fail("Expected Left for imprecise IN list Long value")
-    }
   }
 
   it should "accept mixed Long/Double IN list when all Long values are exactly representable" in {
@@ -520,25 +514,23 @@ class FilterParserTest extends AnyFlatSpec with Matchers {
     // Long.MaxValue.toDouble rounds UP to 2^63; JVM d2l clamps that back to Long.MaxValue,
     // so the old round-trip check (l.toDouble.toLong != l) had a false negative.
     // BigDecimal comparison correctly detects the imprecision.
-    FilterParser.parse(s"id BETWEEN ${Long.MaxValue} AND 1.0e20") match {
+    FilterParser.parse(s"id BETWEEN ${Long.MaxValue} AND 1.0e20") match
       case Left(err) =>
         err.message should include("cannot be represented exactly as a Double")
       case Right(_) =>
         fail(
           "Expected Left: Long.MaxValue is not exactly representable as Double"
         )
-    }
   }
 
   it should "return Left for IN list containing Long.MaxValue mixed with Double" in {
-    FilterParser.parse(s"id IN (${Long.MaxValue}, 1.5)") match {
+    FilterParser.parse(s"id IN (${Long.MaxValue}, 1.5)") match
       case Left(err) =>
         err.message should include("cannot be represented exactly as Double")
       case Right(_) =>
         fail(
           "Expected Left: Long.MaxValue cannot be represented exactly as Double"
         )
-    }
   }
 
   // ── Pure-Long IN list: DECIMAL column advisory ─────────────────────────────
@@ -595,4 +587,4 @@ class FilterParserTest extends AnyFlatSpec with Matchers {
     )
     result.left.map(_.exitCode) shouldBe Left(7)
   }
-}
+end FilterParserTest

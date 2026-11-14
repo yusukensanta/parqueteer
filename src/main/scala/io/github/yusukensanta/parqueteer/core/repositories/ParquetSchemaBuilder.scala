@@ -5,25 +5,24 @@ import org.apache.parquet.schema.{LogicalTypeAnnotation, MessageType, PrimitiveT
 import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
 import scala.jdk.CollectionConverters.*
 
-private[repositories] object ParquetSchemaBuilder {
+private[repositories] object ParquetSchemaBuilder:
   private val logger = org.slf4j.LoggerFactory.getLogger(getClass)
 
   def projectSchema(
       fileSchema: MessageType,
       columns: List[String]
-  ): MessageType = {
+  ): MessageType =
     val columnSet   = columns.toSet
     val schemaNames = fileSchema.getFields.asScala.map(_.getName).toSet
     val fields      = fileSchema.getFields.asScala
       .filter(f => columnSet.contains(f.getName))
       .toList
-    if fields.isEmpty then {
+    if fields.isEmpty then
       val available = schemaNames.mkString(", ")
       throw new IllegalArgumentException(
         s"None of the requested columns exist in the file: ${columns
             .mkString(", ")}. Available columns: $available"
       )
-    }
     val unmatched = columns.filterNot(schemaNames.contains)
     if unmatched.nonEmpty then
       logger.warn(
@@ -32,9 +31,8 @@ private[repositories] object ParquetSchemaBuilder {
         schemaNames.mkString(", ")
       )
     new MessageType("root", fields.asJava)
-  }
 
-  def buildMessageType(schema: ParquetSchema): MessageType = {
+  def buildMessageType(schema: ParquetSchema): MessageType =
     val builder = Types.buildMessage()
     schema.columns.foreach { col =>
       val repetition =
@@ -46,7 +44,6 @@ private[repositories] object ParquetSchemaBuilder {
       )
     }
     builder.named("root")
-  }
 
   // Helper to infer schema from data
   private[repositories] val MaxDecimalPrecision = 38
@@ -80,20 +77,19 @@ private[repositories] object ParquetSchemaBuilder {
   // 2^(8L-1) >= 10^precision. Computed with BigInteger rather than
   // math.log/math.pow to avoid floating-point rounding tipping a boundary
   // the wrong way -- an undersized field here would silently truncate data.
-  private[repositories] def fixedLenByteArrayLength(precision: Int): Int = {
+  private[repositories] def fixedLenByteArrayLength(precision: Int): Int =
     val bound  = java.math.BigInteger.TEN.pow(precision)
     var length = 1
     while java.math.BigInteger.ONE.shiftLeft(8 * length - 1).compareTo(bound) < 0
     do length += 1
     length
-  }
 
   def inferSchemaFromData(data: List[Map[String, CellValue]]): MessageType =
     inferSchemaFromRows(data.iterator)
 
   // Same fold as inferSchemaFromData, generalized to an Iterator so two-pass
   // streaming writers can infer a schema without ever materializing a List.
-  def inferSchemaFromRows(rows: Iterator[Map[String, CellValue]]): MessageType = {
+  def inferSchemaFromRows(rows: Iterator[Map[String, CellValue]]): MessageType =
     // Single pass: accumulate per-column TypeRank from non-null values only.
     // seenKeys tracks all keys (including null-only columns) for schema output.
     val seenKeys  = scala.collection.mutable.LinkedHashSet.empty[String]
@@ -107,7 +103,7 @@ private[repositories] object ParquetSchemaBuilder {
       sawAnyRow = true
       row.foreach { case (k, v) =>
         seenKeys.add(k)
-        if v != CellValue.Null then {
+        if v != CellValue.Null then
           val r = typeRankForValue(v)
           rankByKey.updateWith(k) {
             case Some(prev) =>
@@ -124,7 +120,7 @@ private[repositories] object ParquetSchemaBuilder {
               Some(widened)
             case None => Some(r)
           }
-          v match {
+          v match
             case CellValue.Dec(bd) =>
               val scale     = bd.scale.max(0)
               val intDigits = (bd.precision - bd.scale).max(1)
@@ -133,8 +129,6 @@ private[repositories] object ParquetSchemaBuilder {
                 case None           => Some((scale, intDigits))
               }
             case _ =>
-          }
-        }
       }
     }
     if !sawAnyRow then throw new IllegalArgumentException("Cannot infer schema from empty data")
@@ -143,7 +137,7 @@ private[repositories] object ParquetSchemaBuilder {
     seenKeys.toList.foreach { key =>
       val rank                            = rankByKey.getOrElse(key, TypeRank.String)
       val (primitive, annotation, length) =
-        if rank == TypeRank.Decimal then {
+        if rank == TypeRank.Decimal then
           val (maxScale, maxIntDigits) =
             decimalMetaByKey.getOrElse(key, (18, 20))
           val precision =
@@ -161,16 +155,15 @@ private[repositories] object ParquetSchemaBuilder {
             Some(LogicalTypeAnnotation.decimalType(scale, precision)),
             flbaLength
           )
-        } else {
+        else
           val (p, a) = rankToParquetType(rank)
           (p, a, None)
-        }
       builder.addField(
         makeField(key, primitive, Type.Repetition.OPTIONAL, annotation, length)
       )
     }
     builder.named("root")
-  }
+  end inferSchemaFromRows
 
   // ── private helpers ───────────────────────────────────────────────────────
 
@@ -184,18 +177,17 @@ private[repositories] object ParquetSchemaBuilder {
       repetition: Type.Repetition,
       annotation: Option[LogicalTypeAnnotation],
       length: Option[Int]
-  ): PrimitiveType = {
+  ): PrimitiveType =
     val base0 = Types.primitive(primitive, repetition)
     val base  = length.fold(base0)(base0.length)
     annotation.foldLeft(base)(_.as(_)).named(name)
-  }
 
   private val decimalPattern = """^DECIMAL\((\d+),\s*(\d+)\)$""".r
 
   private def mapDeclaredType(
       dataType: String
   ): (PrimitiveTypeName, Option[LogicalTypeAnnotation], Option[Int]) =
-    dataType.toUpperCase match {
+    dataType.toUpperCase match
       case "INT32" | "INT"                  => (PrimitiveTypeName.INT32, None, None)
       case "INT64" | "LONG"                 => (PrimitiveTypeName.INT64, None, None)
       case "DOUBLE"                         => (PrimitiveTypeName.DOUBLE, None, None)
@@ -221,7 +213,7 @@ private[repositories] object ParquetSchemaBuilder {
             "Use BINARY for variable-length byte fields."
         )
       case t if t.startsWith("DECIMAL") =>
-        t match {
+        t match
           case decimalPattern(pStr, sStr) =>
             val precision = pStr.toInt
             val scale     = sStr.trim.toInt
@@ -243,7 +235,6 @@ private[repositories] object ParquetSchemaBuilder {
             throw new IllegalArgumentException(
               s"Invalid DECIMAL syntax '$t'. Use DECIMAL(precision,scale) e.g. DECIMAL(10,2)"
             )
-        }
       case t if NestedType.isNested(t) =>
         throw new IllegalArgumentException(
           s"Nested type '$t' (STRUCT/MAP/LIST) is not supported for writing. " +
@@ -253,7 +244,6 @@ private[repositories] object ParquetSchemaBuilder {
         throw new IllegalArgumentException(
           s"Unknown dataType '$other'. Supported: INT32, INT64, DOUBLE, FLOAT, BOOLEAN, DATE, TIMESTAMP, DECIMAL(p,s), STRING, BINARY"
         )
-    }
 
   private def dateAnnotation: LogicalTypeAnnotation =
     LogicalTypeAnnotation.dateType()
@@ -295,7 +285,7 @@ private[repositories] object ParquetSchemaBuilder {
   private val numericRanks: Set[TypeRank] =
     integerRanks | floatRanks | Set(TypeRank.Decimal)
 
-  private def typeRankForValue(v: CellValue): TypeRank = v match {
+  private def typeRankForValue(v: CellValue): TypeRank = v match
     case CellValue.I32(_)  => TypeRank.Int
     case CellValue.I64(_)  => TypeRank.Long
     case CellValue.F32(_)  => TypeRank.Float
@@ -305,7 +295,6 @@ private[repositories] object ParquetSchemaBuilder {
     case CellValue.Date(_) => TypeRank.Date
     case CellValue.Ts(_)   => TypeRank.Timestamp
     case _                 => TypeRank.String
-  }
 
   /**
    * Widen two numeric ranks losslessly. Decimal beats all other numeric types
@@ -327,7 +316,7 @@ private[repositories] object ParquetSchemaBuilder {
 
   private def rankToParquetType(
       rank: TypeRank
-  ): (PrimitiveTypeName, Option[LogicalTypeAnnotation]) = rank match {
+  ): (PrimitiveTypeName, Option[LogicalTypeAnnotation]) = rank match
     case TypeRank.Int       => (PrimitiveTypeName.INT32, None)
     case TypeRank.Long      => (PrimitiveTypeName.INT64, None)
     case TypeRank.Float     => (PrimitiveTypeName.FLOAT, None)
@@ -338,5 +327,4 @@ private[repositories] object ParquetSchemaBuilder {
     case TypeRank.Timestamp =>
       (PrimitiveTypeName.INT64, Some(timestampMillisAnnotation))
     case TypeRank.String => (PrimitiveTypeName.BINARY, Some(stringAnnotation))
-  }
-}
+end ParquetSchemaBuilder

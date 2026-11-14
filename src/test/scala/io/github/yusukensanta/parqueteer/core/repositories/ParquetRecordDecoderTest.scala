@@ -22,7 +22,7 @@ import org.apache.parquet.io.api.Binary
 import org.apache.parquet.schema.{MessageType, MessageTypeParser}
 import org.apache.parquet.example.data.simple.SimpleGroupFactory
 
-class ParquetRecordDecoderTest extends AnyFlatSpec with Matchers {
+class ParquetRecordDecoderTest extends AnyFlatSpec with Matchers:
 
   // ── decodeValue ──────────────────────────────────────────────────────────
 
@@ -57,17 +57,15 @@ class ParquetRecordDecoderTest extends AnyFlatSpec with Matchers {
   }
 
   it should "decode FloatValue" in {
-    ParquetRecordDecoder.decodeValue(FloatValue(3.14f)) match {
+    ParquetRecordDecoder.decodeValue(FloatValue(3.14f)) match
       case CellValue.F32(f) => f shouldBe 3.14f +- 0.001f
       case v                => fail(s"Expected CellValue.F32, got $v")
-    }
   }
 
   it should "decode DoubleValue" in {
-    ParquetRecordDecoder.decodeValue(DoubleValue(2.718281828)) match {
+    ParquetRecordDecoder.decodeValue(DoubleValue(2.718281828)) match
       case CellValue.F64(d) => d shouldBe 2.718281828 +- 1e-9
       case v                => fail(s"Expected CellValue.F64, got $v")
-    }
   }
 
   it should "decode BinaryValue as UTF-8 string" in {
@@ -274,10 +272,9 @@ class ParquetRecordDecoderTest extends AnyFlatSpec with Matchers {
     val group =
       new SimpleGroupFactory(schema).newGroup().append("raw_data", bin)
     val result = ParquetRecordDecoder.decodeGroup(group, schema)
-    result("raw_data") match {
+    result("raw_data") match
       case CellValue.Bytes(actual) => actual.toSeq shouldBe bytes.toSeq
       case other                   => fail(s"Expected CellValue.Bytes, got $other")
-    }
   }
 
   it should "decode STRING-annotated BINARY as Str, not Bytes" in {
@@ -584,10 +581,9 @@ class ParquetRecordDecoderTest extends AnyFlatSpec with Matchers {
       .newGroup()
       .append("fba", Binary.fromConstantByteArray(bytes))
     val result = ParquetRecordDecoder.decodeGroup(group, schema)
-    result("fba") match {
+    result("fba") match
       case CellValue.Bytes(b) => b.toSeq shouldBe bytes.toSeq
       case other              => fail(s"Expected CellValue.Bytes, got $other")
-    }
   }
 
   it should "produce the same result as applyTemporalTransformer" in {
@@ -858,4 +854,4 @@ class ParquetRecordDecoderTest extends AnyFlatSpec with Matchers {
     result("id") shouldBe CellValue.I64(1L)
     result("flags") shouldBe CellValue.I32(10)
   }
-}
+end ParquetRecordDecoderTest

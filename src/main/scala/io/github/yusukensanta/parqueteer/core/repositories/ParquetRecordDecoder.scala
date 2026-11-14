@@ -24,7 +24,7 @@ import org.apache.parquet.example.data.Group
 import org.apache.parquet.example.data.simple.convert.GroupRecordConverter
 import scala.jdk.CollectionConverters.*
 
-private[repositories] object ParquetRecordDecoder {
+private[repositories] object ParquetRecordDecoder:
 
   private val logger =
     org.slf4j.LoggerFactory.getLogger(getClass)
@@ -34,15 +34,14 @@ private[repositories] object ParquetRecordDecoder {
 
   private def epochPlusSafe(l: Long, unit: ChronoUnit): CellValue =
     try CellValue.Ts(java.time.Instant.EPOCH.plus(l, unit))
-    catch {
+    catch
       case _: ArithmeticException | _: java.time.DateTimeException =>
         logger.warn(
           s"Timestamp value $l $unit overflows Instant range — falling back to raw INT64"
         )
         CellValue.I64(l)
-    }
 
-  def decodeValue(value: Value): CellValue = value match {
+  def decodeValue(value: Value): CellValue = value match
     case NullValue                 => CellValue.Null
     case BooleanValue(b)           => CellValue.Bool(b)
     case IntValue(i)               => CellValue.I32(i)
@@ -68,7 +67,6 @@ private[repositories] object ParquetRecordDecoder {
             "Upgrade parqueteer to add explicit support."
         )
       CellValue.Str(other.toString)
-  }
 
   def convertRecordToMap(record: RowParquetRecord): Map[String, CellValue] =
     record.iterator
@@ -98,7 +96,7 @@ private[repositories] object ParquetRecordDecoder {
           if f.isPrimitive &&
             f.asPrimitiveType().getPrimitiveTypeName ==
             PrimitiveTypeName.BINARY &&
-            !(Option(f.asPrimitiveType().getLogicalTypeAnnotation) match {
+            !(Option(f.asPrimitiveType().getLogicalTypeAnnotation) match
               case Some(
                     _: LogicalTypeAnnotation.StringLogicalTypeAnnotation |
                     _: LogicalTypeAnnotation.EnumLogicalTypeAnnotation |
@@ -106,7 +104,7 @@ private[repositories] object ParquetRecordDecoder {
                   ) =>
                 true
               case _ => false
-            }) =>
+            ) =>
         f.getName
     }.toSet
 
@@ -120,7 +118,7 @@ private[repositories] object ParquetRecordDecoder {
 
   // 12-byte Spark/Hive INT96 layout: bytes 0-7 = nanos of day (int64 LE), bytes 8-11 = Julian
   // day (int32 LE). Julian day 2440588 = 1970-01-01. Shared by both sequential and parallel paths.
-  private[repositories] def decodeInt96Binary(bytes: Array[Byte]): CellValue = {
+  private[repositories] def decodeInt96Binary(bytes: Array[Byte]): CellValue =
     val buf =
       java.nio.ByteBuffer.wrap(bytes).order(java.nio.ByteOrder.LITTLE_ENDIAN)
     val nanosOfDay = buf.getLong(0)
@@ -133,17 +131,15 @@ private[repositories] object ParquetRecordDecoder {
             nanosOfDay
           )
         )
-      catch {
+      catch
         case _: ArithmeticException =>
           logger.warn(
             s"INT96 Julian-day arithmetic overflow (julianDay=$julianDay, nanosOfDay=$nanosOfDay) — emitting Null"
           )
           None
-      }
     totalNanos.fold[CellValue](CellValue.Null)(
       epochPlusSafe(_, ChronoUnit.NANOS)
     )
-  }
 
   // Schema-aware variant: unannotated BINARY fields decoded as Bytes; INT96 fields decoded
   // directly from raw bytes (parquet4s delivers INT96 as BinaryValue, not DateTimeValue).
@@ -154,7 +150,7 @@ private[repositories] object ParquetRecordDecoder {
   ): Map[String, CellValue] =
     record.iterator
       .map { case (key, value) =>
-        val cell = value match {
+        val cell = value match
           case list: ListParquetRecord =>
             val sz = list.size
             if sz > 1 && warnedVariants.add(s"ListParquetRecord.multivalue:$key")
@@ -166,18 +162,15 @@ private[repositories] object ParquetRecordDecoder {
               )
             list.headOption.fold[CellValue](CellValue.Null)(decodeValue)
           case _ if int96Fields.contains(key) =>
-            value match {
+            value match
               case BinaryValue(bin) => decodeInt96Binary(bin.getBytes)
               case _                => decodeValue(value)
-            }
           case _ if rawBinaryFields.contains(key) =>
-            value match {
+            value match
               case BinaryValue(bin) =>
                 CellValue.Bytes(scala.collection.immutable.ArraySeq.unsafeWrapArray(bin.getBytes))
               case _ => decodeValue(value)
-            }
           case _ => decodeValue(value)
-        }
         key -> cell
       }
       .to(scala.collection.immutable.ListMap)
@@ -198,7 +191,7 @@ private[repositories] object ParquetRecordDecoder {
    * every record. Shared by the sequential read and streaming read paths so
    * they can't decode the same file differently.
    */
-  def rowDecoderFor(schema: MessageType): RowParquetRecord => Map[String, CellValue] = {
+  def rowDecoderFor(schema: MessageType): RowParquetRecord => Map[String, CellValue] =
     val rawBinaryFields     = rawBinaryFieldsFor(schema)
     val int96Fields         = int96FieldsFor(schema)
     val temporalTransformer = buildTemporalTransformer(schema)
@@ -207,7 +200,6 @@ private[repositories] object ParquetRecordDecoder {
         convertRecordToMapWithSchema(record, rawBinaryFields, int96Fields),
         temporalTransformer
       )
-  }
 
   /**
    * Pre-compute a per-column transformer from the schema. Call once per file
@@ -222,50 +214,46 @@ private[repositories] object ParquetRecordDecoder {
       .flatMap { field =>
         val pt   = field.asPrimitiveType()
         val name = field.getName
-        Option(pt.getLogicalTypeAnnotation) match {
+        Option(pt.getLogicalTypeAnnotation) match
           case Some(_: LogicalTypeAnnotation.DateLogicalTypeAnnotation) =>
             Some(
               name -> ((v: CellValue) =>
-                v match {
+                v match
                   case CellValue.I32(i) =>
                     CellValue.Date(java.time.LocalDate.ofEpochDay(i.toLong))
                   case other => other
-                }
               )
             )
           case Some(ts: LogicalTypeAnnotation.TimestampLogicalTypeAnnotation)
               if ts.getUnit == LogicalTypeAnnotation.TimeUnit.MILLIS =>
             Some(
               name -> ((v: CellValue) =>
-                v match {
+                v match
                   case CellValue.I64(l) =>
                     CellValue.Ts(java.time.Instant.ofEpochMilli(l))
                   case other => other
-                }
               )
             )
           case Some(ts: LogicalTypeAnnotation.TimestampLogicalTypeAnnotation)
               if ts.getUnit == LogicalTypeAnnotation.TimeUnit.MICROS =>
             Some(
               name -> ((v: CellValue) =>
-                v match {
+                v match
                   case CellValue.I64(l) => epochPlusSafe(l, ChronoUnit.MICROS)
                   case other            => other
-                }
               )
             )
           case Some(ts: LogicalTypeAnnotation.TimestampLogicalTypeAnnotation)
               if ts.getUnit == LogicalTypeAnnotation.TimeUnit.NANOS =>
             Some(
               name -> ((v: CellValue) =>
-                v match {
+                v match
                   case CellValue.I64(l) => epochPlusSafe(l, ChronoUnit.NANOS)
                   case other            => other
-                }
               )
             )
           case _ => None
-        }
+        end match
       }
       .toMap
 
@@ -280,7 +268,7 @@ private[repositories] object ParquetRecordDecoder {
       pageStore: PageReadStore,
       fileSchema: MessageType,
       requestedSchema: MessageType
-  ): List[Map[String, CellValue]] = {
+  ): List[Map[String, CellValue]] =
     val columnIO =
       new ColumnIOFactory().getColumnIO(requestedSchema, fileSchema)
     val converter    = new GroupRecordConverter(requestedSchema)
@@ -288,13 +276,11 @@ private[repositories] object ParquetRecordDecoder {
     val rowCount     = pageStore.getRowCount
     val result       = List.newBuilder[Map[String, CellValue]]
     var i            = 0L
-    while i < rowCount do {
+    while i < rowCount do
       val group = recordReader.read()
       if group != null then result += decodeGroup(group, requestedSchema)
       i += 1
-    }
     result.result()
-  }
 
   // Standard Parquet LIST layout: outer group (LIST) → repeated group (list) → element.
   // Extracts all elements and returns CellValue.Str("[e1, e2, ...]").
@@ -302,11 +288,11 @@ private[repositories] object ParquetRecordDecoder {
       group: Group,
       fieldIndex: Int,
       listGroupType: GroupType
-  ): CellValue = {
+  ): CellValue =
     val outerGroup   = group.getGroup(fieldIndex, 0)
     val elementCount = outerGroup.getFieldRepetitionCount(0)
     if elementCount == 0 then CellValue.Str("[]")
-    else {
+    else
       val repeatedType = listGroupType.getType(0).asGroupType()
       val elemType     = repeatedType.getType(0)
       val name         = listGroupType.getName
@@ -323,33 +309,30 @@ private[repositories] object ParquetRecordDecoder {
         else "null"
       }
       CellValue.Str(elements.mkString("[", ", ", "]"))
-    }
-  }
 
   def decodeGroup(
       group: Group,
       schema: MessageType
-  ): Map[String, CellValue] = {
+  ): Map[String, CellValue] =
     val builder =
       scala.collection.immutable.ListMap.newBuilder[String, CellValue]
     var i = 0
-    while i < schema.getFieldCount do {
+    while i < schema.getFieldCount do
       if group.getFieldRepetitionCount(i) > 0 && !schema.getType(i).isPrimitive
-      then {
+      then
         val name      = schema.getType(i).getName
         val groupType = schema.getType(i).asGroupType()
-        Option(groupType.getLogicalTypeAnnotation) match {
+        Option(groupType.getLogicalTypeAnnotation) match
           case Some(_: LogicalTypeAnnotation.ListLogicalTypeAnnotation) =>
             val listVal =
               try decodeListField(group, i, groupType)
-              catch {
+              catch
                 case ex: Exception =>
                   if warnedVariants.add(s"list-layout:$name") then
                     logger.warn(
                       s"Column '$name' has a non-standard LIST layout — emitting Null. Cause: ${ex.getMessage}"
                     )
                   CellValue.Null
-              }
             builder += name -> listVal
           case _ =>
             if warnedVariants.add(s"nested:$name") then
@@ -359,11 +342,9 @@ private[repositories] object ParquetRecordDecoder {
                   "reject files containing nested columns."
               )
             builder += name -> CellValue.Null
-        }
-      } else if group.getFieldRepetitionCount(i) == 0 && schema.getType(i).isPrimitive
-      then {
-        builder += schema.getType(i).getName -> CellValue.Null
-      } else if schema.getType(i).isPrimitive then {
+      else if group.getFieldRepetitionCount(i) == 0 && schema.getType(i).isPrimitive
+      then builder += schema.getType(i).getName -> CellValue.Null
+      else if schema.getType(i).isPrimitive then
         val name     = schema.getType(i).getName
         val repCount = group.getFieldRepetitionCount(i)
         if repCount > 1 && warnedVariants.add(s"repeated:$name") then
@@ -374,7 +355,7 @@ private[repositories] object ParquetRecordDecoder {
         val fieldType        = schema.getType(i).asPrimitiveType()
         val logicalType      = Option(fieldType.getLogicalTypeAnnotation)
         val value: CellValue =
-          (fieldType.getPrimitiveTypeName, logicalType) match {
+          (fieldType.getPrimitiveTypeName, logicalType) match
             case (
                   PrimitiveTypeName.INT32,
                   Some(dec: LogicalTypeAnnotation.DecimalLogicalTypeAnnotation)
@@ -477,15 +458,14 @@ private[repositories] object ParquetRecordDecoder {
             case (PrimitiveTypeName.INT96, _) =>
               decodeInt96Binary(group.getInt96(i, 0).getBytes)
             case _ => CellValue.Str(group.getValueToString(i, 0))
-          }
         builder += name -> value
-      } else {
+      else
         // repCount == 0 && !isPrimitive: null/absent nested field.
         // Emit Null so the key is always present, matching the sequential path.
         builder += schema.getType(i).getName -> CellValue.Null
-      }
+      end if
       i += 1
-    }
+    end while
     builder.result()
-  }
-}
+  end decodeGroup
+end ParquetRecordDecoder

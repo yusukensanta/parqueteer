@@ -4,7 +4,7 @@ import io.github.yusukensanta.parqueteer.core.models.*
 import org.scalatest.flatspec.AnyFlatSpec
 import java.io.{ByteArrayOutputStream, PrintStream}
 
-class MultiFileReportTest extends CliTestSupport {
+class MultiFileReportTest extends CliTestSupport:
 
   // ── runMultiFileReport ──────────────────────────────────────────────────
 
@@ -194,4 +194,4 @@ class MultiFileReportTest extends CliTestSupport {
     }
     order.toList shouldBe List("/a.parquet", "/b.parquet", "/c.parquet")
   }
-}
+end MultiFileReportTest

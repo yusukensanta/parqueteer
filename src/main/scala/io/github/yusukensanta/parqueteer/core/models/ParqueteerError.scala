@@ -134,10 +134,10 @@ object ParqueteerError:
         case e: java.io.FileNotFoundException =>
           val raw = Option(e.getMessage).getOrElse("unknown")
           // getMessage is typically "path (No such file or directory)" — extract just the path
-          val path = raw.indexOf(" (") match {
+          val path = raw.indexOf(" (") match
             case -1 => raw
             case i  => raw.substring(0, i)
-          }
           FileNotFound(path)
         case e => IOError(e)
       }
+end ParqueteerError

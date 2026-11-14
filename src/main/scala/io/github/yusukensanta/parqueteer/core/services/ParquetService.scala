@@ -13,7 +13,7 @@ import scala.util.Try
 
 class ParquetService(
     repository: ParquetRepository
-) {
+):
   private val streamWrite = new StreamWriteSupport(repository)
   private val merges      = new MergeOperations(repository, streamWrite)
   private val rawWrites   = new RawToParquetWriter(repository, streamWrite)
@@ -39,17 +39,17 @@ class ParquetService(
       path: String,
       readConfig: ReadConfig
   ): Either[ParqueteerError, ParquetFile] =
-    for {
+    for
       _        <- requireNotStdin(path)
       _        <- validateFilter(readConfig.filter)
       location <- parseLocation(path)
-    } yield ParquetFile(location)
+    yield ParquetFile(location)
 
   def readFile(
       path: String,
       readConfig: ReadConfig = ReadConfig()
   ): Either[ParqueteerError, ParquetFile] =
-    for {
+    for
       file          <- prepareRead(path, readConfig)
       schemaAndMeta <- repository
         .readFileInfo(file)
@@ -58,7 +58,7 @@ class ParquetService(
       content <- repository
         .readContent(file, readConfig)
         .toParqueteerError
-    } yield file.copy(
+    yield file.copy(
       content = Some(content),
       schema = Some(schema),
       metadata = Some(metadata),
@@ -69,26 +69,26 @@ class ParquetService(
       path: String,
       readConfig: ReadConfig
   )(process: Map[String, CellValue] => Unit): Either[ParqueteerError, Long] =
-    for {
+    for
       file  <- prepareRead(path, readConfig)
       count <- repository
         .streamContent(file, readConfig)(
           process
         )
         .toParqueteerError
-    } yield count
+    yield count
 
   def streamReadMulti(
       paths: List[String],
       readConfig: ReadConfig,
       schemaMode: SchemaMode
   )(process: Map[String, CellValue] => Unit): Either[ParqueteerError, Long] =
-    for {
+    for
       _         <- validateFilter(readConfig.filter)
       _         <- checkSchemaCompatibility(paths, schemaMode)
       locations <- parseLocations(paths)
       total     <- streamAllFiles(locations, readConfig)(process)
-    } yield total
+    yield total
 
   /**
    * Streams rows from each location in order into `process`, decrementing a
@@ -98,34 +98,31 @@ class ParquetService(
   private def streamAllFiles(
       locations: Vector[StorageLocation],
       readConfig: ReadConfig
-  )(process: Map[String, CellValue] => Unit): Either[ParqueteerError, Long] = {
+  )(process: Map[String, CellValue] => Unit): Either[ParqueteerError, Long] =
     val budget                         = RowBudget(readConfig.maxRows)
     var total                          = 0L
     var error: Option[ParqueteerError] = None
     val it                             = locations.iterator
-    while error.isEmpty && it.hasNext && !budget.isExhausted do {
+    while error.isEmpty && it.hasNext && !budget.isExhausted do
       val perFileConfig = readConfig.copy(maxRows = budget.nextLimit)
       repository
         .streamContent(ParquetFile(it.next()), perFileConfig)(process)
-        .toParqueteerError match {
+        .toParqueteerError match
         case Left(e)  => error = Some(e)
         case Right(n) =>
           budget.consume(n)
           total += n
-      }
-    }
     error.toLeft(total)
-  }
 
   def getFileInfo(path: String): Either[ParqueteerError, ParquetFile] =
-    for {
+    for
       location <- parseLocation(path)
       file = ParquetFile(location)
       result <- repository
         .readFileInfo(file)
         .toParqueteerError
       (schema, metadata, rowGroups) = result
-    } yield file.copy(
+    yield file.copy(
       schema = Some(schema),
       metadata = Some(metadata),
       rowGroups = rowGroups
@@ -134,13 +131,13 @@ class ParquetService(
   def resolveGlob(path: String): Either[ParqueteerError, List[String]] =
     if !GlobDetector.hasGlobChars(path) then Right(List(path))
     else
-      for {
+      for
         location <- parseLocation(path)
         matches  <- repository.globStatus(location).toParqueteerError
         paths    <-
           if matches.isEmpty then Left(ParqueteerError.NoGlobMatch(path))
           else Right(matches.map(_.path).sorted)
-      } yield paths
+      yield paths
 
   def mergeFiles(
       inputPaths: List[String],
@@ -170,24 +167,24 @@ class ParquetService(
     merges.convertParquetFile(inputPath, outputPath, conversionConfig)
 
   def getStats(path: String): Either[ParqueteerError, FileStats] =
-    for {
+    for
       location <- parseLocation(path)
       file = ParquetFile(location)
       stats <- repository
         .readStats(file)
         .toParqueteerError
-    } yield stats
+    yield stats
 
   def getDetailedMetadata(
       path: String,
       options: MetadataOptions = MetadataOptions()
   ): Either[ParqueteerError, ParquetMetadataReport] =
-    for {
+    for
       location <- parseLocation(path)
       report   <- repository
         .readDetailedMetadata(ParquetFile(location), options)
         .toParqueteerError
-    } yield report
+    yield report
 
   def writeFile(
       path: String,
@@ -250,7 +247,7 @@ class ParquetService(
    * missing file is FileNotFound; an unreadable one, ParseError.
    */
   def readSchemaContract(contractPath: String): Either[ParqueteerError, List[FieldSummary]] =
-    for {
+    for
       contractJson <- Try(
         java.nio.file.Files.readString(java.nio.file.Paths.get(contractPath))
       ).toEither.left.map {
@@ -263,19 +260,19 @@ class ParquetService(
         .parse(contractJson)
         .left
         .map(msg => ParqueteerError.ParseError("schema contract", s"$contractPath: $msg"))
-    } yield fields
+    yield fields
 
   def validateFile(
       path: String,
       deep: Boolean = false
   ): Either[ParqueteerError, ValidationResult] =
-    for {
+    for
       location <- parseLocation(path)
       file = ParquetFile(location)
       issues <- repository
         .validateFile(file, deep)
         .toParqueteerError
-    } yield ValidationResult(isValid = issues.isEmpty, issues = issues)
+    yield ValidationResult(isValid = issues.isEmpty, issues = issues)
 
   /**
    * Compares `path`'s schema against a schema contract file (see
@@ -284,10 +281,10 @@ class ParquetService(
    * A missing contract file is FileNotFound; an unreadable one, ParseError.
    */
   def checkSchemaContract(path: String, contractPath: String): Either[ParqueteerError, SchemaDiff] =
-    for {
+    for
       expected <- readSchemaContract(contractPath)
       file     <- getFileInfo(path)
-    } yield SchemaReconciler.diff(
+    yield SchemaReconciler.diff(
       expected.map(f => ColumnInfo(f.name, f.dataType, f.isOptional, 0, 0, "")),
       file.schema.map(_.columns).getOrElse(Nil)
     )
@@ -296,12 +293,11 @@ class ParquetService(
       path1: String,
       path2: String
   ): Either[ParqueteerError, SchemaDiff] =
-    for {
+    for
       f1 <- getFileInfo(path1)
       f2 <- getFileInfo(path2)
-    } yield SchemaReconciler.diff(
+    yield SchemaReconciler.diff(
       f1.schema.map(_.columns).getOrElse(Nil),
       f2.schema.map(_.columns).getOrElse(Nil)
     )
-
-}
+end ParquetService

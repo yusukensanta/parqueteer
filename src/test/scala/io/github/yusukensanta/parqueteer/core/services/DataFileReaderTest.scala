@@ -5,7 +5,7 @@ import io.circe.Json
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-class DataFileReaderTest extends AnyFlatSpec with Matchers {
+class DataFileReaderTest extends AnyFlatSpec with Matchers:
 
   "coerceJsonValue" should "convert string to CellValue" in {
     DataFileReader.coerceJsonValue(Json.fromString("hello")) shouldBe CellValue.Str("hello")
@@ -109,12 +109,11 @@ class DataFileReaderTest extends AnyFlatSpec with Matchers {
 
   // ── withNdjsonRows / withLtsvRows / withCsvRows ──────────────────────────
 
-  private def tempFileWithContent(suffix: String, content: String): java.io.File = {
+  private def tempFileWithContent(suffix: String, content: String): java.io.File =
     val f = java.nio.file.Files.createTempFile("datafilereader_test_", suffix).toFile
     java.nio.file.Files.writeString(f.toPath, content)
     f.deleteOnExit()
     f
-  }
 
   "withNdjsonRows" should "yield the same rows as readNdjsonFile" in {
     val f         = tempFileWithContent(".ndjson", "{\"a\":1}\n{\"a\":2}\n{\"a\":3}\n")
@@ -178,4 +177,4 @@ class DataFileReaderTest extends AnyFlatSpec with Matchers {
     DataFileReader.withCsvRows(f.getAbsolutePath, None)(_.toList).get
     DataFileReader.withCsvRows(f.getAbsolutePath, None)(_.toList).isSuccess shouldBe true
   }
-}
+end DataFileReaderTest

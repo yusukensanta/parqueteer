@@ -7,7 +7,7 @@ import io.github.yusukensanta.parqueteer.core.models.{
   ParquetSchema
 }
 
-object CSVFormatter {
+object CSVFormatter:
   private[formatters] val Newline = "\r\n"
 
   // A leading '-' is only safe unescaped if the WHOLE value is a plain negative
@@ -15,16 +15,15 @@ object CSVFormatter {
   // digit but is a formula-injection payload, not a number.
   private val NegativeNumberPattern = """^-\d+(\.\d+)?([eE][+-]?\d+)?$""".r
 
-  private[formatters] def escapeField(field: String): String = {
+  private[formatters] def escapeField(field: String): String =
     // CWE-1236: prefix formula-trigger chars. Also check first non-whitespace char
     // because spreadsheets trim leading spaces before formula evaluation.
     val firstSig  = field.dropWhile(_ == ' ')
     val sanitized =
-      if firstSig.nonEmpty && (firstSig.charAt(0) match {
+      if firstSig.nonEmpty && (firstSig.charAt(0) match
           case '=' | '+' | '@' | '\t' | '\r' => true
           case '-'                           => !NegativeNumberPattern.matches(firstSig)
-          case _                             => false
-        })
+          case _                             => false)
       then "'" + field
       else field
 
@@ -33,15 +32,10 @@ object CSVFormatter {
       sanitized.contains("\n") ||
       sanitized.contains("\r")
 
-    if needsQuoting then {
-      "\"" + sanitized.replace("\"", "\"\"") + "\""
-    } else {
-      sanitized
-    }
-  }
-}
+    if needsQuoting then "\"" + sanitized.replace("\"", "\"\"") + "\""
+    else sanitized
 
-class CSVFormatter extends OutputFormatter {
+class CSVFormatter extends OutputFormatter:
 
   private val Delimiter = ","
   private val Newline   = CSVFormatter.Newline
@@ -51,7 +45,7 @@ class CSVFormatter extends OutputFormatter {
       schema: Option[ParquetSchema]
   ): String =
     if content.rows.isEmpty then ""
-    else {
+    else
       val rows        = content.rows
       val columns     = extractColumns(rows, schema)
       val columnIndex = OutputFormatter.indexColumns(columns)
@@ -72,9 +66,8 @@ class CSVFormatter extends OutputFormatter {
       }
 
       sb.toString
-    }
 
-  override def formatSchema(schema: ParquetSchema): String = {
+  override def formatSchema(schema: ParquetSchema): String =
     val headers = List("Column Name", "Data Type", "Optional", "Compression")
     val sb      = new StringBuilder()
 
@@ -92,9 +85,8 @@ class CSVFormatter extends OutputFormatter {
       sb.append(Newline)
     }
     sb.toString
-  }
 
-  override def formatMetadata(metadata: FileMetadata): String = {
+  override def formatMetadata(metadata: FileMetadata): String =
     val sb = new StringBuilder()
 
     sb.append(formatRow(List("Property", "Value")))
@@ -117,8 +109,7 @@ class CSVFormatter extends OutputFormatter {
     sb.append(Newline)
 
     sb.toString
-  }
 
   private def formatRow(values: List[String]): String =
     values.map(CSVFormatter.escapeField).mkString(Delimiter)
-}
+end CSVFormatter

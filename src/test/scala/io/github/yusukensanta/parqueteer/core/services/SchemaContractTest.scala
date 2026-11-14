@@ -4,7 +4,7 @@ import io.github.yusukensanta.parqueteer.core.models.FieldSummary
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-class SchemaContractTest extends AnyFlatSpec with Matchers {
+class SchemaContractTest extends AnyFlatSpec with Matchers:
 
   "SchemaContract.parse" should "read name, dataType and optional and ignore other keys" in {
     val json =
@@ -40,4 +40,4 @@ class SchemaContractTest extends AnyFlatSpec with Matchers {
       """{"columns": [{"name": "id", "dataType": "INT64", "optional": false}, {"name": "x"}]}"""
     SchemaContract.parse(json).left.toOption.get should include("column #2")
   }
-}
+end SchemaContractTest

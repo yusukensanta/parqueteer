@@ -12,10 +12,10 @@ import io.circe.{parser, HCursor}
  * (encodings, row counts) are ignored because they describe one file, not
  * the schema.
  */
-object SchemaContract {
+object SchemaContract:
 
   def parse(json: String): Either[String, List[FieldSummary]] =
-    for {
+    for
       doc     <- parser.parse(json).left.map(e => s"not valid JSON: ${e.message}")
       columns <- doc.hcursor
         .downField("columns")
@@ -26,21 +26,21 @@ object SchemaContract {
         )
         .flatMap(cs => columnsOf(cs))
       _ <- if columns.isEmpty then Left(""""columns" must not be empty""") else Right(())
-    } yield columns
+    yield columns
 
   private def columnsOf(cursors: List[HCursor]): Either[String, List[FieldSummary]] =
     cursors.zipWithIndex.foldLeft[Either[String, List[FieldSummary]]](Right(Nil)) {
       case (acc, (c, i)) =>
         acc.flatMap { done =>
-          (for {
+          (for
             name     <- c.downField("name").as[String]
             dataType <- c.downField("dataType").as[String]
             optional <- c.downField("optional").as[Boolean]
-          } yield FieldSummary(name, dataType, optional)).left
+          yield FieldSummary(name, dataType, optional)).left
             .map(_ =>
               s"""column #${i + 1} needs string "name", string "dataType" and boolean "optional""""
             )
             .map(done :+ _)
         }
     }
-}
+end SchemaContract

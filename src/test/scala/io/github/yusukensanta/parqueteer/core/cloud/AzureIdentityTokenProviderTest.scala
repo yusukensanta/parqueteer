@@ -11,24 +11,21 @@ import java.io.IOException
 import java.time.OffsetDateTime
 import java.util.concurrent.atomic.AtomicReference
 
-class AzureIdentityTokenProviderTest extends AnyFlatSpec with Matchers {
+class AzureIdentityTokenProviderTest extends AnyFlatSpec with Matchers:
 
   private val Account = "acct.dfs.core.windows.net"
 
-  private class StubCredential(result: Mono[AccessToken]) extends TokenCredential {
+  private class StubCredential(result: Mono[AccessToken]) extends TokenCredential:
     val lastRequest = new AtomicReference[TokenRequestContext]()
 
-    override def getToken(request: TokenRequestContext): Mono[AccessToken] = {
+    override def getToken(request: TokenRequestContext): Mono[AccessToken] =
       lastRequest.set(request)
       result
-    }
-  }
 
-  private def confFor(kind: String): Configuration = {
+  private def confFor(kind: String): Configuration =
     val conf = new Configuration(false)
     conf.set(AzureIdentityTokenProvider.CredentialKey, kind)
     conf
-  }
 
   "AzureIdentityTokenProvider" should "return the token and expose its expiry" in {
     val expires = OffsetDateTime.now().plusHours(1)
@@ -146,4 +143,4 @@ class AzureIdentityTokenProviderTest extends AnyFlatSpec with Matchers {
     val ctor = classOf[AzureIdentityTokenProvider].getConstructor()
     ctor.newInstance() shouldBe a[AzureIdentityTokenProvider]
   }
-}
+end AzureIdentityTokenProviderTest

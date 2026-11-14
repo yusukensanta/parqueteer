@@ -7,7 +7,7 @@ import org.scalatest.flatspec.AnyFlatSpec
 import java.io.{ByteArrayOutputStream, PrintStream}
 import scala.util.{Success, Try}
 
-class CommandExecutorTest extends CliTestSupport {
+class CommandExecutorTest extends CliTestSupport:
 
   // ── executeCompletions ─────────────────────────────────────────────────
 
@@ -93,17 +93,15 @@ class CommandExecutorTest extends CliTestSupport {
 
   // ── multi-match dispatch (glob paths) ───────────────────────────────────
 
-  private def multiMatchRepo: ParquetRepository = new FakeParquetRepository() {
+  private def multiMatchRepo: ParquetRepository = new FakeParquetRepository():
 
     override def globStatus(location: StorageLocation): Try[List[StorageLocation]] =
       Success(List(LocalPath("/data/a.parquet"), LocalPath("/data/b.parquet")))
-  }
 
   "ReadCommand" should "concatenate rows from every matched file for a glob path" in {
-    val repo = new FakeParquetRepository() {
+    val repo = new FakeParquetRepository():
       override def globStatus(location: StorageLocation): Try[List[StorageLocation]] =
         Success(List(LocalPath("/data/a.parquet"), LocalPath("/data/b.parquet")))
-    }
     val service     = new ParquetService(repo)
     val out         = new ByteArrayOutputStream()
     val originalOut = System.out
@@ -143,7 +141,7 @@ class CommandExecutorTest extends CliTestSupport {
   }
 
   it should "read the resolved single-match file, not the literal glob pattern" in {
-    val repo = new FakeParquetRepository() {
+    val repo = new FakeParquetRepository():
       override def globStatus(location: StorageLocation): Try[List[StorageLocation]] =
         Success(List(LocalPath("/data/only-x.parquet")))
       override def readFileInfo(
@@ -151,7 +149,6 @@ class CommandExecutorTest extends CliTestSupport {
       ): Try[(ParquetSchema, FileMetadata, List[RowGroupInfo])] =
         if file.location.path == "/data/only-x.parquet" then super.readFileInfo(file)
         else scala.util.Failure(new java.io.IOException(s"unexpected path: ${file.location.path}"))
-    }
     val service = new ParquetService(repo)
     val out     = new ByteArrayOutputStream()
     val code    = Console.withOut(new PrintStream(out)) {
@@ -195,10 +192,9 @@ class CommandExecutorTest extends CliTestSupport {
   "ValidateCommand" should "aggregate exit code 1 when one matched file is invalid" in {
     val repo = new FakeParquetRepository(
       validateResult = Success(List("corrupt row group"))
-    ) {
+    ):
       override def globStatus(location: StorageLocation): Try[List[StorageLocation]] =
         Success(List(LocalPath("/data/a.parquet"), LocalPath("/data/b.parquet")))
-    }
     val service = new ParquetService(repo)
     val code    = CommandExecutor.execute(
       ValidateCommand("/data/*.parquet"),
@@ -249,7 +245,7 @@ class CommandExecutorTest extends CliTestSupport {
 
   "execute" should "dispatch WriteCommand with dryRun = true" in {
     val tmpFile = java.nio.file.Files.createTempFile("pqt-test", ".json")
-    try {
+    try
       java.nio.file.Files.writeString(tmpFile, """[{"x":1}]""")
       val out  = new ByteArrayOutputStream()
       val code = Console.withOut(new PrintStream(out)) {
@@ -261,7 +257,7 @@ class CommandExecutorTest extends CliTestSupport {
       }
       code shouldBe 0
       out.toString("UTF-8") should include("Dry run")
-    } finally java.nio.file.Files.deleteIfExists(tmpFile)
+    finally java.nio.file.Files.deleteIfExists(tmpFile)
   }
 
   "WriteCommand" should "concatenate multiple matched raw inputs into one parquet write" in {
@@ -273,13 +269,12 @@ class CommandExecutorTest extends CliTestSupport {
     // real, possibly-unwritable local directory.
     val fileA = java.nio.file.Files.createTempFile("parqueteer_cmd_write_multi_", ".ndjson")
     val fileB = java.nio.file.Files.createTempFile("parqueteer_cmd_write_multi_", ".ndjson")
-    try {
+    try
       java.nio.file.Files.writeString(fileA, """{"id": 1}""")
       java.nio.file.Files.writeString(fileB, """{"id": 2}""")
-      val repo = new FakeParquetRepository() {
+      val repo = new FakeParquetRepository():
         override def globStatus(location: StorageLocation): Try[List[StorageLocation]] =
           Success(List(LocalPath(fileA.toString), LocalPath(fileB.toString)))
-      }
       val service = new ParquetService(repo)
       val code    = CommandExecutor.execute(
         WriteCommand("/data/*.ndjson", "s3://b/o.parquet", InputFormat.NDJson),
@@ -287,10 +282,9 @@ class CommandExecutorTest extends CliTestSupport {
         GlobalOptions(quiet = true)
       )
       code shouldBe 0
-    } finally {
+    finally
       java.nio.file.Files.deleteIfExists(fileA)
       java.nio.file.Files.deleteIfExists(fileB)
-    }
   }
 
   it should "dispatch ConvertCommand with dryRun = true" in {
@@ -325,16 +319,14 @@ class CommandExecutorTest extends CliTestSupport {
     // actually guaranteed (both files genuinely read) without coupling the
     // test to fetch-ahead scheduling.
     val streamedPaths = new java.util.concurrent.ConcurrentLinkedQueue[String]()
-    val repo          = new FakeParquetRepository() {
+    val repo          = new FakeParquetRepository():
       override def globStatus(location: StorageLocation): Try[List[StorageLocation]] =
         Success(List(LocalPath("/data/a.parquet"), LocalPath("/data/b.parquet")))
       override def streamContent(file: ParquetFile, config: ReadConfig)(
           process: Map[String, CellValue] => Unit
-      ): Try[Long] = {
+      ): Try[Long] =
         streamedPaths.add(file.location.path)
         super.streamContent(file, config)(process)
-      }
-    }
     val service = new ParquetService(repo)
     val code    = CommandExecutor.execute(
       ConvertCommand("/data/*.parquet", "/out.parquet"),
@@ -350,10 +342,9 @@ class CommandExecutorTest extends CliTestSupport {
     val tmpOut = java.nio.file.Files.createTempFile("parqueteer_convert_multi_", ".ndjson")
     java.nio.file.Files.delete(tmpOut)
     tmpOut.toFile.deleteOnExit()
-    val repo = new FakeParquetRepository() {
+    val repo = new FakeParquetRepository():
       override def globStatus(location: StorageLocation): Try[List[StorageLocation]] =
         Success(List(LocalPath("/data/a.parquet"), LocalPath("/data/b.parquet")))
-    }
     val service = new ParquetService(repo)
     val code    = CommandExecutor.execute(
       ConvertCommand("/data/*.parquet", tmpOut.toString),
@@ -366,10 +357,9 @@ class CommandExecutorTest extends CliTestSupport {
   }
 
   it should "reject a glob matching files with different extensions" in {
-    val repo = new FakeParquetRepository() {
+    val repo = new FakeParquetRepository():
       override def globStatus(location: StorageLocation): Try[List[StorageLocation]] =
         Success(List(LocalPath("/data/a.json"), LocalPath("/data/b.ndjson")))
-    }
     val service     = new ParquetService(repo)
     val (code, err) = captureStderr {
       CommandExecutor.execute(
@@ -428,10 +418,9 @@ class CommandExecutorTest extends CliTestSupport {
   }
 
   it should "expand a glob element in place, preserving the other literal paths" in {
-    val repo = new FakeParquetRepository() {
+    val repo = new FakeParquetRepository():
       override def globStatus(location: StorageLocation): Try[List[StorageLocation]] =
         Success(List(LocalPath("/data/2026-01.parquet"), LocalPath("/data/2026-02.parquet")))
-    }
     val service = new ParquetService(repo)
     CommandExecutor.resolveAllGlobs(
       service,
@@ -441,12 +430,11 @@ class CommandExecutorTest extends CliTestSupport {
   }
 
   it should "short-circuit with NoGlobMatch when one element matches nothing" in {
-    val repo = new FakeParquetRepository() {
+    val repo = new FakeParquetRepository():
       override def globStatus(location: StorageLocation): Try[List[StorageLocation]] =
         Success(List.empty)
-    }
     val service = new ParquetService(repo)
     CommandExecutor.resolveAllGlobs(service, List("/fixed.parquet", "/data/*.parquet")) shouldBe
       Left(ParqueteerError.NoGlobMatch("/data/*.parquet"))
   }
-}
+end CommandExecutorTest

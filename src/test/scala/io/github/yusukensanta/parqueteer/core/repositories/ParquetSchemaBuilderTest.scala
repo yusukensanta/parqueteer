@@ -9,7 +9,7 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import scala.jdk.CollectionConverters.*
 
-class ParquetSchemaBuilderTest extends AnyFlatSpec with Matchers {
+class ParquetSchemaBuilderTest extends AnyFlatSpec with Matchers:
 
   // Helper to get a field by name from a MessageType (avoids Scala 3 overload ambiguity)
   private def fieldByName(mt: MessageType, name: String) =
@@ -805,4 +805,4 @@ class ParquetSchemaBuilderTest extends AnyFlatSpec with Matchers {
     val mt = ParquetSchemaBuilder.inferSchemaFromRows(rows)
     fieldByName(mt, "x").getPrimitiveTypeName shouldBe PrimitiveTypeName.INT64
   }
-}
+end ParquetSchemaBuilderTest

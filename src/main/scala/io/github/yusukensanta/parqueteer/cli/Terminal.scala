@@ -1,7 +1,7 @@
 package io.github.yusukensanta.parqueteer.cli
 
 /** Terminal capability detection. */
-private[cli] object Terminal {
+private[cli] object Terminal:
 
   // Since JDK 22, System.console() always returns a non-null Console even when
   // streams are redirected/piped (JLine became the default provider) — the old
@@ -11,11 +11,9 @@ private[cli] object Terminal {
   // called directly; reflection lets it work correctly at runtime on any JDK.
   // On JDK <22, `console() != null` already meant a real terminal, so a missing
   // isTerminal() method (NoSuchMethodException) safely falls back to `true`.
-  private[cli] def isStdoutTTY: Boolean = {
+  private[cli] def isStdoutTTY: Boolean =
     val console = System.console()
     console != null && {
       try console.getClass.getMethod("isTerminal").invoke(console).asInstanceOf[Boolean]
       catch case _: NoSuchMethodException => true
     }
-  }
-}

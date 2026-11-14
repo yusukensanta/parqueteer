@@ -3,7 +3,7 @@ package io.github.yusukensanta.parqueteer.core.models
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-class NestedTypeTest extends AnyFlatSpec with Matchers {
+class NestedTypeTest extends AnyFlatSpec with Matchers:
 
   "NestedType.isNested" should "recognise STRUCT, MAP and LIST type names" in {
     NestedType.isNested("STRUCT<a:INT32>") shouldBe true
@@ -25,4 +25,3 @@ class NestedTypeTest extends AnyFlatSpec with Matchers {
     FieldSummary("s", "STRUCT<x:INT32>", isOptional = true).isNested shouldBe true
     FieldSummary("id", "INT64", isOptional = false).isNested shouldBe false
   }
-}

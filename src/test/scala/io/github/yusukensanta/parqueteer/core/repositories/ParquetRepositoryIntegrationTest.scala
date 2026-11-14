@@ -9,16 +9,15 @@ import java.nio.file.Files
 
 object IntegrationTest extends Tag("IntegrationTest")
 
-class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
+class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers:
 
   private val repo = new HadoopParquetRepository()
 
-  private def tempFile(): java.io.File = {
+  private def tempFile(): java.io.File =
     val f = Files.createTempFile("parqueteer_it_", ".parquet").toFile
     f.delete() // Hadoop refuses to overwrite existing files; free the path
     f.deleteOnExit()
     f
-  }
 
   private val sampleData: List[Map[String, CellValue]] = List(
     Map(
@@ -550,14 +549,12 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
     result.isSuccess shouldBe true
     val rows = result.get.rows
     rows should have length 2
-    rows.head("x") match {
+    rows.head("x") match
       case CellValue.F32(f) => f shouldBe 1.5f +- 0.001f
       case v                => fail(s"Expected CellValue.F32, got $v")
-    }
-    rows.head("y") match {
+    rows.head("y") match
       case CellValue.F32(f) => f shouldBe -2.5f +- 0.001f
       case v                => fail(s"Expected CellValue.F32, got $v")
-    }
   }
 
   it should "write and read back BOOLEAN values" taggedAs IntegrationTest in {
@@ -1356,13 +1353,12 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
   "ParquetRepository writer tuning" should "omit dictionary encodings when enableDictionary is false" taggedAs IntegrationTest in {
     // Repeated values so the writer would choose a dictionary if allowed.
     val rows = List.fill(200)(Map("name" -> CellValue.Str("same"), "id" -> CellValue.I64(1L)))
-    def encodingsWith(dictionary: Boolean): Set[String] = {
+    def encodingsWith(dictionary: Boolean): Set[String] =
       val loc = LocalPath(tempFile().getAbsolutePath)
       repo
         .writeContent(loc, rows, None, WriteConfig(enableDictionary = dictionary))
         .isSuccess shouldBe true
       repo.readFileInfo(ParquetFile(loc)).map(_._1).get.columns.flatMap(_.encodings).toSet
-    }
     encodingsWith(dictionary = true).exists(_.contains("DICTIONARY")) shouldBe true
     encodingsWith(dictionary = false).exists(_.contains("DICTIONARY")) shouldBe false
   }
@@ -1373,4 +1369,4 @@ class ParquetRepositoryIntegrationTest extends AnyFlatSpec with Matchers {
     repo.writeContent(loc, rows, None, WriteConfig(pageSize = 1024)).isSuccess shouldBe true
     repo.readContent(ParquetFile(loc), ReadConfig()).get.rows should have length 2000
   }
-}
+end ParquetRepositoryIntegrationTest

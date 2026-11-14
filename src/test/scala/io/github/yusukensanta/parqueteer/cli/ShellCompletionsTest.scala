@@ -3,7 +3,7 @@ package io.github.yusukensanta.parqueteer.cli
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-class ShellCompletionsTest extends AnyFlatSpec with Matchers {
+class ShellCompletionsTest extends AnyFlatSpec with Matchers:
 
   "ShellCompletions.bash" should "register completion function" in {
     ShellCompletions.bash should include("_parqueteer")
@@ -108,14 +108,14 @@ class ShellCompletionsTest extends AnyFlatSpec with Matchers {
 
   "Every completion script" should "offer every option of every command and every global option" in {
     val options = CliSpec.globalOptions ++ CliSpec.commands.flatMap(_.options)
-    for {
+    for
       (shell, script) <- scripts
       o               <- options
-    } withClue(s"$shell --${o.long}: ")(script should include(o.long))
+    do withClue(s"$shell --${o.long}: ")(script should include(o.long))
   }
 
   it should "offer every enum value the parser accepts" in {
-    for {
+    for
       (shell, script) <- scripts
       values          <- List(
         CliSpec.Choices.formats,
@@ -125,7 +125,7 @@ class ShellCompletionsTest extends AnyFlatSpec with Matchers {
         CliSpec.Choices.colors,
         CliSpec.Choices.shells
       )
-    } withClue(s"$shell: ")(script should include(values.mkString(" ")))
+    do withClue(s"$shell: ")(script should include(values.mkString(" ")))
   }
 
   "ShellCompletions.bash" should "be valid bash syntax" in {
@@ -139,4 +139,4 @@ class ShellCompletionsTest extends AnyFlatSpec with Matchers {
     val out = new String(proc.getInputStream.readAllBytes())
     withClue(out)(proc.waitFor() shouldBe 0)
   }
-}
+end ShellCompletionsTest

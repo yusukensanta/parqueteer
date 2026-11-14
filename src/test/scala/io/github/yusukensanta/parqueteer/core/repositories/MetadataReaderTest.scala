@@ -5,16 +5,15 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import java.nio.file.Files
 
-class MetadataReaderTest extends AnyFlatSpec with Matchers {
+class MetadataReaderTest extends AnyFlatSpec with Matchers:
 
   private val repo = new HadoopParquetRepository()
 
-  private def tempLocation(): LocalPath = {
+  private def tempLocation(): LocalPath =
     val f = Files.createTempFile("parqueteer_meta_", ".parquet").toFile
     f.delete() // Hadoop refuses to overwrite existing files; free the path
     f.deleteOnExit()
     LocalPath(f.getAbsolutePath)
-  }
 
   private val rows: List[Map[String, CellValue]] = List(
     Map("id" -> CellValue.I64(1L), "name" -> CellValue.Str("Alice")),
@@ -22,11 +21,10 @@ class MetadataReaderTest extends AnyFlatSpec with Matchers {
     Map("id" -> CellValue.I64(3L), "name" -> CellValue.Str("Carol"))
   )
 
-  private def written(compression: CompressionType = CompressionType.Snappy) = {
+  private def written(compression: CompressionType = CompressionType.Snappy) =
     val loc = tempLocation()
     repo.writeContent(loc, rows, None, WriteConfig(compressionType = compression)).get
     repo.readDetailedMetadata(ParquetFile(loc)).get -> loc
-  }
 
   "readDetailedMetadata" should "report file-level counts and size" in {
     val (report, loc) = written()
@@ -103,4 +101,4 @@ class MetadataReaderTest extends AnyFlatSpec with Matchers {
     f.toFile.deleteOnExit()
     repo.readDetailedMetadata(ParquetFile(LocalPath(f.toString))).isFailure shouldBe true
   }
-}
+end MetadataReaderTest

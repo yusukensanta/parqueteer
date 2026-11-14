@@ -4,7 +4,7 @@ import io.github.yusukensanta.parqueteer.core.models.*
 import io.github.yusukensanta.parqueteer.core.util.Eithers
 
 /** Path-string to [[StorageLocation]] parsing shared by the service collaborators. */
-private[services] object LocationParsing {
+private[services] object LocationParsing:
 
   def parseLocation(path: String): Either[ParqueteerError, StorageLocation] =
     StorageLocationParser
@@ -18,4 +18,3 @@ private[services] object LocationParsing {
    */
   def parseLocations(paths: List[String]): Either[ParqueteerError, Vector[StorageLocation]] =
     Eithers.traverse(paths)(parseLocation)
-}

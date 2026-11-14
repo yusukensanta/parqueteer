@@ -3,7 +3,7 @@ package io.github.yusukensanta.parqueteer.core.parsers
 import io.github.yusukensanta.parqueteer.core.models.CellValue
 import io.github.yusukensanta.parqueteer.core.util.Warnings
 
-object CsvParser {
+object CsvParser:
 
   def parse(content: String): List[Map[String, CellValue]] =
     parseStream(content).toList
@@ -21,22 +21,21 @@ object CsvParser {
       records: Iterator[Array[String]]
   ): Iterator[Map[String, CellValue]] =
     if !records.hasNext then Iterator.empty
-    else {
+    else
       val headers             = records.next()
       var trailingCommaWarned = false
       var rowNum              = 1
       records.map { values =>
         rowNum += 1
         val normalized =
-          if values.length == headers.length + 1 && values.last.isEmpty then {
-            if !trailingCommaWarned then {
+          if values.length == headers.length + 1 && values.last.isEmpty then
+            if !trailingCommaWarned then
               Warnings.emit(
                 s"CSV row $rowNum has a trailing comma — extra empty field ignored. Suppress with a consistent schema."
               )
               trailingCommaWarned = true
-            }
             values.init
-          } else values
+          else values
         if normalized.length != headers.length then
           throw new IllegalArgumentException(
             s"Row $rowNum has ${normalized.length} fields, expected ${headers.length}"
@@ -47,7 +46,6 @@ object CsvParser {
           }
         )
       }
-    }
 
   /**
    * Parses CSV rows from a line iterator (e.g. `Source.fromFile(path).getLines()`)
@@ -60,41 +58,38 @@ object CsvParser {
    * chunk of text.
    */
   def parseRecordsIncremental(lines: Iterator[String]): Iterator[Array[String]] =
-    new Iterator[Array[String]] {
+    new Iterator[Array[String]]:
       private var pending: List[Array[String]] = Nil
       private var carry: String                = ""
 
       private def fill(): Unit =
-        while pending.isEmpty && lines.hasNext do {
+        while pending.isEmpty && lines.hasNext do
           val line      = lines.next()
           val candidate = if carry.isEmpty then line else carry + "\n" + line
-          try {
+          try
             pending = parseRfc4180(candidate + "\n")
             carry = ""
-          } catch {
+          catch
             case e: IllegalArgumentException
                 if e.getMessage != null &&
                   e.getMessage.startsWith("Unterminated quoted field") =>
               carry = candidate
-          }
-        }
         // Input exhausted with an unresolved quoted field: no more lines will
         // arrive to close it, so surface the same error `parseRfc4180` would
         // raise for whole-content input, instead of silently dropping it.
         if pending.isEmpty && carry.nonEmpty && !lines.hasNext then parseRfc4180(carry + "\n"): Unit
 
-      def hasNext: Boolean = { fill(); pending.nonEmpty }
+      def hasNext: Boolean =
+        fill(); pending.nonEmpty
 
-      def next(): Array[String] = {
+      def next(): Array[String] =
         fill()
         if pending.isEmpty then throw new NoSuchElementException("next on empty iterator")
         val row = pending.head
         pending = pending.tail
         row
-      }
-    }
 
-  def parseRfc4180(content: String): List[Array[String]] = {
+  def parseRfc4180(content: String): List[Array[String]] =
     val records = scala.collection.mutable.ListBuffer.empty[Array[String]]
     val fields  = scala.collection.mutable.ArrayBuffer.empty[String]
     val current = new StringBuilder
@@ -104,16 +99,15 @@ object CsvParser {
     var i         = 0
     val n         = content.length
 
-    def finishRow(): Unit = {
+    def finishRow(): Unit =
       val row = (fields :+ current.toString).toArray
       current.clear()
       fields.clear()
       // A completely blank line produces exactly one empty field; skip it.
       if row.length > 1 || (row.length == 1 && row(0).nonEmpty) then records += row
-    }
 
-    while i < n do {
-      content(i) match {
+    while i < n do
+      content(i) match
         // RFC 4180: a quote is only meaningful at the start of a field
         case '"' if !inQuote && current.isEmpty =>
           inQuote = true
@@ -143,9 +137,9 @@ object CsvParser {
                 "use double-quotes to include quotes inside a field"
             )
           current.append(c)
-      }
+      end match
       i += 1
-    }
+    end while
     if inQuote then
       throw new IllegalArgumentException(
         "Unterminated quoted field in CSV input"
@@ -153,5 +147,5 @@ object CsvParser {
     // Handle content not terminated by a newline
     if current.nonEmpty || fields.nonEmpty then finishRow()
     records.toList
-  }
-}
+  end parseRfc4180
+end CsvParser

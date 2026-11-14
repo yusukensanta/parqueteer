@@ -17,7 +17,7 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import java.time.Instant
 
-class CliOutputFormatterTest extends AnyFlatSpec with Matchers {
+class CliOutputFormatterTest extends AnyFlatSpec with Matchers:
 
   // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -627,4 +627,4 @@ class CliOutputFormatterTest extends AnyFlatSpec with Matchers {
     val obj    = parse(result).toOption.get.asObject.get
     obj("count").get.asNumber.get.toLong.get shouldBe 0L
   }
-}
+end CliOutputFormatterTest

@@ -4,7 +4,7 @@ import io.github.yusukensanta.parqueteer.core.models.GlobalOptions
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-class ConfigCommandRendererTest extends AnyFlatSpec with Matchers {
+class ConfigCommandRendererTest extends AnyFlatSpec with Matchers:
 
   "ConfigCommandRenderer.render" should "return 0 for config display in quiet mode" in {
     val cmd  = ConfigCommand(validate = false)
@@ -29,4 +29,3 @@ class ConfigCommandRendererTest extends AnyFlatSpec with Matchers {
     val opts = GlobalOptions(configPath = Some("/nonexistent/path/config.yaml"))
     ConfigCommandRenderer.render(cmd, opts) shouldBe 0
   }
-}

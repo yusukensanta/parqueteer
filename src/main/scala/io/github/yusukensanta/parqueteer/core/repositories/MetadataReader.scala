@@ -14,14 +14,14 @@ import scala.jdk.CollectionConverters.*
  * Separate from HadoopParquetRepository so it can be tested against
  * in-memory footers without any file system involved.
  */
-private[repositories] object MetadataReader {
+private[repositories] object MetadataReader:
 
   def build(
       footer: FooterInfo,
       fileSize: Long,
       modifiedAt: Option[Instant],
       raw: Option[format.FileMetaData] = None
-  ): ParquetMetadataReport = {
+  ): ParquetMetadataReport =
     val descriptors = footer.schema.getColumns.asScala.toList
     ParquetMetadataReport(
       file = FileDetail(
@@ -48,9 +48,10 @@ private[repositories] object MetadataReader {
       schemaTree = Some(SchemaTypeReader.tree(footer.schema)),
       extended = raw.map(extendedFile)
     )
-  }
 
-  private def columnSchema(root: MessageType, col: ColumnDescriptor): ColumnSchemaDetail = {
+  end build
+
+  private def columnSchema(root: MessageType, col: ColumnDescriptor): ColumnSchemaDetail =
     val pt = col.getPrimitiveType
     ColumnSchemaDetail(
       path = col.getPath.mkString("."),
@@ -64,14 +65,13 @@ private[repositories] object MetadataReader {
       fieldId = Option(pt.getId).map(_.intValue),
       groups = SchemaTypeReader.groupsAbove(root, col.getPath)
     )
-  }
 
   private def rowGroup(
       block: BlockMetaData,
       index: Int,
       rawGroup: Option[format.RowGroup],
       descriptors: List[ColumnDescriptor]
-  ): RowGroupDetail = {
+  ): RowGroupDetail =
     val chunks = block.getColumns.asScala.toList
     RowGroupDetail(
       index = index,
@@ -87,12 +87,11 @@ private[repositories] object MetadataReader {
       },
       extended = rawGroup.map(extendedRowGroup(block, _, descriptors))
     )
-  }
 
   private def columnChunk(
       chunk: ColumnChunkMetaData,
       rawChunk: Option[format.ColumnChunk]
-  ): ColumnChunkDetail = {
+  ): ColumnChunkDetail =
     val stats                = Option(chunk.getStatistics)
     val (minValue, maxValue) = stats
       .filter(s => !s.isEmpty && s.hasNonNullValue)
@@ -121,7 +120,8 @@ private[repositories] object MetadataReader {
       hasOffsetIndex = chunk.getOffsetIndexReference != null,
       extended = rawChunk.map(rc => extendedChunk(chunk, Option(rc.getMeta_data)))
     )
-  }
+
+  end columnChunk
 
   private def extendedFile(raw: format.FileMetaData): ExtendedFileDetail =
     ExtendedFileDetail(
@@ -159,7 +159,7 @@ private[repositories] object MetadataReader {
   private def extendedChunk(
       chunk: ColumnChunkMetaData,
       rawMeta: Option[format.ColumnMetaData]
-  ): ExtendedChunkDetail = {
+  ): ExtendedChunkDetail =
     val encStats = Option(chunk.getEncodingStats)
     def counts(
         encodings: EncodingStats => java.util.Set[Encoding],
@@ -200,5 +200,5 @@ private[repositories] object MetadataReader {
       },
       isEncrypted = chunk.isEncrypted
     )
-  }
-}
+  end extendedChunk
+end MetadataReader

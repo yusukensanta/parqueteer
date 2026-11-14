@@ -9,7 +9,7 @@ import org.scalatest.matchers.should.Matchers
 import java.nio.file.AccessDeniedException
 import scala.util.{Failure, Success}
 
-class HadoopConfigProviderTest extends AnyFlatSpec with Matchers {
+class HadoopConfigProviderTest extends AnyFlatSpec with Matchers:
 
   private def provider() = new HadoopConfigProvider(None, None, None)
 
@@ -97,4 +97,4 @@ class HadoopConfigProviderTest extends AnyFlatSpec with Matchers {
     val result = provider().withConfig(AzureLocation("acct", "ctr", "x.parquet"))(_ => Failure(a))
     result shouldBe Failure(a)
   }
-}
+end HadoopConfigProviderTest

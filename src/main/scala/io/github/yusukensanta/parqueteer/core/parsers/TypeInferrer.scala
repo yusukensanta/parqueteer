@@ -6,7 +6,7 @@ import java.time.{Instant, LocalDate, LocalDateTime, ZoneOffset}
 import java.util.concurrent.atomic.AtomicBoolean
 import scala.util.Try
 
-object TypeInferrer {
+object TypeInferrer:
   private val spaceTsWarnOnce = new AtomicBoolean(false)
 
   private val IntPattern = raw"-?\d+".r.pattern
@@ -22,7 +22,7 @@ object TypeInferrer {
    * Infer a typed CellValue from a raw CSV string. Order: Boolean > Date >
    * Timestamp > Decimal > Long > String.
    */
-  def inferCsvValue(raw: String): CellValue = {
+  def inferCsvValue(raw: String): CellValue =
     val s = raw.trim
     if s.isEmpty then CellValue.Null
     else if s.equalsIgnoreCase("true") then CellValue.Bool(true)
@@ -51,7 +51,6 @@ object TypeInferrer {
       then CellValue.Str(s)
       else Try(s.toLong).map(CellValue.I64.apply).getOrElse(CellValue.Str(s))
     else CellValue.Str(s)
-  }
 
   /**
    * Infer date/timestamp from a JSON string value. JSON numbers are already
@@ -80,4 +79,4 @@ object TypeInferrer {
           )
         inst
       })
-}
+end TypeInferrer

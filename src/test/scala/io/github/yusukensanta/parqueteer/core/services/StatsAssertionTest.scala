@@ -5,7 +5,7 @@ import io.github.yusukensanta.parqueteer.core.services.StatsAssertion.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-class StatsAssertionTest extends AnyFlatSpec with Matchers {
+class StatsAssertionTest extends AnyFlatSpec with Matchers:
 
   private val stats = FileStats(
     columns = List(
@@ -94,4 +94,4 @@ class StatsAssertionTest extends AnyFlatSpec with Matchers {
     r.ok shouldBe false
     r.detail should include("quote the expected value")
   }
-}
+end StatsAssertionTest

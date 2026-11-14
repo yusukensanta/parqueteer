@@ -17,7 +17,7 @@ import java.time.{Instant, LocalDate}
  * the winner. Min/max is always chosen on the typed values and rendered only
  * afterwards, so ordering never depends on the display text.
  */
-object StatsComputer {
+object StatsComputer:
 
   /**
    * @param extract the typed value of a raw statistic, or no match to skip it
@@ -39,7 +39,7 @@ object StatsComputer {
   private[repositories] def minMax[T](
       withValues: List[Statistics[?]],
       codec: StatCodec[T]
-  ): (Option[String], Option[String]) = {
+  ): (Option[String], Option[String]) =
     given Ordering[T]                               = codec.ordering
     def values(side: Statistics[?] => Any): List[T] =
       withValues.flatMap(s => Option(side(s)).collect(codec.extract))
@@ -47,13 +47,12 @@ object StatsComputer {
       values(_.genericGetMin()).minOption.map(codec.render),
       values(_.genericGetMax()).maxOption.map(codec.render)
     )
-  }
 
   private[repositories] def codecFor(
       typeName: PrimitiveTypeName,
       logicalType: LogicalTypeAnnotation
   ): StatCodec[?] =
-    logicalType match {
+    logicalType match
       case _: DateLogicalTypeAnnotation =>
         StatCodec(int32, d => LocalDate.ofEpochDay(d.toLong).toString)
       case ts: TimestampLogicalTypeAnnotation =>
@@ -61,7 +60,7 @@ object StatsComputer {
       case dec: DecimalLogicalTypeAnnotation =>
         decimalCodec(typeName, dec.getScale)
       case _ =>
-        typeName match {
+        typeName match
           case PrimitiveTypeName.INT32   => StatCodec(int32, _.toString)
           case PrimitiveTypeName.INT64   => StatCodec(int64, _.toString)
           case PrimitiveTypeName.FLOAT   => StatCodec(float32, _.toString)
@@ -70,13 +69,11 @@ object StatsComputer {
           case PrimitiveTypeName.INT96 => StatCodec(int96Instant, _.toString)(using instantOrdering)
           case _                       => // BINARY, FIXED_LEN_BYTE_ARRAY
             StatCodec(binary, _.toStringUsingUTF8)(using unsignedBinaryOrdering)
-        }
-    }
 
-  private def decimalCodec(typeName: PrimitiveTypeName, scale: Int): StatCodec[?] = {
+  private def decimalCodec(typeName: PrimitiveTypeName, scale: Int): StatCodec[?] =
     def scaled(unscaled: java.math.BigInteger): String =
       new java.math.BigDecimal(unscaled, scale).toPlainString
-    typeName match {
+    typeName match
       case PrimitiveTypeName.INT32 =>
         StatCodec(int32, v => scaled(java.math.BigInteger.valueOf(v.toLong)))
       case PrimitiveTypeName.INT64 =>
@@ -88,8 +85,6 @@ object StatsComputer {
           },
           _.underlying.toPlainString
         )
-    }
-  }
 
   // ── Raw statistic extractors ────────────────────────────────────────────
 
@@ -112,10 +107,9 @@ object StatsComputer {
 
   private val int96Instant: PartialFunction[Any, Instant] = Function.unlift {
     case b: Binary if b.length() == 12 =>
-      ParquetRecordDecoder.decodeInt96Binary(b.getBytes) match {
+      ParquetRecordDecoder.decodeInt96Binary(b.getBytes) match
         case CellValue.Ts(instant) => Some(instant)
         case _                     => None
-      }
     case _ => None
   }
 
@@ -130,7 +124,7 @@ object StatsComputer {
     (a, b) => java.util.Arrays.compareUnsigned(a.getBytes, b.getBytes)
 
   private def instantOf(value: Long, unit: LogicalTypeAnnotation.TimeUnit): Instant =
-    unit match {
+    unit match
       case LogicalTypeAnnotation.TimeUnit.MICROS =>
         Instant.ofEpochSecond(
           Math.floorDiv(value, 1_000_000L),
@@ -142,5 +136,4 @@ object StatsComputer {
           Math.floorMod(value, 1_000_000_000L)
         )
       case _ => Instant.ofEpochMilli(value)
-    }
-}
+end StatsComputer

@@ -3,7 +3,7 @@ package io.github.yusukensanta.parqueteer.cli
 import io.github.yusukensanta.parqueteer.core.models.*
 import org.scalatest.flatspec.AnyFlatSpec
 
-class CommandSupportTest extends CliTestSupport {
+class CommandSupportTest extends CliTestSupport:
 
   // ── reportError ────────────────────────────────────────────────────────
 
@@ -167,4 +167,4 @@ class CommandSupportTest extends CliTestSupport {
     }
     err should include("--schema-mode has no effect")
   }
-}
+end CommandSupportTest

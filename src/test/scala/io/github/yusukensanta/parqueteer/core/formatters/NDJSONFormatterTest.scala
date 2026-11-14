@@ -10,7 +10,7 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import io.circe.parser.*
 
-class NDJSONFormatterTest extends AnyFlatSpec with Matchers {
+class NDJSONFormatterTest extends AnyFlatSpec with Matchers:
 
   private val formatter = new NDJSONFormatter()
 
@@ -27,10 +27,9 @@ class NDJSONFormatterTest extends AnyFlatSpec with Matchers {
     val lines  = result.split("\n").filter(_.nonEmpty)
     lines should have length 2
     lines.foreach { line =>
-      parse(line) match {
+      parse(line) match
         case Right(_) => succeed
         case Left(e)  => fail(s"Line is not valid JSON: $line — $e")
-      }
     }
   }
 
@@ -58,11 +57,10 @@ class NDJSONFormatterTest extends AnyFlatSpec with Matchers {
     val result = formatter.formatContent(content, None)
     result should endWith("\n")
     result.split("\n", -1).init.foreach { line =>
-      parse(line) match {
+      parse(line) match
         case Right(_) => succeed
         case Left(e)  =>
           fail(s"Non-empty line between newlines is not valid JSON: $line — $e")
-      }
     }
   }
 
@@ -81,4 +79,4 @@ class NDJSONFormatterTest extends AnyFlatSpec with Matchers {
     result should include("INT64")
     result should include("BINARY")
   }
-}
+end NDJSONFormatterTest

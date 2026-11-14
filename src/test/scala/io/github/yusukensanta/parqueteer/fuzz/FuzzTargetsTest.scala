@@ -9,7 +9,7 @@ import java.lang.reflect.Modifier
  * class that exposes `public static fuzzerTestOneInput(byte[])`, and each target
  * must survive empty, malformed and hostile input without throwing.
  */
-class FuzzTargetsTest extends AnyFlatSpec with Matchers {
+class FuzzTargetsTest extends AnyFlatSpec with Matchers:
 
   private val targets = List(
     "io.github.yusukensanta.parqueteer.fuzz.FilterParserFuzzer",
@@ -44,4 +44,4 @@ class FuzzTargetsTest extends AnyFlatSpec with Matchers {
       inputs.foreach(in => m.invoke(null, in))
     }
   }
-}
+end FuzzTargetsTest

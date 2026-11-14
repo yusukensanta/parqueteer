@@ -15,7 +15,7 @@ import scala.collection.immutable.VectorMap
  * under a SchemaMode, and diffing two schemas. Kept free of I/O so it can be
  * tested without a repository.
  */
-private[services] object SchemaReconciler {
+private[services] object SchemaReconciler:
 
   /**
    * Combine per-file schemas under the chosen strategy:
@@ -29,23 +29,22 @@ private[services] object SchemaReconciler {
       schemas: Vector[List[FieldSummary]],
       paths: List[String],
       mode: SchemaMode
-  ): Either[ParqueteerError, List[FieldSummary]] = mode match {
+  ): Either[ParqueteerError, List[FieldSummary]] = mode match
     case SchemaMode.Strict => strict(schemas, paths)
     case SchemaMode.Union  => union(schemas, paths)
-  }
 
   private def strict(
       schemas: Vector[List[FieldSummary]],
       paths: List[String]
   ): Either[ParqueteerError, List[FieldSummary]] =
-    schemas.headOption match {
+    schemas.headOption match
       case None        => Right(Nil)
       case Some(first) =>
         val expected = first.toSet
         // .view keeps this lazy so the scan stops at the first mismatching file.
         schemas.view.zipWithIndex
           .map { case (s, i) => (i, s.toSet) }
-          .collectFirst { case (i, actual) if actual != expected => (i, actual) } match {
+          .collectFirst { case (i, actual) if actual != expected => (i, actual) } match
           case Some((i, actual)) =>
             Left(
               ParqueteerError.SchemaMismatch(
@@ -54,8 +53,6 @@ private[services] object SchemaReconciler {
               )
             )
           case None => Right(first)
-        }
-    }
 
   // Column name -> (dataType, required in every input so far). VectorMap keeps
   // first-seen column order, and `updated` on an existing key keeps its slot.
@@ -70,10 +67,10 @@ private[services] object SchemaReconciler {
         case (acc, (fields, fileIdx)) =>
           acc.flatMap { seen =>
             val path = paths(fileIdx)
-            for {
+            for
               _ <- requireUniqueNames(fields, path)
               _ <- requireCompatibleTypes(fields, seen, path)
-            } yield absorb(seen, fields, isFirstFile = fileIdx == 0)
+            yield absorb(seen, fields, isFirstFile = fileIdx == 0)
           }
       }
       .map(_.map { case (name, (dataType, required)) =>
@@ -83,7 +80,7 @@ private[services] object SchemaReconciler {
   private def requireUniqueNames(
       fields: List[FieldSummary],
       path: String
-  ): Either[ParqueteerError, Unit] = {
+  ): Either[ParqueteerError, Unit] =
     val duplicates =
       fields.groupBy(_.name).collect { case (n, fs) if fs.size > 1 => n }.toList.sorted
     if duplicates.isEmpty then Right(())
@@ -95,13 +92,12 @@ private[services] object SchemaReconciler {
             "Parquet files with duplicate column names cannot be merged."
         )
       )
-  }
 
   private def requireCompatibleTypes(
       fields: List[FieldSummary],
       seen: Seen,
       path: String
-  ): Either[ParqueteerError, Unit] = {
+  ): Either[ParqueteerError, Unit] =
     val conflicts = fields.flatMap { f =>
       seen.get(f.name).collect {
         case (dt, _) if dt != f.dataType => s"'${f.name}' ($dt vs ${f.dataType})"
@@ -116,27 +112,24 @@ private[services] object SchemaReconciler {
             "Cannot union-merge columns with incompatible types."
         )
       )
-  }
 
   /** Folds one file's fields into `seen`, downgrading requiredness as needed. */
-  private def absorb(seen: Seen, fields: List[FieldSummary], isFirstFile: Boolean): Seen = {
+  private def absorb(seen: Seen, fields: List[FieldSummary], isFirstFile: Boolean): Seen =
     val present = fields.iterator.map(_.name).toSet
     // A column seen earlier but absent from this file must become optional.
     val withAbsent: Seen = seen.map { case (name, (dt, required)) =>
       name -> (dt, required && present(name))
     }
     fields.foldLeft(withAbsent) { (acc, f) =>
-      acc.get(f.name) match {
+      acc.get(f.name) match
         case Some((dt, required)) => acc.updated(f.name, (dt, required && !f.isOptional))
         // A column first seen in a later file was absent from earlier files,
         // so it is required only if it comes from the first file.
         case None => acc.updated(f.name, (f.dataType, isFirstFile && !f.isOptional))
-      }
     }
-  }
 
   /** Human-readable summary of how `actual` differs from `expected`. */
-  def describeMismatch(expected: Set[FieldSummary], actual: Set[FieldSummary]): String = {
+  def describeMismatch(expected: Set[FieldSummary], actual: Set[FieldSummary]): String =
     val missing                      = expected -- actual
     val extra                        = actual -- expected
     val missingNames                 = missing.map(_.name)
@@ -146,10 +139,10 @@ private[services] object SchemaReconciler {
     val onlyExtraNames               = extraNames -- changedNames
     def fmt(f: FieldSummary): String = if f.isOptional then s"${f.dataType}?" else f.dataType
     val changedDetails               = changedNames.toList.sorted.flatMap { name =>
-      for {
+      for
         from <- missing.find(_.name == name)
         to   <- extra.find(_.name == name)
-      } yield s"$name (${fmt(from)} → ${fmt(to)})"
+      yield s"$name (${fmt(from)} → ${fmt(to)})"
     }
     List(
       Option.when(changedNames.nonEmpty)(
@@ -160,10 +153,9 @@ private[services] object SchemaReconciler {
       ),
       Option.when(onlyExtraNames.nonEmpty)(s"extra: ${onlyExtraNames.toList.sorted.mkString(", ")}")
     ).flatten.mkString("; ")
-  }
 
   /** Column-level diff of `cols2` against `cols1` (matched by name). */
-  def diff(cols1: List[ColumnInfo], cols2: List[ColumnInfo]): SchemaDiff = {
+  def diff(cols1: List[ColumnInfo], cols2: List[ColumnInfo]): SchemaDiff =
     val byName1                                          = cols1.map(c => c.name -> c).toMap
     val byName2                                          = cols2.map(c => c.name -> c).toMap
     def sameShape(a: ColumnInfo, b: ColumnInfo): Boolean =
@@ -180,5 +172,4 @@ private[services] object SchemaReconciler {
       case c if byName2.get(c.name).exists(sameShape(c, _)) => c.name
     }
     SchemaDiff(added, removed, changed, unchanged)
-  }
-}
+end SchemaReconciler

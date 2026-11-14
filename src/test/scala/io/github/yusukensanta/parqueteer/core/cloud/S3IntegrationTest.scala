@@ -28,7 +28,7 @@ object S3IntegrationTest extends Tag("S3IntegrationTest")
  *
  * All tests are skipped when these vars are absent.
  */
-class S3IntegrationTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
+class S3IntegrationTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll:
 
   private val endpoint   = sys.env.get("AWS_ENDPOINT_URL")
   private val accessKey  = sys.env.getOrElse("AWS_ACCESS_KEY_ID", "")
@@ -67,16 +67,15 @@ class S3IntegrationTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll
   )
 
   override def beforeAll(): Unit =
-    if endpoint.isDefined then {
+    if endpoint.isDefined then
       Try(
         s3Client.createBucket(
           CreateBucketRequest.builder().bucket(testBucket).build()
         )
       )
-    }
 
   override def afterAll(): Unit =
-    if endpoint.isDefined then {
+    if endpoint.isDefined then
       Try {
         val objects = s3Client
           .listObjectsV2(
@@ -97,7 +96,6 @@ class S3IntegrationTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll
           DeleteBucketRequest.builder().bucket(testBucket).build()
         )
       }
-    }
 
   private def assumeS3Available(): Unit =
     assume(
@@ -207,4 +205,4 @@ class S3IntegrationTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll
     content.rows should have length 2
     content.isPartial shouldBe true
   }
-}
+end S3IntegrationTest

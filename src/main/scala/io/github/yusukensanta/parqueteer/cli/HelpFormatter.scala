@@ -7,7 +7,7 @@ import CliSpec.OptSpec
  * here; every OPTIONS section is rendered from the parser via CliSpec, so a
  * flag can't be added to the parser and forgotten in its help.
  */
-object HelpFormatter {
+object HelpFormatter:
 
   private val HelpWidth = 100
 
@@ -18,31 +18,28 @@ object HelpFormatter {
     renderOptions(CliSpec.command(command).fold(Nil)(_.options) :+ helpOption)
 
   /** Two aligned columns, descriptions word-wrapped to HelpWidth with a hanging indent. */
-  private[cli] def renderOptions(options: List[OptSpec]): String = {
+  private[cli] def renderOptions(options: List[OptSpec]): String =
     def flags(o: OptSpec): String =
       o.short.fold("    ")(c => s"-$c, ") + s"--${o.long}" + o.valueName.fold("")(v => s" $v")
     val column = options.map(flags(_).length).maxOption.getOrElse(0) + 3
     options
       .map(o => wrap(s"  ${flags(o).padTo(column, ' ')}", o.text, indent = 2 + column))
       .mkString("\n")
-  }
 
-  private def wrap(prefix: String, text: String, indent: Int): String = {
+  private def wrap(prefix: String, text: String, indent: Int): String =
     val lines = scala.collection.mutable.ListBuffer(new StringBuilder(prefix))
     // A quoted example ('rows > 0') is kept on one line.
     """'[^']*'\S*|\S+""".r.findAllIn(text).foreach { word =>
       val line = lines.last
       if line.length > indent && line.length + 1 + word.length > HelpWidth then
         lines += new StringBuilder(" " * indent).append(word)
-      else {
+      else
         if line.length > indent then line.append(' ')
         line.append(word)
-      }
     }
     lines.map(_.toString).mkString("\n")
-  }
 
-  def subcommandHelp(command: String): Option[String] = command match {
+  def subcommandHelp(command: String): Option[String] = command match
     case "read"        => Some(readHelp())
     case "info"        => Some(infoHelp())
     case "write"       => Some(writeHelp())
@@ -57,7 +54,6 @@ object HelpFormatter {
     case "completions" => Some(completionsHelp())
     case "config"      => Some(configHelp())
     case _             => None
-  }
 
   private def readHelp(): String =
     s"""parqueteer read - Display parquet file content
@@ -377,4 +373,4 @@ ${renderOptions(CliSpec.globalOptions)}
        |  parqueteer stats data.parquet
        |  parqueteer schema diff old.parquet new.parquet
        |""".stripMargin
-}
+end HelpFormatter

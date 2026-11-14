@@ -5,7 +5,7 @@ import io.circe.Json
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-class JsonEncoderTest extends AnyFlatSpec with Matchers {
+class JsonEncoderTest extends AnyFlatSpec with Matchers:
 
   "JsonEncoder.encode" should "encode CellValue.Null as Json.Null" in {
     JsonEncoder.encode(CellValue.Null) shouldBe Json.Null
@@ -102,4 +102,4 @@ class JsonEncoderTest extends AnyFlatSpec with Matchers {
       instant.toString
     )
   }
-}
+end JsonEncoderTest

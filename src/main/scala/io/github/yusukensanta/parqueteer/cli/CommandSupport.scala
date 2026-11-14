@@ -4,19 +4,19 @@ import io.github.yusukensanta.parqueteer.core.models.*
 import io.github.yusukensanta.parqueteer.core.util.CredentialRedactor
 
 /** Error reporting and output-path checks shared by every command handler. */
-private[cli] object CommandSupport {
+private[cli] object CommandSupport:
 
   private[cli] def reportError(
       prefix: String,
       opts: GlobalOptions,
       hint: Option[String] = None
-  )(error: ParqueteerError): Int = {
+  )(error: ParqueteerError): Int =
     System.err.println(
       s"$prefix: ${CredentialRedactor.redact(error.userMessage)}"
     )
     hint.foreach(System.err.println)
     if opts.verbose then
-      error match {
+      error match
         case ParqueteerError.IOError(cause) =>
           System.err.println(
             s"[verbose] ${CredentialRedactor.redactThrowable(cause)}"
@@ -27,9 +27,7 @@ private[cli] object CommandSupport {
         case ParqueteerError.CloudAuthError(_, _, Some(detail)) =>
           System.err.println(s"[verbose] ${CredentialRedactor.redact(detail)}")
         case _ => ()
-      }
     error.exitCode
-  }
 
   private[cli] def warnIfSchemaModeNoop(
       schemaMode: SchemaMode,
@@ -44,7 +42,7 @@ private[cli] object CommandSupport {
       outputPath: String
   ): Either[ParqueteerError, Unit] =
     if StorageLocationParser.hasCloudScheme(outputPath) then Right(())
-    else {
+    else
       val parent = java.nio.file.Paths.get(outputPath).toAbsolutePath.getParent
       // Files.isWritable performs a real access() check via the filesystem
       // provider and respects POSIX ACLs; java.io.File#canWrite does not.
@@ -61,5 +59,4 @@ private[cli] object CommandSupport {
           )
         )
       else Right(())
-    }
-}
+end CommandSupport

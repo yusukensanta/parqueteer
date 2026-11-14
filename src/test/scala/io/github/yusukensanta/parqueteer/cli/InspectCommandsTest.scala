@@ -5,7 +5,7 @@ import org.scalatest.flatspec.AnyFlatSpec
 import java.io.{ByteArrayOutputStream, PrintStream}
 import scala.util.{Success, Try}
 
-class InspectCommandsTest extends CliTestSupport {
+class InspectCommandsTest extends CliTestSupport:
 
   // ── executeInfo ────────────────────────────────────────────────────────
 
@@ -75,15 +75,13 @@ class InspectCommandsTest extends CliTestSupport {
 
   it should "pass --extended through to the repository" in {
     var seen: Option[Boolean] = None
-    val repo                  = new FakeParquetRepository() {
+    val repo                  = new FakeParquetRepository():
       override def readDetailedMetadata(
           file: ParquetFile,
           options: MetadataOptions
-      ): Try[ParquetMetadataReport] = {
+      ): Try[ParquetMetadataReport] =
         seen = Some(options.extended)
         super.readDetailedMetadata(file, options)
-      }
-    }
     InspectCommands.executeMetadata(
       newService(repo),
       MetadataCommand("/tmp/test.parquet", OutputFormat.Table, extended = true),
@@ -235,18 +233,16 @@ class InspectCommandsTest extends CliTestSupport {
 
   // ── validate --expect-schema ─────────────────────────────────────────────
 
-  private def contractFile(json: String): String = {
+  private def contractFile(json: String): String =
     val f = java.nio.file.Files.createTempFile("parqueteer_contract_", ".json")
     f.toFile.deleteOnExit()
     java.nio.file.Files.writeString(f, json)
     f.toString
-  }
 
-  private def captureStdout[A](block: => A): (A, String) = {
+  private def captureStdout[A](block: => A): (A, String) =
     val out    = new ByteArrayOutputStream()
     val result = Console.withOut(new PrintStream(out))(block)
     (result, out.toString("UTF-8"))
-  }
 
   private val matchingContract =
     """{"columns": [{"name": "id", "dataType": "INT64", "optional": false}]}"""
@@ -418,4 +414,4 @@ class InspectCommandsTest extends CliTestSupport {
       quietOpts
     ) shouldBe 0
   }
-}
+end InspectCommandsTest

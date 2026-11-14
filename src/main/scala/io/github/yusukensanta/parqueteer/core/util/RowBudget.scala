@@ -8,7 +8,7 @@ package io.github.yusukensanta.parqueteer.core.util
  * Not thread-safe: it must be consumed by one read at a time, in file order,
  * which is also why limited multi-file reads can't prefetch ahead.
  */
-final class RowBudget(limit: Option[Long]) {
+final class RowBudget(limit: Option[Long]):
   private var remaining: Option[Long] = limit
 
   /** The row limit for the next read: whatever is left, or None if unlimited. */
@@ -18,4 +18,3 @@ final class RowBudget(limit: Option[Long]) {
 
   def consume(rows: Long): Unit =
     remaining = remaining.map(r => (r - rows).max(0L))
-}

@@ -1,6 +1,6 @@
 package io.github.yusukensanta.parqueteer.core.util
 
-object SizeParser {
+object SizeParser:
 
   private val units = Map(
     "B"  -> 1L,
@@ -20,7 +20,7 @@ object SizeParser {
     """(\d+(?:\.\d+)?)\s*(T(?:B)?|G(?:B)?|M(?:B)?|K(?:B)?|B)?""".r
 
   def parse(sizeStr: String): Long =
-    sizeStr.trim.toUpperCase match {
+    sizeStr.trim.toUpperCase match
       case pattern(size, unit) =>
         val multiplier = units.getOrElse(Option(unit).getOrElse("B"), 1L)
         val bytes      = BigDecimal(size) * multiplier
@@ -42,5 +42,4 @@ object SizeParser {
         throw new IllegalArgumentException(
           s"Invalid size format: $sizeStr. Expected format: <number>[unit] (e.g., 128MB, 128M, 1.5GB, 134217728)"
         )
-    }
-}
+end SizeParser

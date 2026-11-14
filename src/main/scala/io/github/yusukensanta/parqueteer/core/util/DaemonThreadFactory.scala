@@ -8,12 +8,10 @@ import java.util.concurrent.atomic.AtomicInteger
  * worker pool that isn't shut down (e.g. on an uncaught error) can never keep
  * the CLI's JVM alive after main returns.
  */
-final class DaemonThreadFactory(prefix: String) extends ThreadFactory {
+final class DaemonThreadFactory(prefix: String) extends ThreadFactory:
   private val counter = new AtomicInteger(0)
 
-  override def newThread(r: Runnable): Thread = {
+  override def newThread(r: Runnable): Thread =
     val t = new Thread(r, s"$prefix-${counter.getAndIncrement()}")
     t.setDaemon(true)
     t
-  }
-}

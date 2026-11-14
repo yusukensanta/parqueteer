@@ -24,7 +24,7 @@ import java.util.concurrent.{ArrayBlockingQueue, Executors}
  * a partial result from a missing file would be silently wrong data, not a
  * best-effort report.
  */
-object RowPipeline {
+object RowPipeline:
 
   sealed private trait Event[+E]
   private case class RowEvent(row: Map[String, CellValue]) extends Event[Nothing]
@@ -50,32 +50,30 @@ object RowPipeline {
       queueCapacity: Int
   )(
       fetchOne: (A, Map[String, CellValue] => Unit) => Either[E, Long]
-  )(consume: Map[String, CellValue] => Unit): Either[E, Long] = {
+  )(consume: Map[String, CellValue] => Unit): Either[E, Long] =
     val pool = Executors.newFixedThreadPool(
       parallelism.min(items.size),
       new DaemonThreadFactory("parqueteer-file-fetch-ahead")
     )
     val queues: Vector[ArrayBlockingQueue[Event[E]]] =
       Vector.fill(items.size)(new ArrayBlockingQueue[Event[E]](queueCapacity))
-    try {
+    try
       items.zipWithIndex.foreach { case (item, idx) =>
         pool.execute { () =>
-          fetchOne(item, row => queues(idx).put(RowEvent(row))) match {
+          fetchOne(item, row => queues(idx).put(RowEvent(row))) match
             case Right(n)  => queues(idx).put(DoneEvent(n))
             case Left(err) => queues(idx).put(ErrorEvent(err))
-          }
         }
       }
       var total              = 0L
       var idx                = 0
       var failure: Option[E] = None
       while idx < items.size && failure.isEmpty do
-        queues(idx).take() match {
+        queues(idx).take() match
           case RowEvent(row)   => consume(row)
           case DoneEvent(n)    => total += n; idx += 1
           case ErrorEvent(err) => failure = Some(err)
-        }
       failure.toLeft(total)
-    } finally pool.shutdownNow()
-  }
-}
+    finally pool.shutdownNow()
+  end runPipelined
+end RowPipeline

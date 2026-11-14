@@ -5,7 +5,7 @@ import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 import org.scalacheck.Gen
 
-class CredentialRedactorTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks {
+class CredentialRedactorTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks:
 
   "CredentialRedactor.redact" should "redact Authorization header value" in {
     val input = "Authorization: Bearer eyJhbGciOiJSUzI1NiJ9.secret"
@@ -374,4 +374,4 @@ class CredentialRedactorTest extends AnyFlatSpec with Matchers with ScalaCheckPr
     val result = CredentialRedactor.redact(input)
     result shouldBe input
   }
-}
+end CredentialRedactorTest

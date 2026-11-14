@@ -3,7 +3,7 @@ package io.github.yusukensanta.parqueteer.core.util
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-class BoundedWarnSetTest extends AnyFlatSpec with Matchers {
+class BoundedWarnSetTest extends AnyFlatSpec with Matchers:
 
   "BoundedWarnSet" should "add new keys and return true" in {
     val set = BoundedWarnSet(100)
@@ -37,4 +37,4 @@ class BoundedWarnSetTest extends AnyFlatSpec with Matchers {
     set.add("key") shouldBe true
     set.add("key") shouldBe false
   }
-}
+end BoundedWarnSetTest

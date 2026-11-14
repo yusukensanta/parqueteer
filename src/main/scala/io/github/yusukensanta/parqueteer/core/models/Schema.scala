@@ -34,11 +34,10 @@ case class GroupInfo(
     logicalType: Option[LogicalTypeDetail] = None,
     convertedType: Option[String] = None,
     fieldId: Option[Int] = None
-) {
+):
 
   /** `tags=LIST` for an annotated group, `None` for a plain struct group. */
   def annotation: Option[String] = logicalType.map(lt => s"$name=${lt.render}")
-}
 
 /**
  * A column's logical type annotation with all of its parameters, e.g.
@@ -46,23 +45,21 @@ case class GroupInfo(
  * rendered as strings; `true`/`false` and integers are emitted as native JSON
  * booleans/numbers by the JSON output.
  */
-case class LogicalTypeDetail(name: String, params: List[(String, String)] = Nil) {
+case class LogicalTypeDetail(name: String, params: List[(String, String)] = Nil):
 
   def render: String =
     if params.isEmpty then name
     else s"$name(${params.map { case (k, v) => s"$k=$v" }.mkString(", ")})"
-}
 
-case class FieldSummary(name: String, dataType: String, isOptional: Boolean) {
+case class FieldSummary(name: String, dataType: String, isOptional: Boolean):
   def isNested: Boolean = NestedType.isNested(dataType)
-}
 
 /**
  * Canonical prefixes for nested (group) column type names, e.g.
  * `STRUCT<a:INT32,b:BINARY>`. The single source of truth for both producing
  * these names and recognising them, so the two can't drift apart.
  */
-object NestedType {
+object NestedType:
   val Struct = "STRUCT"
   val Map    = "MAP"
   val List   = "LIST"
@@ -72,7 +69,6 @@ object NestedType {
   def isNested(dataType: String): Boolean = prefixes.exists(dataType.startsWith)
 
   def struct(fields: String): String = s"$Struct<$fields>"
-}
 
 enum SchemaMode:
   case Strict, Union
@@ -96,6 +92,5 @@ case class SchemaDiff(
     removed: List[ColumnInfo],
     changed: List[ColumnChange],
     unchanged: List[String]
-) {
+):
   def identical: Boolean = added.isEmpty && removed.isEmpty && changed.isEmpty
-}

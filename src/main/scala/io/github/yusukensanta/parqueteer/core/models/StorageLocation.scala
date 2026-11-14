@@ -3,9 +3,8 @@ package io.github.yusukensanta.parqueteer.core.models
 import scala.util.matching.Regex
 
 /** A file location that may be local or on a cloud object store (S3, GCS, Azure). */
-sealed trait StorageLocation {
+sealed trait StorageLocation:
   def path: String
-}
 
 case class LocalPath(path: String) extends StorageLocation
 
@@ -13,28 +12,25 @@ case class S3Location(
     bucket: String,
     key: String,
     region: Option[String] = None
-) extends StorageLocation {
+) extends StorageLocation:
   override def path: String = s"s3a://$bucket/$key"
-}
 
 case class GCSLocation(
     bucket: String,
     key: String
-) extends StorageLocation {
+) extends StorageLocation:
   override def path: String = s"gs://$bucket/$key"
-}
 
 case class AzureLocation(
     account: String,
     container: String,
     key: String
-) extends StorageLocation {
+) extends StorageLocation:
 
   override def path: String =
     s"abfss://$container@$account.dfs.core.windows.net/$key"
-}
 
-object StorageLocationParser {
+object StorageLocationParser:
 
   // Every scheme parqueteer treats as remote storage. Includes wasb[s]://,
   // which parse() rejects, because such a path is still clearly not local.
@@ -59,7 +55,7 @@ object StorageLocationParser {
    *   Either an error message or the parsed StorageLocation
    */
   def parse(url: String): Either[String, StorageLocation] =
-    url.trim match {
+    url.trim match
       case s3Pattern(bucket, key) =>
         Right(S3Location(bucket, key))
       case gcsPattern(bucket, key) =>
@@ -79,6 +75,4 @@ object StorageLocationParser {
         Right(LocalPath(java.nio.file.Paths.get(localPath).normalize().toString))
       case unsupported =>
         Left(s"Unsupported storage location format: $unsupported")
-    }
-
-}
+end StorageLocationParser

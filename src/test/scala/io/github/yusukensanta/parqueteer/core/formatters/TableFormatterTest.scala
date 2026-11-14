@@ -5,7 +5,7 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import java.time.Instant
 
-class TableFormatterTest extends AnyFlatSpec with Matchers {
+class TableFormatterTest extends AnyFlatSpec with Matchers:
 
   private val formatter = new TableFormatter()
 
@@ -443,4 +443,4 @@ class TableFormatterTest extends AnyFlatSpec with Matchers {
     lines(3) should (include("1") and include("null"))
     lines(4) should (include("2") and include("x"))
   }
-}
+end TableFormatterTest

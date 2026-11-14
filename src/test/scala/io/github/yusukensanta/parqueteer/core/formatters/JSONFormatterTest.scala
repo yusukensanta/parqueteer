@@ -6,7 +6,7 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import java.time.Instant
 
-class JSONFormatterTest extends AnyFlatSpec with Matchers {
+class JSONFormatterTest extends AnyFlatSpec with Matchers:
 
   private val formatter = new JSONFormatter()
 
@@ -122,4 +122,4 @@ class JSONFormatterTest extends AnyFlatSpec with Matchers {
     val json   = parse(result).getOrElse(fail("not JSON"))
     json.hcursor.downField("fileSize").as[Long] shouldBe Right(1024L)
   }
-}
+end JSONFormatterTest

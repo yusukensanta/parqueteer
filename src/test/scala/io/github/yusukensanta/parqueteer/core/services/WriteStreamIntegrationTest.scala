@@ -9,24 +9,22 @@ import java.nio.file.{Files, Path}
 
 object WriteStreamIntegrationTest extends Tag("IntegrationTest")
 
-class WriteStreamIntegrationTest extends AnyFlatSpec with Matchers {
+class WriteStreamIntegrationTest extends AnyFlatSpec with Matchers:
 
   private val repo    = new HadoopParquetRepository()
   private val service = new ParquetService(repo)
 
-  private def tempOutputPath(): String = {
+  private def tempOutputPath(): String =
     val f = Files.createTempFile("write_stream_it_", ".parquet").toFile
     f.delete()
     f.deleteOnExit()
     f.getAbsolutePath
-  }
 
-  private def tempInput(suffix: String, content: String): String = {
+  private def tempInput(suffix: String, content: String): String =
     val p: Path = Files.createTempFile("write_stream_it_", suffix)
     Files.writeString(p, content)
     p.toFile.deleteOnExit()
     p.toString
-  }
 
   // ── Round-trip equivalence with the fully-buffered path ─────────────────
 
@@ -127,4 +125,4 @@ class WriteStreamIntegrationTest extends AnyFlatSpec with Matchers {
     val content = repo.readContent(ParquetFile(LocalPath(out)), ReadConfig()).get
     content.rows should have size 3
   }
-}
+end WriteStreamIntegrationTest

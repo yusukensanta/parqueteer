@@ -5,7 +5,7 @@ import org.scalatest.matchers.should.Matchers
 import scopt.OParser
 import CliSpec.Values
 
-class CliSpecTest extends AnyFlatSpec with Matchers {
+class CliSpecTest extends AnyFlatSpec with Matchers:
 
   // Pins what CliSpec reads out of scopt (including its private[scopt]
   // metadata via scopt.ParserIntrospection), so a scopt upgrade that changes
@@ -87,11 +87,11 @@ class CliSpecTest extends AnyFlatSpec with Matchers {
     minimalArgs.keySet shouldBe CliSpec.commands.map(_.path).toSet
     val silenced = new java.io.PrintStream(new java.io.ByteArrayOutputStream())
     Console.withErr(silenced) {
-      for {
+      for
         cmd <- CliSpec.commands
         opt <- cmd.options
         case Values.Choice(values) <- List(CliSpec.optionValues(cmd.path, opt))
-      } {
+      do
         values.foreach { v =>
           withClue(s"${cmd.path} --${opt.long} $v: ")(
             parses(minimalArgs(cmd.path) ++ List(s"--${opt.long}", v)) shouldBe true
@@ -100,9 +100,8 @@ class CliSpecTest extends AnyFlatSpec with Matchers {
         withClue(s"${cmd.path} --${opt.long} bogus: ")(
           parses(minimalArgs(cmd.path) ++ List(s"--${opt.long}", "bogus")) shouldBe false
         )
-      }
       CliSpec.globalOptions.foreach { opt =>
-        CliSpec.optionValues("", opt) match {
+        CliSpec.optionValues("", opt) match
           case Values.Choice(values) =>
             values.foreach(v =>
               withClue(s"--${opt.long} $v: ")(
@@ -110,7 +109,6 @@ class CliSpecTest extends AnyFlatSpec with Matchers {
               )
             )
           case _ => ()
-        }
       }
       CliSpec.Choices.shells.foreach(sh => parses(List("completions", sh)) shouldBe true)
     }
@@ -122,4 +120,4 @@ class CliSpecTest extends AnyFlatSpec with Matchers {
       "Fully decompress all row groups"
     CliSpec.summarize("Suppress non-error output") shouldBe "Suppress non-error output"
   }
-}
+end CliSpecTest

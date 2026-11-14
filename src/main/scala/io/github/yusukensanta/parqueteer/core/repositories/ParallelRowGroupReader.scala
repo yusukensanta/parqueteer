@@ -15,7 +15,7 @@ import java.util.concurrent.atomic.AtomicLong
 import scala.jdk.CollectionConverters.*
 import scala.util.Using
 
-private[repositories] object ParallelRowGroupReader {
+private[repositories] object ParallelRowGroupReader:
 
   private val logger = LoggerFactory.getLogger(getClass)
 
@@ -26,28 +26,27 @@ private[repositories] object ParallelRowGroupReader {
       fileSchema: MessageType,
       blocks: List[BlockMetaData],
       footerMeta: ParquetMetadata
-  ): List[Map[String, CellValue]] = {
-    val selectedBlocks = config.maxRows match {
+  ): List[Map[String, CellValue]] =
+    val selectedBlocks = config.maxRows match
       case None        => blocks
       case Some(limit) =>
         var cumulative = 0L
         blocks.takeWhile { block =>
           if cumulative >= limit then false
-          else { cumulative += block.getRowCount; true }
+          else
+            cumulative += block.getRowCount; true
         }
-    }
 
-    val requestedSchema = config.columns match {
+    val requestedSchema = config.columns match
       case Some(cols) if cols.nonEmpty =>
         ParquetSchemaBuilder.projectSchema(fileSchema, cols)
       case _ => fileSchema
-    }
 
     val pool = Executors.newFixedThreadPool(
       config.parallelism.max(1),
       new DaemonThreadFactory("parqueteer-parallel-read")
     )
-    try {
+    try
       given ExecutionContext = ExecutionContext.fromExecutor(pool)
       val requestedNames     =
         requestedSchema.getColumns.asScala.map(_.getPath.mkString(".")).toSet
@@ -70,7 +69,7 @@ private[repositories] object ParallelRowGroupReader {
       }
       val allRows =
         try Await.result(Future.sequence(futures), config.readTimeout).flatten
-        catch {
+        catch
           case _: TimeoutException =>
             // Cancel in-flight block reads immediately instead of letting them
             // run to completion in the background, burning I/O for a result
@@ -81,11 +80,12 @@ private[repositories] object ParallelRowGroupReader {
               s"parallel read timed out after ${config.readTimeout} — " +
                 "retry with --parallelism 1, or check network connectivity"
             )
-        }
       io.github.yusukensanta.parqueteer.core.util.RowLimiter
         .limitList(allRows, config.maxRows)
-    } finally pool.shutdown()
-  }
+    finally pool.shutdown()
+    end try
+
+  end read
 
   private def readBlock(
       path: HadoopPath,
@@ -96,12 +96,12 @@ private[repositories] object ParallelRowGroupReader {
       requestedSchema: MessageType,
       requestedNames: Set[String],
       nullRowsAllotted: AtomicLong
-  ): List[Map[String, CellValue]] = {
+  ): List[Map[String, CellValue]] =
     val colChunks      = block.getColumns.asScala.toList
     val relevantChunks =
       if requestedNames.isEmpty then colChunks
       else colChunks.filter(c => requestedNames.contains(c.getPath.toDotString))
-    if relevantChunks.isEmpty then {
+    if relevantChunks.isEmpty then
       logger.warn(
         s"Row group (${block.getRowCount} rows) has no chunks matching " +
           s"requested columns $requestedNames — fabricating null rows for schema evolution."
@@ -118,7 +118,7 @@ private[repositories] object ParallelRowGroupReader {
         nullRowsAllotted.getAndUpdate(r => r - rowCount.min(r))
       val rowsToFabricate = rowCount.min(prev).toInt
       List.fill(rowsToFabricate)(nullRow)
-    } else {
+    else
       val rangeStart = relevantChunks.map(_.getStartingPos).min
       val rangeEnd   =
         relevantChunks.map(c => c.getStartingPos + c.getTotalSize).max
@@ -141,6 +141,6 @@ private[repositories] object ParallelRowGroupReader {
             requestedSchema
           )
       }
-    }
-  }
-}
+    end if
+  end readBlock
+end ParallelRowGroupReader

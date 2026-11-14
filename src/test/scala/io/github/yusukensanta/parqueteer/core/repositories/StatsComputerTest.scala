@@ -9,7 +9,7 @@ import org.apache.parquet.schema.{LogicalTypeAnnotation, PrimitiveType, Types}
 import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
 
 @nowarn("cat=deprecation") // BinaryStatistics.setMinMax is the only way to build fixtures
-class StatsComputerTest extends AnyFlatSpec with Matchers {
+class StatsComputerTest extends AnyFlatSpec with Matchers:
 
   private def intType(logical: LogicalTypeAnnotation): PrimitiveType =
     if logical == null then Types.required(PrimitiveTypeName.INT32).named("test")
@@ -23,51 +23,45 @@ class StatsComputerTest extends AnyFlatSpec with Matchers {
       min: Int,
       max: Int,
       logical: LogicalTypeAnnotation = null
-  ): Statistics[?] = {
+  ): Statistics[?] =
     val pt    = intType(logical)
     val stats = Statistics.createStats(pt).asInstanceOf[IntStatistics]
     stats.setMinMax(min, max)
     stats
-  }
 
   private def mkLongStats(
       min: Long,
       max: Long,
       logical: LogicalTypeAnnotation = null
-  ): Statistics[?] = {
+  ): Statistics[?] =
     val pt    = longType(logical)
     val stats = Statistics.createStats(pt).asInstanceOf[LongStatistics]
     stats.setMinMax(min, max)
     stats
-  }
 
-  private def mkFloatStats(min: Float, max: Float): Statistics[?] = {
+  private def mkFloatStats(min: Float, max: Float): Statistics[?] =
     val pt    = Types.required(PrimitiveTypeName.FLOAT).named("test")
     val stats = Statistics.createStats(pt).asInstanceOf[FloatStatistics]
     stats.setMinMax(min, max)
     stats
-  }
 
-  private def mkDoubleStats(min: Double, max: Double): Statistics[?] = {
+  private def mkDoubleStats(min: Double, max: Double): Statistics[?] =
     val pt    = Types.required(PrimitiveTypeName.DOUBLE).named("test")
     val stats = Statistics.createStats(pt).asInstanceOf[DoubleStatistics]
     stats.setMinMax(min, max)
     stats
-  }
 
-  private def mkBoolStats(min: Boolean, max: Boolean): Statistics[?] = {
+  private def mkBoolStats(min: Boolean, max: Boolean): Statistics[?] =
     val pt    = Types.required(PrimitiveTypeName.BOOLEAN).named("test")
     val stats = Statistics.createStats(pt).asInstanceOf[BooleanStatistics]
     stats.setMinMax(min, max)
     stats
-  }
 
-  private def mkBinaryStats(min: String, max: String): Statistics[?] = {
+  private def mkBinaryStats(min: String, max: String): Statistics[?] =
     val pt    = Types.required(PrimitiveTypeName.BINARY).named("test")
     val stats = Statistics.createStats(pt).asInstanceOf[BinaryStatistics]
     stats.setMinMax(Binary.fromString(min), Binary.fromString(max))
     stats
-  }
 
   "computeTypedMinMax" should "return (None, None) for empty statistics list" in {
     val result = StatsComputer.computeTypedMinMax(Nil, PrimitiveTypeName.INT32, null)
@@ -223,14 +217,13 @@ class StatsComputerTest extends AnyFlatSpec with Matchers {
 
   // ── Characterization: exact rendered strings, pinned before refactoring ──
 
-  private def tsStats(unit: LogicalTypeAnnotation.TimeUnit, min: Long, max: Long) = {
+  private def tsStats(unit: LogicalTypeAnnotation.TimeUnit, min: Long, max: Long) =
     val logical = LogicalTypeAnnotation.timestampType(true, unit)
     StatsComputer.computeTypedMinMax(
       List(mkLongStats(min, max, logical)),
       PrimitiveTypeName.INT64,
       logical
     )
-  }
 
   it should "render timestamps as ISO-8601 instants at the column's precision" in {
     import LogicalTypeAnnotation.TimeUnit.*
@@ -270,7 +263,7 @@ class StatsComputerTest extends AnyFlatSpec with Matchers {
       min: BigInt,
       max: BigInt,
       logical: LogicalTypeAnnotation
-  ): Statistics[?] = {
+  ): Statistics[?] =
     val base = Types.required(physical)
     val pt   =
       (if physical == PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY then base.length(16) else base)
@@ -278,16 +271,15 @@ class StatsComputerTest extends AnyFlatSpec with Matchers {
         .named("test")
     val stats                         = Statistics.createStats(pt).asInstanceOf[BinaryStatistics]
     def bytes(v: BigInt): Array[Byte] =
-      if physical == PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY then {
+      if physical == PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY then
         val raw = v.toByteArray
         Array.fill[Byte](16 - raw.length)(if v < 0 then -1 else 0) ++ raw
-      } else v.toByteArray
+      else v.toByteArray
     stats.setMinMax(
       Binary.fromConstantByteArray(bytes(min)),
       Binary.fromConstantByteArray(bytes(max))
     )
     stats
-  }
 
   it should "compare BINARY decimals numerically across row groups, negatives included" in {
     val dec = LogicalTypeAnnotation.decimalType(2, 10)
@@ -342,20 +334,18 @@ class StatsComputerTest extends AnyFlatSpec with Matchers {
   }
 
   // INT96 = 8 bytes nanos-of-day + 4 bytes Julian day, both little-endian.
-  private def int96(instant: java.time.Instant): Binary = {
+  private def int96(instant: java.time.Instant): Binary =
     val buf = java.nio.ByteBuffer.allocate(12).order(java.nio.ByteOrder.LITTLE_ENDIAN)
     val day = Math.floorDiv(instant.getEpochSecond, 86400L)
     buf.putLong(Math.floorMod(instant.getEpochSecond, 86400L) * 1_000_000_000L + instant.getNano)
     buf.putInt((day + 2440588L).toInt)
     Binary.fromConstantByteArray(buf.array())
-  }
 
-  private def int96Stats(min: java.time.Instant, max: java.time.Instant): Statistics[?] = {
+  private def int96Stats(min: java.time.Instant, max: java.time.Instant): Statistics[?] =
     val pt    = Types.required(PrimitiveTypeName.INT96).named("test")
     val stats = Statistics.createStats(pt).asInstanceOf[BinaryStatistics]
     stats.setMinMax(int96(min), int96(max))
     stats
-  }
 
   it should "decode INT96 timestamps" in {
     val t0 = java.time.Instant.parse("2024-02-29T12:34:56Z")
@@ -413,4 +403,4 @@ class StatsComputerTest extends AnyFlatSpec with Matchers {
         .StatCodec[Float]({ case n: java.lang.Float if !n.isNaN => n.floatValue() }, _.toString)
     ) shouldBe (Some("3.0"), Some("10.0"))
   }
-}
+end StatsComputerTest

@@ -10,7 +10,7 @@ import org.scalatest.matchers.should.Matchers
 import java.nio.file.Files
 
 /** `metadata --index` / `--pages` against a real multi-page file. */
-class PageDetailTest extends AnyFlatSpec with Matchers {
+class PageDetailTest extends AnyFlatSpec with Matchers:
 
   private val message = MessageTypeParser.parseMessageType(
     """message m {
@@ -21,7 +21,7 @@ class PageDetailTest extends AnyFlatSpec with Matchers {
   )
   private val RowCount = 3000
 
-  private lazy val file: ParquetFile = {
+  private lazy val file: ParquetFile =
     val f = Files.createTempFile("parqueteer_pages_", ".parquet").toFile
     f.delete()
     f.deleteOnExit()
@@ -31,14 +31,13 @@ class PageDetailTest extends AnyFlatSpec with Matchers {
       .withPageSize(512)
       .withDictionaryEncoding(true)
       .build()
-    try {
+    try
       val factory = new SimpleGroupFactory(message)
       (0 until RowCount).foreach { i =>
         writer.write(factory.newGroup().append("id", i.toLong).append("name", s"n${i % 5}"))
       }
-    } finally writer.close()
+    finally writer.close()
     ParquetFile(LocalPath(f.getAbsolutePath))
-  }
 
   private val repo = new HadoopParquetRepository()
 
@@ -116,4 +115,4 @@ class PageDetailTest extends AnyFlatSpec with Matchers {
     chunk(report, "name").pageIndex shouldBe None
     chunk(report, "name").pages shouldBe None
   }
-}
+end PageDetailTest

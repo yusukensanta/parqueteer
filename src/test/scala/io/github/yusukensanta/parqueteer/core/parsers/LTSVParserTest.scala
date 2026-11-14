@@ -4,7 +4,7 @@ import io.github.yusukensanta.parqueteer.core.models.CellValue
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-class LTSVParserTest extends AnyFlatSpec with Matchers {
+class LTSVParserTest extends AnyFlatSpec with Matchers:
 
   "LTSVParser.parse" should "parse a single record" in {
     val rows = LTSVParser.parse("host:192.168.0.1\tstatus:200\tsize:1234\n")
@@ -79,4 +79,4 @@ class LTSVParserTest extends AnyFlatSpec with Matchers {
     val rows = LTSVParser.parse("z:3\ta:1\tm:2\n")
     rows(0).keys.toList shouldBe List("z", "a", "m")
   }
-}
+end LTSVParserTest

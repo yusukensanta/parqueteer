@@ -12,19 +12,16 @@ import scala.annotation.tailrec
  * portion must not be misdetected as a glob trigger. A bare '?' with no
  * such suffix (e.g. `file?.parquet`) is still a wildcard.
  */
-object GlobDetector {
+object GlobDetector:
   private val globChars        = Set('*', '[', '{')
   private val queryValuePrefix = """[\w.\-]+=""".r
 
-  def hasGlobChars(path: String): Boolean = {
+  def hasGlobChars(path: String): Boolean =
     @tailrec def scan(i: Int): Boolean =
       if i >= path.length then false
-      else {
+      else
         val c = path.charAt(i)
         if globChars.contains(c) then true
         else if c == '?' then queryValuePrefix.findPrefixOf(path.substring(i + 1)).isEmpty
         else scan(i + 1)
-      }
     scan(0)
-  }
-}

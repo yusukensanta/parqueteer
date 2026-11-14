@@ -3,7 +3,7 @@ package io.github.yusukensanta.parqueteer.core.repositories
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-class ParquetRepositoryTraitTest extends AnyFlatSpec with Matchers {
+class ParquetRepositoryTraitTest extends AnyFlatSpec with Matchers:
 
   "ParquetRepository.cacheStats" should "be callable through the trait interface" in {
     val repo: ParquetRepository = new HadoopParquetRepository()
@@ -17,7 +17,7 @@ class ParquetRepositoryTraitTest extends AnyFlatSpec with Matchers {
 
   it should "return CacheStats with all zeros as the default implementation" in {
     // A no-op stub that inherits the default cacheStats() from the trait
-    val stub = new ParquetRepository {
+    val stub = new ParquetRepository:
       import scala.util.Try
       import io.github.yusukensanta.parqueteer.core.models.*
       def readContent(f: ParquetFile, c: ReadConfig) = Try(???)
@@ -45,7 +45,6 @@ class ParquetRepositoryTraitTest extends AnyFlatSpec with Matchers {
       def deleteFile(l: StorageLocation)                              = Try(???)
       def readStats(f: ParquetFile)                                   = Try(???)
       def inferSchemaFromRows(rows: Iterator[Map[String, CellValue]]) = Try(???)
-    }
     val stats = stub.cacheStats()
     stats shouldBe ParquetRepository.CacheStats(0L, 0L, 0L, 0L)
   }
@@ -53,7 +52,7 @@ class ParquetRepositoryTraitTest extends AnyFlatSpec with Matchers {
   "ParquetRepository.readDetailedMetadata" should "fail by default so unimplemented repositories are visible" in {
     import scala.util.Try
     import io.github.yusukensanta.parqueteer.core.models.*
-    val stub = new ParquetRepository {
+    val stub = new ParquetRepository:
       def readContent(f: ParquetFile, c: ReadConfig) = Try(???)
       def streamContent(f: ParquetFile, c: ReadConfig)(
           p: Map[String, CellValue] => Unit
@@ -75,7 +74,6 @@ class ParquetRepositoryTraitTest extends AnyFlatSpec with Matchers {
       def deleteFile(l: StorageLocation)                              = Try(???)
       def readStats(f: ParquetFile)                                   = Try(???)
       def inferSchemaFromRows(rows: Iterator[Map[String, CellValue]]) = Try(???)
-    }
     stub.readDetailedMetadata(ParquetFile(LocalPath("/x"))).isFailure shouldBe true
   }
-}
+end ParquetRepositoryTraitTest

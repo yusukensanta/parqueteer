@@ -5,7 +5,7 @@ import org.scalatest.matchers.should.Matchers
 import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
 import org.apache.parquet.schema.LogicalTypeAnnotation
 
-class FooterReaderTest extends AnyFlatSpec with Matchers {
+class FooterReaderTest extends AnyFlatSpec with Matchers:
 
   "logicalTypeName" should "return primitive name when annotation is null" in {
     FooterReader.logicalTypeName(PrimitiveTypeName.INT32, null) shouldBe "INT32"
@@ -87,4 +87,4 @@ class FooterReaderTest extends AnyFlatSpec with Matchers {
       LogicalTypeAnnotation.intType(32, true)
     ) shouldBe "INT32"
   }
-}
+end FooterReaderTest

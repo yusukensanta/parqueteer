@@ -3,7 +3,7 @@ package io.github.yusukensanta.parqueteer.core.util
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-class FileExtensionTest extends AnyFlatSpec with Matchers {
+class FileExtensionTest extends AnyFlatSpec with Matchers:
 
   "FileExtension.of" should "extract extension from a local path" in {
     FileExtension.of("/data/file.parquet") shouldBe "parquet"
@@ -58,4 +58,4 @@ class FileExtensionTest extends AnyFlatSpec with Matchers {
       "gs://bucket/path/data.csv?token=x/y/z"
     ) shouldBe "csv"
   }
-}
+end FileExtensionTest

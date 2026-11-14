@@ -10,7 +10,7 @@ import org.scalatest.matchers.should.Matchers
 import java.nio.file.Files
 
 /** Reads LIST/MAP annotations back from a real file's footer, not an in-memory schema. */
-class NestedSchemaFileTest extends AnyFlatSpec with Matchers {
+class NestedSchemaFileTest extends AnyFlatSpec with Matchers:
 
   private val message = MessageTypeParser.parseMessageType(
     """message m {
@@ -29,7 +29,7 @@ class NestedSchemaFileTest extends AnyFlatSpec with Matchers {
       |}""".stripMargin
   )
 
-  private def writeFile(): ParquetFile = {
+  private def writeFile(): ParquetFile =
     val f = Files.createTempFile("parqueteer_nested_", ".parquet").toFile
     f.delete()
     f.deleteOnExit()
@@ -38,7 +38,6 @@ class NestedSchemaFileTest extends AnyFlatSpec with Matchers {
     try writer.write(new SimpleGroupFactory(message).newGroup().append("id", 1L))
     finally writer.close()
     ParquetFile(LocalPath(f.getAbsolutePath))
-  }
 
   private val repo = new HadoopParquetRepository()
 
@@ -58,4 +57,4 @@ class NestedSchemaFileTest extends AnyFlatSpec with Matchers {
     tags.logicalType.map(_.name) shouldBe Some("LIST")
     tags.children.head.children.map(_.name) shouldBe List("element")
   }
-}
+end NestedSchemaFileTest

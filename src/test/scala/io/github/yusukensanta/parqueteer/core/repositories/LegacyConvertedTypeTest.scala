@@ -19,7 +19,7 @@ import scala.jdk.CollectionConverters.*
  * LogicalType. The report must describe them the same way, including the
  * `isAdjustedToUTC=true` the spec implies for TIMESTAMP_MILLIS/MICROS.
  */
-class LegacyConvertedTypeTest extends AnyFlatSpec with Matchers {
+class LegacyConvertedTypeTest extends AnyFlatSpec with Matchers:
 
   private val message = MessageTypeParser.parseMessageType(
     """message m {
@@ -34,7 +34,7 @@ class LegacyConvertedTypeTest extends AnyFlatSpec with Matchers {
 
   private def readFooter(
       bytes: Array[Byte]
-  ): (Array[Byte], org.apache.parquet.format.FileMetaData) = {
+  ): (Array[Byte], org.apache.parquet.format.FileMetaData) =
     val footerLen =
       ByteBuffer.wrap(bytes, bytes.length - 8, 4).order(ByteOrder.LITTLE_ENDIAN).getInt
     val dataEnd = bytes.length - 8 - footerLen
@@ -42,10 +42,9 @@ class LegacyConvertedTypeTest extends AnyFlatSpec with Matchers {
       new java.io.ByteArrayInputStream(bytes, dataEnd, footerLen)
     )
     (bytes.take(dataEnd), footer)
-  }
 
   /** Writes a file, then rewrites its footer with every LogicalType removed. */
-  private def legacyOnlyFile(): ParquetFile = {
+  private def legacyOnlyFile(): ParquetFile =
     val f = Files.createTempFile("parqueteer_legacy_", ".parquet").toFile
     f.delete()
     f.deleteOnExit()
@@ -66,7 +65,6 @@ class LegacyConvertedTypeTest extends AnyFlatSpec with Matchers {
       data ++ newFooter.toByteArray ++ len ++ "PAR1".getBytes("US-ASCII")
     )
     ParquetFile(LocalPath(f.getAbsolutePath))
-  }
 
   private val repo = new HadoopParquetRepository()
 
@@ -109,4 +107,4 @@ class LegacyConvertedTypeTest extends AnyFlatSpec with Matchers {
     byName("ts").convertedType shouldBe Some("TIMESTAMP_MILLIS")
     byName("small").convertedType shouldBe Some("UINT_16")
   }
-}
+end LegacyConvertedTypeTest

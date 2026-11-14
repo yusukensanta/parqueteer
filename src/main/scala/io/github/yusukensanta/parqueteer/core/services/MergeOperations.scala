@@ -16,7 +16,7 @@ import io.github.yusukensanta.parqueteer.core.util.Eithers
 private[services] class MergeOperations(
     repository: ParquetRepository,
     streamWrite: StreamWriteSupport
-) {
+):
   import streamWrite.{abortOnReadError, buildExplicitSchema, handleStreamWriteResult, projectRow}
 
   def mergeFiles(
@@ -35,7 +35,7 @@ private[services] class MergeOperations(
         )
       )
     else
-      for {
+      for
         inputLocations <- parseLocations(inputPaths)
         schemas        <- readAllSchemas(inputLocations)
         mergedFields   <- SchemaReconciler.reconcile(schemas, inputPaths, schemaMode)
@@ -49,17 +49,17 @@ private[services] class MergeOperations(
           onProgress,
           fileParallelism
         )
-      } yield count
+      yield count
 
   def checkSchemaCompatibility(
       paths: List[String],
       schemaMode: SchemaMode
   ): Either[ParqueteerError, Unit] =
-    for {
+    for
       locations <- parseLocations(paths)
       schemas   <- readAllSchemas(locations)
       _         <- SchemaReconciler.reconcile(schemas, paths, schemaMode)
-    } yield ()
+    yield ()
 
   /**
    * Read the field-summary schema for each input file, preserving order. Stops
@@ -86,7 +86,7 @@ private[services] class MergeOperations(
       writeConfig: WriteConfig,
       onProgress: (Int, Int, String) => Unit,
       fileParallelism: Int
-  ): Either[ParqueteerError, Long] = {
+  ): Either[ParqueteerError, Long] =
     val nestedFields = mergedFields.filter(_.isNested)
     if nestedFields.nonEmpty then
       Left(
@@ -96,7 +96,7 @@ private[services] class MergeOperations(
             "Flatten STRUCT/MAP/LIST columns before merging."
         )
       )
-    else {
+    else
       // compression controlled by WriteConfig, not ColumnInfo
       val explicitSchema                = buildExplicitSchema(mergedFields, compressionCodec = "")
       val fieldNames                    = mergedFields.map(_.name).toArray
@@ -122,8 +122,9 @@ private[services] class MergeOperations(
         }
 
       handleStreamWriteResult(outputLocation, writeResult)
-    }
-  }
+    end if
+
+  end streamMerge
 
   /**
    * Stream parquet → parquet conversion without loading the entire file into
@@ -135,7 +136,7 @@ private[services] class MergeOperations(
       outputPath: String,
       conversionConfig: ConversionConfig
   ): Either[ParqueteerError, Long] =
-    for {
+    for
       inputLocation  <- parseLocation(inputPath)
       outputLocation <- parseLocation(outputPath)
       schemaFields   <- repository
@@ -158,5 +159,5 @@ private[services] class MergeOperations(
         abortOnReadError(readResult)
       }
       count <- handleStreamWriteResult(outputLocation, writeResult)
-    } yield count
-}
+    yield count
+end MergeOperations

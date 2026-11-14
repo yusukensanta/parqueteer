@@ -7,7 +7,7 @@ import io.github.yusukensanta.parqueteer.core.models.{
   ParquetSchema
 }
 
-trait OutputFormatter {
+trait OutputFormatter:
   def formatContent(content: FileContent, schema: Option[ParquetSchema]): String
   def formatSchema(schema: ParquetSchema): String
   def formatMetadata(metadata: FileMetadata): String
@@ -15,21 +15,18 @@ trait OutputFormatter {
   protected def extractColumns(
       rows: List[Map[String, CellValue]],
       schema: Option[ParquetSchema] = None
-  ): List[String] = {
-    val seen = {
+  ): List[String] =
+    val seen =
       val s = scala.collection.mutable.LinkedHashSet.empty[String]
       rows.foreach(_.keysIterator.foreach(s += _))
       s
-    }
     schema.map(_.columns.map(_.name).filter(seen)).getOrElse(seen.toList)
-  }
-}
 
-object OutputFormatter {
+object OutputFormatter:
   import io.github.yusukensanta.parqueteer.core.models.OutputFormat
 
   def apply(format: OutputFormat, useColors: Boolean = true): OutputFormatter =
-    format match {
+    format match
       case OutputFormat.Table    => new TableFormatter()
       case OutputFormat.JSON     => new JSONFormatter()
       case OutputFormat.CSV      => new CSVFormatter()
@@ -37,7 +34,6 @@ object OutputFormatter {
       case OutputFormat.Markdown => new MarkdownFormatter()
       case OutputFormat.NDJSON   => new NDJSONFormatter()
       case OutputFormat.LTSV     => new LTSVFormatter()
-    }
 
   private[formatters] def indexColumns(columns: List[String]): Map[String, Int] =
     columns.iterator.zipWithIndex.toMap
@@ -53,9 +49,8 @@ object OutputFormatter {
       row: Map[String, CellValue],
       nameToIndex: Map[String, Int],
       numCols: Int
-  ): Array[CellValue] = {
+  ): Array[CellValue] =
     val values = new Array[CellValue](numCols)
     row.foreach { case (k, v) => nameToIndex.get(k).foreach(idx => values(idx) = v) }
     values
-  }
-}
+end OutputFormatter

@@ -3,7 +3,7 @@ package io.github.yusukensanta.parqueteer.core.repositories
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-class SchemaTypeReaderTest extends AnyFlatSpec with Matchers {
+class SchemaTypeReaderTest extends AnyFlatSpec with Matchers:
 
   private val tree                = SchemaTypeReader.tree(LogicalTypeFixtures.message)
   private def child(name: String) = tree.children.find(_.name == name).get
@@ -39,4 +39,4 @@ class SchemaTypeReaderTest extends AnyFlatSpec with Matchers {
       .map(_.name) shouldBe List("tags", "list")
     SchemaTypeReader.groupsAbove(LogicalTypeFixtures.message, Array("plain")) shouldBe Nil
   }
-}
+end SchemaTypeReaderTest

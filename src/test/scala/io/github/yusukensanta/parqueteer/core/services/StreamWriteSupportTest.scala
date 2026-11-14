@@ -4,7 +4,7 @@ import io.github.yusukensanta.parqueteer.cli.CliTestSupport
 import io.github.yusukensanta.parqueteer.core.models.*
 import scala.util.{Failure, Success}
 
-class StreamWriteSupportTest extends CliTestSupport {
+class StreamWriteSupportTest extends CliTestSupport:
 
   private val support = new StreamWriteSupport(new FakeParquetRepository())
 
@@ -59,4 +59,4 @@ class StreamWriteSupportTest extends CliTestSupport {
     )
     res shouldBe Left(ParqueteerError.OutputExists(out.path))
   }
-}
+end StreamWriteSupportTest

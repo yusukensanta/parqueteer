@@ -4,7 +4,7 @@ import io.github.yusukensanta.parqueteer.core.models.*
 import org.scalatest.flatspec.AnyFlatSpec
 import java.io.{ByteArrayOutputStream, PrintStream}
 
-class WriteCommandsTest extends CliTestSupport {
+class WriteCommandsTest extends CliTestSupport:
 
   // ── performConvert ─────────────────────────────────────────────────────
 
@@ -21,7 +21,7 @@ class WriteCommandsTest extends CliTestSupport {
 
   it should "refuse to overwrite an existing file when converting parquet to a text format" in {
     val tmpFile = java.nio.file.Files.createTempFile("pqt-convert-guard", ".csv")
-    try {
+    try
       java.nio.file.Files.writeString(tmpFile, "PREEXISTING")
       val result = WriteCommands.performConvert(
         newService(),
@@ -32,7 +32,7 @@ class WriteCommandsTest extends CliTestSupport {
       result.isLeft shouldBe true
       result.left.toOption.get.userMessage should include("already exists")
       java.nio.file.Files.readString(tmpFile) shouldBe "PREEXISTING"
-    } finally java.nio.file.Files.deleteIfExists(tmpFile)
+    finally java.nio.file.Files.deleteIfExists(tmpFile)
   }
 
   // ── executeMerge ───────────────────────────────────────────────────────
@@ -74,7 +74,7 @@ class WriteCommandsTest extends CliTestSupport {
 
   "executeWrite" should "show dry-run preview without writing" in {
     val tmpFile = java.nio.file.Files.createTempFile("pqt-test", ".json")
-    try {
+    try
       java.nio.file.Files.writeString(tmpFile, """[{"id":1,"name":"Alice"}]""")
       val out = new ByteArrayOutputStream()
       Console.withOut(new PrintStream(out)) {
@@ -95,7 +95,7 @@ class WriteCommandsTest extends CliTestSupport {
       output should include("Dry run")
       output should include("s3://bucket/out.parquet")
       output should include("id")
-    } finally java.nio.file.Files.deleteIfExists(tmpFile)
+    finally java.nio.file.Files.deleteIfExists(tmpFile)
   }
 
   it should "return error when dry-run input file not found" in {
@@ -197,4 +197,4 @@ class WriteCommandsTest extends CliTestSupport {
     cfg.pageSize shouldBe 8192
     cfg.enableDictionary shouldBe false
   }
-}
+end WriteCommandsTest

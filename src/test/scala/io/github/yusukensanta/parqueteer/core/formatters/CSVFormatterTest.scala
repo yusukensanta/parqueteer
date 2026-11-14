@@ -4,7 +4,7 @@ import io.github.yusukensanta.parqueteer.core.models.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-class CSVFormatterTest extends AnyFlatSpec with Matchers {
+class CSVFormatterTest extends AnyFlatSpec with Matchers:
 
   private val formatter = new CSVFormatter()
 
@@ -244,4 +244,4 @@ class CSVFormatterTest extends AnyFlatSpec with Matchers {
     lines(1) shouldBe "1,"
     lines(2) shouldBe "2,x"
   }
-}
+end CSVFormatterTest

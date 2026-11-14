@@ -7,7 +7,7 @@ import org.slf4j.LoggerFactory
 import scala.util.{Failure, Success, Try}
 import java.nio.file.{Files, Paths}
 
-private object GCSTuning {
+private object GCSTuning:
   // All values as plain bytes to avoid NumberFormatException: Hadoop 3.5
   // core-default.xml ships GCS defaults with suffix notation ("8m", "64m")
   // but conf.getLong/getInt call Long.parseLong directly.
@@ -20,15 +20,14 @@ private object GCSTuning {
   val RewriteMaxChunkSize = "536870912" // 512MB
   val MaxRequestsPerBatch = "30"
   val BatchThreads        = "15"
-}
 
-class GCSCredentialManager extends CloudCredentialManager {
+class GCSCredentialManager extends CloudCredentialManager:
   private val logger = LoggerFactory.getLogger(getClass)
 
   override def configureHadoop(
       location: StorageLocation
   ): Try[Configuration] =
-    location match {
+    location match
       case _: GCSLocation =>
         Try {
           val conf = new Configuration()
@@ -83,7 +82,6 @@ class GCSCredentialManager extends CloudCredentialManager {
         }
       case _ =>
         Failure(new IllegalArgumentException("Expected GCSLocation"))
-    }
 
   // gcs-connector 3.x+ selects the mechanism with an explicit fs.gs.auth.type;
   // the older google.cloud.auth.service.account.* keys are ignored and the
@@ -92,7 +90,7 @@ class GCSCredentialManager extends CloudCredentialManager {
   // the authorized_user file written by `gcloud auth application-default login`)
   // goes through Application Default Credentials instead.
   private[cloud] def applyAuth(conf: Configuration, credentials: Try[String]): Unit =
-    credentials match {
+    credentials match
       case Success(path) if isServiceAccountKey(path) =>
         conf.set("fs.gs.auth.type", "SERVICE_ACCOUNT_JSON_KEYFILE")
         conf.set("fs.gs.auth.service.account.json.keyfile", path)
@@ -106,7 +104,6 @@ class GCSCredentialManager extends CloudCredentialManager {
           "Using application default credentials: {}",
           CredentialRedactor.redact(Option(error.getMessage).getOrElse(""))
         )
-    }
 
   private val ServiceAccountType = """"type"\s*:\s*"service_account"""".r
 
@@ -167,5 +164,4 @@ class GCSCredentialManager extends CloudCredentialManager {
         s"No credentials found at well-known location: $wellKnownPath"
       )
   }
-
-}
+end GCSCredentialManager

@@ -4,7 +4,7 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.slf4j.LoggerFactory
 
-class LoggingConfigTest extends AnyFlatSpec with Matchers {
+class LoggingConfigTest extends AnyFlatSpec with Matchers:
 
   private def logger(name: String) = LoggerFactory.getLogger(name)
 
@@ -19,4 +19,3 @@ class LoggingConfigTest extends AnyFlatSpec with Matchers {
     logger("org.apache.hadoop.fs.s3a.S3AFileSystem").isWarnEnabled shouldBe false
     logger("org.apache.hadoop.fs.s3a.S3AFileSystem").isErrorEnabled shouldBe true
   }
-}

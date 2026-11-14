@@ -3,7 +3,7 @@ package io.github.yusukensanta.parqueteer.core.util
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-class ByteFormatterTest extends AnyFlatSpec with Matchers {
+class ByteFormatterTest extends AnyFlatSpec with Matchers:
 
   "ByteFormatter.format" should "format whole-number bytes without decimal" in {
     ByteFormatter.format(512L) shouldBe "512 B"
@@ -44,4 +44,4 @@ class ByteFormatterTest extends AnyFlatSpec with Matchers {
   it should "format 1.5 GB with decimal" in {
     ByteFormatter.format((1.5 * 1024 * 1024 * 1024).toLong) shouldBe "1.5 GB"
   }
-}
+end ByteFormatterTest

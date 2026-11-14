@@ -7,7 +7,7 @@ import io.circe.syntax.*
 import io.github.yusukensanta.parqueteer.core.formatters.JSONFormatter.given
 
 /** Renders a [[ParquetMetadataReport]] as a human-readable table or as JSON. */
-private[cli] object MetadataFormatter {
+private[cli] object MetadataFormatter:
 
   // Writers such as Spark and Arrow embed the whole serialized schema in a
   // single key-value entry (often several KB, or base64 in ARROW:schema), so
@@ -20,13 +20,12 @@ private[cli] object MetadataFormatter {
    * one line. Values longer than `maxLen` are cut and suffixed with an
    * ellipsis and the original length, e.g. `{"type":"struct"… (4213 chars)`.
    */
-  private[cli] def truncateKeyValue(value: String, maxLen: Int): String = {
+  private[cli] def truncateKeyValue(value: String, maxLen: Int): String =
     val flat = value.replaceAll("\\s+", " ").trim
     if flat.length <= maxLen then flat
     else s"${flat.take(maxLen)}… (${value.length} chars)"
-  }
 
-  def formatJson(report: ParquetMetadataReport): String = {
+  def formatJson(report: ParquetMetadataReport): String =
     def optLong(o: Option[Long])  = o.fold(Json.Null)(Json.fromLong)
     def optStr(o: Option[String]) = o.fold(Json.Null)(Json.fromString)
     def optInt(o: Option[Int])    = o.fold(Json.Null)(Json.fromInt)
@@ -96,13 +95,13 @@ private[cli] object MetadataFormatter {
         })
       )
       .spaces2
-  }
+  end formatJson
 
   private case class Col(title: String, width: Int, rightAligned: Boolean = false)
 
   // Fixed-width table: header, dashed rule, rows. Trailing padding is stripped
   // so the last column doesn't leave whitespace at the end of each line.
-  private def renderTable(cols: List[Col], rows: List[List[String]]): String = {
+  private def renderTable(cols: List[Col], rows: List[List[String]]): String =
     def line(cells: List[String]): String =
       cols
         .zip(cells)
@@ -111,7 +110,6 @@ private[cli] object MetadataFormatter {
         .stripTrailing()
     val header = line(cols.map(_.title))
     (header :: "-" * header.length :: rows.map(line)).mkString("\n")
-  }
 
   private def bytes(n: Long): String = ByteFormatter.format(n)
 
@@ -289,7 +287,7 @@ private[cli] object MetadataFormatter {
       index ++ headers
     }
 
-  def formatTable(report: ParquetMetadataReport): String = {
+  def formatTable(report: ParquetMetadataReport): String =
     val f = report.file
 
     val fileSection = List(
@@ -329,10 +327,9 @@ private[cli] object MetadataFormatter {
             c.maxRepetitionLevel.toString,
             c.typeLength.fold("-")(_.toString),
             c.fieldId.fold("-")(_.toString),
-            c.groups.flatMap(_.annotation).mkString(", ") match {
+            c.groups.flatMap(_.annotation).mkString(", ") match
               case "" => "-"
               case s  => s
-            }
           )
         }
       )
@@ -374,5 +371,5 @@ private[cli] object MetadataFormatter {
       extendedSections ++ pageSections :+ legend)
       .map(_.mkString("\n"))
       .mkString("\n\n")
-  }
-}
+  end formatTable
+end MetadataFormatter

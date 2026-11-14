@@ -4,20 +4,19 @@ import io.github.yusukensanta.parqueteer.core.models.{S3Location, StorageLocatio
 import org.apache.hadoop.conf.Configuration
 import scala.util.{Failure, Try}
 
-private[cloud] object S3Tuning {
+private[cloud] object S3Tuning:
   val MaxConnections        = "100"
   val MaxAttempts           = "3"
   val ThrottleRetryLimit    = "20"
   val ThrottleRetryInterval = "50ms"
   val MultipartSize         = "100m"
   val MultipartThreshold    = "100m"
-}
 
 // AWS SDK v2 credential provider class names, tried by S3A in this order until
 // one resolves. S3A instantiates and calls each *itself*, per S3 request, so
 // short-lived session/IMDS tokens refresh automatically instead of being
 // resolved once here and baked into a Configuration for the process lifetime.
-private[cloud] object S3ProviderChain {
+private[cloud] object S3ProviderChain:
   val Simple      = "org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider"
   val EnvVar      = "software.amazon.awssdk.auth.credentials.EnvironmentVariableCredentialsProvider"
   val Profile     = "software.amazon.awssdk.auth.credentials.ProfileCredentialsProvider"
@@ -28,22 +27,20 @@ private[cloud] object S3ProviderChain {
   // then env vars, then a named profile via AWS_PROFILE/aws.profile, then
   // EC2/ECS instance credentials.
   val default: String = List(Simple, EnvVar, Profile, IamInstance).mkString(",")
-}
 
 class S3CredentialManager(
     profile: Option[String] = None,
     endpointOverride: Option[String] = None
-) extends CloudCredentialManager {
+) extends CloudCredentialManager:
 
-  protected[cloud] def env(key: String): Option[String] = key match {
+  protected[cloud] def env(key: String): Option[String] = key match
     case "AWS_ENDPOINT_URL" => endpointOverride.orElse(sys.env.get(key))
     case _                  => sys.env.get(key)
-  }
 
   override def configureHadoop(
       location: StorageLocation
   ): Try[Configuration] =
-    location match {
+    location match
       case s3Location: S3Location =>
         Try {
           val conf = new Configuration()
@@ -60,13 +57,12 @@ class S3CredentialManager(
           // then "default"), so an explicit --profile is passed through that
           // way. Safe here because parqueteer is a single-command-per-process
           // CLI, not a long-running multi-tenant service.
-          profile match {
+          profile match
             case Some(p) =>
               System.setProperty("aws.profile", p)
               conf.set("fs.s3a.aws.credentials.provider", S3ProviderChain.Profile)
             case None =>
               conf.set("fs.s3a.aws.credentials.provider", S3ProviderChain.default)
-          }
 
           s3Location.region.foreach(region => conf.set("fs.s3a.endpoint.region", region))
 
@@ -91,12 +87,12 @@ class S3CredentialManager(
           )
 
           env("AWS_ENDPOINT_URL").foreach { rawEndpoint =>
-            val endpoint = if !rawEndpoint.contains("://") then {
+            val endpoint = if !rawEndpoint.contains("://") then
               io.github.yusukensanta.parqueteer.core.util.Warnings.emit(
                 "AWS_ENDPOINT_URL has no scheme; assuming https:// — prepend http:// or https:// to suppress this warning"
               )
               s"https://$rawEndpoint"
-            } else rawEndpoint
+            else rawEndpoint
             conf.set("fs.s3a.endpoint", endpoint)
             conf.set("fs.s3a.path.style.access", "true")
             if endpointDisablesSsl(endpoint) then conf.set("fs.s3a.connection.ssl.enabled", "false")
@@ -106,8 +102,7 @@ class S3CredentialManager(
         }
       case _ =>
         Failure(new IllegalArgumentException("Expected S3Location"))
-    }
 
   private[cloud] def endpointDisablesSsl(endpoint: String): Boolean =
     endpoint.toLowerCase(java.util.Locale.ROOT).startsWith("http://")
-}
+end S3CredentialManager

@@ -8,20 +8,20 @@ import InspectCommands.*
 import WriteCommands.*
 
 /** Entry point: routes a parsed Command to its handler, expanding globs first. */
-private[cli] object CommandExecutor {
+private[cli] object CommandExecutor:
 
   def execute(
       command: Command,
       service: ParquetService,
       globalOptions: GlobalOptions
   ): Int =
-    command match {
+    command match
       case cmd: ReadCommand =>
         withResolvedPaths(service, cmd.filePath, "Error", globalOptions)(
-          path => {
+          path =>
             warnIfSchemaModeNoop(cmd.schemaMode, globalOptions)
             executeRead(service, cmd.copy(filePath = path), globalOptions)
-          },
+          ,
           paths => executeReadMulti(service, paths, cmd, globalOptions)
         )
 
@@ -33,10 +33,10 @@ private[cli] object CommandExecutor {
 
       case cmd: WriteCommand =>
         withResolvedPaths(service, cmd.inputPath, "Failed to write file", globalOptions)(
-          path => {
+          path =>
             warnIfSchemaModeNoop(cmd.schemaMode, globalOptions)
             executeWrite(service, cmd.copy(inputPath = path), globalOptions)
-          },
+          ,
           paths => executeWriteMulti(service, paths, cmd, globalOptions)
         )
 
@@ -48,10 +48,10 @@ private[cli] object CommandExecutor {
 
       case cmd: ConvertCommand =>
         withResolvedPaths(service, cmd.inputPath, "Failed to convert file", globalOptions)(
-          path => {
+          path =>
             warnIfSchemaModeNoop(cmd.schemaMode, globalOptions)
             executeConvert(service, cmd.copy(inputPath = path), globalOptions)
-          },
+          ,
           paths => executeConvertMulti(service, paths, cmd, globalOptions)
         )
 
@@ -86,15 +86,13 @@ private[cli] object CommandExecutor {
         )
 
       case cmd: MergeCommand =>
-        resolveAllGlobs(service, cmd.inputPaths) match {
+        resolveAllGlobs(service, cmd.inputPaths) match
           case Left(error)          => reportError("Failed to merge", globalOptions)(error)
           case Right(expandedPaths) =>
             executeMerge(service, cmd.copy(inputPaths = expandedPaths), globalOptions)
-        }
 
       case CompletionsCommand(shell) =>
         executeCompletions(shell, globalOptions)
-    }
 
   /**
    * Expands a possibly-glob `path` and routes to the single-file handler for
@@ -107,11 +105,10 @@ private[cli] object CommandExecutor {
       errorPrefix: String,
       globalOptions: GlobalOptions
   )(single: String => Int, multi: List[String] => Int): Int =
-    service.resolveGlob(path) match {
+    service.resolveGlob(path) match
       case Left(error)      => reportError(errorPrefix, globalOptions)(error)
       case Right(List(one)) => single(one)
       case Right(paths)     => multi(paths)
-    }
 
   private[cli] def resolveAllGlobs(
       service: ParquetService,
@@ -124,13 +121,12 @@ private[cli] object CommandExecutor {
   private[cli] def executeCompletions(
       shell: Shell,
       globalOptions: GlobalOptions
-  ): Int = {
+  ): Int =
     if !globalOptions.quiet then println(ShellCompletions.scriptFor(shell))
     0
-  }
 
   private[cli] def executeConfig(
       cmd: ConfigCommand,
       globalOptions: GlobalOptions
   ): Int = ConfigCommandRenderer.render(cmd, globalOptions)
-}
+end CommandExecutor
