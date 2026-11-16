@@ -12,7 +12,7 @@ GREEN := \033[0;32m
 YELLOW := \033[0;33m
 NC := \033[0m # No Color
 
-SCALA_VERSION := 3.7.4
+SCALA_VERSION := 3.10.0
 
 ##@ General
 

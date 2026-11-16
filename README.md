@@ -456,7 +456,7 @@ sbt assembly
 **Common commands:**
 - `make compile` - Compile the project
 - `make test` - Run tests
-- `make assembly` - Create fat JAR (target/scala-3.7.4/parqueteer.jar)
+- `make assembly` - Create fat JAR (target/scala-3.10.0/parqueteer.jar)
 - `make package` - Create distribution with launch scripts
 - `make clean` - Remove build artifacts
 

@@ -24,5 +24,5 @@ depends = ["sync-sbt"]
 [hooks]
 "enter" = "mise run sync-sbt"
 
-[tools]
-sbt = "1.12.11"
+# Tool versions are declared in .tool-versions only (mise reads it alongside
+# this file, and scripts/sync-sbt-version.sh reads the sbt version from it).

@@ -66,10 +66,11 @@ make fmt           # Auto-fix formatting issues only
    - If no Scala/sbt files modified → Skips all checks ✅ Fast commit!
    - If Scala/sbt files modified → Runs full checks below
 2. Code formatting check (`sbt scalafmtCheckAll`)
-   Static analysis (`sbt "scalafix --check"`, rules in `.scalafix.conf`) runs in CI and in `make lint`
 3. Compilation check (`sbt compile`)
 4. Cleanup of build artifacts (`target/streams`)
 5. Test execution (`sbt test`)
+
+Static analysis (`sbt "scalafix --check"`, rules in `.scalafix.conf`) is not part of the hook; it runs in CI and in `make lint`.
 
 **To bypass the hook** (not recommended, only for emergencies):
 ```bash
@@ -131,19 +132,24 @@ make run ARGS="--help"
 
 ### Formatting
 
-We use scalafmt for consistent code formatting:
+We use scalafmt for consistent code formatting and scalafix for static analysis:
 
 ```bash
 make fmt         # Format all code
-make lint        # Check formatting (CI uses this)
+make lint        # Check formatting and run scalafix (the same checks CI runs)
 ```
+
+Sources use Scala 3 indentation syntax, and scalafmt enforces it (see `rewrite.scala3` in `.scalafmt.conf`): optional braces are removed and indented regions of 30 lines or more get an `end` marker. `make fmt` converts brace-style code for you.
 
 ### Testing
 
 ```bash
 make test        # Run all tests
 make check       # Run linting + tests
+make coverage    # Run tests with a coverage report
 ```
+
+Tests that need a cloud account or a local S3 endpoint are reported as canceled when that environment is not configured. CI enforces minimum coverage of 75% of statements and 68% of branches (`coverageMinimum*` in `build.sbt`).
 
 ### Building
 
@@ -186,14 +192,24 @@ The project will build fine with any recent versions.
 parqueteer/
 ├── src/main/scala/io/github/yusukensanta/parqueteer/
 │   ├── cli/
-│   │   ├── CliApp.scala               # Entry point, command dispatch
-│   │   ├── ArgumentParser.scala       # CLI flag/subcommand parsing
-│   │   ├── Commands.scala             # Command ADT definitions
-│   │   ├── CommandExecutor.scala      # Wires parsed commands to core services
+│   │   ├── CliApp.scala               # Entry point: parses args, loads config, builds the service, runs the command
+│   │   ├── ArgumentParser.scala       # scopt definitions: the one place flags and subcommands are declared
+│   │   ├── Commands.scala             # Command ADT (one case class per command)
+│   │   ├── CommandExecutor.scala      # Routes a parsed Command to its handler, expanding globs first
+│   │   ├── ReadCommands.scala         # Handlers for `read` (single file and multi-file/glob)
+│   │   ├── WriteCommands.scala        # Handlers for write, convert, merge
+│   │   ├── InspectCommands.scala      # Handlers for info, validate, schema, schema diff, stats, count
+│   │   ├── CommandSupport.scala       # Error reporting and output-path checks shared by the handlers
+│   │   ├── CliSpec.scala              # Commands and options as data, read from the parser
+│   │   ├── HelpFormatter.scala        # --help text (OPTIONS sections rendered from CliSpec)
+│   │   ├── ShellCompletions.scala     # bash/zsh/fish completion scripts (rendered from CliSpec)
 │   │   ├── CliOutputFormatter.scala   # Presentation layer (table/json/csv/ltsv)
+│   │   ├── MetadataFormatter.scala    # `metadata` report as a table or JSON
+│   │   ├── MultiFileReport.scala      # One report per matched file for multi-file metadata commands
+│   │   ├── StreamingOutput.scala      # Streaming row output and safe local output files
+│   │   ├── DryRunReport.scala         # "Dry run: would …" summaries
 │   │   ├── ConfigCommandRenderer.scala # `parqueteer config` output rendering
-│   │   ├── HelpFormatter.scala        # --help text generation
-│   │   └── ShellCompletions.scala     # bash/zsh/fish completion scripts
+│   │   └── Terminal.scala             # Terminal capability detection
 │   ├── config/
 │   │   ├── Configuration.scala       # Config case classes with Circe given instances
 │   │   └── EnvConfig.scala           # Environment variable resolution
@@ -205,6 +221,10 @@ parqueteer/
 │       │   ├── RawToParquetWriter.scala # JSON/NDJSON/CSV/LTSV → parquet (buffered or streaming)
 │       │   ├── StreamWriteSupport.scala # Shared stream-write helpers (cleanup, schema, row projection)
 │       │   ├── RowPipeline.scala        # Ordered multi-file row fetch with bounded read-ahead
+│       │   ├── DataFileReader.scala     # Reads JSON/NDJSON/CSV/LTSV input files into rows
+│       │   ├── SchemaReconciler.scala   # Pure schema logic for multi-file operations (reconcile, diff)
+│       │   ├── SchemaContract.scala     # Expected schema for `validate --expect-schema`
+│       │   ├── StatsAssertion.scala     # Data-quality checks evaluated against footer statistics
 │       │   └── LocationParsing.scala    # Path string → StorageLocation
 │       ├── repositories/
 │       │   ├── ParquetRepository.scala        # Parquet I/O interface (trait)
@@ -218,11 +238,13 @@ parqueteer/
 │       │   ├── SchemaTypeReader.scala          # Schema types → logical type detail, group chain, schema tree
 │       │   ├── PageInspector.scala             # `metadata --index/--pages`: column/offset index and page headers
 │       │   ├── ParallelRowGroupReader.scala    # `--parallel` row group reads
-│       │   └── StatsComputer.scala             # `stats` command column statistics
+│       │   ├── StatsComputer.scala             # `stats` command column statistics
+│       │   └── LruCache.scala                  # Bounded LRU cache behind the footer and Hadoop config caches
 │       ├── cloud/
 │       │   ├── CloudCredentialManager.scala # Shared credential-resolution contract
 │       │   ├── S3CredentialManager.scala
 │       │   ├── AzureCredentialManager.scala
+│       │   ├── AzureIdentityTokenProvider.scala # azure-identity access tokens for ABFS
 │       │   └── GCSCredentialManager.scala
 │       ├── filters/
 │       │   └── FilterParser.scala    # SQL-like `--filter` expression parsing
@@ -230,10 +252,11 @@ parqueteer/
 │       ├── formatters/               # Rows → output text (table/json/csv/markdown/ndjson/ltsv/pretty)
 │       └── util/                     # Domain-free helpers (SizeParser, FileExtension, CredentialRedactor, …);
 │                                     # imports no other parqueteer package
-├── src/test/scala/         # Mirror structure of main
+├── src/test/scala/         # Mirror structure of main, plus fuzz/ (fuzz targets)
 ├── project/                # sbt build configuration
 ├── scripts/                # Utility scripts
 ├── docs/                   # Extended documentation
+├── .githooks/              # pre-commit and post-checkout hooks (enabled by `make setup-dev`)
 ├── .github/workflows/      # CI/CD pipelines
 ├── Makefile               # Build commands
 ├── build.sbt              # sbt build definition
@@ -244,10 +267,14 @@ parqueteer/
 
 ### Adding a New Command
 
-1. Create command class in `src/main/scala/io/github/yusukensanta/parqueteer/cli/`
-2. Add tests in `src/test/scala/io/github/yusukensanta/parqueteer/cli/`
-3. Register in `CliApp.scala`
-4. Update documentation
+All of these live in `src/main/scala/io/github/yusukensanta/parqueteer/cli/`:
+
+1. Add a case class extending `Command` in `Commands.scala`
+2. Declare the subcommand and its options in `ArgumentParser.scala`. Shell completions and the OPTIONS section of `--help` are rendered from the parser (via `CliSpec`), so they need no separate change
+3. Write the handler in `ReadCommands.scala`, `WriteCommands.scala` or `InspectCommands.scala`, and route to it from `CommandExecutor.execute`
+4. Add the help prose (summary, usage, examples) in `HelpFormatter.scala`
+5. Add tests in `src/test/scala/io/github/yusukensanta/parqueteer/cli/`
+6. Update documentation
 
 ### Adding Dependencies
 
@@ -277,11 +304,16 @@ Or use your IDE (IntelliJ IDEA, VS Code with Metals):
 
 ## CI/CD
 
-Our CI pipeline automatically:
-- ✅ Compiles the project
-- ✅ Runs all tests
-- ✅ Checks code formatting
-- ✅ Builds assembly JAR
+`.github/workflows/ci.yml` runs on every pull request and on pushes to `main`:
+
+- ✅ Static analysis (`scalafix --check`)
+- ✅ Compiles and runs all tests on Java 17 and 21
+- ✅ Enforces the coverage minimums (Java 21 job)
+- ✅ Checks code formatting (`scalafmtCheckAll`)
+- ✅ Checks architecture boundaries: `core` must not reference `cli`, and `core.util` must not import any other parqueteer package
+- ✅ Runs the S3 integration tests against a RustFS container
+
+`Build & Test (Java 17)`, `Build & Test (Java 21)` and `S3 Integration Tests (RustFS)` are required checks on `main`.
 
 Make sure `make check` passes before submitting PR!
 
@@ -337,7 +369,6 @@ How did you test this?
 
 - [ ] Tests added/updated
 - [ ] Documentation updated
-- [ ] Changelog entry added (if applicable)
 ```
 
 ## Code Review Process
@@ -346,6 +377,10 @@ How did you test this?
 2. Automated checks must pass
 3. Address review feedback
 4. Once approved, maintainer will merge
+
+Pull requests are squash-merged (the only merge method enabled), so each PR becomes one commit on `main`. Give the PR a Conventional Commits title, and split changes that should stay separate in history into separate PRs.
+
+`main` requires signed commits. A PR that contains an unsigned commit cannot be merged even when all checks pass, so [set up commit signing](https://docs.github.com/en/authentication/managing-commit-signature-verification) before you push.
 
 ## Development Tips
 
@@ -393,19 +428,21 @@ make show-versions
 
 (For maintainers only)
 
-Version is managed automatically by `sbt-ci-release` from git tags — no manual version bumps needed.
+The version comes from git tags (`sbt-dynver`); there is no version file to edit.
 
-1. Update CHANGELOG.md
-2. Create and push git tag:
+1. Make sure CI is green on the `main` commit you want to release
+2. Create and push a tag on that commit:
    ```bash
    git tag v1.2.3
    git push origin v1.2.3
    ```
-3. GitHub Actions runs two workflows in parallel:
-   - **release.yml** — builds tgz/zip, creates GitHub Release, updates Homebrew formula
-   - **maven-central.yml** — publishes JAR to Maven Central
+3. The tag push triggers `.github/workflows/release.yml`, which:
+   - runs the tests and builds reproducible tgz/zip distributions with checksums
+   - creates the GitHub Release with auto-generated release notes (a version containing `-alpha`, `-beta` or `-rc` is marked as a pre-release)
+   - updates the Homebrew formula in `yusukensanta/homebrew-parqueteer`
+   - generates a build provenance attestation and attaches it to the release
 
-See `.claude/adr-homebrew-distribution.md` for distribution methodology decisions.
+Release notes are generated from commit history, so `CHANGELOG.md` does not need an entry per release.
 
 ## Code of Conduct
 
