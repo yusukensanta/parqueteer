@@ -564,6 +564,43 @@ class FilterParserTest extends AnyFlatSpec with Matchers:
     result.left.exists(_.message.contains("after IS,")) shouldBe true
   }
 
+  // ── Nesting depth ─────────────────────────────────────────────────────────
+
+  private def nested(depth: Int): String = ("(" * depth) + "a = 1" + (")" * depth)
+
+  "FilterParser nesting" should s"accept parentheses nested ${FilterParser.MaxNestingDepth} deep" in {
+    FilterParser.parse(nested(FilterParser.MaxNestingDepth)) shouldBe a[Right[?, ?]]
+  }
+
+  it should "reject parentheses nested one level past the limit" in {
+    val result = FilterParser.parse(nested(FilterParser.MaxNestingDepth + 1))
+    result shouldBe a[Left[?, ?]]
+    result.left.toOption.get.message should include(
+      s"nested more than ${FilterParser.MaxNestingDepth} levels deep"
+    )
+  }
+
+  it should "return an error instead of overflowing the stack on very deep nesting" in {
+    // 100k levels overflowed the default thread stack before the limit existed.
+    val result = FilterParser.parse(nested(100000))
+    result shouldBe a[Left[?, ?]]
+    result.left.toOption.get.exitCode shouldBe 7
+  }
+
+  it should "return an error for unbalanced opening parentheses past the limit" in {
+    FilterParser.parse("(" * 100000) shouldBe a[Left[?, ?]]
+  }
+
+  it should "count depth per path, not in total, so sibling groups do not add up" in {
+    val group = nested(FilterParser.MaxNestingDepth)
+    FilterParser.parse(s"$group AND $group OR NOT $group") shouldBe a[Right[?, ?]]
+  }
+
+  it should "apply the same limit when a schema is given" in {
+    val s = schema("a" -> PrimitiveTypeName.INT64)
+    FilterParser.parseWithSchema(nested(100000), s) shouldBe a[Left[?, ?]]
+  }
+
   // ── FilterParseError exit code and FilterParseException routing ───────────
 
   "FilterParseError" should "have exit code 7" in {
