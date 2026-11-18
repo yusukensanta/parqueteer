@@ -176,6 +176,10 @@ curl https://mise.run | sh
 mise install
 ```
 
+`.tool-versions` selects the latest Amazon Corretto 21, the same JDK
+distribution CI uses.
+Run `mise upgrade java` after each quarterly JDK security release.
+
 The Makefile automatically detects mise and syncs versions from `.tool-versions`.
 
 ### Without mise

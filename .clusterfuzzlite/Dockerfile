@@ -1,11 +1,11 @@
 FROM gcr.io/oss-fuzz-base/base-builder-jvm@sha256:bd13a763de1a0fb22099442094e7e0049657a8c47f01e9d7af8bb849e0ad4699
 
 # The base image ships an old OpenJDK, but Scala 3.10 and the dependencies need
-# JDK 21. Install Temurin 21 for the build; build.sh copies it next to the
-# fuzzers so they run on the same JVM.
+# JDK 21. Install Amazon Corretto 21 for the build; build.sh copies it next to
+# the fuzzers so they run on the same JVM.
 RUN curl -fL -o /tmp/jdk21.tar.gz \
-      "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.13%2B9/OpenJDK21U-jdk_x64_linux_hotspot_21.0.13_9.tar.gz" \
- && echo "d7f5d5cf865a2902b70ff549b97586a7d3f234e016f041ab447ea740c7d66d1c  /tmp/jdk21.tar.gz" | sha256sum -c \
+      "https://corretto.aws/downloads/resources/21.0.13.1.2/amazon-corretto-21.0.13.1.2-linux-x64.tar.gz" \
+ && echo "2aaa2a9a43143b20ff0b28c8d0da27407b97dc40b160d9a2f60a26965815e948  /tmp/jdk21.tar.gz" | sha256sum -c \
  && mkdir -p /opt/jdk21 \
  && tar -xzf /tmp/jdk21.tar.gz -C /opt/jdk21 --strip-components=1 \
  && rm /tmp/jdk21.tar.gz
