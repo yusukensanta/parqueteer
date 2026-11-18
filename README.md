@@ -437,6 +437,26 @@ bin/parqueteer --help
 
 **Note**: Java 21 (LTS) recommended for clean output. Java 25+ may show harmless JVM deprecation warnings from the Scala runtime.
 
+### Option 3: mise (Optional)
+
+If you use [mise](https://mise.jdx.dev), it can install the release `.tgz` directly from GitHub Releases (the build provenance attestation is verified on download):
+
+```bash
+# Install the latest release and make it available globally
+mise use -g github:yusukensanta/parqueteer
+
+# Or pin a specific version
+mise use -g github:yusukensanta/parqueteer@0.10.195
+
+parqueteer --version
+```
+
+The launcher needs a Java runtime on `PATH` or in `JAVA_HOME`. If you don't have one, mise can provide it too:
+
+```bash
+mise use -g java@corretto-21
+```
+
 ### Build from Source
 
 ```bash
