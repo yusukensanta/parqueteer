@@ -14,6 +14,13 @@ private type NumericValue = Long | Double
 
 object FilterParser:
 
+  /**
+   * Deepest parenthesis nesting a filter may use. The parser is recursive descent, so without a
+   * bound a crafted expression like "((((...))))" exhausts the thread stack; 64 is far beyond any
+   * hand-written filter and keeps the recursion a few hundred frames deep.
+   */
+  val MaxNestingDepth: Int = 64
+
   private[filters] val logger =
     org.slf4j.LoggerFactory.getLogger(getClass)
 
@@ -35,6 +42,8 @@ object FilterParser:
     new FilterParserImpl(Some(schema)).parse(filterExpr) match
       case Right(f)  => Right(f)
       case Left(msg) => Left(ParqueteerError.FilterParseError(filterExpr, msg))
+
+end FilterParser
 
 private class FilterParserImpl(schema: Option[MessageType]):
 
@@ -148,6 +157,7 @@ private class FilterParserImpl(schema: Option[MessageType]):
 
   private var tokens: Vector[Token] = Vector.empty
   private var pos: Int              = 0
+  private var depth: Int            = 0
 
   private def peek: Token = if pos < tokens.length then tokens(pos) else Token.Eof
 
@@ -162,7 +172,7 @@ private class FilterParserImpl(schema: Option[MessageType]):
       tokenize(input) match
         case Left(err)   => Left(s"Filter parse error: $err")
         case Right(toks) =>
-          tokens = toks; pos = 0
+          tokens = toks; pos = 0; depth = 0
           parseExpression().flatMap { f =>
             if peek == Token.Eof then Right(f)
             else Left(s"Filter parse error: unexpected token after expression")
@@ -199,9 +209,18 @@ private class FilterParserImpl(schema: Option[MessageType]):
 
   private def parsePrimary(): Either[String, Filter] =
     peek match
+      // Each '(' is the only place the grammar recurses, so bounding it here
+      // bounds the whole parser's stack use.
+      case Token.LParen if depth >= FilterParser.MaxNestingDepth =>
+        Left(
+          s"Filter parse error: parentheses nested more than ${FilterParser.MaxNestingDepth} levels deep"
+        )
       case Token.LParen =>
         advance()
-        parseExpression().flatMap { f =>
+        depth += 1
+        val inner = parseExpression()
+        depth -= 1
+        inner.flatMap { f =>
           if peek == Token.RParen then
             advance(); Right(f)
           else Left("Filter parse error: missing closing ')'")
