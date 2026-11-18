@@ -3,6 +3,7 @@ package io.github.yusukensanta.parqueteer.cli
 import io.github.yusukensanta.parqueteer.core.models.{
   ColorMode,
   CompressionType,
+  InputFormat,
   MetadataOptions,
   OutputFormat,
   SchemaMode
@@ -772,6 +773,59 @@ class ArgumentParserTest extends AnyFlatSpec with Matchers:
       .flatMap(_.command)
       .collect { case v: ValidateCommand => v.asserts.map(_.source) } shouldBe
       Some(List("rows > 0", "id.nulls == 0"))
+  }
+
+  // Help shows `<cmd> [OPTIONS] <args>`, so options must work on either side of
+  // the positional arguments. Each case lists (command, options, positionals).
+  private val optionOrderCases: List[(String, List[String], List[String])] = List(
+    ("read", List("--limit", "5", "--format", "json", "--stream"), List("in.parquet")),
+    ("info", List("--format", "json", "--verbose"), List("in.parquet")),
+    (
+      "write",
+      List("--input-format", "csv", "-c", "zstd", "--row-group-size", "1MB", "--dry-run"),
+      List("in.csv", "out.parquet")
+    ),
+    ("validate", List("--deep", "--assert", "rows > 0"), List("in.parquet")),
+    ("convert", List("--limit", "3", "--compression", "gzip"), List("in.parquet", "out.csv")),
+    ("stats", List("--format", "json"), List("in.parquet")),
+    ("metadata", List("--format", "json", "--extended"), List("in.parquet")),
+    ("count", List("--format", "json"), List("in.parquet")),
+    ("schema", List("--format", "json", "--detail"), List("in.parquet")),
+    ("merge", List("-o", "out.parquet", "--dry-run"), List("a.parquet", "b.parquet"))
+  )
+
+  private def parseCommand(args: List[String]): Option[Command] =
+    OParser.parse(ArgumentParser.parser, args.toArray, ArgumentParser.Config()).flatMap(_.command)
+
+  optionOrderCases.foreach { case (name, opts, positionals) =>
+    it should s"apply $name options given before the positional arguments" in {
+      val after  = parseCommand(name :: positionals ::: opts)
+      val before = parseCommand(name :: opts ::: positionals)
+      after shouldBe defined
+      // Guard against a vacuous pass: the options must change the command.
+      after should not be parseCommand(name :: positionals)
+      before shouldBe after
+    }
+  }
+
+  it should "apply write options split around the positional arguments" in {
+    parseCommand(
+      List("write", "--input-format", "csv", "in.csv", "-c", "zstd", "out.parquet", "--dry-run")
+    ) shouldBe Some(
+      WriteCommand(
+        "in.csv",
+        "out.parquet",
+        inputFormat = InputFormat.Csv,
+        compression = CompressionType.Zstd,
+        dryRun = true
+      )
+    )
+  }
+
+  it should "still require the positional arguments when only options are given" in {
+    parseCommand(List("write", "--input-format", "csv")) shouldBe None
+    parseCommand(List("write", "--input-format", "csv", "in.csv")) shouldBe None
+    parseCommand(List("read", "--limit", "5")) shouldBe None
   }
 
   it should "reject a malformed --assert at parse time" in {

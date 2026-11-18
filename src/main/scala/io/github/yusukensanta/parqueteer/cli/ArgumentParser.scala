@@ -149,21 +149,22 @@ object ArgumentParser:
         .text("Color output mode: auto, always, never (default: auto)"),
       cmd("read")
         .text("Display parquet file content")
+        .action((_, c) =>
+          c.copy(command =
+            Some(
+              ReadCommand(
+                "",
+                maxRows = EnvConfig.parsedMaxRows,
+                format = EnvConfig.parsedDefaultFormat
+                  .getOrElse(OutputFormat.Table)
+              )
+            )
+          )
+        )
         .children(
           arg[String]("<file>")
             .required()
-            .action((x, c) =>
-              c.copy(command =
-                Some(
-                  ReadCommand(
-                    x,
-                    maxRows = EnvConfig.parsedMaxRows,
-                    format = EnvConfig.parsedDefaultFormat
-                      .getOrElse(OutputFormat.Table)
-                  )
-                )
-              )
-            )
+            .action((x, c) => updateCmd[ReadCommand](c, _.copy(filePath = x)))
             .text(
               "Path to parquet file (local, s3://, gs://, abfss://) (supports glob patterns: *, ?, [], {})"
             ),
@@ -212,19 +213,13 @@ object ArgumentParser:
         .text(
           "Show file metadata (size, dates, writer version, compression ratio)"
         )
+        .action((_, c) =>
+          c.copy(command = Some(InfoCommand("", format = defaultTableOrJsonFormat)))
+        )
         .children(
           arg[String]("<file>")
             .required()
-            .action((x, c) =>
-              c.copy(command =
-                Some(
-                  InfoCommand(
-                    x,
-                    format = defaultTableOrJsonFormat
-                  )
-                )
-              )
-            )
+            .action((x, c) => updateCmd[InfoCommand](c, _.copy(filePath = x)))
             .text("Path to parquet file (supports glob patterns: *, ?, [], {})"),
           tableOrJsonFormatOpt[InfoCommand]((cmd, f) => cmd.copy(format = f))
             .text("Output format: table, json (default: table)"),
@@ -236,10 +231,11 @@ object ArgumentParser:
         ),
       cmd("write")
         .text("Create parquet file from input data")
+        .action((_, c) => c.copy(command = Some(WriteCommand("", ""))))
         .children(
           arg[String]("<input>")
             .required()
-            .action((x, c) => c.copy(command = Some(WriteCommand(x, ""))))
+            .action((x, c) => updateCmd[WriteCommand](c, _.copy(inputPath = x)))
             .text("Input data file path (JSON or CSV) (supports glob patterns: *, ?, [], {})"),
           arg[String]("<output>")
             .required()
@@ -291,10 +287,11 @@ object ArgumentParser:
         ),
       cmd("validate")
         .text("Verify parquet file integrity")
+        .action((_, c) => c.copy(command = Some(ValidateCommand(""))))
         .children(
           arg[String]("<file>")
             .required()
-            .action((x, c) => c.copy(command = Some(ValidateCommand(x))))
+            .action((x, c) => updateCmd[ValidateCommand](c, _.copy(filePath = x)))
             .text("Path to parquet file (supports glob patterns: *, ?, [], {})"),
           opt[Unit]("verbose")
             .action((_, c) => updateCmd[ValidateCommand](c, _.copy(verbose = true)))
@@ -330,12 +327,13 @@ object ArgumentParser:
         ),
       cmd("convert")
         .text("Convert between parquet and other formats")
+        .action((_, c) =>
+          c.copy(command = Some(ConvertCommand("", "", maxRows = EnvConfig.parsedMaxRows)))
+        )
         .children(
           arg[String]("<input>")
             .required()
-            .action((x, c) =>
-              c.copy(command = Some(ConvertCommand(x, "", maxRows = EnvConfig.parsedMaxRows)))
-            )
+            .action((x, c) => updateCmd[ConvertCommand](c, _.copy(inputPath = x)))
             .text("Input file path (supports glob patterns: *, ?, [], {})"),
           arg[String]("<output>")
             .required()
@@ -448,19 +446,13 @@ object ArgumentParser:
         .text(
           "Show column statistics (min, max, null count) from row group metadata"
         )
+        .action((_, c) =>
+          c.copy(command = Some(StatsCommand("", format = defaultTableOrJsonFormat)))
+        )
         .children(
           arg[String]("<file>")
             .required()
-            .action((x, c) =>
-              c.copy(command =
-                Some(
-                  StatsCommand(
-                    x,
-                    format = defaultTableOrJsonFormat
-                  )
-                )
-              )
-            )
+            .action((x, c) => updateCmd[StatsCommand](c, _.copy(filePath = x)))
             .text("Path to parquet file (supports glob patterns: *, ?, [], {})"),
           tableOrJsonFormatOpt[StatsCommand]((cmd, f) => cmd.copy(format = f))
             .text("Output format: table, json (default: table)")
@@ -469,19 +461,13 @@ object ArgumentParser:
         .text(
           "Show full footer metadata (key-value pairs, row groups, per-column chunk details)"
         )
+        .action((_, c) =>
+          c.copy(command = Some(MetadataCommand("", format = defaultTableOrJsonFormat)))
+        )
         .children(
           arg[String]("<file>")
             .required()
-            .action((x, c) =>
-              c.copy(command =
-                Some(
-                  MetadataCommand(
-                    x,
-                    format = defaultTableOrJsonFormat
-                  )
-                )
-              )
-            )
+            .action((x, c) => updateCmd[MetadataCommand](c, _.copy(filePath = x)))
             .text("Path to parquet file (supports glob patterns: *, ?, [], {})"),
           tableOrJsonFormatOpt[MetadataCommand]((cmd, f) => cmd.copy(format = f))
             .text("Output format: table, json (default: table)"),
@@ -506,10 +492,11 @@ object ArgumentParser:
         .text(
           "Print the total row count from footer metadata (no data scan)"
         )
+        .action((_, c) => c.copy(command = Some(CountCommand(""))))
         .children(
           arg[String]("<file>")
             .required()
-            .action((x, c) => c.copy(command = Some(CountCommand(x))))
+            .action((x, c) => updateCmd[CountCommand](c, _.copy(filePath = x)))
             .text("Path to parquet file (supports glob patterns: *, ?, [], {})"),
           tableOrJsonFormatOpt[CountCommand]((cmd, f) => cmd.copy(format = f))
             .text(
