@@ -43,6 +43,8 @@ object FilterParser:
       case Right(f)  => Right(f)
       case Left(msg) => Left(ParqueteerError.FilterParseError(filterExpr, msg))
 
+end FilterParser
+
 private class FilterParserImpl(schema: Option[MessageType]):
 
   // ── Tokens ────────────────────────────────────────────────────────────────
