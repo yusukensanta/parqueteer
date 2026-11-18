@@ -55,6 +55,17 @@ This policy covers the `parqueteer` library itself.
   (report those to the respective upstream projects)
 - Issues only reproducible with attacker-controlled local filesystem access
 
+## Java Runtime
+
+parqueteer does not bundle a JVM; it runs on the one you install. Keep it on
+the latest patch release of your JDK line: **21.0.13.1 / 17.0.21.1 or later**
+as of November 2026. Earlier builds trust root certificates linked to the
+eMudhra intermediate-CA key compromise (CVE-2026-91403, CVE-2026-114820), so
+an attacker could intercept the HTTPS connections parqueteer makes to S3, GCS
+and Azure. See the [OpenJDK vulnerability advisories](https://openjdk.org/groups/vulnerability/advisories/).
+
+CI, releases and fuzzing build on Amazon Corretto.
+
 ## Security Advisories
 
 Published advisories are available at:

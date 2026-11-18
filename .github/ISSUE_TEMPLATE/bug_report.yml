@@ -34,7 +34,7 @@ body:
     attributes:
       label: Java Version
       description: "Run `java -version` to get the version"
-      placeholder: "e.g. OpenJDK 21.0.2"
+      placeholder: "e.g. Corretto 21.0.13.1.2"
     validations:
       required: true
 

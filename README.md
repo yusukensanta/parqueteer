@@ -575,6 +575,10 @@ parqueteer read abfss://container@account.dfs.core.windows.net/data.parquet
   - Java 21: Clean output, no warnings ✅
   - Java 17: Also fully supported
   - Java 25+: may show JVM deprecation warnings from the Scala runtime
+  - Use a current patch release: 21.0.13.1 / 17.0.21.1 or later. Older builds
+    trust compromised eMudhra root certificates (CVE-2026-91403,
+    CVE-2026-114820), which affects HTTPS connections to S3, GCS and Azure.
+    CI is tested on Amazon Corretto.
 - **Memory**: Minimum 1GB RAM
 - **Disk**: ~1GB for full cloud dependencies
 
