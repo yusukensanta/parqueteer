@@ -457,6 +457,28 @@ The launcher needs a Java runtime on `PATH` or in `JAVA_HOME`. If you don't have
 mise use -g java@corretto-21
 ```
 
+#### Newest release not picked up by mise
+
+As a supply-chain safeguard, mise skips versions published more recently than its [`minimum_release_age`](https://mise.jdx.dev/configuration/settings.html#minimum_release_age) setting (default: `24h`). For about a day after a release is published, the version marked **Latest** on GitHub Releases can therefore differ from what mise resolves as `latest`:
+
+```bash
+$ mise latest github:yusukensanta/parqueteer
+0.10.194
+mise WARN  1 newer github:yusukensanta/parqueteer release hidden by minimum_release_age
+```
+
+The filter applies to `latest`, prefix requests such as `@0.10`, and `mise upgrade`. To install the newest release before the window has passed, either pin the exact version (exact versions are not filtered) or set the age explicitly for that one command:
+
+```bash
+# Pin the exact version shown on GitHub Releases
+mise use -g github:yusukensanta/parqueteer@0.10.195
+
+# Or turn the delay off for this command only
+mise use -g --minimum-release-age 0s github:yusukensanta/parqueteer
+```
+
+Prefer leaving the default in place for everyday use; the delay gives time for a compromised release to be noticed and pulled before it reaches your machine.
+
 ### Build from Source
 
 ```bash
