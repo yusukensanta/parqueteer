@@ -1,7 +1,7 @@
 ThisBuild / organization := "io.github.yusukensanta"
 // Version managed by sbt-ci-release from git tags
 name                     := "parqueteer"
-ThisBuild / scalaVersion := "3.10.0"
+ThisBuild / scalaVersion := "3.10.1"
 
 // sbt-ci-release configuration
 ThisBuild / versionScheme := Some("early-semver")
